@@ -99,6 +99,18 @@
       (arch fork: private claude home, ProviderAdapter, router rewrites);
       skills exts (need that backend); skill-md + voice already-have
 
+## Phase 10 — Locus (scoped 2026-09-11, no blind ports)
+
+- [x] Queued: (1) chat-session-binding re-implemented our way (own OpenSpec),
+      (2) provider-diagnostics taxonomy, (3) local-only guard (product call)
+- [x] Rejected/queued rest: capability model, workbench, jobs, headless, i18n,
+      registry, mcp-import-preview (no consumer), git/file-stats (their-UI)
+
+## Phase 11 — T3 server (reviewed 2026-09-11, HELD)
+
+- [x] Held: Effect-based serve/pairing/DPoP/MCP-HTTP/exposure — replatform
+      scale, no shared substrate; needs explicit user/product approval
+
 ## Pending (not in any phase until reviewed)
 
-- [ ] Locus deep mine / T3 server-auth+orchestration+MCP
+- [ ] (none — all known forks triaged;mausCode)
