@@ -11,28 +11,35 @@ session-init.
 
 ## What changes
 
-- The daemon host derives the native session's capability snapshot (tools, MCP
-  servers, plugins, skills) from the harness session and emits a `session-init`
-  chunk in the same shape the renderer already consumes.
-- The native transport feeds it to `sessionInfoAtom` exactly like the legacy
-  transport (shared handling; no transport-specific panels).
-- Staleness rule: switching engines on an empty chat clears or replaces the
-  snapshot so panels never show another engine's data. (Engine switching is
-  already limited to empty chats; this change defines what the panels show then.)
-- If the harness cannot enumerate some category (e.g. skills), the snapshot
-  marks it unknown rather than empty — the UI distinguishes "none" from
-  "not reported".
+- On every native chat start (after session attach, before the turn), main
+  emits a `session-init` chunk in the same shape the renderer already consumes:
+  MCP servers from the Phase 1 snapshot (`add-native-mcp-passthrough`),
+  `tools` carrying cached `mcp__server__tool` names, `plugins: []`,
+  `skills: []`.
+- Honest unknown marking: the v1 harness exposes no tool list, so the chunk
+  sets `toolsUnknown: true` (additive optional field; legacy omits it). The
+  MCP widget shows an "unavailable until the runtime reports it" note instead
+  of presenting the partial list as complete. Config-file errors travel in
+  `mcpConfigErrors` and render as warnings. The snapshot is best-effort: a
+  resolution failure never fails the turn.
+- The native transport feeds the chunk to `sessionInfoAtom` exactly like the
+  legacy transport (same atom, same panels, no transport-specific rendering).
+- Staleness rule: the engine toggle clears `sessionInfoAtom` (the next send's
+  session-init repopulates it), and legacy session-inits overwrite the whole
+  atom, so panels never show another engine's data. The engine badge itself
+  already exists in the input area — no new chrome.
+- `RuntimeManager` gains a `jcodeHome` getter so the snapshot reads the same
+  global config + schema cache the daemon uses.
 
 ## Non-goals
 
 - No new panels or UI redesign.
 - No MCP/plugin/skill feature work (this change only reports what's there;
-  passthrough is `add-native-mcp-passthrough`).
-- No backfill of legacy snapshots.
+  resolution is `add-native-mcp-passthrough`, live relay is its Phase 2).
+- No Rust changes.
 
 ## Impact
 
-- Small and additive: one chunk emission + shared atom handling.
-- Kills a real misinformation bug (stale legacy panels shown for native
-  sessions) rather than adding a feature.
-- Approval requested before implementation.
+- Additive chunk/atom fields (optional; legacy path untouched).
+- Snapshot emission is synchronous file reads on chat start (same files the
+  daemon reads); failure-isolated from the turn.

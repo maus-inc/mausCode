@@ -15,6 +15,7 @@ import {
   type CustomClaudeConfig,
   customClaudeConfigAtom,
   normalizeCustomClaudeConfig,
+  sessionInfoAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
@@ -149,6 +150,21 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
               })
               applyCompactingChunks(chunk, this.config.subChatId)
               clearStalePendingQuestion(chunk, this.config.subChatId)
+
+              // Handle session init - store MCP servers, plugins, tools info
+              // (native snapshot: cached mcp__ tools + config-resolved servers)
+              if (chunk.type === "session-init") {
+                appStore.set(sessionInfoAtom, {
+                  tools: chunk.tools ?? [],
+                  mcpServers: chunk.mcpServers ?? [],
+                  plugins: chunk.plugins ?? [],
+                  skills: chunk.skills ?? [],
+                  ...(chunk.toolsUnknown !== undefined && { toolsUnknown: chunk.toolsUnknown }),
+                  ...(chunk.mcpConfigErrors !== undefined && {
+                    mcpConfigErrors: chunk.mcpConfigErrors,
+                  }),
+                })
+              }
 
               // Native auth failure: no modal exists for this engine yet —
               // stash the prompt for retry and surface a provider toast.

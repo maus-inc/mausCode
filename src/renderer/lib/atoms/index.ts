@@ -859,6 +859,13 @@ export type SessionInfo = {
   mcpServers: MCPServer[]
   plugins: { name: string; path: string }[]
   skills: string[]
+  /**
+   * Native engine only: the v1 harness exposes no tool list, so `tools`
+   * carries only cached `mcp__server__tool` names. Absent on legacy.
+   */
+  toolsUnknown?: boolean
+  /** Native engine only: unparseable MCP config files (daemon ignores them). */
+  mcpConfigErrors?: { file: string; error: string }[]
 }
 
 // Session info from SDK init message

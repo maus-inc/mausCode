@@ -46,6 +46,11 @@ export class RuntimeManager extends EventEmitter {
     this.paths = paths
   }
 
+  /** The instance's JCODE_HOME (global MCP config + schema cache live here). */
+  get jcodeHome(): string {
+    return this.paths.jcodeHome
+  }
+
   status(): RuntimeStatus {
     if (this.client) return "ready"
     if (this.starting) return "starting"

@@ -50,6 +50,7 @@ import {
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
+  sessionInfoAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
@@ -700,12 +701,16 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Native engine supports local claude-code chats only (no Codex, no remote sandboxes yet)
   const canSwitchEngine = canSwitchProvider && provider !== "codex"
 
+  const setSessionInfo = useSetAtom(sessionInfoAtom)
   const switchEngine = useCallback((next: SubChatEngine) => {
     if (!canSwitchEngine || next === engine) return
     // Drop the pre-created empty Chat so the next send rebuilds with the new transport
     agentChatStore.delete(subChatId)
+    // Drop the other engine's snapshot (tools/servers/plugins); the next
+    // send's session-init repopulates it.
+    setSessionInfo(null)
     setEngine(next)
-  }, [canSwitchEngine, engine, setEngine, subChatId])
+  }, [canSwitchEngine, engine, setEngine, setSessionInfo, subChatId])
 
   // Helper to update mode (atomFamily + Zustand store sync)
   const updateMode = useCallback((newMode: AgentMode) => {

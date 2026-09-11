@@ -21,6 +21,7 @@ import {
   normalizeEndpointUrl,
   probeEndpoint,
   readEndpointSettings,
+  resolveNativeMcpSnapshot,
   restartRuntime,
   writeEndpointSettings,
 } from "../../runtime"
@@ -136,6 +137,29 @@ export const runtimeRouter = router({
                 `NATIVE_SESSION_FAILED: ${error instanceof Error ? error.message : String(error)}`,
               )
               return
+            }
+
+            // Native session snapshot (MCP Phase 1 + session-init): the v1
+            // harness exposes no tool list, so tools carries only cached
+            // mcp__server__tool names with toolsUnknown set.
+            try {
+              const snapshot = resolveNativeMcpSnapshot(input.cwd, manager.jcodeHome)
+              safeEmit({
+                type: "session-init",
+                tools: snapshot.servers.flatMap((s) =>
+                  s.tools.map((t) => `mcp__${s.name}__${t}`),
+                ),
+                mcpServers: snapshot.servers.map((s) => ({
+                  name: s.name,
+                  status: s.status,
+                })),
+                plugins: [],
+                skills: [],
+                toolsUnknown: true,
+                ...(snapshot.errors.length > 0 && { mcpConfigErrors: snapshot.errors }),
+              })
+            } catch {
+              // Snapshot is best-effort observability; never fail the turn.
             }
 
             try {
