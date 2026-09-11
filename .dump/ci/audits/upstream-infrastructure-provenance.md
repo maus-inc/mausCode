@@ -19,11 +19,12 @@ provenance.
 
 | Location | Value (inherited) | Action |
 |---|---|---|
-| `package.json` `name` | `21st-desktop` | → `mauscode` |
+| `package.json` `name` | `21st-desktop` | → `mauscode-desktop` (human-side rebrand decision, settled) |
 | `package.json` `description` | "1Code - UI for parallel work with AI agents" | → mausCode product description |
+| `package.json` `version` | `0.0.72` | → `0.1.0` (human decision D6, 2026-09-11) |
 | `package.json` `homepage` | `https://21st.dev` | → `https://github.com/maus-inc/mausCode` (no product domain exists yet) |
 | `package.json` `author` | 21st.dev / support@21st.dev | → maus-inc |
-| `package.json` `build.appId` | `dev.21st.agents` | → `com.maus-inc.mauscode` (reverse-DNS; domain unowned — use com.* over dev.21st) |
+| `package.json` `build.appId` | `dev.21st.agents` | → `dev.mausinc.mauscode` (settled in rebrand pass; supersedes my initial `io.github.maus-inc.mauscode`) |
 | `package.json` `build.productName` | `1Code` | → `mausCode` |
 | `package.json` `build.protocols` | `twentyfirst-agents` scheme | → `mauscode` scheme |
 | `package.json` `build.publish.url` | `https://cdn.21st.dev/releases/desktop` | → GitHub provider (`github.com/maus-inc/mausCode`); removes hard CDN dependency |
