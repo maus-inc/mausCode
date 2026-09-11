@@ -1020,7 +1020,7 @@ function normalizeCodexIntegrationState(rawOutput: string): CodexIntegrationStat
   return "unknown"
 }
 
-function parseStoredMessages(raw: string | null | undefined): any[] {
+export function parseStoredMessages(raw: string | null | undefined): any[] {
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
@@ -1030,7 +1030,7 @@ function parseStoredMessages(raw: string | null | undefined): any[] {
   }
 }
 
-function extractPromptFromStoredMessage(message: any): string {
+export function extractPromptFromStoredMessage(message: any): string {
   if (!message || !Array.isArray(message.parts)) return ""
 
   const textParts: string[] = []
@@ -1051,7 +1051,7 @@ function extractPromptFromStoredMessage(message: any): string {
   return textParts.join("\n") + fileContents.join("")
 }
 
-function getLastSessionId(messages: any[]): string | undefined {
+export function getLastSessionId(messages: any[]): string | undefined {
   const lastAssistant = [...messages].reverse().find((message) => message?.role === "assistant")
   const sessionId = lastAssistant?.metadata?.sessionId
   return typeof sessionId === "string" ? sessionId : undefined
@@ -1158,7 +1158,7 @@ function buildCodexProviderArgs(reasoningEffort?: string): string[] {
   return args
 }
 
-function buildUserParts(
+export function buildUserParts(
   prompt: string,
   images:
     | Array<{
