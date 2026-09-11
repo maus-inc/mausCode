@@ -24,7 +24,7 @@ rebranding/restructuring:
 6. [ ] Draft `docs/protocol.md` v0 (envelope, hello/capabilities, workspace, session,
    message, tool, approval, terminal, fs, git, events) — the source of truth.
 7. [ ] Upstream research notes: JCode harness API doc, T3 remote/t3-connect docs,
-   Hermes backends, OpenCode session model → `.dump/mausagent/research/`.
+   Hermes backends, OpenCode session model → `.dump/app/research/`.
 8. [ ] Establish `benchmarks/` harness skeleton + record 1Code-baseline numbers that
    are measurable without bun (tsgo check time, bundle size; runtime benches need
    the JCode vendor step).

@@ -1,1 +1,81 @@
 # Second Brain - App
+
+Compact architectural memory of mausCode (app track). Update as understanding changes.
+Detail lives in `research/` and `plans/`; this file states what is true.
+
+## Architecture
+
+- Electron app; UI (inherited 1Code, React 19) → application layer (tRPC, thinning) →
+  runtime client (harness-api v1 NDJSON) → mausCode runtime (refined JCode daemon).
+- One `RuntimeHandle` per workspace; placements (local/SSH/Docker/Daytona/remote node)
+  differ only in launcher. Workspace model is placement-independent.
+- Compatibility adapters (Claude/Codex/OpenCode/Hermes) implement the same handle
+  interface; native path never depends on them.
+
+## Runtime model
+
+- JCode upstream v0.84.0 (MIT): single-server multi-client, sessions daemon-owned,
+  stable harness-api v1 (`{v,id,req}`/`{v,reply_to?,ev}`), TS SDK with platform
+  binaries, shared MCP pool, provider catalog, hooks, rewind/compaction/snapshots,
+  native SSH attach, session import parsers (Claude/Codex/OpenCode/Cursor/Pi).
+- mausCode extensions are minor-versioned `maus.*` kinds: workspace, device,
+  checkpoint, taskgraph, doctor. No PTY-in-protocol yet; no git-in-protocol (kept
+  in app/git engine).
+
+## Major invariants
+
+- I-1 UI speaks only to application layer. I-2 workspaces are placement-independent.
+- I-3 JCode stays standalone-usable; no incompatible protocol fork without major bump.
+- I-4 native never depends on adapters. I-5 secrets are refs at every boundary.
+- I-6 benchmarks gate every phase.
+
+## Important interfaces
+
+- `RuntimeProvider.launch/status/stop` → `RuntimeHandle { request, events }`.
+- `ApiEvent→UIMessageChunk` translation (`main/lib/runtime/translate.ts`, planned).
+- tRPC 20 routers shrink to adapters; `chats` keeps product workflows; `changes`
+  (git) kept whole; terminal manager kept for local.
+
+## Performance principles
+
+- Hot path: UI → transport → JCode → OS. No JS orchestration layers on it.
+- Daemon owns sessions/transcripts; DB keeps metadata/index (JSON-blob writes go away).
+- Reproduce JCode's published numbers before claiming anything; CI owns measurement
+  (sandbox has node, no bun). UI: per-message atom isolation (already good), virtualize
+  >100 rows, throttle bg progress events.
+
+## Compatibility model
+
+- Adapter = translate maus protocol ↔ foreign CLI protocol (Codex ACP first as the
+  reference, since the code already speaks ACP). Foreign tools never shape native types.
+
+## Remote runtime model
+
+- `mauscode node` daemon; lifecycle register/auth/connect/heartbeat/caps/allocate/
+  stream/disconnect/reconnect/revoke/upgrade. SSH first (JCode attach semantics +
+  maus device auth + T3-style launcher/forwarding). Relay is control-plane track.
+
+## BYOK model
+
+- Catalog + credential refs; safeStorage local, per-device remote, no silent sync;
+  workspace route → device default → env(opt-in). Local-only full product, no account.
+
+## Migration model
+
+- Detect→Preview→Map→Confirm→Import, manifest + rollback, originals untouched.
+- Transcripts untrusted (provenance banner, no auto-exec); creds referenced not copied;
+  foreign hooks import disabled. MVP: Claude + OpenCode.
+
+## Rejected approaches
+
+- JCode-as-adapter; 1Code+JCode merge; bypass-permissions default; Hermes-style silent
+  teardown sync (opt-in only); HTTP-everywhere locally (NDJSON local, HTTP only remote);
+- Big-bang rewrite of chats/terminal/git UI before vertical slice; depending on
+  21st.dev for anything.
+
+## Unresolved user-facing decisions
+
+- Wordmark selection (5 PNGs in `new mauscode branding/`); CLI/app-id naming
+  (provisional: `mauscode`, `dev.maus-inc.mauscode`); JCode vendor form + attribution
+  placement (provisional: copied tree under `runtime/jcode` + UPSTREAM.md + MIT notice);
+  telemetry policy contents; release channel/CDN owner. See `decisions/`.
