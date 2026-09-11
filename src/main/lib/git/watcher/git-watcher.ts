@@ -308,7 +308,15 @@ class GitWatcherRegistry {
 	async dispose(worktreePath: string): Promise<void> {
 		// A creation may still be in flight. It registers itself in the map
 		// before resolving, so awaiting it first keeps the lookup below honest.
-		await this.pending.get(worktreePath)?.catch(() => {});
+		const pending = this.pending.get(worktreePath);
+		if (pending) {
+			// A creation that rejects never registers a watcher, so there is
+			// nothing to dispose. The rejection already reaches whoever awaited
+			// getOrCreate; log it so a shutdown-time failure is not silent.
+			await pending.catch((error) => {
+				console.debug("[GitWatcherRegistry] pending creation failed:", error);
+			});
+		}
 
 		const watcher = this.watchers.get(worktreePath);
 		if (watcher) {
