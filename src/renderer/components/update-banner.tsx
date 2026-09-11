@@ -1,22 +1,17 @@
 import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
-import { useUpdateChecker } from "../lib/hooks/use-update-checker"
-import { useJustUpdated } from "../lib/hooks/use-just-updated"
 import { RELEASES_URL } from "../../shared/app-identity"
-import { Button } from "./ui/button"
 import { IconSpinner } from "../icons"
+import { useJustUpdated } from "../lib/hooks/use-just-updated"
+import { useUpdateChecker } from "../lib/hooks/use-update-checker"
+import { Button } from "./ui/button"
 
 // For testing: set to "available", "downloading", or "just-updated" to see the UI
 // Change to "none" for production
 const MOCK_STATE: "none" | "available" | "downloading" | "just-updated" = "none"
 
 export function UpdateBanner() {
-  const {
-    state: realState,
-    downloadUpdate,
-    installUpdate,
-    dismissUpdate,
-  } = useUpdateChecker()
+  const { state: realState, downloadUpdate, installUpdate, dismissUpdate } = useUpdateChecker()
 
   const {
     justUpdated: realJustUpdated,
@@ -56,8 +51,7 @@ export function UpdateBanner() {
 
   // Just updated state (show "What's New" banner)
   // When mocking "just-updated", we need to show that state regardless of real state
-  const justUpdated =
-    isMocking && MOCK_STATE === "just-updated" ? true : realJustUpdated
+  const justUpdated = isMocking && MOCK_STATE === "just-updated" ? true : realJustUpdated
 
   // Get current app version for display
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
@@ -163,9 +157,7 @@ export function UpdateBanner() {
   if (justUpdated) {
     return (
       <div className="fixed bottom-4 left-4 z-50 flex items-center gap-3 rounded-lg border border-border bg-popover p-2.5 text-sm text-popover-foreground shadow-lg animate-in fade-in-0 slide-in-from-bottom-2">
-        <span className="text-foreground">
-          Updated to v{displayVersion}
-        </span>
+        <span className="text-foreground">Updated to v{displayVersion}</span>
         <div className="flex items-center gap-2 ml-2">
           <Button size="sm" onClick={handleOpenChangelog}>
             See what's new
@@ -197,17 +189,12 @@ export function UpdateBanner() {
   }
 
   // Don't show anything for idle, checking, or error states
-  if (
-    state.status === "idle" ||
-    state.status === "checking" ||
-    state.status === "error"
-  ) {
+  if (state.status === "idle" || state.status === "checking" || state.status === "error") {
     return null
   }
 
   // Updating state (downloading or ready to install, or pending click)
-  const isUpdating =
-    state.status === "downloading" || state.status === "ready" || isPending
+  const isUpdating = state.status === "downloading" || state.status === "ready" || isPending
 
   return (
     <div className="fixed bottom-4 left-4 z-50 flex items-center gap-3 rounded-lg border border-border bg-popover p-2.5 text-sm text-popover-foreground shadow-lg animate-in fade-in-0 slide-in-from-bottom-2">
@@ -237,9 +224,7 @@ export function UpdateBanner() {
             {isPending ? "Starting update..." : "Updating..."}
           </span>
           {progress !== undefined && !isPending && (
-            <span className="text-muted-foreground ml-1">
-              {Math.round(progress)}%
-            </span>
+            <span className="text-muted-foreground ml-1">{Math.round(progress)}%</span>
           )}
         </>
       )}

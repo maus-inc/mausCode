@@ -130,7 +130,7 @@ export const remoteApi = {
     }
     const apiBase = await getApiBase()
     const result = await window.desktopApi.signedFetch(
-      `${apiBase}/api/agents/sandbox/${sandboxId}/diff`
+      `${apiBase}/api/agents/sandbox/${sandboxId}/diff`,
     )
     if (!result.ok) {
       throw new Error(result.error || `Failed to fetch diff: ${result.status}`)
@@ -147,7 +147,7 @@ export const remoteApi = {
     }
     const apiBase = await getApiBase()
     const result = await window.desktopApi.signedFetch(
-      `${apiBase}/api/agents/sandbox/${sandboxId}/files?path=${encodeURIComponent(path)}`
+      `${apiBase}/api/agents/sandbox/${sandboxId}/files?path=${encodeURIComponent(path)}`,
     )
     if (!result.ok) {
       throw new Error(result.error || `Failed to fetch file: ${result.status}`)

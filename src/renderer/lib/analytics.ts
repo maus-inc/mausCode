@@ -17,7 +17,8 @@ let appArch: string | null = null
 
 // Check if we're in development mode
 // Renderer can't access env vars directly, so we check a global flag
-const isDev = typeof window !== "undefined" &&
+const isDev =
+  typeof window !== "undefined" &&
   window.location.hostname === "localhost" &&
   !(window as any).__FORCE_ANALYTICS__
 
@@ -94,10 +95,7 @@ export async function initAnalytics() {
 /**
  * Capture an analytics event
  */
-export function capture(
-  eventName: string,
-  properties?: Record<string, any>,
-) {
+export function capture(eventName: string, properties?: Record<string, any>) {
   // Skip in development mode
   if (isDev) return
 
@@ -115,10 +113,7 @@ export function capture(
 /**
  * Identify a user
  */
-export function identify(
-  userId: string,
-  traits?: Record<string, any>,
-) {
+export function identify(userId: string, traits?: Record<string, any>) {
   currentUserId = userId
 
   // Skip in development mode
@@ -180,4 +175,3 @@ export function trackMessageSent(data: {
     mode: data.mode,
   })
 }
-

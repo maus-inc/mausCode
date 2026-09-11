@@ -1,31 +1,33 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useAtom } from "jotai"
-import { Button } from "../../../components/ui/button"
-import { Logo } from "../../../components/ui/logo"
 import { RotateCw } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Button } from "../../../components/ui/button"
 import {
   ExternalLinkIcon,
-  IconDoubleChevronRight,
   IconChatBubble,
+  IconDoubleChevronRight,
 } from "../../../components/ui/icons"
-import { PreviewUrlInput } from "./preview-url-input"
-import {
-  previewPathAtomFamily,
-  viewportModeAtomFamily,
-  previewScaleAtomFamily,
-  mobileDeviceAtomFamily,
-} from "../atoms"
+import { Logo } from "../../../components/ui/logo"
 import { cn } from "../../../lib/utils"
-import { ViewportToggle } from "./viewport-toggle"
-import { ScaleControl } from "./scale-control"
+import {
+  mobileDeviceAtomFamily,
+  previewPathAtomFamily,
+  previewScaleAtomFamily,
+  viewportModeAtomFamily,
+} from "../atoms"
+import { AGENTS_PREVIEW_CONSTANTS, DEVICE_PRESETS } from "../constants"
 import { DevicePresetsBar } from "./device-presets-bar"
-import { ResizeHandle } from "./resize-handle"
 import { MobileCopyLinkButton } from "./mobile-copy-link-button"
-import { DEVICE_PRESETS, AGENTS_PREVIEW_CONSTANTS } from "../constants"
+import { PreviewUrlInput } from "./preview-url-input"
+import { ResizeHandle } from "./resize-handle"
+import { ScaleControl } from "./scale-control"
+import { ViewportToggle } from "./viewport-toggle"
+
 // import { getSandboxPreviewUrl } from "@/app/(alpha)/canvas/{components}/settings-tabs/repositories/preview-url"
-const getSandboxPreviewUrl = (sandboxId: string, port: number, _type: string) => `https://${sandboxId}-${port}.csb.app` // Desktop mock
+const getSandboxPreviewUrl = (sandboxId: string, port: number, _type: string) =>
+  `https://${sandboxId}-${port}.csb.app` // Desktop mock
 interface AgentPreviewProps {
   chatId: string
   sandboxId: string
@@ -53,20 +55,14 @@ export function AgentPreview({
   const resizeCleanupRef = useRef<(() => void) | null>(null)
 
   // Persisted state from Jotai atoms (per chatId)
-  const [persistedPath, setPersistedPath] = useAtom(
-    previewPathAtomFamily(chatId),
-  )
-  const [viewportMode, setViewportMode] = useAtom(
-    viewportModeAtomFamily(chatId),
-  )
+  const [persistedPath, setPersistedPath] = useAtom(previewPathAtomFamily(chatId))
+  const [viewportMode, setViewportMode] = useAtom(viewportModeAtomFamily(chatId))
   const [scale, setScale] = useAtom(previewScaleAtomFamily(chatId))
   const [device, setDevice] = useAtom(mobileDeviceAtomFamily(chatId))
 
   // Local state for resizing
   const [isResizing, setIsResizing] = useState(false)
-  const [maxWidth, setMaxWidth] = useState<number>(
-    AGENTS_PREVIEW_CONSTANTS.MAX_WIDTH,
-  )
+  const [maxWidth, setMaxWidth] = useState<number>(AGENTS_PREVIEW_CONSTANTS.MAX_WIDTH)
 
   // Dual state architecture:
   // - loadedPath: Controls iframe src (stable, only changes on manual navigation)
@@ -84,15 +80,8 @@ export function AgentPreview({
       }
     }
 
-    window.addEventListener(
-      "agent-preview-reload",
-      handleReload as EventListener,
-    )
-    return () =>
-      window.removeEventListener(
-        "agent-preview-reload",
-        handleReload as EventListener,
-      )
+    window.addEventListener("agent-preview-reload", handleReload as EventListener)
+    return () => window.removeEventListener("agent-preview-reload", handleReload as EventListener)
   }, [chatId])
 
   // Listen for navigation events from external header
@@ -106,15 +95,9 @@ export function AgentPreview({
       }
     }
 
-    window.addEventListener(
-      "agent-preview-navigate",
-      handleNavigate as EventListener,
-    )
+    window.addEventListener("agent-preview-navigate", handleNavigate as EventListener)
     return () =>
-      window.removeEventListener(
-        "agent-preview-navigate",
-        handleNavigate as EventListener,
-      )
+      window.removeEventListener("agent-preview-navigate", handleNavigate as EventListener)
   }, [chatId, setPersistedPath])
 
   // Dispatch path updates to header
@@ -160,10 +143,7 @@ export function AgentPreview({
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Verify source is our iframe
-      if (
-        !iframeRef.current ||
-        event.source !== iframeRef.current.contentWindow
-      ) {
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) {
         return
       }
 
@@ -262,10 +242,7 @@ export function AgentPreview({
           delta = -delta
         }
         const newWidth = Math.round(
-          Math.max(
-            AGENTS_PREVIEW_CONSTANTS.MIN_WIDTH,
-            Math.min(maxWidth, startWidth + delta * 2),
-          ),
+          Math.max(AGENTS_PREVIEW_CONSTANTS.MIN_WIDTH, Math.min(maxWidth, startWidth + delta * 2)),
         )
         frame.style.width = `${newWidth}px`
         setDevice({
@@ -310,12 +287,7 @@ export function AgentPreview({
   )
 
   return (
-    <div
-      className={cn(
-        "flex flex-col bg-tl-background",
-        isMobile ? "h-full w-full" : "h-full",
-      )}
-    >
+    <div className={cn("flex flex-col bg-tl-background", isMobile ? "h-full w-full" : "h-full")}>
       {/* Mobile Header */}
       {isMobile && !hideHeader && (
         <div
@@ -352,9 +324,7 @@ export function AgentPreview({
               disabled={isRefreshing}
               className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
             >
-              <RotateCw
-                className={cn("h-4 w-4", isRefreshing && "animate-spin")}
-              />
+              <RotateCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             </Button>
 
             {/* URL Input - centered, flexible */}
@@ -390,10 +360,7 @@ export function AgentPreview({
               className="h-7 w-7 p-0 hover:bg-muted transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md"
             >
               <RotateCw
-                className={cn(
-                  "h-3.5 w-3.5 text-muted-foreground",
-                  isRefreshing && "animate-spin",
-                )}
+                className={cn("h-3.5 w-3.5 text-muted-foreground", isRefreshing && "animate-spin")}
               />
             </Button>
 
@@ -498,11 +465,7 @@ export function AgentPreview({
           <>
             {/* Left resize handle - only in mobile viewport mode (not on actual mobile devices) */}
             {viewportMode === "mobile" && (
-              <ResizeHandle
-                side="left"
-                onPointerDown={handleResizeStart}
-                isResizing={isResizing}
-              />
+              <ResizeHandle side="left" onPointerDown={handleResizeStart} isResizing={isResizing} />
             )}
 
             {/* Frame with dynamic size */}
@@ -510,18 +473,13 @@ export function AgentPreview({
               ref={frameRef}
               className={cn(
                 "relative overflow-hidden flex-shrink-0 bg-background",
-                !isResizing &&
-                  "transition-[width,height,margin] duration-300 ease-in-out",
-                viewportMode === "desktop"
-                  ? "border-[0.5px] rounded-sm"
-                  : "shadow-lg border",
+                !isResizing && "transition-[width,height,margin] duration-300 ease-in-out",
+                viewportMode === "desktop" ? "border-[0.5px] rounded-sm" : "shadow-lg border",
               )}
               style={{
-                width:
-                  viewportMode === "desktop" ? "100%" : `${device.width}px`,
+                width: viewportMode === "desktop" ? "100%" : `${device.width}px`,
                 height: "100%",
-                maxHeight:
-                  viewportMode === "mobile" ? `${device.height}px` : "100%",
+                maxHeight: viewportMode === "mobile" ? `${device.height}px` : "100%",
                 marginLeft: viewportMode === "mobile" ? "16px" : "0",
                 marginRight: viewportMode === "mobile" ? "16px" : "0",
                 borderRadius: viewportMode === "desktop" ? "8px" : "24px",

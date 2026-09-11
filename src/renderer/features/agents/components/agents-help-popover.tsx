@@ -1,20 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useSetAtom } from "jotai"
+import { ArrowUpRight } from "lucide-react"
+import { useEffect, useState } from "react"
+import { RELEASES_URL } from "../../../../shared/app-identity"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
-import { ArrowUpRight } from "lucide-react"
 import { KeyboardIcon } from "../../../components/ui/icons"
 import { DiscordIcon } from "../../../icons"
-import { RELEASES_URL } from "../../../../shared/app-identity"
-import { useSetAtom } from "jotai"
-import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "../../../lib/atoms"
+import { agentsSettingsDialogActiveTabAtom, agentsSettingsDialogOpenAtom } from "../../../lib/atoms"
 
 interface ReleaseHighlight {
   version: string
@@ -73,25 +73,28 @@ export function AgentsHelpPopover({
     let cancelled = false
     ;(async () => {
       const apiBase = await window.desktopApi.getApiBaseUrl()
-    if (!apiBase) return // local-only mode: no control-plane changelog
-    window.desktopApi
-      .signedFetch(`${apiBase}/api/changelog/desktop?per_page=3`)
-      .then((result) => {
-        if (cancelled) return
-        const data = result.data as {
-          releases?: Array<{ version?: string; content?: string }>
-        }
-        if (data?.releases) {
-          const items: ReleaseHighlight[] = []
-          for (const release of data.releases) {
-            if (release.version) {
-              items.push({ version: release.version, title: parseFirstHighlight(release.content || "") })
-            }
+      if (!apiBase) return // local-only mode: no control-plane changelog
+      window.desktopApi
+        .signedFetch(`${apiBase}/api/changelog/desktop?per_page=3`)
+        .then((result) => {
+          if (cancelled) return
+          const data = result.data as {
+            releases?: Array<{ version?: string; content?: string }>
           }
-          setHighlights(items)
-        }
-      })
-      .catch(() => {})
+          if (data?.releases) {
+            const items: ReleaseHighlight[] = []
+            for (const release of data.releases) {
+              if (release.version) {
+                items.push({
+                  version: release.version,
+                  title: parseFirstHighlight(release.content || ""),
+                })
+              }
+            }
+            setHighlights(items)
+          }
+        })
+        .catch(() => {})
     })()
     return () => {
       cancelled = true
@@ -126,10 +129,7 @@ export function AgentsHelpPopover({
         </DropdownMenuItem>
 
         {!isMobile && (
-          <DropdownMenuItem
-            onClick={handleKeyboardShortcutsClick}
-            className="gap-2"
-          >
+          <DropdownMenuItem onClick={handleKeyboardShortcutsClick} className="gap-2">
             <KeyboardIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="flex-1">Shortcuts</span>
           </DropdownMenuItem>
@@ -148,7 +148,11 @@ export function AgentsHelpPopover({
                 className="gap-0 items-stretch min-h-0 px-2 py-0"
               >
                 <div className="flex flex-col items-center w-3 shrink-0">
-                  {i === 0 ? <div className="h-[11px]" /> : <div className="w-px h-[11px] border-l border-dashed border-muted-foreground/30" />}
+                  {i === 0 ? (
+                    <div className="h-[11px]" />
+                  ) : (
+                    <div className="w-px h-[11px] border-l border-dashed border-muted-foreground/30" />
+                  )}
                   <div className="w-1.5 h-1.5 rounded-full border border-muted-foreground/40 shrink-0" />
                   <div className="w-px flex-1 border-l border-dashed border-muted-foreground/30" />
                 </div>
@@ -157,7 +161,10 @@ export function AgentsHelpPopover({
                 </span>
               </DropdownMenuItem>
             ))}
-            <DropdownMenuItem onClick={handleChangelogClick} className="gap-0 items-stretch min-h-0 px-2 py-0">
+            <DropdownMenuItem
+              onClick={handleChangelogClick}
+              className="gap-0 items-stretch min-h-0 px-2 py-0"
+            >
               <div className="flex flex-col items-center w-3 shrink-0">
                 <div className="w-px h-[11px] border-l border-dashed border-muted-foreground/30" />
                 <div className="w-1.5 h-1.5 rounded-full bg-foreground shrink-0" />

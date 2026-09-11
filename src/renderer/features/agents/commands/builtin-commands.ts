@@ -3,15 +3,11 @@ import type { BuiltinCommandAction, SlashCommandOption } from "./types"
 /**
  * Prompt texts for prompt-based slash commands
  */
-export const COMMAND_PROMPTS: Partial<
-  Record<BuiltinCommandAction["type"], string>
-> = {
+export const COMMAND_PROMPTS: Partial<Record<BuiltinCommandAction["type"], string>> = {
   review:
     "Please review the code in the current context and provide feedback on code quality, potential bugs, and improvements.",
-  "pr-comments":
-    "Generate detailed PR review comments for the changes in the current context.",
-  "release-notes":
-    "Generate release notes summarizing the changes in this codebase.",
+  "pr-comments": "Generate detailed PR review comments for the changes in the current context.",
+  "release-notes": "Generate release notes summarizing the changes in this codebase.",
   "security-review":
     "Perform a security audit of the code in the current context. Identify vulnerabilities, security risks, and suggest fixes.",
   commit:
@@ -48,7 +44,13 @@ Now analyze this project and create .mauscode/worktree.json with the appropriate
  */
 export function isPromptCommand(
   type: BuiltinCommandAction["type"],
-): type is "review" | "pr-comments" | "release-notes" | "security-review" | "commit" | "worktree-setup" {
+): type is
+  | "review"
+  | "pr-comments"
+  | "release-notes"
+  | "security-review"
+  | "commit"
+  | "worktree-setup" {
   return type in COMMAND_PROMPTS
 }
 
@@ -132,15 +134,12 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandOption[] = [
 /**
  * Filter builtin commands by search text
  */
-export function filterBuiltinCommands(
-  searchText: string,
-): SlashCommandOption[] {
+export function filterBuiltinCommands(searchText: string): SlashCommandOption[] {
   if (!searchText) return BUILTIN_SLASH_COMMANDS
 
   const query = searchText.toLowerCase()
   return BUILTIN_SLASH_COMMANDS.filter(
     (cmd) =>
-      cmd.name.toLowerCase().includes(query) ||
-      cmd.description.toLowerCase().includes(query),
+      cmd.name.toLowerCase().includes(query) || cmd.description.toLowerCase().includes(query),
   )
 }

@@ -3,7 +3,12 @@ import { app, BrowserWindow, dialog, Menu, nativeImage, session } from "electron
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
-import { AuthManager, initAuthManager, getAuthManager as getAuthManagerFromModule } from "./auth-manager"
+import {
+  type AuthManager,
+  getAuthManager as getAuthManagerFromModule,
+  initAuthManager,
+} from "./auth-manager"
+import { AUTH_SERVER_PORT, DEV_USER_DATA_NAME, IS_DEV, PROTOCOL } from "./constants"
 import {
   identify,
   initAnalytics,
@@ -18,29 +23,35 @@ import {
   initAutoUpdater,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
-import { closeDatabase, initDatabase } from "./lib/db"
 import {
   getLaunchDirectory,
-  isCliInstalled,
   installCli,
-  uninstallCli,
+  isCliInstalled,
   parseLaunchDirectory,
+  uninstallCli,
 } from "./lib/cli"
+import { getApiUrl } from "./lib/config"
+import { closeDatabase, initDatabase } from "./lib/db"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
-import { getAllMcpConfigHandler, hasActiveClaudeSessions, abortAllClaudeSessions } from "./lib/trpc/routers/claude"
-import { getAllCodexMcpConfigHandler, hasActiveCodexStreams, abortAllCodexStreams } from "./lib/trpc/routers/codex"
+import {
+  abortAllClaudeSessions,
+  getAllMcpConfigHandler,
+  hasActiveClaudeSessions,
+} from "./lib/trpc/routers/claude"
+import {
+  abortAllCodexStreams,
+  getAllCodexMcpConfigHandler,
+  hasActiveCodexStreams,
+} from "./lib/trpc/routers/codex"
 import {
   createMainWindow,
   createWindow,
-  getWindow,
   getAllWindows,
+  getWindow,
   setIsQuitting,
 } from "./windows/main"
 import { windowManager } from "./windows/window-manager"
-
-import { IS_DEV, AUTH_SERVER_PORT, PROTOCOL, DEV_USER_DATA_NAME } from "./constants"
-import { getApiUrl } from "./lib/config"
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
@@ -121,9 +132,7 @@ export async function handleAuthCode(code: string): Promise<void> {
           url: apiBase,
           name: "x-desktop-token",
           value: authData.token,
-          expirationDate: Math.floor(
-            new Date(authData.expiresAt).getTime() / 1000,
-          ),
+          expirationDate: Math.floor(new Date(authData.expiresAt).getTime() / 1000),
           httpOnly: false,
           secure: apiBase.startsWith("https"),
           sameSite: "lax" as const,
@@ -226,23 +235,15 @@ function registerProtocol(): boolean {
   if (process.defaultApp) {
     // Dev mode: need to pass execPath and script path
     if (process.argv.length >= 2) {
-      success = app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [
-        process.argv[1]!,
-      ])
-      console.log(
-        `[Protocol] Dev mode registration:`,
-        success ? "success" : "failed",
-      )
+      success = app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [process.argv[1]!])
+      console.log(`[Protocol] Dev mode registration:`, success ? "success" : "failed")
     } else {
       console.warn("[Protocol] Dev mode: insufficient argv for registration")
     }
   } else {
     // Production mode
     success = app.setAsDefaultProtocolClient(PROTOCOL)
-    console.log(
-      `[Protocol] Production registration:`,
-      success ? "success" : "failed",
-    )
+    console.log(`[Protocol] Production registration:`, success ? "success" : "failed")
   }
 
   return success
@@ -254,17 +255,13 @@ let initialRegistration = false
 // Verify registration (this checks if OS recognizes us as the handler)
 function verifyProtocolRegistration(): void {
   const isDefault = process.defaultApp
-    ? app.isDefaultProtocolClient(PROTOCOL, process.execPath, [
-        process.argv[1]!,
-      ])
+    ? app.isDefaultProtocolClient(PROTOCOL, process.execPath, [process.argv[1]!])
     : app.isDefaultProtocolClient(PROTOCOL)
 
   console.log(`[Protocol] Verification - isDefaultProtocolClient: ${isDefault}`)
 
   if (!isDefault && initialRegistration) {
-    console.warn(
-      "[Protocol] Registration returned success but verification failed.",
-    )
+    console.warn("[Protocol] Registration returned success but verification failed.")
     console.warn(
       "[Protocol] This is common on first install - macOS Launch Services may need time to update.",
     )
@@ -284,35 +281,32 @@ const FAVICON_DATA_URI =
 // Favicon PNG bytes (decoded from the data URI above) for the /favicon route
 const FAVICON_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAFVBMVEX///8ODg8ODQ4ODg4PDg8PDw8PDxBo6R6vAAACCUlEQVRIx+1UW3KjQAyEMgeICpQD7F4gFEm+l1pyABU1/vcH3P8I2y3N8HA4wH5ELjBmelqtlsZV9RP/ccgvxm9c8nK13vSyRX8F6CwtKSVdxOSK4iZYsyT4ErG3CwWmiv2mZkC8XRCYcrsZURcAQfpkfgHzHTCSO0USCnkGNH3s1tXvSZ+rEGxNXFwXai1V1EOJXqZx6mhRp9Bg9hLCGaPf2+JhS66UMgBPr+sCTWqHcqAmGFpVrISsAAiu3n86oJeoW1GZA26jA1iri+Qj2hMWOcEcDKkwGLtnTkPy2ycBHy4yGDScx7IDdA0AfJLMQG+FCAJqTSVFLjMeo0dSNdCyA0qKu/ubCKDbBMiyixz2IZSasDn6btmoU3xxXwBA9X3kapcyb5NzYqiH98FfKwHerOXPad4hgfZqYdBcZhlX892YOY0q7Cyy6TwpWLIGH6wDACNEO41Hos3+ZqMiAdvFhlPHXNp9KFOSKAdeOBRz+KsHAEYQx0DppUqKbh5F1iMTEGCiezdt0/DlJVIAB1ef2l1Vf5UDCg3RsL3d5eCMtIce8NDzTOapLgwD/JOUCTAcj+6cou6N5xRbkR8v71adATdVP6jqKXSJtx/pvuYyb6yYHuIDcx5SBcNaAM0areV/SvYZ8Y433SP6+Jq2QLJcejtNUx/z0sgOiLP1HGO7/YMMbfUTl/EP+zbExawQYEQAAAAASUVORK5CYII=",
-  "base64"
+  "base64",
 )
 
 // Start local HTTP server for auth callbacks
 // This catches http://localhost:{AUTH_SERVER_PORT}/auth/callback?code=xxx and /callback (for MCP OAuth)
 const server = createServer((req, res) => {
-    const url = new URL(req.url || "", `http://localhost:${AUTH_SERVER_PORT}`)
+  const url = new URL(req.url || "", `http://localhost:${AUTH_SERVER_PORT}`)
 
-    // Serve favicon
-    if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
-      res.writeHead(200, { "Content-Type": "image/png" })
-      res.end(FAVICON_PNG)
-      return
-    }
+  // Serve favicon
+  if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
+    res.writeHead(200, { "Content-Type": "image/png" })
+    res.end(FAVICON_PNG)
+    return
+  }
 
-    if (url.pathname === "/auth/callback") {
-      const code = url.searchParams.get("code")
-      console.log(
-        "[Auth Server] Received callback with code:",
-        code?.slice(0, 8) + "...",
-      )
+  if (url.pathname === "/auth/callback") {
+    const code = url.searchParams.get("code")
+    console.log("[Auth Server] Received callback with code:", code?.slice(0, 8) + "...")
 
-      if (code) {
-        // Handle the auth code
-        handleAuthCode(code)
+    if (code) {
+      // Handle the auth code
+      handleAuthCode(code)
 
-        // Send success response and close the browser tab
-        res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(`<!DOCTYPE html>
+      // Send success response and close the browser tab
+      res.writeHead(200, { "Content-Type": "text/html" })
+      res.end(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -375,28 +369,28 @@ const server = createServer((req, res) => {
   <script>setTimeout(() => window.close(), 1000)</script>
 </body>
 </html>`)
-      } else {
-        res.writeHead(400, { "Content-Type": "text/plain" })
-        res.end("Missing code parameter")
-      }
-    } else if (url.pathname === "/callback") {
-      // Handle MCP OAuth callback
-      const code = url.searchParams.get("code")
-      const state = url.searchParams.get("state")
-      console.log(
-        "[Auth Server] Received MCP OAuth callback with code:",
-        code?.slice(0, 8) + "...",
-        "state:",
-        state?.slice(0, 8) + "...",
-      )
+    } else {
+      res.writeHead(400, { "Content-Type": "text/plain" })
+      res.end("Missing code parameter")
+    }
+  } else if (url.pathname === "/callback") {
+    // Handle MCP OAuth callback
+    const code = url.searchParams.get("code")
+    const state = url.searchParams.get("state")
+    console.log(
+      "[Auth Server] Received MCP OAuth callback with code:",
+      code?.slice(0, 8) + "...",
+      "state:",
+      state?.slice(0, 8) + "...",
+    )
 
-      if (code && state) {
-        // Handle the MCP OAuth callback
-        handleMcpOAuthCallback(code, state)
+    if (code && state) {
+      // Handle the MCP OAuth callback
+      handleMcpOAuthCallback(code, state)
 
-        // Send success response and close the browser tab
-        res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(`<!DOCTYPE html>
+      // Send success response and close the browser tab
+      res.writeHead(200, { "Content-Type": "text/html" })
+      res.end(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -459,15 +453,15 @@ const server = createServer((req, res) => {
   <script>setTimeout(() => window.close(), 1000)</script>
 </body>
 </html>`)
-      } else {
-        res.writeHead(400, { "Content-Type": "text/plain" })
-        res.end("Missing code or state parameter")
-      }
     } else {
-      res.writeHead(404, { "Content-Type": "text/plain" })
-      res.end("Not found")
+      res.writeHead(400, { "Content-Type": "text/plain" })
+      res.end("Missing code or state parameter")
     }
-  })
+  } else {
+    res.writeHead(404, { "Content-Type": "text/plain" })
+    res.end("Not found")
+  }
+})
 
 server.listen(AUTH_SERVER_PORT, () => {
   console.log(`[Auth Server] Listening on http://localhost:${AUTH_SERVER_PORT}`)
@@ -558,7 +552,6 @@ if (gotTheLock) {
     //   app.name = "Agents Dev"
     // }
 
-
     // Register protocol handler (must be after app is ready)
     initialRegistration = registerProtocol()
 
@@ -613,11 +606,12 @@ if (gotTheLock) {
     // Menu icons: PNG template for settings (auto light/dark via "Template" suffix),
     // macOS native SF Symbol for terminal
     const settingsMenuIcon = nativeImage.createFromPath(
-      join(__dirname, "../../build/settingsTemplate.png")
+      join(__dirname, "../../build/settingsTemplate.png"),
     )
-    const terminalMenuIcon = process.platform === "darwin"
-      ? nativeImage.createFromNamedImage("terminal")?.resize({ width: 12, height: 12 })
-      : null
+    const terminalMenuIcon =
+      process.platform === "darwin"
+        ? nativeImage.createFromNamedImage("terminal")?.resize({ width: 12, height: 12 })
+        : null
 
     // Function to build and set application menu
     const buildMenu = () => {
@@ -632,9 +626,7 @@ if (gotTheLock) {
               click: () => app.showAboutPanel(),
             },
             {
-              label: updateAvailable
-                ? `Update to v${availableVersion}...`
-                : "Check for Updates...",
+              label: updateAvailable ? `Update to v${availableVersion}...` : "Check for Updates...",
               click: () => {
                 // Send event to renderer to clear dismiss state
                 const win = getWindow()
@@ -920,9 +912,7 @@ if (gotTheLock) {
           url: apiBase,
           name: "x-desktop-token",
           value: authData.token,
-          expirationDate: Math.floor(
-            new Date(authData.expiresAt).getTime() / 1000,
-          ),
+          expirationDate: Math.floor(new Date(authData.expiresAt).getTime() / 1000),
           httpOnly: false,
           secure: apiBase.startsWith("https"),
           sameSite: "lax" as const,
@@ -979,9 +969,7 @@ if (gotTheLock) {
     parseLaunchDirectory()
 
     // Handle deep link from app launch (Windows/Linux)
-    const deepLinkUrl = process.argv.find((arg) =>
-      arg.startsWith(`${PROTOCOL}://`),
-    )
+    const deepLinkUrl = process.argv.find((arg) => arg.startsWith(`${PROTOCOL}://`))
     if (deepLinkUrl) {
       handleDeepLink(deepLinkUrl)
     }

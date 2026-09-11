@@ -1,6 +1,6 @@
-import { DEFAULT_API_BASE_URL } from "../../../../shared/app-identity"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
+import { DEFAULT_API_BASE_URL } from "../../../../shared/app-identity"
 
 // Cache the API base URL (fetched once from main process)
 let cachedApiBase: string | null = null
@@ -82,18 +82,14 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
     const apiBase = await getApiBase()
 
     // Start the streaming fetch via IPC
-    const result = await window.desktopApi.streamFetch(
-      streamId,
-      `${apiBase}/api/agents/chat`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          id: this.config.subChatId,
-          messages: options.messages,
-        }),
-      }
-    )
+    const result = await window.desktopApi.streamFetch(streamId, `${apiBase}/api/agents/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        id: this.config.subChatId,
+        messages: options.messages,
+      }),
+    })
 
     console.log(`[RemoteTransport] Stream fetch started`, {
       streamId,
@@ -103,7 +99,11 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
     })
 
     if (!result.ok) {
-      console.error(`[RemoteTransport] ERROR`, { subId, status: result.status, error: result.error })
+      console.error(`[RemoteTransport] ERROR`, {
+        subId,
+        status: result.status,
+        error: result.error,
+      })
 
       if (result.status === 401) {
         toast.error("Authentication failed", {
@@ -134,7 +134,7 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
   private createIPCStream(
     streamId: string,
     subId: string,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
   ): ReadableStream<UIMessageChunk> {
     const decoder = new TextDecoder()
     let buffer = ""
@@ -144,7 +144,7 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
     let cleanupError: (() => void) | null = null
     let resolveNext: ((result: { done: boolean; chunk?: UIMessageChunk }) => void) | null = null
     let rejectNext: ((error: Error) => void) | null = null
-    let pendingChunks: UIMessageChunk[] = []
+    const pendingChunks: UIMessageChunk[] = []
     let streamDone = false
     let streamError: Error | null = null
 
@@ -186,7 +186,10 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
               pendingChunks.push(chunk)
             }
           } catch (parseErr) {
-            console.warn(`[RemoteTransport] Failed to parse chunk`, { subId, data: data.slice(0, 100) })
+            console.warn(`[RemoteTransport] Failed to parse chunk`, {
+              subId,
+              data: data.slice(0, 100),
+            })
           }
         }
       }
@@ -251,10 +254,12 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
         }
 
         // Wait for next chunk
-        const result = await new Promise<{ done: boolean; chunk?: UIMessageChunk }>((resolve, reject) => {
-          resolveNext = resolve
-          rejectNext = reject
-        })
+        const result = await new Promise<{ done: boolean; chunk?: UIMessageChunk }>(
+          (resolve, reject) => {
+            resolveNext = resolve
+            rejectNext = reject
+          },
+        )
 
         if (result.done) {
           cleanup()

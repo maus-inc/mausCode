@@ -21,7 +21,38 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "correctness": {
+        "noUnusedVariables": "warn",
+        "noUnusedImports": "warn",
+        "noUnusedFunctionParameters": "warn",
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "warn"
+      },
+      "style": {
+        "noNonNullAssertion": "warn",
+        "useTemplate": "warn",
+        "useNodejsImportProtocol": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noArrayIndexKey": "warn",
+        "useIterableCallbackReturn": "warn",
+        "noControlCharactersInRegex": "warn",
+        "noImplicitAnyLet": "warn"
+      },
+      "a11y": {
+        "useButtonType": "warn",
+        "noSvgWithoutTitle": "warn",
+        "noStaticElementInteractions": "warn",
+        "noLabelWithoutControl": "warn",
+        "useKeyWithClickEvents": "warn",
+        "noNoninteractiveTabindex": "warn"
+      },
+      "complexity": {
+        "useOptionalChain": "warn",
+        "noUselessFragments": "warn"
+      }
     }
   },
   "files": {

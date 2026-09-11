@@ -1,13 +1,12 @@
 import os from "node:os"
 import {
   platform,
-  getDefaultShell as platformGetDefaultShell,
-  detectShell as platformDetectShell,
   detectLocale as platformDetectLocale,
+  detectShell as platformDetectShell,
+  getDefaultShell as platformGetDefaultShell,
 } from "../platform"
 
-export const FALLBACK_SHELL =
-  platform.platform === "win32" ? "cmd.exe" : "/bin/sh"
+export const FALLBACK_SHELL = platform.platform === "win32" ? "cmd.exe" : "/bin/sh"
 export const SHELL_CRASH_THRESHOLD_MS = 1000
 
 // Global cache for shell detection (computed once per process lifetime)
@@ -109,9 +108,7 @@ export function prewarmEnvCaches(): void {
   }
 }
 
-export function sanitizeEnv(
-  env: NodeJS.ProcessEnv
-): Record<string, string> | undefined {
+export function sanitizeEnv(env: NodeJS.ProcessEnv): Record<string, string> | undefined {
   const sanitized: Record<string, string> = {}
 
   for (const [key, value] of Object.entries(env)) {
@@ -310,7 +307,7 @@ function hasAllowedPrefix(key: string, isWindows: boolean): boolean {
  */
 export function buildSafeEnv(
   env: Record<string, string>,
-  options?: { platform?: NodeJS.Platform }
+  options?: { platform?: NodeJS.Platform },
 ): Record<string, string> {
   const currentPlatform = options?.platform ?? os.platform()
   const isWindows = currentPlatform === "win32"
@@ -339,15 +336,7 @@ export function buildTerminalEnv(params: {
   workspacePath?: string
   rootPath?: string
 }): Record<string, string> {
-  const {
-    shell,
-    paneId,
-    tabId,
-    workspaceId,
-    workspaceName,
-    workspacePath,
-    rootPath,
-  } = params
+  const { shell, paneId, tabId, workspaceId, workspaceName, workspacePath, rootPath } = params
 
   // Get Electron's process.env and filter to only allowlisted safe vars
   const rawBaseEnv = sanitizeEnv(process.env) || {}

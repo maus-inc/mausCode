@@ -1,5 +1,5 @@
-import { index, sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
 import { relations } from "drizzle-orm"
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
 import { createId } from "../utils"
 
 // ============ PROJECTS ============
@@ -9,12 +9,8 @@ export const projects = sqliteTable("projects", {
     .$defaultFn(() => createId()),
   name: text("name").notNull(),
   path: text("path").notNull().unique(),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   // Git remote info (extracted from local .git)
   gitRemoteUrl: text("git_remote_url"),
   gitProvider: text("git_provider"), // "github" | "gitlab" | "bitbucket" | null
@@ -29,31 +25,29 @@ export const projectsRelations = relations(projects, ({ many }) => ({
 }))
 
 // ============ CHATS ============
-export const chats = sqliteTable("chats", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  name: text("name"),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  archivedAt: integer("archived_at", { mode: "timestamp" }),
-  // Worktree fields (for git isolation per chat)
-  worktreePath: text("worktree_path"),
-  branch: text("branch"),
-  baseBranch: text("base_branch"),
-  // PR tracking fields
-  prUrl: text("pr_url"),
-  prNumber: integer("pr_number"),
-}, (table) => [
-  index("chats_worktree_path_idx").on(table.worktreePath),
-])
+export const chats = sqliteTable(
+  "chats",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    name: text("name"),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
+    // Worktree fields (for git isolation per chat)
+    worktreePath: text("worktree_path"),
+    branch: text("branch"),
+    baseBranch: text("base_branch"),
+    // PR tracking fields
+    prUrl: text("pr_url"),
+    prNumber: integer("pr_number"),
+  },
+  (table) => [index("chats_worktree_path_idx").on(table.worktreePath)],
+)
 
 export const chatsRelations = relations(chats, ({ one, many }) => ({
   project: one(projects, {
@@ -76,12 +70,8 @@ export const subChats = sqliteTable("sub_chats", {
   streamId: text("stream_id"), // Track in-progress streams
   mode: text("mode").notNull().default("agent"), // "plan" | "agent"
   messages: text("messages").notNull().default("[]"), // JSON array
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
 
 export const subChatsRelations = relations(subChats, ({ one }) => ({
@@ -97,9 +87,7 @@ export const subChatsRelations = relations(subChats, ({ one }) => ({
 export const claudeCodeCredentials = sqliteTable("claude_code_credentials", {
   id: text("id").primaryKey().default("default"), // Single row, always "default"
   oauthToken: text("oauth_token").notNull(), // Encrypted with safeStorage
-  connectedAt: integer("connected_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
+  connectedAt: integer("connected_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   userId: text("user_id"), // Desktop auth user ID (for reference)
 })
 
@@ -112,9 +100,7 @@ export const anthropicAccounts = sqliteTable("anthropic_accounts", {
   email: text("email"), // User's email from OAuth (if available)
   displayName: text("display_name"), // User-editable label
   oauthToken: text("oauth_token").notNull(), // Encrypted with safeStorage
-  connectedAt: integer("connected_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
+  connectedAt: integer("connected_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
   desktopUserId: text("desktop_user_id"), // Reference to mausCode control-plane user
 })
@@ -123,9 +109,7 @@ export const anthropicAccounts = sqliteTable("anthropic_accounts", {
 export const anthropicSettings = sqliteTable("anthropic_settings", {
   id: text("id").primaryKey().default("singleton"), // Single row
   activeAccountId: text("active_account_id"), // References anthropicAccounts.id
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
 
 // ============ TYPE EXPORTS ============

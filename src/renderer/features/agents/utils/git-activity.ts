@@ -25,10 +25,7 @@ export interface ChangedFileInfo {
 /**
  * Extract commit message from a git commit command and its output.
  */
-function extractCommitInfo(
-  command: string,
-  stdout: string,
-): GitCommitInfo | null {
+function extractCommitInfo(command: string, stdout: string): GitCommitInfo | null {
   if (!/git\s+commit/.test(command)) return null
 
   // Verify commit actually succeeded by checking stdout for git's commit output
@@ -41,9 +38,7 @@ function extractCommitInfo(
 
   // If stdout message is truncated, try to get full message from command
   // Pattern 1: HEREDOC pattern (Claude's preferred format)
-  const heredocMatch = command.match(
-    /<<'?EOF'?\s*\n([\s\S]*?)\n\s*EOF/,
-  )
+  const heredocMatch = command.match(/<<'?EOF'?\s*\n([\s\S]*?)\n\s*EOF/)
   if (heredocMatch) {
     const heredocFirstLine = heredocMatch[1]!.split("\n")[0]!.trim()
     if (heredocFirstLine) {
@@ -69,9 +64,7 @@ function extractPrInfo(command: string, stdout: string): GitPrInfo | null {
   if (!/gh\s+pr\s+create/.test(command)) return null
 
   // Extract URL from stdout
-  const urlMatch = stdout.match(
-    /(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/,
-  )
+  const urlMatch = stdout.match(/(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/)
   if (!urlMatch) return null
 
   const url = urlMatch[1]!

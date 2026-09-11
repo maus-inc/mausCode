@@ -5,12 +5,7 @@ import { getAuthManager } from "../../../index"
 import { getClaudeShellEnvironment } from "../../claude"
 import { getExistingClaudeToken } from "../../claude-token"
 import { getApiUrl } from "../../config"
-import {
-  anthropicAccounts,
-  anthropicSettings,
-  claudeCodeCredentials,
-  getDatabase,
-} from "../../db"
+import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../../db"
 import { createId } from "../../db/utils"
 import { publicProcedure, router } from "../index"
 
@@ -86,9 +81,7 @@ function storeOAuthToken(oauthToken: string, setAsActive = true): string {
   }
 
   // Also update legacy table for backward compatibility
-  db.delete(claudeCodeCredentials)
-    .where(eq(claudeCodeCredentials.id, "default"))
-    .run()
+  db.delete(claudeCodeCredentials).where(eq(claudeCodeCredentials.id, "default")).run()
 
   db.insert(claudeCodeCredentials)
     .values({
@@ -114,7 +107,11 @@ export const claudeCodeRouter = router({
    */
   hasExistingCliConfig: publicProcedure.query(() => {
     const shellEnv = getClaudeShellEnvironment()
-    const hasConfig = !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN || shellEnv.ANTHROPIC_BASE_URL)
+    const hasConfig = !!(
+      shellEnv.ANTHROPIC_API_KEY ||
+      shellEnv.ANTHROPIC_AUTH_TOKEN ||
+      shellEnv.ANTHROPIC_BASE_URL
+    )
     return {
       hasConfig,
       hasApiKey: !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN),
@@ -203,13 +200,11 @@ export const claudeCodeRouter = router({
       z.object({
         sandboxUrl: z.string(),
         sessionId: z.string(),
-      })
+      }),
     )
     .query(async ({ input }) => {
       try {
-        const response = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
+        const response = await fetch(`${input.sandboxUrl}/api/auth/${input.sessionId}/status`)
 
         if (!response.ok) {
           return { state: "error" as const, oauthUrl: null, error: "Failed to poll status" }
@@ -236,18 +231,15 @@ export const claudeCodeRouter = router({
         sandboxUrl: z.string(),
         sessionId: z.string(),
         code: z.string().min(1),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Submit code to sandbox
-      const codeRes = await fetch(
-        `${input.sandboxUrl}/api/auth/${input.sessionId}/code`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: input.code }),
-        }
-      )
+      const codeRes = await fetch(`${input.sandboxUrl}/api/auth/${input.sessionId}/code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: input.code }),
+      })
 
       if (!codeRes.ok) {
         throw new Error(`Code submission failed: ${codeRes.statusText}`)
@@ -259,9 +251,7 @@ export const claudeCodeRouter = router({
       for (let i = 0; i < 10; i++) {
         await new Promise((r) => setTimeout(r, 1000))
 
-        const statusRes = await fetch(
-          `${input.sandboxUrl}/api/auth/${input.sessionId}/status`
-        )
+        const statusRes = await fetch(`${input.sandboxUrl}/api/auth/${input.sessionId}/status`)
 
         if (!statusRes.ok) continue
 
@@ -294,7 +284,7 @@ export const claudeCodeRouter = router({
     .input(
       z.object({
         token: z.string().min(1),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const oauthToken = input.token.trim()
@@ -394,9 +384,7 @@ export const claudeCodeRouter = router({
 
     if (settings?.activeAccountId) {
       // Remove active account
-      db.delete(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, settings.activeAccountId))
-        .run()
+      db.delete(anthropicAccounts).where(eq(anthropicAccounts.id, settings.activeAccountId)).run()
 
       // Try to set another account as active
       const firstRemaining = db.select().from(anthropicAccounts).limit(1).get()
@@ -421,9 +409,7 @@ export const claudeCodeRouter = router({
     }
 
     // Also clear legacy table
-    db.delete(claudeCodeCredentials)
-      .where(eq(claudeCodeCredentials.id, "default"))
-      .run()
+    db.delete(claudeCodeCredentials).where(eq(claudeCodeCredentials.id, "default")).run()
 
     console.log("[ClaudeCode] Disconnected")
     return { success: true }
@@ -432,10 +418,8 @@ export const claudeCodeRouter = router({
   /**
    * Open OAuth URL in browser
    */
-  openOAuthUrl: publicProcedure
-    .input(z.string())
-    .mutation(async ({ input: url }) => {
-      await shell.openExternal(url)
-      return { success: true }
-    }),
+  openOAuthUrl: publicProcedure.input(z.string()).mutation(async ({ input: url }) => {
+    await shell.openExternal(url)
+    return { success: true }
+  }),
 })

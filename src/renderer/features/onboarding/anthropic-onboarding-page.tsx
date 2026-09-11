@@ -7,10 +7,7 @@ import { useEffect, useRef, useState } from "react"
 import { ClaudeCodeIcon, IconSpinner } from "../../components/ui/icons"
 import { Input } from "../../components/ui/input"
 import { Logo } from "../../components/ui/logo"
-import {
-  anthropicOnboardingCompletedAtom,
-  billingMethodAtom,
-} from "../../lib/atoms"
+import { anthropicOnboardingCompletedAtom, billingMethodAtom } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
 
 type AuthFlowState =
@@ -42,9 +39,7 @@ export function AnthropicOnboardingPage() {
   const [isUsingExistingToken, setIsUsingExistingToken] = useState(false)
   const [existingTokenError, setExistingTokenError] = useState<string | null>(null)
   const urlOpenedRef = useRef(false)
-  const setAnthropicOnboardingCompleted = useSetAtom(
-    anthropicOnboardingCompletedAtom
-  )
+  const setAnthropicOnboardingCompleted = useSetAtom(anthropicOnboardingCompletedAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
 
   const handleBack = () => {
@@ -80,7 +75,7 @@ export function AnthropicOnboardingPage() {
     {
       enabled: flowState.step === "waiting_url",
       refetchInterval: 1500,
-    }
+    },
   )
 
   // Auto-start auth on mount
@@ -119,10 +114,7 @@ export function AnthropicOnboardingPage() {
         sandboxUrl: flowState.sandboxUrl,
         sessionId: flowState.sessionId,
       })
-    } else if (
-      flowState.step === "waiting_url" &&
-      pollStatusQuery.data?.state === "error"
-    ) {
+    } else if (flowState.step === "waiting_url" && pollStatusQuery.data?.state === "error") {
       setFlowState({
         step: "error",
         message: pollStatusQuery.data.error || "Failed to get OAuth URL",
@@ -132,11 +124,7 @@ export function AnthropicOnboardingPage() {
 
   // Open URL in browser when ready (after user clicked Connect)
   useEffect(() => {
-    if (
-      flowState.step === "has_url" &&
-      userClickedConnect &&
-      !urlOpenedRef.current
-    ) {
+    if (flowState.step === "has_url" && userClickedConnect && !urlOpenedRef.current) {
       urlOpenedRef.current = true
       setUrlOpened(true)
       // Use Electron's shell.openExternal via tRPC
@@ -174,8 +162,7 @@ export function AnthropicOnboardingPage() {
       } catch (err) {
         setFlowState({
           step: "error",
-          message:
-            err instanceof Error ? err.message : "Failed to start authentication",
+          message: err instanceof Error ? err.message : "Failed to start authentication",
         })
       }
     }
@@ -193,9 +180,7 @@ export function AnthropicOnboardingPage() {
       await importSystemTokenMutation.mutateAsync()
       setAnthropicOnboardingCompleted(true)
     } catch (err) {
-      setExistingTokenError(
-        err instanceof Error ? err.message : "Failed to use existing token"
-      )
+      setExistingTokenError(err instanceof Error ? err.message : "Failed to use existing token")
       setIsUsingExistingToken(false)
     }
   }
@@ -252,8 +237,7 @@ export function AnthropicOnboardingPage() {
     }
   }
 
-  const isLoadingAuth =
-    flowState.step === "starting" || flowState.step === "waiting_url"
+  const isLoadingAuth = flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
 
   return (
@@ -284,9 +268,7 @@ export function AnthropicOnboardingPage() {
             </div>
           </div>
           <div className="space-y-1">
-            <h1 className="text-base font-semibold tracking-tight">
-              Connect Claude Code
-            </h1>
+            <h1 className="text-base font-semibold tracking-tight">Connect Claude Code</h1>
             <p className="text-sm text-muted-foreground">
               Connect your Claude Code subscription to get started
             </p>
@@ -299,9 +281,7 @@ export function AnthropicOnboardingPage() {
           {shouldOfferExistingToken && flowState.step === "idle" && (
             <div className="space-y-4 w-full">
               <div className="p-4 bg-muted/50 border border-border rounded-lg">
-                <p className="text-sm font-medium">
-                  Existing Claude Code credentials found
-                </p>
+                <p className="text-sm font-medium">Existing Claude Code credentials found</p>
                 {existingToken && (
                   <pre className="mt-2 px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap break-words font-mono bg-background/60 rounded border border-border/60">
                     {formatTokenPreview(existingToken)}
@@ -310,9 +290,7 @@ export function AnthropicOnboardingPage() {
               </div>
               {existingTokenError && (
                 <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                  <p className="text-sm text-destructive">
-                    {existingTokenError}
-                  </p>
+                  <p className="text-sm text-destructive">{existingTokenError}</p>
                 </div>
               )}
               <div className="flex w-full gap-2">
@@ -359,9 +337,7 @@ export function AnthropicOnboardingPage() {
 
           {/* Code Input - Show after URL is opened, if has_url (after redirect), or if submitting */}
           {/* No Continue button - auto-submit on valid code paste */}
-          {(urlOpened ||
-            flowState.step === "has_url" ||
-            flowState.step === "submitting") && (
+          {(urlOpened || flowState.step === "has_url" || flowState.step === "submitting") && (
             <div className="space-y-4">
               <div className="relative">
                 <Input
@@ -410,7 +386,6 @@ export function AnthropicOnboardingPage() {
               </button>
             </div>
           )}
-
         </div>
       </div>
     </div>

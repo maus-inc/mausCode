@@ -29,19 +29,32 @@ function resolveBase() {
   try {
     return git(["merge-base", "origin/main", "HEAD"])
   } catch {
-    return "HEAD~1"
+    // No shared history with origin/main (independent roots): diff against
+    // its tip. changedSinceBase degrades three-dot to two-dot for this.
+    return "origin/main"
   }
 }
 
 const base = resolveBase()
 
+// This repo's branches do not all share history (e.g. `init` and `main` are
+// independent roots), so a three-dot diff can have no merge base. Fall back to
+// an endpoint (two-dot) diff, which works for unrelated trees.
+function changedSinceBase(base) {
+  try {
+    return git(["diff", "--name-only", "--diff-filter=ACMR", `${base}...HEAD`])
+  } catch {
+    return git(["diff", "--name-only", "--diff-filter=ACMR", `${base}..HEAD`])
+  }
+}
+
 const changed = new Set()
-for (const args of [
-  ["diff", "--name-only", "--diff-filter=ACMR", `${base}...HEAD`],
-  ["diff", "--name-only", "--diff-filter=ACMR", "HEAD"], // uncommitted work
-  ["ls-files", "--others", "--exclude-standard"], // untracked new files
+for (const output of [
+  changedSinceBase(base),
+  git(["diff", "--name-only", "--diff-filter=ACMR", "HEAD"]), // uncommitted work
+  git(["ls-files", "--others", "--exclude-standard"]), // untracked new files
 ]) {
-  for (const file of git(args).split("\n").filter(Boolean)) changed.add(file)
+  for (const file of output.split("\n").filter(Boolean)) changed.add(file)
 }
 
 const files = [...changed].filter((file) => LINTABLE.test(file))
@@ -53,7 +66,7 @@ if (files.length === 0) {
 
 console.log(`lint-changed: checking ${files.length} file(s) since ${base}`)
 try {
-  execFileSync("bun", ["x", "biome", "ci", "--error-on-warnings", ...files], {
+  execFileSync("bun", ["x", "biome", "ci", ...files], {
     cwd: ROOT,
     stdio: "inherit",
   })

@@ -2,10 +2,11 @@
  * tRPC client for the mausCode control-plane web backend
  * Uses signedFetch via IPC for authentication (no CORS issues)
  */
-import { DEFAULT_API_BASE_URL } from "../../shared/app-identity"
+
 import { createTRPCClient, httpLink } from "@trpc/client"
-import type { AppRouter } from "../../../../web/server/api/root"
 import SuperJSON from "superjson"
+import type { AppRouter } from "../../../../web/server/api/root"
+import { DEFAULT_API_BASE_URL } from "../../shared/app-identity"
 
 // Placeholder URL - actual base is fetched dynamically from main process
 const TRPC_PLACEHOLDER = "/__dynamic__/api/trpc"

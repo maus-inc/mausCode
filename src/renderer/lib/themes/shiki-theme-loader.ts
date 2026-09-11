@@ -1,7 +1,7 @@
 import * as shiki from "shiki"
+import type { VSCodeFullTheme } from "../atoms"
 import { isBuiltinTheme } from "../vscode-themes"
 import { getBuiltinThemeById } from "./builtin-themes"
-import type { VSCodeFullTheme } from "../atoms"
 
 /**
  * Shared Shiki highlighter instance
@@ -172,17 +172,17 @@ function getShikiThemeForHighlighting(themeId: string): string {
   if (themeId in THEME_TO_SHIKI_MAP) {
     return THEME_TO_SHIKI_MAP[themeId]
   }
-  
+
   // If it's already a shiki bundled theme, use it directly
   if (isShikiBundledTheme(themeId)) {
     return themeId
   }
-  
+
   // If the theme is loaded in our cache (has tokenColors), use it directly
   if (fullThemesCache.has(themeId)) {
     return themeId
   }
-  
+
   // Check the theme type and use appropriate default
   const builtinTheme = getBuiltinThemeById(themeId)
   if (builtinTheme) {
@@ -192,7 +192,7 @@ function getShikiThemeForHighlighting(themeId: string): string {
     }
     return builtinTheme.type === "light" ? "github-light" : "github-dark"
   }
-  
+
   // Default to github-dark
   return "github-dark"
 }

@@ -1,17 +1,17 @@
-import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import { getDatabase, projects } from "../../db"
-import { eq, desc } from "drizzle-orm"
-import { dialog, BrowserWindow, app } from "electron"
-import { basename, join } from "path"
 import { exec } from "node:child_process"
-import { promisify } from "node:util"
 import { existsSync } from "node:fs"
-import { mkdir, copyFile, unlink } from "node:fs/promises"
+import { copyFile, mkdir, unlink } from "node:fs/promises"
 import { extname } from "node:path"
-import { getGitRemoteInfo } from "../../git"
+import { promisify } from "node:util"
+import { desc, eq } from "drizzle-orm"
+import { app, BrowserWindow, dialog } from "electron"
+import { basename, join } from "path"
+import { z } from "zod"
 import { trackProjectOpened } from "../../analytics"
 import { getLaunchDirectory } from "../../cli"
+import { getDatabase, projects } from "../../db"
+import { getGitRemoteInfo } from "../../git"
+import { publicProcedure, router } from "../index"
 
 const execAsync = promisify(exec)
 
@@ -35,12 +35,10 @@ export const projectsRouter = router({
   /**
    * Get a single project by ID
    */
-  get: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(({ input }) => {
-      const db = getDatabase()
-      return db.select().from(projects).where(eq(projects.id, input.id)).get()
-    }),
+  get: publicProcedure.input(z.object({ id: z.string() })).query(({ input }) => {
+    const db = getDatabase()
+    return db.select().from(projects).where(eq(projects.id, input.id)).get()
+  }),
 
   /**
    * Open folder picker and create project
@@ -80,11 +78,7 @@ export const projectsRouter = router({
     const db = getDatabase()
 
     // Check if project already exists
-    const existing = db
-      .select()
-      .from(projects)
-      .where(eq(projects.path, folderPath))
-      .get()
+    const existing = db.select().from(projects).where(eq(projects.path, folderPath)).get()
 
     if (existing) {
       // Update the updatedAt timestamp and git info (in case remote changed)
@@ -143,11 +137,7 @@ export const projectsRouter = router({
       const name = input.name || basename(input.path)
 
       // Check if project already exists
-      const existing = db
-        .select()
-        .from(projects)
-        .where(eq(projects.path, input.path))
-        .get()
+      const existing = db.select().from(projects).where(eq(projects.path, input.path)).get()
 
       if (existing) {
         return existing
@@ -188,16 +178,10 @@ export const projectsRouter = router({
   /**
    * Delete a project and all its chats
    */
-  delete: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(({ input }) => {
-      const db = getDatabase()
-      return db
-        .delete(projects)
-        .where(eq(projects.id, input.id))
-        .returning()
-        .get()
-    }),
+  delete: publicProcedure.input(z.object({ id: z.string() })).mutation(({ input }) => {
+    const db = getDatabase()
+    return db.delete(projects).where(eq(projects.id, input.id)).returning().get()
+  }),
 
   /**
    * Refresh git info for a project (in case remote changed)
@@ -208,11 +192,7 @@ export const projectsRouter = router({
       const db = getDatabase()
 
       // Get project
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, input.id))
-        .get()
+      const project = db.select().from(projects).where(eq(projects.id, input.id)).get()
 
       if (!project) {
         return null
@@ -249,9 +229,7 @@ export const projectsRouter = router({
       let repo: string | null = null
 
       // Match HTTPS format: https://github.com/owner/repo
-      const httpsMatch = repoUrl.match(
-        /https?:\/\/github\.com\/([^/]+)\/([^/]+)/,
-      )
+      const httpsMatch = repoUrl.match(/https?:\/\/github\.com\/([^/]+)\/([^/]+)/)
       if (httpsMatch) {
         owner = httpsMatch[1] || null
         repo = httpsMatch[2]?.replace(/\.git$/, "") || null
@@ -284,11 +262,7 @@ export const projectsRouter = router({
       if (existsSync(clonePath)) {
         // Project might already exist in DB
         const db = getDatabase()
-        const existing = db
-          .select()
-          .from(projects)
-          .where(eq(projects.path, clonePath))
-          .get()
+        const existing = db.select().from(projects).where(eq(projects.path, clonePath)).get()
 
         if (existing) {
           trackProjectOpened({
@@ -361,7 +335,7 @@ export const projectsRouter = router({
       z.object({
         expectedOwner: z.string(),
         expectedRepo: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const window = ctx.getWindow?.() ?? BrowserWindow.getFocusedWindow()
@@ -390,10 +364,7 @@ export const projectsRouter = router({
       const gitInfo = await getGitRemoteInfo(folderPath)
 
       // Validate it's the correct repo
-      if (
-        gitInfo.owner !== input.expectedOwner ||
-        gitInfo.repo !== input.expectedRepo
-      ) {
+      if (gitInfo.owner !== input.expectedOwner || gitInfo.repo !== input.expectedRepo) {
         return {
           success: false as const,
           reason: "wrong-repo" as const,
@@ -406,11 +377,7 @@ export const projectsRouter = router({
 
       // Create or update project
       const db = getDatabase()
-      const existing = db
-        .select()
-        .from(projects)
-        .where(eq(projects.path, folderPath))
-        .get()
+      const existing = db.select().from(projects).where(eq(projects.path, folderPath)).get()
 
       if (existing) {
         // Update git info in case it changed
@@ -502,9 +469,7 @@ export const projectsRouter = router({
         properties: ["openFile"],
         title: "Select Project Icon",
         buttonLabel: "Set Icon",
-        filters: [
-          { name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "webp", "ico"] },
-        ],
+        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "webp", "ico"] }],
       })
 
       if (result.canceled || !result.filePaths[0]) return null
@@ -529,21 +494,21 @@ export const projectsRouter = router({
   /**
    * Remove custom icon for a project
    */
-  removeIcon: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const db = getDatabase()
-      const project = db.select().from(projects).where(eq(projects.id, input.id)).get()
+  removeIcon: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ input }) => {
+    const db = getDatabase()
+    const project = db.select().from(projects).where(eq(projects.id, input.id)).get()
 
-      if (project?.iconPath && existsSync(project.iconPath)) {
-        try { await unlink(project.iconPath) } catch {}
-      }
+    if (project?.iconPath && existsSync(project.iconPath)) {
+      try {
+        await unlink(project.iconPath)
+      } catch {}
+    }
 
-      return db
-        .update(projects)
-        .set({ iconPath: null, updatedAt: new Date() })
-        .where(eq(projects.id, input.id))
-        .returning()
-        .get()
-    }),
+    return db
+      .update(projects)
+      .set({ iconPath: null, updatedAt: new Date() })
+      .where(eq(projects.id, input.id))
+      .returning()
+      .get()
+  }),
 })

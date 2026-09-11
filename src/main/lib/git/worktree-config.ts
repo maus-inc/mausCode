@@ -1,11 +1,8 @@
-import { readFile, writeFile, mkdir, access } from "node:fs/promises"
-import { join, dirname, isAbsolute } from "node:path"
 import { exec } from "node:child_process"
+import { access, mkdir, readFile, writeFile } from "node:fs/promises"
+import { dirname, isAbsolute, join } from "node:path"
 import { promisify } from "node:util"
-import {
-  WORKTREE_CONFIG_PATH,
-  LEGACY_WORKTREE_CONFIG_PATH,
-} from "../../../shared/app-identity"
+import { LEGACY_WORKTREE_CONFIG_PATH, WORKTREE_CONFIG_PATH } from "../../../shared/app-identity"
 
 const execAsync = promisify(exec)
 
@@ -74,9 +71,7 @@ export async function detectWorktreeConfig(
 ): Promise<DetectedWorktreeConfig> {
   // 1. Check custom path if provided
   if (customPath) {
-    const fullPath = isAbsolute(customPath)
-      ? customPath
-      : join(projectPath, customPath)
+    const fullPath = isAbsolute(customPath) ? customPath : join(projectPath, customPath)
     const config = await readJsonFile<WorktreeConfig>(fullPath)
     if (config) {
       return { config, path: fullPath, source: "custom" }
@@ -117,9 +112,7 @@ export async function detectWorktreeConfig(
  * Get available config paths for a project
  * Returns which paths exist and can be used
  */
-export async function getAvailableConfigPaths(
-  projectPath: string,
-): Promise<AvailableConfigPaths> {
+export async function getAvailableConfigPaths(projectPath: string): Promise<AvailableConfigPaths> {
   const mauscodePath = join(projectPath, WORKTREE_CONFIG_PATH)
   const cursorPath = join(projectPath, CURSOR_CONFIG_PATH)
   const legacyPath = join(projectPath, LEGACY_WORKTREE_CONFIG_PATH)
@@ -282,7 +275,7 @@ export async function executeWorktreeSetup(
 
   console.log(
     `[worktree-setup] Completed: ${result.commandsRun}/${commandList.length} commands, ` +
-    `${result.errors.length} errors`
+      `${result.errors.length} errors`,
   )
 
   return result

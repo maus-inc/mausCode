@@ -1,8 +1,8 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { useState, useEffect } from "react"
 import { ChevronLeft } from "lucide-react"
+import { useEffect, useState } from "react"
 
 import { IconSpinner, KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
 import { Input } from "../../components/ui/input"
@@ -11,8 +11,8 @@ import { Logo } from "../../components/ui/logo"
 import {
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
-  customClaudeConfigAtom,
   type CustomClaudeConfig,
+  customClaudeConfigAtom,
 } from "../../lib/atoms"
 import { cn } from "../../lib/utils"
 
@@ -108,9 +108,7 @@ export function ApiKeyOnboardingPage() {
     }
   }
 
-  const canSubmitCustomModel = Boolean(
-    model.trim() && token.trim() && baseUrl.trim()
-  )
+  const canSubmitCustomModel = Boolean(model.trim() && token.trim() && baseUrl.trim())
 
   // Simple API key input mode
   if (!isCustomModel) {
@@ -142,9 +140,7 @@ export function ApiKeyOnboardingPage() {
               </div>
             </div>
             <div className="space-y-1">
-              <h1 className="text-base font-semibold tracking-tight">
-                Enter API Key
-              </h1>
+              <h1 className="text-base font-semibold tracking-tight">Enter API Key</h1>
               <p className="text-sm text-muted-foreground">
                 Get your API key from{" "}
                 <a
@@ -215,12 +211,8 @@ export function ApiKeyOnboardingPage() {
             </div>
           </div>
           <div className="space-y-1">
-            <h1 className="text-base font-semibold tracking-tight">
-              Configure Custom Model
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Enter your custom model configuration
-            </p>
+            <h1 className="text-base font-semibold tracking-tight">Configure Custom Model</h1>
+            <p className="text-sm text-muted-foreground">Enter your custom model configuration</p>
           </div>
         </div>
 
@@ -235,9 +227,7 @@ export function ApiKeyOnboardingPage() {
               placeholder="claude-sonnet-4-6"
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">
-              Model identifier for API requests
-            </p>
+            <p className="text-xs text-muted-foreground">Model identifier for API requests</p>
           </div>
 
           {/* API Token */}
@@ -250,9 +240,7 @@ export function ApiKeyOnboardingPage() {
               placeholder="sk-ant-..."
               className="w-full"
             />
-            <p className="text-xs text-muted-foreground">
-              Your API key or token
-            </p>
+            <p className="text-xs text-muted-foreground">Your API key or token</p>
           </div>
 
           {/* Base URL */}
@@ -274,8 +262,7 @@ export function ApiKeyOnboardingPage() {
           disabled={!canSubmitCustomModel || isSubmitting}
           className={cn(
             "w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] flex items-center justify-center",
-            (!canSubmitCustomModel || isSubmitting) &&
-              "opacity-50 cursor-not-allowed"
+            (!canSubmitCustomModel || isSubmitting) && "opacity-50 cursor-not-allowed",
           )}
         >
           {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Continue"}

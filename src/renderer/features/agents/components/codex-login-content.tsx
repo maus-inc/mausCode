@@ -56,9 +56,7 @@ export function CodexLoginContent({
         <div className="space-y-1">
           <h1 className="text-base font-semibold tracking-tight">Connect OpenAI Codex</h1>
           <p className="text-sm text-muted-foreground">
-            {isApiKeyMode
-              ? "Connect with your API key"
-              : "Connect your Codex subscription"}
+            {isApiKeyMode ? "Connect with your API key" : "Connect your Codex subscription"}
           </p>
 
           {!isApiKeyMode && url && (
@@ -110,7 +108,11 @@ export function CodexLoginContent({
               )}
 
               {showConnect && (
-                <Button onClick={onConnect} disabled={!onConnect || isConnecting} className="w-full">
+                <Button
+                  onClick={onConnect}
+                  disabled={!onConnect || isConnecting}
+                  className="w-full"
+                >
                   {isConnecting ? "Connecting..." : "Connect"}
                 </Button>
               )}

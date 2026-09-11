@@ -1,23 +1,23 @@
 import {
-  BrowserWindow,
-  Notification,
-  shell,
-  nativeTheme,
-  ipcMain,
   app,
+  BrowserWindow,
   clipboard,
-  session,
-  nativeImage,
   dialog,
+  ipcMain,
+  Notification,
+  nativeImage,
+  nativeTheme,
+  session,
+  shell,
 } from "electron"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
-import { createAppRouter } from "../lib/trpc/routers"
-import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
+import { getAuthManager, getBaseUrl, handleAuthCode } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
-import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/routers/claude"
-import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
+import { createAppRouter } from "../lib/trpc/routers"
+import { abortAllClaudeSessions, hasActiveClaudeSessions } from "../lib/trpc/routers/claude"
+import { abortAllCodexStreams, hasActiveCodexStreams } from "../lib/trpc/routers/codex"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
 
@@ -29,9 +29,7 @@ export function setIsQuitting(value: boolean): void {
 }
 
 // Helper to get window from IPC event
-function getWindowFromEvent(
-  event: Electron.IpcMainInvokeEvent,
-): BrowserWindow | null {
+function getWindowFromEvent(event: Electron.IpcMainInvokeEvent): BrowserWindow | null {
   const webContents = event.sender
   const win = BrowserWindow.fromWebContents(webContents)
   return win && !win.isDestroyed() ? win : null
@@ -106,45 +104,42 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle(
-    "app:show-notification",
-    (event, options: { title: string; body: string }) => {
-      try {
-        if (!Notification.isSupported()) {
-          console.warn("[Main] Notifications not supported on this system")
-          return
-        }
-
-        // On macOS, the app icon is used automatically — no custom icon needed.
-        // On Windows, use .ico; on Linux, use .png.
-        let icon: Electron.NativeImage | undefined
-        if (process.platform !== "darwin") {
-          const ext = process.platform === "win32" ? "icon.ico" : "icon.png"
-          const iconPath = join(__dirname, "../../build", ext)
-          icon = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined
-        }
-
-        const notification = new Notification({
-          title: options.title,
-          body: options.body,
-          ...(icon && { icon }),
-          ...(process.platform === "win32" && { silent: false }),
-        })
-
-        notification.on("click", () => {
-          const win = getWindowFromEvent(event)
-          if (win) {
-            if (win.isMinimized()) win.restore()
-            win.focus()
-          }
-        })
-
-        notification.show()
-      } catch (error) {
-        console.error("[Main] Failed to show notification:", error)
+  ipcMain.handle("app:show-notification", (event, options: { title: string; body: string }) => {
+    try {
+      if (!Notification.isSupported()) {
+        console.warn("[Main] Notifications not supported on this system")
+        return
       }
-    },
-  )
+
+      // On macOS, the app icon is used automatically — no custom icon needed.
+      // On Windows, use .ico; on Linux, use .png.
+      let icon: Electron.NativeImage | undefined
+      if (process.platform !== "darwin") {
+        const ext = process.platform === "win32" ? "icon.ico" : "icon.png"
+        const iconPath = join(__dirname, "../../build", ext)
+        icon = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined
+      }
+
+      const notification = new Notification({
+        title: options.title,
+        body: options.body,
+        ...(icon && { icon }),
+        ...(process.platform === "win32" && { silent: false }),
+      })
+
+      notification.on("click", () => {
+        const win = getWindowFromEvent(event)
+        if (win) {
+          if (win.isMinimized()) win.restore()
+          win.focus()
+        }
+      })
+
+      notification.show()
+    } catch (error) {
+      console.error("[Main] Failed to show notification:", error)
+    }
+  })
 
   // API base URL for fetch requests
   ipcMain.handle("app:get-api-base-url", () => getBaseUrl())
@@ -178,20 +173,17 @@ function registerIpcHandlers(): void {
   })
 
   // Traffic light visibility control (for hybrid native/custom approach)
-  ipcMain.handle(
-    "window:set-traffic-light-visibility",
-    (event, visible: boolean) => {
-      const win = getWindowFromEvent(event)
-      if (win && process.platform === "darwin") {
-        // In fullscreen, always show native traffic lights (don't let React hide them)
-        if (win.isFullScreen()) {
-          win.setWindowButtonVisibility(true)
-        } else {
-          win.setWindowButtonVisibility(visible)
-        }
+  ipcMain.handle("window:set-traffic-light-visibility", (event, visible: boolean) => {
+    const win = getWindowFromEvent(event)
+    if (win && process.platform === "darwin") {
+      // In fullscreen, always show native traffic lights (don't let React hide them)
+      if (win.isFullScreen()) {
+        win.setWindowButtonVisibility(true)
+      } else {
+        win.setWindowButtonVisibility(visible)
       }
-    },
-  )
+    }
+  })
 
   // Zoom controls
   ipcMain.handle("window:zoom-in", (event) => {
@@ -285,14 +277,10 @@ function registerIpcHandlers(): void {
   })
 
   // Shell
-  ipcMain.handle("shell:open-external", (_event, url: string) =>
-    shell.openExternal(url),
-  )
+  ipcMain.handle("shell:open-external", (_event, url: string) => shell.openExternal(url))
 
   // Clipboard
-  ipcMain.handle("clipboard:write", (_event, text: string) =>
-    clipboard.writeText(text),
-  )
+  ipcMain.handle("clipboard:write", (_event, text: string) => clipboard.writeText(text))
   ipcMain.handle("clipboard:read", () => clipboard.readText())
 
   // Save file with native dialog
@@ -300,7 +288,11 @@ function registerIpcHandlers(): void {
     "dialog:save-file",
     async (
       event,
-      options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] },
+      options: {
+        base64Data: string
+        filename: string
+        filters?: { name: string; extensions: string[] }[]
+      },
     ) => {
       const win = getWindowFromEvent(event)
       if (!win) return { success: false }
@@ -392,10 +384,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("auth:submit-code", async (event, code: string) => {
     if (!validateSender(event)) return
     if (!code || typeof code !== "string") {
-      getWindowFromEvent(event)?.webContents.send(
-        "auth:error",
-        "Invalid authorization code",
-      )
+      getWindowFromEvent(event)?.webContents.send("auth:error", "Invalid authorization code")
       return
     }
     await handleAuthCode(code)
@@ -513,7 +502,6 @@ function registerIpcHandlers(): void {
         if (!reader) {
           return { ok: false, status: 500, error: "No response body" }
         }
-
         // Send chunks asynchronously
         ;(async () => {
           try {
@@ -528,7 +516,10 @@ function registerIpcHandlers(): void {
             }
           } catch (err) {
             console.error("[StreamFetch] Stream error:", err)
-            event.sender.send(`stream:${streamId}:error`, err instanceof Error ? err.message : "Stream error")
+            event.sender.send(
+              `stream:${streamId}:error`,
+              err instanceof Error ? err.message : "Stream error",
+            )
           }
         })()
 
@@ -639,8 +630,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     // hiddenInset shows native traffic lights inset in the window
     // hiddenInset hides the native title bar but keeps traffic lights visible
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    trafficLightPosition:
-      process.platform === "darwin" ? { x: 15, y: 12 } : undefined,
+    trafficLightPosition: process.platform === "darwin" ? { x: 15, y: 12 } : undefined,
     // Windows: Use native frame or frameless based on user preference
     ...(process.platform === "win32" && {
       frame: useNativeFrame,
@@ -847,18 +837,15 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
   window.webContents.on("did-finish-load", () => {
     console.log("[Main] Page finished loading in window", window.id)
   })
-  window.webContents.on(
-    "did-fail-load",
-    (_event, errorCode, errorDescription) => {
-      console.error(
-        "[Main] Page failed to load in window",
-        window.id,
-        ":",
-        errorCode,
-        errorDescription,
-      )
-    },
-  )
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+    console.error(
+      "[Main] Page failed to load in window",
+      window.id,
+      ":",
+      errorCode,
+      errorDescription,
+    )
+  })
 
   return window
 }

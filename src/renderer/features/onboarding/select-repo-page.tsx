@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
 import { useAtom } from "jotai"
 import { ChevronLeft } from "lucide-react"
+import { useState } from "react"
 
-import { IconSpinner, GitHubIcon } from "../../components/ui/icons"
-import { Logo } from "../../components/ui/logo"
+import { GitHubIcon, IconSpinner } from "../../components/ui/icons"
 import { Input } from "../../components/ui/input"
+import { Logo } from "../../components/ui/logo"
 import { trpc } from "../../lib/trpc"
 import { selectedProjectAtom } from "../agents/atoms"
 
@@ -28,7 +28,7 @@ export function SelectRepoPage() {
           const exists = oldData.some((p) => p.id === project.id)
           if (exists) {
             return oldData.map((p) =>
-              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p
+              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
             )
           }
           return [project, ...oldData]
@@ -39,11 +39,7 @@ export function SelectRepoPage() {
           name: project.name,
           path: project.path,
           gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
+          gitProvider: project.gitProvider as "github" | "gitlab" | "bitbucket" | null,
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
@@ -60,7 +56,7 @@ export function SelectRepoPage() {
           const exists = oldData.some((p) => p.id === project.id)
           if (exists) {
             return oldData.map((p) =>
-              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p
+              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
             )
           }
           return [project, ...oldData]
@@ -71,11 +67,7 @@ export function SelectRepoPage() {
           name: project.name,
           path: project.path,
           gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
+          gitProvider: project.gitProvider as "github" | "gitlab" | "bitbucket" | null,
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
@@ -131,12 +123,8 @@ export function SelectRepoPage() {
               </div>
             </div>
             <div className="space-y-1">
-              <h1 className="text-base font-semibold tracking-tight">
-                Clone from GitHub
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Enter a repository URL or owner/repo
-              </p>
+              <h1 className="text-base font-semibold tracking-tight">Clone from GitHub</h1>
+              <p className="text-sm text-muted-foreground">Enter a repository URL or owner/repo</p>
             </div>
           </div>
 
@@ -189,9 +177,7 @@ export function SelectRepoPage() {
             </div>
           </div>
           <div className="space-y-1">
-            <h1 className="text-base font-semibold tracking-tight">
-              Select a repository
-            </h1>
+            <h1 className="text-base font-semibold tracking-tight">Select a repository</h1>
             <p className="text-sm text-muted-foreground">
               Choose a local folder to start working with
             </p>
@@ -205,22 +191,14 @@ export function SelectRepoPage() {
             disabled={openFolder.isPending}
             className="w-full h-8 px-4 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
-            {openFolder.isPending ? (
-              <IconSpinner className="h-4 w-4" />
-            ) : (
-              "Select folder"
-            )}
+            {openFolder.isPending ? <IconSpinner className="h-4 w-4" /> : "Select folder"}
           </button>
           <button
             onClick={() => setShowClonePage(true)}
             disabled={cloneFromGitHub.isPending}
             className="w-full h-8 px-4 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.06)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.06)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
-            {cloneFromGitHub.isPending ? (
-              <IconSpinner className="h-4 w-4" />
-            ) : (
-              "Clone from GitHub"
-            )}
+            {cloneFromGitHub.isPending ? <IconSpinner className="h-4 w-4" /> : "Clone from GitHub"}
           </button>
         </div>
       </div>

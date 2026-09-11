@@ -29,7 +29,7 @@ export async function getApiBaseUrl(): Promise<string> {
 export async function apiFetch(
   path: string,
   init?: RequestInit,
-  options?: { withCredentials?: boolean }
+  options?: { withCredentials?: boolean },
 ): Promise<Response> {
   const baseUrl = await getApiBaseUrl()
   return fetch(`${baseUrl}${path}`, {

@@ -1,14 +1,8 @@
 "use client"
 
-import { cn } from "../../../lib/utils"
-import {
-  motion,
-  AnimatePresence,
-  useMotionValue,
-  useTransform,
-  animate,
-} from "motion/react"
+import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { cn } from "../../../lib/utils"
 
 interface PreviewUrlInputProps {
   /** The base host (e.g., "sandbox-3000.example.com") */

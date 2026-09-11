@@ -32,9 +32,12 @@ jobs:
       - name: "Install dependencies (scripts skipped: no native modules needed here)"
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Lint + format (changed files only)
-        # Repo-wide rollout is a ratchet step; gate only what the PR touches.
-        # biome is in devDependencies; `bun x` resolves it from node_modules.
-        run: node scripts/ci/lint-changed.mjs "${{ github.event.pull_request.base.sha || 'origin/main' }}"
+        # Repo-wide rollout is a ratchet step; gate only what the change touches.
+        # PRs diff against base.sha; pushes diff against the previous head
+        # (falls back to origin/main for branch creation).
+        env:
+          LINT_BASE: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
+        run: node scripts/ci/lint-changed.mjs
       - name: Unit tests
         run: bun run test
       - name: "Typecheck (ratchet: no new errors vs baseline)"

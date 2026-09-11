@@ -1,6 +1,6 @@
-import * as React from "react"
-import { cn } from "../../lib/utils"
+import type * as React from "react"
 import logoUrl from "../../assets/logo-mauscode.png"
+import { cn } from "../../lib/utils"
 
 interface LogoProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   className?: string

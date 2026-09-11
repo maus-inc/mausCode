@@ -11,6 +11,7 @@ import {
   trackWorkspaceCreated,
   trackWorkspaceDeleted,
 } from "../../analytics"
+import { getApiUrl } from "../../config"
 import { chats, getDatabase, projects, subChats } from "../../db"
 import {
   createWorktreeForChat,
@@ -19,13 +20,12 @@ import {
   removeWorktree,
   sanitizeProjectName,
 } from "../../git"
-import type { WorktreeSetupResult } from "../../git/worktree-config"
 import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
+import type { WorktreeSetupResult } from "../../git/worktree-config"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
-import { getApiUrl } from "../../config"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
 
@@ -75,7 +75,7 @@ function getFallbackName(userMessage: string): string {
  */
 async function generateChatNameWithOllama(
   userMessage: string,
-  model?: string | null
+  model?: string | null,
 ): Promise<string | null> {
   try {
     const ollamaStatus = await checkOllamaStatus()
@@ -149,7 +149,7 @@ async function generateCommitMessageWithOllama(
   fileCount: number,
   additions: number,
   deletions: number,
-  model?: string | null
+  model?: string | null,
 ): Promise<string | null> {
   try {
     const ollamaStatus = await checkOllamaStatus()
@@ -214,21 +214,19 @@ export const chatsRouter = router({
   /**
    * List all non-archived chats (optionally filter by project)
    */
-  list: publicProcedure
-    .input(z.object({ projectId: z.string().optional() }))
-    .query(({ input }) => {
-      const db = getDatabase()
-      const conditions = [isNull(chats.archivedAt)]
-      if (input.projectId) {
-        conditions.push(eq(chats.projectId, input.projectId))
-      }
-      return db
-        .select()
-        .from(chats)
-        .where(and(...conditions))
-        .orderBy(desc(chats.updatedAt))
-        .all()
-    }),
+  list: publicProcedure.input(z.object({ projectId: z.string().optional() })).query(({ input }) => {
+    const db = getDatabase()
+    const conditions = [isNull(chats.archivedAt)]
+    if (input.projectId) {
+      conditions.push(eq(chats.projectId, input.projectId))
+    }
+    return db
+      .select()
+      .from(chats)
+      .where(and(...conditions))
+      .orderBy(desc(chats.updatedAt))
+      .all()
+  }),
 
   /**
    * List archived chats (optionally filter by project)
@@ -252,28 +250,22 @@ export const chatsRouter = router({
   /**
    * Get a single chat with all sub-chats
    */
-  get: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(({ input }) => {
-      const db = getDatabase()
-      const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
-      if (!chat) return null
+  get: publicProcedure.input(z.object({ id: z.string() })).query(({ input }) => {
+    const db = getDatabase()
+    const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
+    if (!chat) return null
 
-      const chatSubChats = db
-        .select()
-        .from(subChats)
-        .where(eq(subChats.chatId, input.id))
-        .orderBy(subChats.createdAt)
-        .all()
+    const chatSubChats = db
+      .select()
+      .from(subChats)
+      .where(eq(subChats.chatId, input.id))
+      .orderBy(subChats.createdAt)
+      .all()
 
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, chat.projectId))
-        .get()
+    const project = db.select().from(projects).where(eq(projects.id, chat.projectId)).get()
 
-      return { ...chat, subChats: chatSubChats, project }
-    }),
+    return { ...chat, subChats: chatSubChats, project }
+  }),
 
   /**
    * Create a new chat with optional git worktree
@@ -319,11 +311,7 @@ export const chatsRouter = router({
       const requestingWindowId = ctx.getWindow?.()?.id ?? null
 
       // Get project path
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, input.projectId))
-        .get()
+      const project = db.select().from(projects).where(eq(projects.id, input.projectId)).get()
       console.log("[chats.create] found project:", project)
       if (!project) throw new Error("Project not found")
 
@@ -399,8 +387,7 @@ export const chatsRouter = router({
             onSetupComplete: (setupResult: WorktreeSetupResult) => {
               if (setupResult.success) return
               const message =
-                setupResult.errors[0] ||
-                "Worktree setup failed. Check your setup commands."
+                setupResult.errors[0] || "Worktree setup failed. Check your setup commands."
               sendWorktreeSetupFailure(requestingWindowId, {
                 kind: "setup-failed",
                 message,
@@ -433,19 +420,13 @@ export const chatsRouter = router({
             projectId: project.id,
           })
           // Fallback to project path
-          db.update(chats)
-            .set({ worktreePath: project.path })
-            .where(eq(chats.id, chat.id))
-            .run()
+          db.update(chats).set({ worktreePath: project.path }).where(eq(chats.id, chat.id)).run()
           worktreeResult = { worktreePath: project.path }
         }
       } else {
         // Local mode: use project path directly, no branch info
         console.log("[chats.create] local mode - using project path directly")
-        db.update(chats)
-          .set({ worktreePath: project.path })
-          .where(eq(chats.id, chat.id))
-          .run()
+        db.update(chats).set({ worktreePath: project.path }).where(eq(chats.id, chat.id)).run()
         worktreeResult = { worktreePath: project.path }
       }
 
@@ -498,11 +479,7 @@ export const chatsRouter = router({
       const db = getDatabase()
 
       // Get chat to check for worktree (before archiving)
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.id))
-        .get()
+      const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
 
       // Archive immediately (optimistic)
       const result = db
@@ -520,44 +497,38 @@ export const chatsRouter = router({
       // so they should not be killed when a single workspace is archived.
       const isLocalMode = !chat?.branch
       if (!isLocalMode) {
-        terminalManager.killByWorkspaceId(input.id).then((killResult) => {
-          if (killResult.killed > 0) {
-            console.log(
-              `[chats.archive] Killed ${killResult.killed} terminal session(s) for workspace ${input.id}`,
-            )
-          }
-        }).catch((error) => {
-          console.error(`[chats.archive] Error killing processes:`, error)
-        })
+        terminalManager
+          .killByWorkspaceId(input.id)
+          .then((killResult) => {
+            if (killResult.killed > 0) {
+              console.log(
+                `[chats.archive] Killed ${killResult.killed} terminal session(s) for workspace ${input.id}`,
+              )
+            }
+          })
+          .catch((error) => {
+            console.error(`[chats.archive] Error killing processes:`, error)
+          })
       }
 
       // Optionally delete worktree in background (don't await)
       if (input.deleteWorktree && chat?.worktreePath && chat?.branch) {
-        const project = db
-          .select()
-          .from(projects)
-          .where(eq(projects.id, chat.projectId))
-          .get()
+        const project = db.select().from(projects).where(eq(projects.id, chat.projectId)).get()
 
         if (project) {
-          removeWorktree(project.path, chat.worktreePath).then((worktreeResult) => {
-            if (worktreeResult.success) {
-              console.log(
-                `[chats.archive] Deleted worktree for workspace ${input.id}`,
-              )
-              // Clear worktreePath since it's deleted (keep branch for reference)
-              db.update(chats)
-                .set({ worktreePath: null })
-                .where(eq(chats.id, input.id))
-                .run()
-            } else {
-              console.warn(
-                `[chats.archive] Failed to delete worktree: ${worktreeResult.error}`,
-              )
-            }
-          }).catch((error) => {
-            console.error(`[chats.archive] Error removing worktree:`, error)
-          })
+          removeWorktree(project.path, chat.worktreePath)
+            .then((worktreeResult) => {
+              if (worktreeResult.success) {
+                console.log(`[chats.archive] Deleted worktree for workspace ${input.id}`)
+                // Clear worktreePath since it's deleted (keep branch for reference)
+                db.update(chats).set({ worktreePath: null }).where(eq(chats.id, input.id)).run()
+              } else {
+                console.warn(`[chats.archive] Failed to delete worktree: ${worktreeResult.error}`)
+              }
+            })
+            .catch((error) => {
+              console.error(`[chats.archive] Error removing worktree:`, error)
+            })
         }
       }
 
@@ -573,17 +544,15 @@ export const chatsRouter = router({
   /**
    * Restore an archived chat
    */
-  restore: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(({ input }) => {
-      const db = getDatabase()
-      return db
-        .update(chats)
-        .set({ archivedAt: null })
-        .where(eq(chats.id, input.id))
-        .returning()
-        .get()
-    }),
+  restore: publicProcedure.input(z.object({ id: z.string() })).mutation(({ input }) => {
+    const db = getDatabase()
+    return db
+      .update(chats)
+      .set({ archivedAt: null })
+      .where(eq(chats.id, input.id))
+      .returning()
+      .get()
+  }),
 
   /**
    * Archive multiple chats at once (also kills terminal processes in each workspace)
@@ -614,18 +583,18 @@ export const chatsRouter = router({
       // Local-mode terminals are shared and should not be killed.
 
       if (worktreeChats.length > 0) {
-        Promise.all(
-          worktreeChats.map((c) => terminalManager.killByWorkspaceId(c.id)),
-        ).then((killResults) => {
-          const totalKilled = killResults.reduce((sum, r) => sum + r.killed, 0)
-          if (totalKilled > 0) {
-            console.log(
-              `[chats.archiveBatch] Killed ${totalKilled} terminal session(s) for ${worktreeChats.length} worktree workspace(s)`,
-            )
-          }
-        }).catch((error) => {
-          console.error(`[chats.archiveBatch] Error killing processes:`, error)
-        })
+        Promise.all(worktreeChats.map((c) => terminalManager.killByWorkspaceId(c.id)))
+          .then((killResults) => {
+            const totalKilled = killResults.reduce((sum, r) => sum + r.killed, 0)
+            if (totalKilled > 0) {
+              console.log(
+                `[chats.archiveBatch] Killed ${totalKilled} terminal session(s) for ${worktreeChats.length} worktree workspace(s)`,
+              )
+            }
+          })
+          .catch((error) => {
+            console.error(`[chats.archiveBatch] Error killing processes:`, error)
+          })
       }
 
       return result
@@ -634,82 +603,62 @@ export const chatsRouter = router({
   /**
    * Delete a chat permanently (with worktree cleanup)
    */
-  delete: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const db = getDatabase()
+  delete: publicProcedure.input(z.object({ id: z.string() })).mutation(async ({ input }) => {
+    const db = getDatabase()
 
-      // Get chat before deletion
-      const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
+    // Get chat before deletion
+    const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
 
-      // Cleanup worktree if it was created (has branch = was a real worktree, not just project path)
-      if (chat?.worktreePath && chat?.branch) {
-        const project = db
-          .select()
-          .from(projects)
-          .where(eq(projects.id, chat.projectId))
-          .get()
-        if (project) {
-          const result = await removeWorktree(project.path, chat.worktreePath)
-          if (!result.success) {
-            console.warn(`[Worktree] Cleanup failed: ${result.error}`)
-          }
+    // Cleanup worktree if it was created (has branch = was a real worktree, not just project path)
+    if (chat?.worktreePath && chat?.branch) {
+      const project = db.select().from(projects).where(eq(projects.id, chat.projectId)).get()
+      if (project) {
+        const result = await removeWorktree(project.path, chat.worktreePath)
+        if (!result.success) {
+          console.warn(`[Worktree] Cleanup failed: ${result.error}`)
         }
       }
+    }
 
-      // Kill terminal processes for worktree-mode workspaces.
-      // Local-mode terminals are shared and should not be killed on delete.
-      if (chat?.branch) {
-        terminalManager.killByWorkspaceId(input.id).catch((error) => {
-          console.error(`[chats.delete] Error killing processes:`, error)
-        })
-      }
+    // Kill terminal processes for worktree-mode workspaces.
+    // Local-mode terminals are shared and should not be killed on delete.
+    if (chat?.branch) {
+      terminalManager.killByWorkspaceId(input.id).catch((error) => {
+        console.error(`[chats.delete] Error killing processes:`, error)
+      })
+    }
 
-      // Track workspace deleted
-      trackWorkspaceDeleted(input.id)
+    // Track workspace deleted
+    trackWorkspaceDeleted(input.id)
 
-      // Invalidate git cache for this worktree
-      if (chat?.worktreePath) {
-        gitCache.invalidateStatus(chat.worktreePath)
-        gitCache.invalidateParsedDiff(chat.worktreePath)
-      }
+    // Invalidate git cache for this worktree
+    if (chat?.worktreePath) {
+      gitCache.invalidateStatus(chat.worktreePath)
+      gitCache.invalidateParsedDiff(chat.worktreePath)
+    }
 
-      return db.delete(chats).where(eq(chats.id, input.id)).returning().get()
-    }),
+    return db.delete(chats).where(eq(chats.id, input.id)).returning().get()
+  }),
 
   // ============ Sub-chat procedures ============
 
   /**
    * Get a single sub-chat
    */
-  getSubChat: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(({ input }) => {
-      const db = getDatabase()
-      const subChat = db
-        .select()
-        .from(subChats)
-        .where(eq(subChats.id, input.id))
-        .get()
+  getSubChat: publicProcedure.input(z.object({ id: z.string() })).query(({ input }) => {
+    const db = getDatabase()
+    const subChat = db.select().from(subChats).where(eq(subChats.id, input.id)).get()
 
-      if (!subChat) return null
+    if (!subChat) return null
 
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, subChat.chatId))
-        .get()
+    const chat = db.select().from(chats).where(eq(chats.id, subChat.chatId)).get()
 
-      const project = chat
-        ? db
-            .select()
-            .from(projects)
-            .where(eq(projects.id, chat.projectId))
-            .get()
-        : null
+    const project = chat
+      ? db.select().from(projects).where(eq(projects.id, chat.projectId)).get()
+      : null
 
-      return { ...subChat, chat: chat ? { ...chat, project } : null }
-    }),
+    return { ...subChat, chat: chat ? { ...chat, project } : null }
+  }),
 
   /**
    * Create a new sub-chat
@@ -754,22 +703,20 @@ export const chatsRouter = router({
       const db = getDatabase()
 
       // 1. Get the source sub-chat
-      const sourceSubChat = db
-        .select()
-        .from(subChats)
-        .where(eq(subChats.id, input.subChatId))
-        .get()
+      const sourceSubChat = db.select().from(subChats).where(eq(subChats.id, input.subChatId)).get()
       if (!sourceSubChat) throw new Error("Source sub-chat not found")
 
       // 2. Parse messages and find the cutoff point
       const allMessages = JSON.parse(sourceSubChat.messages || "[]")
-      let cutoffIndex = allMessages.findIndex(
-        (m: any) => m.id === input.messageId,
-      )
+      let cutoffIndex = allMessages.findIndex((m: any) => m.id === input.messageId)
       // Fallback: AI SDK generates its own message IDs on the client which differ
       // from the server-generated UUIDs stored in the DB. Use the message index
       // (passed from the client) as a fallback when the ID doesn't match.
-      if (cutoffIndex === -1 && input.messageIndex !== undefined && input.messageIndex < allMessages.length) {
+      if (
+        cutoffIndex === -1 &&
+        input.messageIndex !== undefined &&
+        input.messageIndex < allMessages.length
+      ) {
         cutoffIndex = input.messageIndex
       }
       if (cutoffIndex === -1) throw new Error("Message not found")
@@ -778,9 +725,7 @@ export const chatsRouter = router({
       const messagesToFork = allMessages.slice(0, cutoffIndex + 1)
 
       // 4. Find sdkMessageUuid of last assistant message (for resumeSessionAt)
-      const lastAssistant = [...messagesToFork]
-        .reverse()
-        .find((m: any) => m.role === "assistant")
+      const lastAssistant = [...messagesToFork].reverse().find((m: any) => m.role === "assistant")
       const forkAtSdkUuid = lastAssistant?.metadata?.sdkMessageUuid || null
 
       // 5. Generate new IDs for all messages + set shouldForkResume on last assistant
@@ -840,18 +785,8 @@ export const chatsRouter = router({
         try {
           const { app } = await import("electron")
           const userDataPath = app.getPath("userData")
-          const sourceDir = path.join(
-            userDataPath,
-            "claude-sessions",
-            input.subChatId,
-            "projects",
-          )
-          const targetDir = path.join(
-            userDataPath,
-            "claude-sessions",
-            newSubChat.id,
-            "projects",
-          )
+          const sourceDir = path.join(userDataPath, "claude-sessions", input.subChatId, "projects")
+          const targetDir = path.join(userDataPath, "claude-sessions", newSubChat.id, "projects")
 
           const sourceDirExists = await fs
             .stat(sourceDir)
@@ -876,7 +811,11 @@ export const chatsRouter = router({
         }
       }
 
-      console.log("[forkSubChat] Created", { id: newSubChat.id, name: forkName, messages: forkedMessages.length })
+      console.log("[forkSubChat] Created", {
+        id: newSubChat.id,
+        name: forkName,
+        messages: forkedMessages.length,
+      })
 
       return {
         subChat: newSubChat,
@@ -912,82 +851,75 @@ export const chatsRouter = router({
         sdkMessageUuid: z.string(),
       }),
     )
-    .mutation(async ({ input }): Promise<
-      | { success: false; error: string }
-      | { success: true; messages: any[] }
-    > => {
-      const db = getDatabase()
+    .mutation(
+      async ({
+        input,
+      }): Promise<{ success: false; error: string } | { success: true; messages: any[] }> => {
+        const db = getDatabase()
 
-      // 1. Get the sub-chat and its messages
-      const subChat = db
-        .select()
-        .from(subChats)
-        .where(eq(subChats.id, input.subChatId))
-        .get()
-      if (!subChat) {
-        return { success: false, error: "Sub-chat not found" }
-      }
-
-      // 2. Parse messages and find the target message by sdkMessageUuid
-      const messages = JSON.parse(subChat.messages || "[]")
-      const targetIndex = messages.findIndex(
-        (m: any) => m.metadata?.sdkMessageUuid === input.sdkMessageUuid,
-      )
-
-      if (targetIndex === -1) {
-        return { success: false, error: "Message not found" }
-      }
-
-      // 3. Get the parent chat for worktreePath
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, subChat.chatId))
-        .get()
-
-      // 4. Rollback git state first - if this fails, abort the whole operation
-      if (chat?.worktreePath) {
-        const res = await applyRollbackStash(chat.worktreePath, input.sdkMessageUuid)
-        if (!res.success) {
-          return { success: false, error: `Git rollback failed: ${res.error}` }
+        // 1. Get the sub-chat and its messages
+        const subChat = db.select().from(subChats).where(eq(subChats.id, input.subChatId)).get()
+        if (!subChat) {
+          return { success: false, error: "Sub-chat not found" }
         }
-        // If checkpoint wasn't found, we still fail because we can't safely rollback
-        // without reverting the git state to match the message history
-        if (!res.checkpointFound) {
-          return { success: false, error: "Checkpoint not found - cannot rollback git state" }
+
+        // 2. Parse messages and find the target message by sdkMessageUuid
+        const messages = JSON.parse(subChat.messages || "[]")
+        const targetIndex = messages.findIndex(
+          (m: any) => m.metadata?.sdkMessageUuid === input.sdkMessageUuid,
+        )
+
+        if (targetIndex === -1) {
+          return { success: false, error: "Message not found" }
         }
-      }
 
-      // 5. Truncate messages to include up to and including the target message
-      let truncatedMessages = messages.slice(0, targetIndex + 1)
+        // 3. Get the parent chat for worktreePath
+        const chat = db.select().from(chats).where(eq(chats.id, subChat.chatId)).get()
 
-      // 5.5. Clear any old shouldResume flags, then set on the target message
-      truncatedMessages = truncatedMessages.map((m: any, i: number) => {
-        const { shouldResume, ...restMeta } = m.metadata || {}
-        return {
-          ...m,
-          metadata: {
-            ...restMeta,
-            ...(i === truncatedMessages.length - 1 && { shouldResume: true }),
-          },
+        // 4. Rollback git state first - if this fails, abort the whole operation
+        if (chat?.worktreePath) {
+          const res = await applyRollbackStash(chat.worktreePath, input.sdkMessageUuid)
+          if (!res.success) {
+            return { success: false, error: `Git rollback failed: ${res.error}` }
+          }
+          // If checkpoint wasn't found, we still fail because we can't safely rollback
+          // without reverting the git state to match the message history
+          if (!res.checkpointFound) {
+            return { success: false, error: "Checkpoint not found - cannot rollback git state" }
+          }
         }
-      })
 
-      // 6. Update the sub-chat with truncated messages
-      db.update(subChats)
-        .set({
-          messages: JSON.stringify(truncatedMessages),
-          updatedAt: new Date(),
+        // 5. Truncate messages to include up to and including the target message
+        let truncatedMessages = messages.slice(0, targetIndex + 1)
+
+        // 5.5. Clear any old shouldResume flags, then set on the target message
+        truncatedMessages = truncatedMessages.map((m: any, i: number) => {
+          const { shouldResume, ...restMeta } = m.metadata || {}
+          return {
+            ...m,
+            metadata: {
+              ...restMeta,
+              ...(i === truncatedMessages.length - 1 && { shouldResume: true }),
+            },
+          }
         })
-        .where(eq(subChats.id, input.subChatId))
-        .returning()
-        .get()
 
-      return {
-        success: true,
-        messages: truncatedMessages,
-      }
-    }),
+        // 6. Update the sub-chat with truncated messages
+        db.update(subChats)
+          .set({
+            messages: JSON.stringify(truncatedMessages),
+            updatedAt: new Date(),
+          })
+          .where(eq(subChats.id, input.subChatId))
+          .returning()
+          .get()
+
+        return {
+          success: true,
+          messages: truncatedMessages,
+        }
+      },
+    ),
 
   /**
    * Update sub-chat session ID (for Claude resume)
@@ -1037,45 +969,30 @@ export const chatsRouter = router({
   /**
    * Delete a sub-chat
    */
-  deleteSubChat: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(({ input }) => {
-      const db = getDatabase()
-      return db
-        .delete(subChats)
-        .where(eq(subChats.id, input.id))
-        .returning()
-        .get()
-    }),
+  deleteSubChat: publicProcedure.input(z.object({ id: z.string() })).mutation(({ input }) => {
+    const db = getDatabase()
+    return db.delete(subChats).where(eq(subChats.id, input.id)).returning().get()
+  }),
 
   /**
    * Get git diff for a chat's worktree
    */
-  getDiff: publicProcedure
-    .input(z.object({ chatId: z.string() }))
-    .query(async ({ input }) => {
-      const db = getDatabase()
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.chatId))
-        .get()
+  getDiff: publicProcedure.input(z.object({ chatId: z.string() })).query(async ({ input }) => {
+    const db = getDatabase()
+    const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
-      if (!chat?.worktreePath) {
-        return { diff: null, error: "No worktree path" }
-      }
+    if (!chat?.worktreePath) {
+      return { diff: null, error: "No worktree path" }
+    }
 
-      const result = await getWorktreeDiff(
-        chat.worktreePath,
-        chat.baseBranch ?? undefined,
-      )
+    const result = await getWorktreeDiff(chat.worktreePath, chat.baseBranch ?? undefined)
 
-      if (!result.success) {
-        return { diff: null, error: result.error }
-      }
+    if (!result.success) {
+      return { diff: null, error: result.error }
+    }
 
-      return { diff: result.diff || "" }
-    }),
+    return { diff: result.diff || "" }
+  }),
 
   /**
    * Get parsed diff with prefetched file contents
@@ -1086,11 +1003,7 @@ export const chatsRouter = router({
     .input(z.object({ chatId: z.string() }))
     .query(async ({ input }) => {
       const db = getDatabase()
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.chatId))
-        .get()
+      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
       if (!chat?.worktreePath) {
         return {
@@ -1103,11 +1016,9 @@ export const chatsRouter = router({
       }
 
       // 1. Get raw diff (only uncommitted changes - don't show branch diff after commit)
-      const result = await getWorktreeDiff(
-        chat.worktreePath,
-        chat.baseBranch ?? undefined,
-        { onlyUncommitted: true },
-      )
+      const result = await getWorktreeDiff(chat.worktreePath, chat.baseBranch ?? undefined, {
+        onlyUncommitted: true,
+      })
 
       if (!result.success) {
         return {
@@ -1202,28 +1113,23 @@ export const chatsRouter = router({
    * @param ollamaModel - Optional Ollama model for offline generation
    */
   generateCommitMessage: publicProcedure
-    .input(z.object({
-      chatId: z.string(),
-      filePaths: z.array(z.string()).optional(),
-      ollamaModel: z.string().nullish(), // Optional model for offline mode
-    }))
+    .input(
+      z.object({
+        chatId: z.string(),
+        filePaths: z.array(z.string()).optional(),
+        ollamaModel: z.string().nullish(), // Optional model for offline mode
+      }),
+    )
     .mutation(async ({ input }) => {
       const db = getDatabase()
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.chatId))
-        .get()
+      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
       if (!chat?.worktreePath) {
         throw new Error("No worktree path")
       }
 
       // Get the diff to understand what changed
-      const result = await getWorktreeDiff(
-        chat.worktreePath,
-        chat.baseBranch ?? undefined,
-      )
+      const result = await getWorktreeDiff(chat.worktreePath, chat.baseBranch ?? undefined)
 
       if (!result.success || !result.diff) {
         throw new Error("Failed to get diff")
@@ -1238,10 +1144,14 @@ export const chatsRouter = router({
         files = files.filter((f) => {
           const filePath = f.newPath !== "/dev/null" ? f.newPath : f.oldPath
           // Match by exact path or by path suffix (handle different path formats)
-          return selectedPaths.has(filePath) ||
-            [...selectedPaths].some(sp => filePath.endsWith(sp) || sp.endsWith(filePath))
+          return (
+            selectedPaths.has(filePath) ||
+            [...selectedPaths].some((sp) => filePath.endsWith(sp) || sp.endsWith(filePath))
+          )
         })
-        console.log(`[generateCommitMessage] Filtered ${files.length} files from ${input.filePaths.length} selected paths`)
+        console.log(
+          `[generateCommitMessage] Filtered ${files.length} files from ${input.filePaths.length} selected paths`,
+        )
       }
 
       if (files.length === 0) {
@@ -1249,7 +1159,7 @@ export const chatsRouter = router({
       }
 
       // Build filtered diff text for API (only selected files)
-      const filteredDiff = files.map(f => f.diffText).join('\n')
+      const filteredDiff = files.map((f) => f.diffText).join("\n")
       const additions = files.reduce((sum, f) => sum + f.additions, 0)
       const deletions = files.reduce((sum, f) => sum + f.deletions, 0)
 
@@ -1263,7 +1173,7 @@ export const chatsRouter = router({
           files.length,
           additions,
           deletions,
-          input.ollamaModel
+          input.ollamaModel,
         )
         if (ollamaMessage) {
           console.log("[generateCommitMessage] Generated via Ollama:", ollamaMessage)
@@ -1285,22 +1195,19 @@ export const chatsRouter = router({
           } else if (!token) {
             apiError = "No auth token available"
           } else {
-            const response = await fetch(
-              `${apiUrl}/api/agents/generate-commit-message`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Desktop-Token": token,
-                },
-                body: JSON.stringify({
-                  diff: filteredDiff.slice(0, 10000), // Limit diff size, use filtered diff
-                  fileCount: files.length,
-                  additions,
-                  deletions,
-                }),
+            const response = await fetch(`${apiUrl}/api/agents/generate-commit-message`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Desktop-Token": token,
               },
-            )
+              body: JSON.stringify({
+                diff: filteredDiff.slice(0, 10000), // Limit diff size, use filtered diff
+                fileCount: files.length,
+                additions,
+                deletions,
+              }),
+            })
 
             if (response.ok) {
               const data = await response.json()
@@ -1334,15 +1241,16 @@ export const chatsRouter = router({
       const hasOnlyDeletions = files.every((f) => f.additions === 0 && f.deletions > 0)
 
       // Detect type from file paths
-      const allPaths = files.map((f) => f.newPath !== "/dev/null" ? f.newPath : f.oldPath)
+      const allPaths = files.map((f) => (f.newPath !== "/dev/null" ? f.newPath : f.oldPath))
       const hasTestFiles = allPaths.some((p) => p.includes("test") || p.includes("spec"))
       const hasDocFiles = allPaths.some((p) => p.endsWith(".md") || p.includes("doc"))
-      const hasConfigFiles = allPaths.some((p) =>
-        p.includes("config") ||
-        p.endsWith(".json") ||
-        p.endsWith(".yaml") ||
-        p.endsWith(".yml") ||
-        p.endsWith(".toml")
+      const hasConfigFiles = allPaths.some(
+        (p) =>
+          p.includes("config") ||
+          p.endsWith(".json") ||
+          p.endsWith(".yaml") ||
+          p.endsWith(".yml") ||
+          p.endsWith(".toml"),
       )
 
       // Determine commit type prefix
@@ -1382,10 +1290,12 @@ export const chatsRouter = router({
    * Uses Ollama when offline, otherwise calls web API
    */
   generateSubChatName: publicProcedure
-    .input(z.object({
-      userMessage: z.string(),
-      ollamaModel: z.string().nullish(), // Optional model for offline mode
-    }))
+    .input(
+      z.object({
+        userMessage: z.string(),
+        ollamaModel: z.string().nullish(), // Optional model for offline mode
+      }),
+    )
     .mutation(async ({ input }) => {
       try {
         // Check internet first - if offline, use Ollama
@@ -1415,27 +1325,20 @@ export const chatsRouter = router({
           token ? "present" : "missing",
         )
 
-        const response = await fetch(
-          `${apiUrl}/api/agents/sub-chat/generate-name`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token && { "X-Desktop-Token": token }),
-            },
-            body: JSON.stringify({ userMessage: input.userMessage }),
+        const response = await fetch(`${apiUrl}/api/agents/sub-chat/generate-name`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { "X-Desktop-Token": token }),
           },
-        )
+          body: JSON.stringify({ userMessage: input.userMessage }),
+        })
 
         console.log("[generateSubChatName] Response status:", response.status)
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.error(
-            "[generateSubChatName] API error:",
-            response.status,
-            errorText,
-          )
+          console.error("[generateSubChatName] API error:", response.status, errorText)
           return { name: getFallbackName(input.userMessage) }
         }
 
@@ -1453,48 +1356,38 @@ export const chatsRouter = router({
   /**
    * Get PR context for message generation (branch info, uncommitted changes, etc.)
    */
-  getPrContext: publicProcedure
-    .input(z.object({ chatId: z.string() }))
-    .query(async ({ input }) => {
-      const db = getDatabase()
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.chatId))
-        .get()
+  getPrContext: publicProcedure.input(z.object({ chatId: z.string() })).query(async ({ input }) => {
+    const db = getDatabase()
+    const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
-      if (!chat?.worktreePath) {
-        return null
-      }
+    if (!chat?.worktreePath) {
+      return null
+    }
 
+    try {
+      const git = simpleGit(chat.worktreePath)
+      const status = await git.status()
+
+      // Check if upstream exists
+      let hasUpstream = false
       try {
-        const git = simpleGit(chat.worktreePath)
-        const status = await git.status()
-
-        // Check if upstream exists
-        let hasUpstream = false
-        try {
-          const tracking = await git.raw([
-            "rev-parse",
-            "--abbrev-ref",
-            "@{upstream}",
-          ])
-          hasUpstream = !!tracking.trim()
-        } catch {
-          hasUpstream = false
-        }
-
-        return {
-          branch: chat.branch || status.current || "unknown",
-          baseBranch: chat.baseBranch || "main",
-          uncommittedCount: status.files.length,
-          hasUpstream,
-        }
-      } catch (error) {
-        console.error("[getPrContext] Error:", error)
-        return null
+        const tracking = await git.raw(["rev-parse", "--abbrev-ref", "@{upstream}"])
+        hasUpstream = !!tracking.trim()
+      } catch {
+        hasUpstream = false
       }
-    }),
+
+      return {
+        branch: chat.branch || status.current || "unknown",
+        baseBranch: chat.baseBranch || "main",
+        uncommittedCount: status.files.length,
+        hasUpstream,
+      }
+    } catch (error) {
+      console.error("[getPrContext] Error:", error)
+      return null
+    }
+  }),
 
   /**
    * Update PR info after Claude creates a PR
@@ -1531,22 +1424,16 @@ export const chatsRouter = router({
   /**
    * Get PR status from GitHub (via gh CLI)
    */
-  getPrStatus: publicProcedure
-    .input(z.object({ chatId: z.string() }))
-    .query(async ({ input }) => {
-      const db = getDatabase()
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.chatId))
-        .get()
+  getPrStatus: publicProcedure.input(z.object({ chatId: z.string() })).query(async ({ input }) => {
+    const db = getDatabase()
+    const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
-      if (!chat?.worktreePath) {
-        return null
-      }
+    if (!chat?.worktreePath) {
+      return null
+    }
 
-      return await fetchGitHubPRStatus(chat.worktreePath)
-    }),
+    return await fetchGitHubPRStatus(chat.worktreePath)
+  }),
 
   /**
    * Merge PR via gh CLI
@@ -1561,11 +1448,7 @@ export const chatsRouter = router({
     )
     .mutation(async ({ input }) => {
       const db = getDatabase()
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.chatId))
-        .get()
+      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
       if (!chat?.worktreePath || !chat?.prNumber) {
         throw new Error("No PR to merge")
@@ -1576,20 +1459,14 @@ export const chatsRouter = router({
       if (prStatus?.pr?.mergeable === "CONFLICTING") {
         throw new Error(
           "MERGE_CONFLICT: This PR has merge conflicts with the base branch. " +
-          "Please sync your branch with the latest changes from main to resolve conflicts."
+            "Please sync your branch with the latest changes from main to resolve conflicts.",
         )
       }
 
       try {
         await execWithShellEnv(
           "gh",
-          [
-            "pr",
-            "merge",
-            String(chat.prNumber),
-            `--${input.method}`,
-            "--delete-branch",
-          ],
+          ["pr", "merge", String(chat.prNumber), `--${input.method}`, "--delete-branch"],
           { cwd: chat.worktreePath },
         )
         return { success: true }
@@ -1606,7 +1483,7 @@ export const chatsRouter = router({
         ) {
           throw new Error(
             "MERGE_CONFLICT: This PR has merge conflicts with the base branch. " +
-            "Please sync your branch with the latest changes from main to resolve conflicts."
+              "Please sync your branch with the latest changes from main to resolve conflicts.",
           )
         }
 
@@ -1622,157 +1499,158 @@ export const chatsRouter = router({
    * - chatIds: query all sub-chats for given chats (used by archive popover)
    */
   getFileStats: publicProcedure
-    .input(z.object({
-      openSubChatIds: z.array(z.string()).optional(),
-      chatIds: z.array(z.string()).optional(),
-    }))
+    .input(
+      z.object({
+        openSubChatIds: z.array(z.string()).optional(),
+        chatIds: z.array(z.string()).optional(),
+      }),
+    )
     .query(({ input }) => {
-    const db = getDatabase()
+      const db = getDatabase()
 
-    // Early return if nothing to check
-    if ((!input.openSubChatIds || input.openSubChatIds.length === 0) &&
-        (!input.chatIds || input.chatIds.length === 0)) {
-      return []
-    }
+      // Early return if nothing to check
+      if (
+        (!input.openSubChatIds || input.openSubChatIds.length === 0) &&
+        (!input.chatIds || input.chatIds.length === 0)
+      ) {
+        return []
+      }
 
-    // Query sub-chats based on input mode
-    let allChats: Array<{ chatId: string | null; subChatId: string; messages: string | null }>
+      // Query sub-chats based on input mode
+      let allChats: Array<{ chatId: string | null; subChatId: string; messages: string | null }>
 
-    if (input.chatIds && input.chatIds.length > 0) {
-      // Archive mode: query all sub-chats for given chat IDs
-      // Pre-filter with LIKE to skip sub-chats without file edits (avoids loading/parsing large JSON)
-      allChats = db
-        .select({
-          chatId: subChats.chatId,
-          subChatId: subChats.id,
-          messages: subChats.messages,
-        })
-        .from(subChats)
-        .where(
-          and(
-            inArray(subChats.chatId, input.chatIds),
-            sql`(${subChats.messages} LIKE '%tool-Edit%' OR ${subChats.messages} LIKE '%tool-Write%')`
+      if (input.chatIds && input.chatIds.length > 0) {
+        // Archive mode: query all sub-chats for given chat IDs
+        // Pre-filter with LIKE to skip sub-chats without file edits (avoids loading/parsing large JSON)
+        allChats = db
+          .select({
+            chatId: subChats.chatId,
+            subChatId: subChats.id,
+            messages: subChats.messages,
+          })
+          .from(subChats)
+          .where(
+            and(
+              inArray(subChats.chatId, input.chatIds),
+              sql`(${subChats.messages} LIKE '%tool-Edit%' OR ${subChats.messages} LIKE '%tool-Write%')`,
+            ),
           )
-        )
-        .all()
-    } else {
-      // Main sidebar mode: query specific sub-chats
-      allChats = db
-        .select({
-          chatId: subChats.chatId,
-          subChatId: subChats.id,
-          messages: subChats.messages,
-        })
-        .from(subChats)
-        .where(inArray(subChats.id, input.openSubChatIds!))
-        .all()
-    }
+          .all()
+      } else {
+        // Main sidebar mode: query specific sub-chats
+        allChats = db
+          .select({
+            chatId: subChats.chatId,
+            subChatId: subChats.id,
+            messages: subChats.messages,
+          })
+          .from(subChats)
+          .where(inArray(subChats.id, input.openSubChatIds!))
+          .all()
+      }
 
-    // Aggregate stats per workspace (chatId)
-    const statsMap = new Map<
-      string,
-      { additions: number; deletions: number; fileCount: number }
-    >()
+      // Aggregate stats per workspace (chatId)
+      const statsMap = new Map<
+        string,
+        { additions: number; deletions: number; fileCount: number }
+      >()
 
-    for (const row of allChats) {
-      if (!row.messages || !row.chatId) continue
-      const chatId = row.chatId // TypeScript narrowing
+      for (const row of allChats) {
+        if (!row.messages || !row.chatId) continue
+        const chatId = row.chatId // TypeScript narrowing
 
-      try {
-        const messages = JSON.parse(row.messages) as Array<{
-          role: string
-          parts?: Array<{
-            type: string
-            input?: {
-              file_path?: string
-              old_string?: string
-              new_string?: string
-              content?: string
-            }
+        try {
+          const messages = JSON.parse(row.messages) as Array<{
+            role: string
+            parts?: Array<{
+              type: string
+              input?: {
+                file_path?: string
+                old_string?: string
+                new_string?: string
+                content?: string
+              }
+            }>
           }>
-        }>
 
-        // Track file states for this sub-chat
-        const fileStates = new Map<
-          string,
-          { originalContent: string | null; currentContent: string }
-        >()
+          // Track file states for this sub-chat
+          const fileStates = new Map<
+            string,
+            { originalContent: string | null; currentContent: string }
+          >()
 
-        for (const msg of messages) {
-          if (msg.role !== "assistant") continue
-          for (const part of msg.parts || []) {
-            if (part.type === "tool-Edit" || part.type === "tool-Write") {
-              const filePath = part.input?.file_path
-              if (!filePath) continue
-              // Skip session files
-              if (
-                filePath.includes("claude-sessions") ||
-                filePath.includes("Application Support")
-              )
-                continue
+          for (const msg of messages) {
+            if (msg.role !== "assistant") continue
+            for (const part of msg.parts || []) {
+              if (part.type === "tool-Edit" || part.type === "tool-Write") {
+                const filePath = part.input?.file_path
+                if (!filePath) continue
+                // Skip session files
+                if (
+                  filePath.includes("claude-sessions") ||
+                  filePath.includes("Application Support")
+                )
+                  continue
 
-              const oldString = part.input?.old_string || ""
-              const newString =
-                part.input?.new_string || part.input?.content || ""
+                const oldString = part.input?.old_string || ""
+                const newString = part.input?.new_string || part.input?.content || ""
 
-              const existing = fileStates.get(filePath)
-              if (existing) {
-                existing.currentContent = newString
-              } else {
-                fileStates.set(filePath, {
-                  originalContent: part.type === "tool-Write" ? null : oldString,
-                  currentContent: newString,
-                })
+                const existing = fileStates.get(filePath)
+                if (existing) {
+                  existing.currentContent = newString
+                } else {
+                  fileStates.set(filePath, {
+                    originalContent: part.type === "tool-Write" ? null : oldString,
+                    currentContent: newString,
+                  })
+                }
               }
             }
           }
-        }
 
-        // Calculate stats for this sub-chat and add to workspace total
-        let subChatAdditions = 0
-        let subChatDeletions = 0
-        let subChatFileCount = 0
+          // Calculate stats for this sub-chat and add to workspace total
+          let subChatAdditions = 0
+          let subChatDeletions = 0
+          let subChatFileCount = 0
 
-        for (const [, state] of fileStates) {
-          const original = state.originalContent || ""
-          if (original === state.currentContent) continue
+          for (const [, state] of fileStates) {
+            const original = state.originalContent || ""
+            if (original === state.currentContent) continue
 
-          const oldLines = original ? original.split("\n").length : 0
-          const newLines = state.currentContent
-            ? state.currentContent.split("\n").length
-            : 0
+            const oldLines = original ? original.split("\n").length : 0
+            const newLines = state.currentContent ? state.currentContent.split("\n").length : 0
 
-          if (!original) {
-            // New file
-            subChatAdditions += newLines
-          } else {
-            subChatAdditions += newLines
-            subChatDeletions += oldLines
+            if (!original) {
+              // New file
+              subChatAdditions += newLines
+            } else {
+              subChatAdditions += newLines
+              subChatDeletions += oldLines
+            }
+            subChatFileCount += 1
           }
-          subChatFileCount += 1
-        }
 
-        // Add to workspace total
-        const existing = statsMap.get(chatId) || {
-          additions: 0,
-          deletions: 0,
-          fileCount: 0,
+          // Add to workspace total
+          const existing = statsMap.get(chatId) || {
+            additions: 0,
+            deletions: 0,
+            fileCount: 0,
+          }
+          existing.additions += subChatAdditions
+          existing.deletions += subChatDeletions
+          existing.fileCount += subChatFileCount
+          statsMap.set(chatId, existing)
+        } catch {
+          // Skip invalid JSON
         }
-        existing.additions += subChatAdditions
-        existing.deletions += subChatDeletions
-        existing.fileCount += subChatFileCount
-        statsMap.set(chatId, existing)
-      } catch {
-        // Skip invalid JSON
       }
-    }
 
-    // Convert to array for easier consumption
-    return Array.from(statsMap.entries()).map(([chatId, stats]) => ({
-      chatId,
-      ...stats,
-    }))
-  }),
+      // Convert to array for easier consumption
+      return Array.from(statsMap.entries()).map(([chatId, stats]) => ({
+        chatId,
+        ...stats,
+      }))
+    }),
 
   /**
    * Get sub-chats with pending plan approvals
@@ -1783,80 +1661,78 @@ export const chatsRouter = router({
   getPendingPlanApprovals: publicProcedure
     .input(z.object({ openSubChatIds: z.array(z.string()) }))
     .query(({ input }) => {
-    const db = getDatabase()
+      const db = getDatabase()
 
-    // Early return if no sub-chats to check
-    if (input.openSubChatIds.length === 0) {
-      return []
-    }
+      // Early return if no sub-chats to check
+      if (input.openSubChatIds.length === 0) {
+        return []
+      }
 
-    // Query only the specified sub-chats, including mode for filtering
-    const allSubChats = db
-      .select({
-        chatId: subChats.chatId,
-        subChatId: subChats.id,
-        mode: subChats.mode,
-        messages: subChats.messages,
-      })
-      .from(subChats)
-      .where(inArray(subChats.id, input.openSubChatIds))
-      .all()
+      // Query only the specified sub-chats, including mode for filtering
+      const allSubChats = db
+        .select({
+          chatId: subChats.chatId,
+          subChatId: subChats.id,
+          mode: subChats.mode,
+          messages: subChats.messages,
+        })
+        .from(subChats)
+        .where(inArray(subChats.id, input.openSubChatIds))
+        .all()
 
-    const pendingApprovals: Array<{ subChatId: string; chatId: string }> = []
+      const pendingApprovals: Array<{ subChatId: string; chatId: string }> = []
 
-    for (const row of allSubChats) {
-      if (!row.subChatId || !row.chatId) continue
+      for (const row of allSubChats) {
+        if (!row.subChatId || !row.chatId) continue
 
-      // If mode is "agent", plan is already approved - skip
-      if (row.mode === "agent") continue
+        // If mode is "agent", plan is already approved - skip
+        if (row.mode === "agent") continue
 
-      // Only check for ExitPlanMode in plan mode sub-chats
-      if (!row.messages) continue
+        // Only check for ExitPlanMode in plan mode sub-chats
+        if (!row.messages) continue
 
-      try {
-        const messages = JSON.parse(row.messages) as Array<{
-          role: string
-          content?: string
-          parts?: Array<{
-            type: string
-            text?: string
-            output?: unknown
+        try {
+          const messages = JSON.parse(row.messages) as Array<{
+            role: string
+            content?: string
+            parts?: Array<{
+              type: string
+              text?: string
+              output?: unknown
+            }>
           }>
-        }>
 
-        // Check if there's a completed ExitPlanMode in messages
-        const hasCompletedExitPlanMode = (): boolean => {
-          for (let i = messages.length - 1; i >= 0; i--) {
-            const msg = messages[i]
-            if (!msg) continue
+          // Check if there's a completed ExitPlanMode in messages
+          const hasCompletedExitPlanMode = (): boolean => {
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const msg = messages[i]
+              if (!msg) continue
 
-            // If assistant message with completed ExitPlanMode, we found an unapproved plan
-            if (msg.role === "assistant" && msg.parts) {
-              const exitPlanPart = msg.parts.find(
-                (p) => p.type === "tool-ExitPlanMode"
-              )
-              // Check if ExitPlanMode is completed (has output, even if empty)
-              if (exitPlanPart && exitPlanPart.output !== undefined) {
-                return true
+              // If assistant message with completed ExitPlanMode, we found an unapproved plan
+              if (msg.role === "assistant" && msg.parts) {
+                const exitPlanPart = msg.parts.find((p) => p.type === "tool-ExitPlanMode")
+                // Check if ExitPlanMode is completed (has output, even if empty)
+                if (exitPlanPart && exitPlanPart.output !== undefined) {
+                  return true
+                }
               }
             }
+            return false
           }
-          return false
-        }
 
-        if (hasCompletedExitPlanMode()) {
-          pendingApprovals.push({
-            subChatId: row.subChatId,
-            chatId: row.chatId,
-          })
+          if (hasCompletedExitPlanMode()) {
+            pendingApprovals.push({
+              subChatId: row.subChatId,
+              chatId: row.chatId,
+            })
+          }
+        } catch {
+          // Skip invalid JSON
         }
-      } catch {
-        // Skip invalid JSON
       }
-    }
 
-    return pendingApprovals
-  }),
+      return pendingApprovals
+    }),
 
   /**
    * Get worktree status for archive dialog
@@ -1866,11 +1742,7 @@ export const chatsRouter = router({
     .input(z.object({ chatId: z.string() }))
     .query(async ({ input }) => {
       const db = getDatabase()
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.chatId))
-        .get()
+      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
       // No worktree if no branch (local mode)
       if (!chat?.worktreePath || !chat?.branch) {
@@ -1907,21 +1779,13 @@ export const chatsRouter = router({
     )
     .query(async ({ input }) => {
       const db = getDatabase()
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.chatId))
-        .get()
+      const chat = db.select().from(chats).where(eq(chats.id, input.chatId)).get()
 
       if (!chat) {
         throw new Error("Chat not found")
       }
 
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, chat.projectId))
-        .get()
+      const project = db.select().from(projects).where(eq(projects.id, chat.projectId)).get()
 
       // Query sub-chats: either a specific one or all for the chat
       let chatSubChats
@@ -1930,10 +1794,12 @@ export const chatsRouter = router({
         const singleSubChat = db
           .select()
           .from(subChats)
-          .where(and(
-            eq(subChats.id, input.subChatId),
-            eq(subChats.chatId, input.chatId) // Ensure sub-chat belongs to this chat
-          ))
+          .where(
+            and(
+              eq(subChats.id, input.subChatId),
+              eq(subChats.chatId, input.chatId), // Ensure sub-chat belongs to this chat
+            ),
+          )
           .get()
 
         if (!singleSubChat) {
@@ -1977,19 +1843,22 @@ export const chatsRouter = router({
 
       // Sanitize filename - remove characters that are invalid on Windows/macOS/Linux
       const sanitizeFilename = (name: string): string => {
-        return name
-          .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_") // Invalid chars
-          .replace(/\s+/g, "_") // Replace spaces with underscores
-          .replace(/_+/g, "_") // Collapse multiple underscores
-          .replace(/^_|_$/g, "") // Trim underscores from ends
-          .slice(0, 100) // Limit length
-          || "chat" // Fallback if empty
+        return (
+          name
+            .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_") // Invalid chars
+            .replace(/\s+/g, "_") // Replace spaces with underscores
+            .replace(/_+/g, "_") // Collapse multiple underscores
+            .replace(/^_|_$/g, "") // Trim underscores from ends
+            .slice(0, 100) || // Limit length
+          "chat"
+        ) // Fallback if empty
       }
 
       // Use sub-chat name if exporting single sub-chat, otherwise use chat name
-      const exportName = input.subChatId && chatSubChats[0]?.name
-        ? `${chat.name || "chat"}-${chatSubChats[0].name}`
-        : (chat.name || "chat")
+      const exportName =
+        input.subChatId && chatSubChats[0]?.name
+          ? `${chat.name || "chat"}-${chatSubChats[0].name}`
+          : chat.name || "chat"
       const safeFilename = sanitizeFilename(exportName)
 
       if (input.format === "json") {
@@ -2088,10 +1957,7 @@ export const chatsRouter = router({
               const toolName = part.toolName
               if (toolName === "Bash" && part.input?.command) {
                 markdown += `\`\`\`bash\n${part.input.command}\n\`\`\`\n\n`
-              } else if (
-                (toolName === "Edit" || toolName === "Write") &&
-                part.input?.file_path
-              ) {
+              } else if ((toolName === "Edit" || toolName === "Write") && part.input?.file_path) {
                 markdown += `> Modified: \`${part.input.file_path}\`\n\n`
               } else if (toolName === "Read" && part.input?.file_path) {
                 markdown += `> Read: \`${part.input.file_path}\`\n\n`
@@ -2116,10 +1982,12 @@ export const chatsRouter = router({
    * Useful for showing chat summary in sidebar or export dialogs.
    */
   getChatStats: publicProcedure
-    .input(z.object({
-      chatId: z.string(),
-      subChatId: z.string().optional(), // If provided, return stats for only this sub-chat
-    }))
+    .input(
+      z.object({
+        chatId: z.string(),
+        subChatId: z.string().optional(), // If provided, return stats for only this sub-chat
+      }),
+    )
     .query(({ input }) => {
       const db = getDatabase()
 
@@ -2129,20 +1997,13 @@ export const chatsRouter = router({
         const singleSubChat = db
           .select()
           .from(subChats)
-          .where(and(
-            eq(subChats.id, input.subChatId),
-            eq(subChats.chatId, input.chatId)
-          ))
+          .where(and(eq(subChats.id, input.subChatId), eq(subChats.chatId, input.chatId)))
           .get()
 
         chatSubChats = singleSubChat ? [singleSubChat] : []
       } else {
         // Get stats for all sub-chats
-        chatSubChats = db
-          .select()
-          .from(subChats)
-          .where(eq(subChats.chatId, input.chatId))
-          .all()
+        chatSubChats = db.select().from(subChats).where(eq(subChats.chatId, input.chatId)).all()
       }
 
       let messageCount = 0

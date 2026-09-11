@@ -1,10 +1,10 @@
-import { router, publicProcedure } from "../index"
-import { getDatabase, projects, chats, subChats } from "../../db"
 import { app, shell } from "electron"
-import { getAuthManager } from "../../../index"
 import { z } from "zod"
-import { clearNetworkCache } from "../../ollama/network-detector"
 import { IS_DEV, PROTOCOL } from "../../../constants"
+import { getAuthManager } from "../../../index"
+import { chats, getDatabase, projects, subChats } from "../../db"
+import { clearNetworkCache } from "../../ollama/network-detector"
+import { publicProcedure, router } from "../index"
 
 // Global flag for simulating offline mode (for testing)
 let simulateOfflineMode = false
@@ -26,11 +26,7 @@ export const debugRouter = router({
     let protocolRegistered = false
     try {
       protocolRegistered = process.defaultApp
-        ? app.isDefaultProtocolClient(
-            PROTOCOL,
-            process.execPath,
-            [process.argv[1]!],
-          )
+        ? app.isDefaultProtocolClient(PROTOCOL, process.execPath, [process.argv[1]!])
         : app.isDefaultProtocolClient(PROTOCOL)
     } catch {
       protocolRegistered = false

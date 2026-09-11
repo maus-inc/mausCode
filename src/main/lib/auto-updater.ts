@@ -1,7 +1,7 @@
-import { BrowserWindow, ipcMain, app } from "electron"
+import { app, BrowserWindow, ipcMain } from "electron"
 import log from "electron-log"
-import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater"
-import { readFileSync, writeFileSync, existsSync } from "fs"
+import { autoUpdater, type ProgressInfo, type UpdateInfo } from "electron-updater"
+import { existsSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 
 /**
@@ -114,13 +114,15 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
       url: feedUrl,
     })
   } else {
-    log.info("[AutoUpdater] No update feed configured (MAIN_VITE_UPDATE_FEED_URL empty) - auto-update disabled")
+    log.info(
+      "[AutoUpdater] No update feed configured (MAIN_VITE_UPDATE_FEED_URL empty) - auto-update disabled",
+    )
   }
 
   // Add cache-busting to update requests
   autoUpdater.requestHeaders = {
     "Cache-Control": "no-cache, no-store, must-revalidate",
-    "Pragma": "no-cache",
+    Pragma: "no-cache",
   }
 
   // Event: Checking for updates
@@ -351,5 +353,5 @@ function formatBytes(bytes: number): string {
   const k = 1024
   const sizes = ["B", "KB", "MB", "GB"]
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+  return parseFloat((bytes / k ** i).toFixed(1)) + " " + sizes[i]
 }

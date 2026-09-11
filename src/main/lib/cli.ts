@@ -7,8 +7,8 @@
  */
 
 import { app } from "electron"
-import { join } from "path"
 import { existsSync, lstatSync } from "fs"
+import { join } from "path"
 import { platform } from "./platform"
 
 // Launch directory from CLI (e.g., `mauscode /path/to/project`)

@@ -1,92 +1,78 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
-import {
-  DEFAULT_DARK_THEME_ID,
-  DEFAULT_LIGHT_THEME_ID,
-} from "../themes/builtin-themes"
 import { desktopViewAtom as _desktopViewAtom } from "../../features/agents/atoms"
+import { DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID } from "../themes/builtin-themes"
 
 // ============================================
 // RE-EXPORT FROM FEATURES/AGENTS/ATOMS (source of truth)
 // ============================================
 
 export {
-  // Chat atoms
-  selectedAgentChatIdAtom,
-  subChatModeAtomFamily,
-  lastSelectedModelIdAtom,
-  lastSelectedAgentIdAtom,
-  lastSelectedRepoAtom,
-  selectedProjectAtom,
-  agentsUnseenChangesAtom,
-  agentsSubChatUnseenChangesAtom,
-  loadingSubChatsAtom,
-  setLoading,
-  clearLoading,
-  MODEL_ID_MAP,
-  lastChatModesAtom,
-
+  // Mode utilities
+  AGENT_MODES,
+  type AgentMode,
+  type AgentsDebugMode,
+  type AgentsMobileViewMode,
+  type AutomationTemplateParams,
+  agentsChangesPanelWidthAtom,
+  // Debug mode
+  agentsDebugModeAtom,
+  agentsDiffSidebarOpenAtom,
+  // Diff atoms
+  agentsDiffSidebarWidthAtom,
+  agentsFocusedDiffFileAtom,
+  agentsInboxSidebarWidthAtom,
+  // UI state
+  agentsMobileViewModeAtom,
+  agentsPreviewSidebarOpenAtom,
+  agentsPreviewSidebarWidthAtom,
   // Sidebar atoms
   agentsSidebarOpenAtom,
   agentsSidebarWidthAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatsSidebarWidthAtom,
-
-  // Preview atoms
-  previewPathAtomFamily,
-  viewportModeAtomFamily,
-  previewScaleAtomFamily,
-  mobileDeviceAtomFamily,
-  agentsPreviewSidebarWidthAtom,
-  agentsPreviewSidebarOpenAtom,
-
-  // Diff atoms
-  agentsDiffSidebarWidthAtom,
-  agentsChangesPanelWidthAtom,
-  agentsDiffSidebarOpenAtom,
-  agentsFocusedDiffFileAtom,
-  filteredDiffFilesAtom,
-  subChatFilesAtom,
-
+  agentsSubChatUnseenChangesAtom,
+  agentsUnseenChangesAtom,
   // Archive atoms
   archivePopoverOpenAtom,
-  archiveSearchQueryAtom,
   archiveRepositoryFilterAtom,
-
-  // UI state
-  agentsMobileViewModeAtom,
-
-  // Debug mode
-  agentsDebugModeAtom,
-
+  archiveSearchQueryAtom,
+  automationDetailIdAtom,
+  automationTemplateParamsAtom,
+  clearLoading,
   // Todos
   currentTodosAtomFamily,
-
+  type DesktopView,
+  // Desktop view navigation (Automations / Inbox)
+  desktopViewAtom,
+  filteredDiffFilesAtom,
+  getNextMode,
+  type InboxMobileViewMode,
+  inboxMobileViewModeAtom,
+  inboxSelectedChatIdAtom,
+  lastChatModesAtom,
+  lastSelectedAgentIdAtom,
+  lastSelectedModelIdAtom,
+  lastSelectedRepoAtom,
+  loadingSubChatsAtom,
+  MODEL_ID_MAP,
+  mobileDeviceAtomFamily,
   // AskUserQuestion
   pendingUserQuestionsAtom,
-
+  // Preview atoms
+  previewPathAtomFamily,
+  previewScaleAtomFamily,
   // Types
   type SavedRepo,
   type SelectedProject,
-  type AgentsMobileViewMode,
-  type AgentsDebugMode,
   type SubChatFileChange,
-  type AgentMode,
-
-  // Mode utilities
-  AGENT_MODES,
-  getNextMode,
-
-  // Desktop view navigation (Automations / Inbox)
-  desktopViewAtom,
-  automationDetailIdAtom,
-  automationTemplateParamsAtom,
-  inboxSelectedChatIdAtom,
-  agentsInboxSidebarWidthAtom,
-  inboxMobileViewModeAtom,
-  type DesktopView,
-  type AutomationTemplateParams,
-  type InboxMobileViewMode,
+  // Chat atoms
+  selectedAgentChatIdAtom,
+  selectedProjectAtom,
+  setLoading,
+  subChatFilesAtom,
+  subChatModeAtomFamily,
+  viewportModeAtomFamily,
 } from "../../features/agents/atoms"
 
 // ============================================
@@ -116,26 +102,20 @@ export const selectedAgentChatsCountAtom = atom((get) => {
   return get(selectedAgentChatIdsAtom).size
 })
 
-export const toggleAgentChatSelectionAtom = atom(
-  null,
-  (get, set, chatId: string) => {
-    const currentSet = get(selectedAgentChatIdsAtom)
-    const newSet = new Set(currentSet)
-    if (newSet.has(chatId)) {
-      newSet.delete(chatId)
-    } else {
-      newSet.add(chatId)
-    }
-    set(selectedAgentChatIdsAtom, newSet)
-  },
-)
+export const toggleAgentChatSelectionAtom = atom(null, (get, set, chatId: string) => {
+  const currentSet = get(selectedAgentChatIdsAtom)
+  const newSet = new Set(currentSet)
+  if (newSet.has(chatId)) {
+    newSet.delete(chatId)
+  } else {
+    newSet.add(chatId)
+  }
+  set(selectedAgentChatIdsAtom, newSet)
+})
 
-export const selectAllAgentChatsAtom = atom(
-  null,
-  (_get, set, chatIds: string[]) => {
-    set(selectedAgentChatIdsAtom, new Set(chatIds))
-  },
-)
+export const selectAllAgentChatsAtom = atom(null, (_get, set, chatIds: string[]) => {
+  set(selectedAgentChatIdsAtom, new Set(chatIds))
+})
 
 export const clearAgentChatSelectionAtom = atom(null, (_get, set) => {
   set(selectedAgentChatIdsAtom, new Set())
@@ -155,26 +135,20 @@ export const selectedSubChatsCountAtom = atom((get) => {
   return get(selectedSubChatIdsAtom).size
 })
 
-export const toggleSubChatSelectionAtom = atom(
-  null,
-  (get, set, subChatId: string) => {
-    const currentSet = get(selectedSubChatIdsAtom)
-    const newSet = new Set(currentSet)
-    if (newSet.has(subChatId)) {
-      newSet.delete(subChatId)
-    } else {
-      newSet.add(subChatId)
-    }
-    set(selectedSubChatIdsAtom, newSet)
-  },
-)
+export const toggleSubChatSelectionAtom = atom(null, (get, set, subChatId: string) => {
+  const currentSet = get(selectedSubChatIdsAtom)
+  const newSet = new Set(currentSet)
+  if (newSet.has(subChatId)) {
+    newSet.delete(subChatId)
+  } else {
+    newSet.add(subChatId)
+  }
+  set(selectedSubChatIdsAtom, newSet)
+})
 
-export const selectAllSubChatsAtom = atom(
-  null,
-  (_get, set, subChatIds: string[]) => {
-    set(selectedSubChatIdsAtom, new Set(subChatIds))
-  },
-)
+export const selectAllSubChatsAtom = atom(null, (_get, set, subChatIds: string[]) => {
+  set(selectedSubChatIdsAtom, new Set(subChatIds))
+})
 
 export const clearSubChatSelectionAtom = atom(null, (_get, set) => {
   set(selectedSubChatIdsAtom, new Set())
@@ -205,7 +179,7 @@ export const agentsSettingsDialogOpenAtom = atom(
   (get) => get(_desktopViewAtom) === "settings",
   (_get, set, open: boolean) => {
     set(_desktopViewAtom, open ? "settings" : null)
-  }
+  },
 )
 
 export type CustomClaudeConfig = {
@@ -232,25 +206,25 @@ export const selectedOllamaModelAtom = atomWithStorage<string | null>(
 
 // Helper to get offline profile with selected model
 export const getOfflineProfile = (modelName?: string | null): ModelProfile => ({
-  id: 'offline-ollama',
-  name: 'Offline (Ollama)',
+  id: "offline-ollama",
+  name: "Offline (Ollama)",
   isOffline: true,
   config: {
-    model: modelName || 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
+    model: modelName || "qwen2.5-coder:7b",
+    token: "ollama",
+    baseUrl: "http://localhost:11434",
   },
 })
 
 // Predefined offline profile for Ollama (legacy, uses default model)
 export const OFFLINE_PROFILE: ModelProfile = {
-  id: 'offline-ollama',
-  name: 'Offline (Ollama)',
+  id: "offline-ollama",
+  name: "Offline (Ollama)",
   isOffline: true,
   config: {
-    model: 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
+    model: "qwen2.5-coder:7b",
+    token: "ollama",
+    baseUrl: "http://localhost:11434",
   },
 }
 
@@ -267,12 +241,9 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
 )
 
 // OpenAI API key for voice transcription (for users without paid subscription)
-export const openaiApiKeyAtom = atomWithStorage<string>(
-  "agents:openai-api-key",
-  "",
-  undefined,
-  { getOnInit: true },
-)
+export const openaiApiKeyAtom = atomWithStorage<string>("agents:openai-api-key", "", undefined, {
+  getOnInit: true,
+})
 
 // New: Model profiles storage
 export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
@@ -339,7 +310,7 @@ export const activeConfigAtom = atom((get) => {
 
   // If auto-offline enabled and no internet, use offline profile
   if (!networkOnline && autoOffline) {
-    const offlineProfile = profiles.find(p => p.isOffline)
+    const offlineProfile = profiles.find((p) => p.isOffline)
     if (offlineProfile) {
       return offlineProfile.config
     }
@@ -347,7 +318,7 @@ export const activeConfigAtom = atom((get) => {
 
   // If specific profile is selected, use it
   if (activeProfileId) {
-    const profile = profiles.find(p => p.id === activeProfileId)
+    const profile = profiles.find((p) => p.id === activeProfileId)
     if (profile) {
       return profile.config
     }
@@ -500,7 +471,7 @@ export const autoAdvanceTargetAtom = atomWithStorage<AutoAdvanceTarget>(
 // Preferences - Default Agent Mode
 // Controls what mode new chats/sub-chats start in (Plan = read-only, Agent = can edit)
 // Re-using AgentMode type from features/agents/atoms
-import { type AgentMode as AgentModeType } from "../../features/agents/atoms"
+import type { AgentMode as AgentModeType } from "../../features/agents/atoms"
 
 // Migration: convert old isPlanMode boolean to new defaultAgentMode string
 // This runs once when the module loads
@@ -513,7 +484,10 @@ if (typeof window !== "undefined") {
     const wasInPlanMode = oldValue === "true"
     localStorage.setItem(newKey, JSON.stringify(wasInPlanMode ? "plan" : "agent"))
     localStorage.removeItem(oldKey)
-    console.log("[atoms] Migrated isPlanMode to defaultAgentMode:", wasInPlanMode ? "plan" : "agent")
+    console.log(
+      "[atoms] Migrated isPlanMode to defaultAgentMode:",
+      wasInPlanMode ? "plan" : "agent",
+    )
   }
 }
 
@@ -646,6 +620,7 @@ export const allFullThemesAtom = atom<VSCodeFullTheme[]>((get) => {
 // ============================================
 
 import type { CustomHotkeysConfig } from "../hotkeys/types"
+
 export type { CustomHotkeysConfig }
 
 /**
@@ -694,13 +669,7 @@ export const subChatsQuickSwitchSelectedIndexAtom = atom<number>(0)
 // UPDATE ATOMS
 // ============================================
 
-export type UpdateStatus =
-  | "idle"
-  | "checking"
-  | "available"
-  | "downloading"
-  | "ready"
-  | "error"
+export type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "ready" | "error"
 
 export type UpdateState = {
   status: UpdateStatus
@@ -798,21 +767,17 @@ export const codexOnboardingCompletedAtom = atomWithStorage<boolean>(
 export type CodexOnboardingAuthMethod = "chatgpt" | "api_key"
 
 // Preferred/last successful Codex auth method
-export const codexOnboardingAuthMethodAtom =
-  atomWithStorage<CodexOnboardingAuthMethod>(
-    "onboarding:codex-auth-method",
-    "chatgpt",
-    undefined,
-    { getOnInit: true },
-  )
-
-// App-managed Codex API key (separate from voice OpenAI key)
-export const codexApiKeyAtom = atomWithStorage<string>(
-  "onboarding:codex-api-key",
-  "",
+export const codexOnboardingAuthMethodAtom = atomWithStorage<CodexOnboardingAuthMethod>(
+  "onboarding:codex-auth-method",
+  "chatgpt",
   undefined,
   { getOnInit: true },
 )
+
+// App-managed Codex API key (separate from voice OpenAI key)
+export const codexApiKeyAtom = atomWithStorage<string>("onboarding:codex-api-key", "", undefined, {
+  getOnInit: true,
+})
 
 export function normalizeCodexApiKey(apiKey: string): string | null {
   const trimmed = apiKey.trim()

@@ -1,5 +1,5 @@
-import { AuthStore, AuthData, AuthUser } from "./auth-store"
-import { app, BrowserWindow } from "electron"
+import { app, type BrowserWindow } from "electron"
+import { type AuthData, AuthStore, type AuthUser } from "./auth-store"
 import { AUTH_SERVER_PORT, PROTOCOL } from "./constants"
 import { getApiUrl, isControlPlaneConfigured } from "./lib/config"
 
@@ -202,7 +202,9 @@ export class AuthManager {
   startAuthFlow(mainWindow: BrowserWindow | null): void {
     if (!isControlPlaneConfigured()) {
       // Local-only mode: there is no mausCode control plane to sign in to.
-      console.warn("[Auth] Control plane not configured (MAIN_VITE_API_URL empty) - sign-in unavailable")
+      console.warn(
+        "[Auth] Control plane not configured (MAIN_VITE_API_URL empty) - sign-in unavailable",
+      )
       return
     }
 

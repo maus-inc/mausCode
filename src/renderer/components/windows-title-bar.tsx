@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { Minus, Square, X } from "lucide-react"
+import { useEffect, useState } from "react"
 import { Button } from "./ui/button"
 
 /**
@@ -14,8 +14,7 @@ export function WindowsTitleBar() {
   const [isMaximized, setIsMaximized] = useState(false)
   const [hasNativeFrame, setHasNativeFrame] = useState(false)
 
-  const isWindows =
-    typeof window !== "undefined" && window.desktopApi?.platform === "win32"
+  const isWindows = typeof window !== "undefined" && window.desktopApi?.platform === "win32"
 
   // Check actual window frame state
   useEffect(() => {

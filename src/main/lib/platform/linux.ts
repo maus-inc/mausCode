@@ -7,12 +7,7 @@ import { existsSync, lstatSync, readlinkSync } from "node:fs"
 import * as path from "node:path"
 import { promisify } from "node:util"
 import { BasePlatformProvider } from "./base"
-import type {
-  ShellConfig,
-  PathConfig,
-  CliConfig,
-  EnvironmentConfig,
-} from "./types"
+import type { CliConfig, EnvironmentConfig, PathConfig, ShellConfig } from "./types"
 
 const execAsync = promisify(exec)
 
@@ -102,10 +97,7 @@ export class LinuxPlatformProvider extends BasePlatformProvider {
     try {
       const uid = process.getuid?.()
       if (uid !== undefined) {
-        const { stdout } = await this.execCommand("sh", [
-          "-c",
-          `getent passwd ${uid} 2>/dev/null`,
-        ])
+        const { stdout } = await this.execCommand("sh", ["-c", `getent passwd ${uid} 2>/dev/null`])
         // getent format: user:x:uid:gid:name:home:shell
         const match = stdout.match(/:([^:]+)$/)
         if (match?.[1]) {
@@ -145,9 +137,7 @@ export class LinuxPlatformProvider extends BasePlatformProvider {
     return "en_US.UTF-8"
   }
 
-  async installCli(
-    sourcePath: string
-  ): Promise<{ success: boolean; error?: string }> {
+  async installCli(sourcePath: string): Promise<{ success: boolean; error?: string }> {
     const cliConfig = this.getCliConfig()
     const installPath = cliConfig.installPath
 
@@ -175,8 +165,7 @@ export class LinuxPlatformProvider extends BasePlatformProvider {
       console.log("[CLI] Installed mauscode command to", installPath)
       return { success: true }
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Installation failed"
+      const errorMessage = error instanceof Error ? error.message : "Installation failed"
       console.error("[CLI] Failed to install:", error)
       return { success: false, error: errorMessage }
     }
@@ -202,8 +191,7 @@ export class LinuxPlatformProvider extends BasePlatformProvider {
       console.log("[CLI] Uninstalled mauscode command")
       return { success: true }
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Uninstallation failed"
+      const errorMessage = error instanceof Error ? error.message : "Uninstallation failed"
       console.error("[CLI] Failed to uninstall:", error)
       return { success: false, error: errorMessage }
     }
