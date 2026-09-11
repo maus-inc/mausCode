@@ -14,7 +14,7 @@
 
 - [ ] Human approves this proposal + Phase 1 scope (aadivar widget)
 - [ ] Sidebar lineage decision recorded (erenbertr vs sylv — one line)
-- [ ] Effect-adoption decision recorded (before Phase 4)
+- [x] Effect-adoption decision recorded (before Phase 4)
 - [ ] Per-phase go-ahead before each subsequent phase
 
 ## Phase 1 — aadivar usage widget
@@ -56,9 +56,12 @@
       rebind, footer wiring + usage-widget retirement
 - [x] Batch C verify: tsc 31->25 (delta = 6 fixed, zero new), node--test 27/27, secrets clean
 
-## Phase 4 — T3 contracts (needs explicit approval)
+## Phase 4 — T3 contracts (APPROVED 2026-09-11: user T3 FULL-ADOPT)
 
-- [ ] Port to shared layer (ids/names adapted), tests ported along
+- [x] Effect-adoption decision recorded (.dump/app/decisions/effect-adoption-t3-layers-2026-09-11.md): effect isolated to T3 layers, exact pin 4.0.0-rc.112
+- [x] Ported 67 files to src/shared/contracts/ @211618f (verbatim + attribution headers; vite-plus/test->vitest); T3 ids kept, renames deferred
+- [x] Deps: effect 4.0.0-rc.112 (exact), vitest + @effect/vitest (dev); npm run test:contracts
+- [x] Verify: vitest 382/382, tsc zero-delta (25), node--test 27/27, secrets clean
 
 ## Phase 5 — T3 codex-app-server evaluation (not committed)
 

@@ -31,7 +31,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "ts:check": "tsgo --noEmit",
-    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs"
+    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs",
+    "test:contracts": "vitest run src/shared/contracts"
   },
   "workspaces": [
     "packages/*"
@@ -88,6 +89,7 @@
     "date-fns": "^3.6.0",
     "diff": "^8.0.3",
     "drizzle-orm": "^0.45.1",
+    "effect": "4.0.0-rc.112",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",
     "gray-matter": "^4.0.3",
@@ -123,6 +125,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@effect/vitest": "4.0.0-rc.112",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^4.0.0",
     "@electron/rebuild": "^4.0.3",
@@ -142,7 +145,8 @@
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.4.5",
-    "vite": "^6.3.4"
+    "vite": "^6.3.4",
+    "vitest": "4.1.11"
   },
   "build": {
     "appId": "com.maus-inc.mausscode",

@@ -127,6 +127,7 @@ Delta base: `HEAD` (our init) <-> `forkup/main`. 230 files total: 66 A,, 123 M,,
 - Status: 3,833 commits; active nightly (`v0.0.41-nightly.2026.0911` = today); many `agents/mcp-*` branches(mcp controls, conversations, environment, projects, queue-inputs, scheduled-tasks, terminals, preview-controls, checkpoints,. Target for: **optional backend for external CLIs** - port + refactor to our stack(do not build blind)Detailed lineage/architecture/port-plan requested `deep-research` - separate section below soon.
 
 ## Action log
+- 2026-09-11(p): Phase 4 PORTED (T3 contracts @211618f, MIT): 67 files to src/shared/contracts/ (verbatim + headers; tests vite-plus/test->vitest); effect 4.0.0-rc.112 exact (isolated layer, decision in .dump/app/decisions/effect-adoption-t3-layers-2026-09-11.md); npm run test:contracts = 382/382; tsc zero-delta (25), 27/27, secrets clean. T3 ids kept verbatim (renames deferred to scaffold wiring).
 - 2026-09-11: full fork-network scan(618 forks); candidates identified; catalog created.
 - 2026-09-11(b): Category-A file map produced (above); Category-C maps added; SamSammanne Not Found; t3code fetched. Next: t3code deep-research + transplant per approval.
 - 2026-09-11(c): app-track intake - pulled ledger onto arena; spot-verified (9/9 repos resolve, SamSammanne 404 re-confirmed, 1Code Apache-2.0/archived, T3 MIT, aadivar+normalizer paths exist); scaffolded `openspec/changes/add-fork-harvest-transplants/` (phased plan). No code transplanted yet - per-phase go-ahead pending.
