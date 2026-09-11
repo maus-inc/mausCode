@@ -21,30 +21,17 @@ export const CLAUDE_CONFIG_PATH = path.join(os.homedir(), ".claude.json")
 export const CLAUDE_DIR_CONFIG_PATH = path.join(os.homedir(), ".claude", ".claude.json")
 export const CLAUDE_DIR_MCP_PATH = path.join(os.homedir(), ".claude", "mcp.json")
 
-export interface McpServerConfig {
-  command?: string
-  args?: string[]
-  url?: string
-  authType?: "oauth" | "bearer" | "none"
-  _oauth?: {
-    accessToken: string
-    refreshToken?: string
-    clientId?: string
-    expiresAt?: number
-  }
-  [key: string]: unknown
-}
+// The mcpServers data shapes and the pure transforms over them live in
+// ./mcp-config, which has no imports of its own and so can be unit tested
+// without the database or electron.
+import type { McpServerConfig, ProjectConfig, ClaudeConfig } from "./mcp-config"
+import {
+  getMcpServerByScope,
+  removeMcpServerByScope,
+  updateMcpServerByScope,
+} from "./mcp-config"
 
-export interface ProjectConfig {
-  mcpServers?: Record<string, McpServerConfig>
-  [key: string]: unknown
-}
-
-export interface ClaudeConfig {
-  mcpServers?: Record<string, McpServerConfig>  // User-scope (global) MCP servers
-  projects?: Record<string, ProjectConfig>
-  [key: string]: unknown
-}
+export type { McpServerConfig, ProjectConfig, ClaudeConfig }
 
 /**
  * Read ~/.claude.json asynchronously
@@ -153,12 +140,7 @@ export function getMcpServerConfig(
   projectPath: string | null,
   serverName: string
 ): McpServerConfig | undefined {
-  const scope = resolveMcpScope(projectPath)
-  // Global MCP servers (root level mcpServers in ~/.claude.json)
-  if (scope === null) {
-    return config.mcpServers?.[serverName]
-  }
-  return config.projects?.[scope]?.mcpServers?.[serverName]
+  return getMcpServerByScope(config, resolveMcpScope(projectPath), serverName)
 }
 
 /**
@@ -177,34 +159,12 @@ export function updateMcpServerConfig(
   serverName: string,
   update: Partial<McpServerConfig>
 ): ClaudeConfig {
-  const scope = resolveMcpScope(projectPath)
-
-  // Global MCP servers (root level mcpServers in ~/.claude.json)
-  if (scope === null) {
-    return {
-      ...config,
-      mcpServers: {
-        ...config.mcpServers,
-        [serverName]: { ...config.mcpServers?.[serverName], ...update },
-      },
-    }
-  }
-
-  // Project-specific MCP servers
-  const projectEntry = config.projects?.[scope]
-  return {
-    ...config,
-    projects: {
-      ...config.projects,
-      [scope]: {
-        ...projectEntry,
-        mcpServers: {
-          ...projectEntry?.mcpServers,
-          [serverName]: { ...projectEntry?.mcpServers?.[serverName], ...update },
-        },
-      },
-    },
-  }
+  return updateMcpServerByScope(
+    config,
+    resolveMcpScope(projectPath),
+    serverName,
+    update
+  )
 }
 
 /**
@@ -220,38 +180,11 @@ export function removeMcpServerConfig(
   projectPath: string | null,
   serverName: string
 ): ClaudeConfig {
-  const scope = resolveMcpScope(projectPath)
-
-  // Global MCP servers
-  if (scope === null) {
-    if (!config.mcpServers?.[serverName]) return config
-    const mcpServers = { ...config.mcpServers }
-    delete mcpServers[serverName]
-    return { ...config, mcpServers }
-  }
-
-  // Project-specific MCP servers
-  const projectEntry = config.projects?.[scope]
-  if (!projectEntry?.mcpServers?.[serverName]) return config
-
-  const mcpServers = { ...projectEntry.mcpServers }
-  delete mcpServers[serverName]
-
-  // Clean up empty objects so we don't leave hollow entries behind
-  const nextProject: ProjectConfig = { ...projectEntry }
-  if (Object.keys(mcpServers).length === 0) {
-    delete nextProject.mcpServers
-  } else {
-    nextProject.mcpServers = mcpServers
-  }
-
-  const projects = { ...config.projects }
-  if (Object.keys(nextProject).length === 0) {
-    delete projects[scope]
-  } else {
-    projects[scope] = nextProject
-  }
-  return { ...config, projects }
+  return removeMcpServerByScope(
+    config,
+    resolveMcpScope(projectPath),
+    serverName
+  )
 }
 
 /**
