@@ -3,6 +3,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { toast } from "sonner"
 import { trpc } from "../../lib/trpc"
 import { getWindowId } from "../../contexts/WindowContext"
+import { stableArrayIfSameContents } from "../../lib/utils/stable-reference"
 import {
   selectedAgentChatIdAtom,
   selectedDraftIdAtom,
@@ -161,15 +162,9 @@ export function KanbanView() {
       }
     }
 
-    const prev = prevOpenSubChatIdsRef.current
-    const sorted = [...allIds].sort()
-    const prevSorted = [...prev].sort()
-    if (sorted.length === prevSorted.length && sorted.every((id, i) => id === prevSorted[i])) {
-      return prev
-    }
-
-    prevOpenSubChatIdsRef.current = allIds
-    return allIds
+    const stable = stableArrayIfSameContents(prevOpenSubChatIdsRef.current, allIds)
+    prevOpenSubChatIdsRef.current = stable
+    return stable
   }, [chats, openSubChatsVersion])
 
   // Pending plan approvals from DB

@@ -4,6 +4,7 @@ import type {
   UploadedFile,
 } from "../hooks/use-agents-file-upload"
 import type { SelectedTextContext } from "./queue-utils"
+import { canonicalJoin } from "../../../lib/utils/stable-reference"
 
 // Constants
 export const DRAFTS_STORAGE_KEY = "agent-drafts-global"
@@ -247,12 +248,12 @@ export function useNewChatDrafts(): NewChatDraft[] {
       // Only update state if drafts actually changed (compare by content)
       setDrafts((prev) => {
         if (prev.length !== newDrafts.length) return newDrafts
-        const prevIds = prev.map((d) => d.id).sort().join(",")
-        const newIds = newDrafts.map((d) => d.id).sort().join(",")
+        const prevIds = canonicalJoin(prev.map((d) => d.id))
+        const newIds = canonicalJoin(newDrafts.map((d) => d.id))
         if (prevIds !== newIds) return newDrafts
         // Also compare text content
-        const prevTexts = prev.map((d) => `${d.id}:${d.text}`).sort().join("|")
-        const newTexts = newDrafts.map((d) => `${d.id}:${d.text}`).sort().join("|")
+        const prevTexts = canonicalJoin(prev.map((d) => `${d.id}:${d.text}`), "|")
+        const newTexts = canonicalJoin(newDrafts.map((d) => `${d.id}:${d.text}`), "|")
         if (prevTexts !== newTexts) return newDrafts
         return prev // No change, return previous reference
       })

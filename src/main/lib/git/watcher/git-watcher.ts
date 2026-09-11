@@ -88,13 +88,24 @@ export class GitWatcher extends EventEmitter {
 	private pendingChanges: Map<string, FileChangeType> = new Map();
 	private isDisposed = false;
 	private debounceMs: number;
-	private initPromise: Promise<void>;
 
-	constructor(config: GitWatcherConfig) {
+	private constructor(config: GitWatcherConfig) {
 		super();
 		this.worktreePath = config.worktreePath;
 		this.debounceMs = config.debounceMs ?? 100;
-		this.initPromise = this.initWatcher(config);
+	}
+
+	/**
+	 * Build a watcher and wait for it to be watching before handing it back.
+	 *
+	 * chokidar is ESM-only, so setting up the watch is asynchronous and cannot
+	 * happen in the constructor. A caller that constructs directly would hold a
+	 * watcher with no file handles yet and no way to tell.
+	 */
+	static async create(config: GitWatcherConfig): Promise<GitWatcher> {
+		const watcher = new GitWatcher(config);
+		await watcher.initWatcher(config);
+		return watcher;
 	}
 
 	private async initWatcher(config: GitWatcherConfig): Promise<void> {
@@ -168,13 +179,6 @@ export class GitWatcher extends EventEmitter {
 		console.log(`[GitWatcher] Watching: ${config.worktreePath}`);
 	}
 
-	/**
-	 * Wait for the watcher to be initialized.
-	 */
-	async waitForReady(): Promise<void> {
-		await this.initPromise;
-	}
-
 	getWorktreePath(): string {
 		return this.worktreePath;
 	}
@@ -183,9 +187,8 @@ export class GitWatcher extends EventEmitter {
 		if (this.isDisposed) return;
 		this.isDisposed = true;
 
-		// Wait for init to complete before disposing
-		await this.initPromise.catch(() => {});
-
+		// create() has already resolved, so the watch is either open or was
+		// never opened. No need to wait on init here.
 		await this.watcher?.close();
 		this.pendingChanges.clear();
 		this.removeAllListeners();
@@ -209,11 +212,10 @@ class GitWatcherRegistry {
 	async getOrCreate(worktreePath: string): Promise<GitWatcher> {
 		let watcher = this.watchers.get(worktreePath);
 		if (!watcher) {
-			watcher = new GitWatcher({
+			watcher = await GitWatcher.create({
 				worktreePath,
 				debounceMs: 100,
 			});
-			this.watchers.set(worktreePath, watcher);
 
 			// Wire up event forwarding
 			watcher.on("change", (event: GitWatchEvent) => {
@@ -233,8 +235,9 @@ class GitWatcherRegistry {
 				}
 			});
 
-			// Wait for the watcher to be ready
-			await watcher.waitForReady();
+			// Register only after the watch is live, so a failed setup does not
+			// leave an inert watcher cached against the path.
+			this.watchers.set(worktreePath, watcher);
 		}
 		return watcher;
 	}

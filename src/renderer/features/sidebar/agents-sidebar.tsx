@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import { stableArrayIfSameContents } from "../../lib/utils/stable-reference"
 import { useState, useRef, useMemo, useEffect, useCallback, memo, forwardRef } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "motion/react"
@@ -24,7 +25,6 @@ import {
   showOfflineModeFeaturesAtom,
   chatSourceModeAtom,
   selectedTeamIdAtom,
-  type ChatSourceMode,
   showWorkspaceIconAtom,
   betaKanbanEnabledAtom,
   betaAutomationsEnabledAtom,
@@ -40,7 +40,7 @@ import {
 } from "../../lib/hooks/use-remote-chats"
 import { usePrefetchLocalChat } from "../../lib/hooks/use-prefetch-local-chat"
 import { ArchivePopover } from "../agents/ui/archive-popover"
-import { ChevronDown, MoreHorizontal, Columns3, ArrowUpRight } from "lucide-react"
+import { ChevronDown, Columns3, ArrowUpRight } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { remoteTrpc } from "../../lib/remote-trpc"
 // import { useRouter } from "next/navigation" // Desktop doesn't use next/navigation
@@ -86,10 +86,7 @@ import {
 import {
   IconDoubleChevronLeft,
   SettingsIcon,
-  PlusIcon,
   ProfileIcon,
-  PublisherStudioIcon,
-  SearchIcon,
   GitHubLogo,
   LoadingDot,
   ArchiveIcon,
@@ -97,7 +94,6 @@ import {
   QuestionCircleIcon,
   QuestionIcon,
   KeyboardIcon,
-  TicketIcon,
   CloudIcon,
 } from "../../components/ui/icons"
 import { Logo } from "../../components/ui/logo"
@@ -124,10 +120,10 @@ import { NetworkStatus } from "../../components/ui/network-status"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT } from "../agents/stores/sub-chat-store"
 import { getWindowId } from "../../contexts/WindowContext"
 import { AgentsHelpPopover } from "../agents/components/agents-help-popover"
-import { getShortcutKey, isDesktopApp } from "../../lib/utils/platform"
+import { isDesktopApp } from "../../lib/utils/platform"
 import { useResolvedHotkeyDisplay, useResolvedHotkeyDisplayWithAlt } from "../../lib/hotkeys"
 import { pluralize } from "../agents/utils/pluralize"
-import { useNewChatDrafts, deleteNewChatDraft, type NewChatDraft } from "../agents/lib/drafts"
+import { useNewChatDrafts, deleteNewChatDraft } from "../agents/lib/drafts"
 import {
   TrafficLightSpacer,
   TrafficLights,
@@ -136,7 +132,7 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { Checkbox } from "../../components/ui/checkbox"
 import { useHaptic } from "./hooks/use-haptic"
 import { TypewriterText } from "../../components/ui/typewriter-text"
-import { exportChat, copyChat, type ExportFormat } from "../agents/lib/export-chat"
+import { exportChat, copyChat } from "../agents/lib/export-chat"
 
 // Feedback URL: uses env variable for hosted version, falls back to public Discord for open source
 const FEEDBACK_URL =
@@ -1909,15 +1905,9 @@ export function AgentsSidebar({
 
     // Compare with previous - if content is same, return old reference
     // This prevents React Query from refetching when array content hasn't changed
-    const prev = prevOpenSubChatIdsRef.current
-    const sorted = [...allIds].sort()
-    const prevSorted = [...prev].sort()
-    if (sorted.length === prevSorted.length && sorted.every((id, i) => id === prevSorted[i])) {
-      return prev
-    }
-
-    prevOpenSubChatIdsRef.current = allIds
-    return allIds
+    const stable = stableArrayIfSameContents(prevOpenSubChatIdsRef.current, allIds)
+    prevOpenSubChatIdsRef.current = stable
+    return stable
   }, [agentChats, openSubChatsVersion])
 
   // File changes stats from DB - only for open sub-chats

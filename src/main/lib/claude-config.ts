@@ -131,6 +131,19 @@ export function getProjectMcpServers(
 export const GLOBAL_MCP_PATH = "__global__"
 
 /**
+ * Resolve the `~/.claude.json` key a project path is stored under.
+ * Returns null when the request targets the global (root-level) mcpServers
+ * section, and collapses worktree paths back to their original project path.
+ *
+ * Single source of truth for the "is this the global scope?" question that
+ * getMcpServerConfig / updateMcpServerConfig / removeMcpServerConfig all ask.
+ */
+function resolveMcpScope(projectPath: string | null): string | null {
+  if (!projectPath || projectPath === GLOBAL_MCP_PATH) return null
+  return resolveProjectPathFromWorktree(projectPath) || projectPath
+}
+
+/**
  * Get a specific MCP server config
  * Use projectPath = GLOBAL_MCP_PATH (or null) for global MCP servers
  * Automatically resolves worktree paths to original project paths
@@ -140,19 +153,23 @@ export function getMcpServerConfig(
   projectPath: string | null,
   serverName: string
 ): McpServerConfig | undefined {
+  const scope = resolveMcpScope(projectPath)
   // Global MCP servers (root level mcpServers in ~/.claude.json)
-  if (!projectPath || projectPath === GLOBAL_MCP_PATH) {
+  if (scope === null) {
     return config.mcpServers?.[serverName]
   }
-  // Project-specific MCP servers (resolve worktree paths)
-  const resolvedPath = resolveProjectPathFromWorktree(projectPath) || projectPath
-  return config.projects?.[resolvedPath]?.mcpServers?.[serverName]
+  return config.projects?.[scope]?.mcpServers?.[serverName]
 }
 
 /**
  * Update MCP server config (creates path if needed)
  * Use projectPath = GLOBAL_MCP_PATH (or null) for global MCP servers
  * Automatically resolves worktree paths to original project paths
+ *
+ * Pure: returns a new config and leaves the input untouched. Callers pass the
+ * result straight to writeClaudeConfig(), so nothing depends on in-place
+ * mutation - and mutating a freshly read config makes accidental reuse of the
+ * stale object a silent bug.
  */
 export function updateMcpServerConfig(
   config: ClaudeConfig,
@@ -160,57 +177,81 @@ export function updateMcpServerConfig(
   serverName: string,
   update: Partial<McpServerConfig>
 ): ClaudeConfig {
+  const scope = resolveMcpScope(projectPath)
+
   // Global MCP servers (root level mcpServers in ~/.claude.json)
-  if (!projectPath || projectPath === GLOBAL_MCP_PATH) {
-    config.mcpServers = config.mcpServers || {}
-    config.mcpServers[serverName] = {
-      ...config.mcpServers[serverName],
-      ...update,
+  if (scope === null) {
+    return {
+      ...config,
+      mcpServers: {
+        ...config.mcpServers,
+        [serverName]: { ...config.mcpServers?.[serverName], ...update },
+      },
     }
-    return config
   }
-  // Project-specific MCP servers (resolve worktree paths)
-  const resolvedPath = resolveProjectPathFromWorktree(projectPath) || projectPath
-  config.projects = config.projects || {}
-  config.projects[resolvedPath] = config.projects[resolvedPath] || {}
-  config.projects[resolvedPath].mcpServers = config.projects[resolvedPath].mcpServers || {}
-  config.projects[resolvedPath].mcpServers[serverName] = {
-    ...config.projects[resolvedPath].mcpServers[serverName],
-    ...update,
+
+  // Project-specific MCP servers
+  const projectEntry = config.projects?.[scope]
+  return {
+    ...config,
+    projects: {
+      ...config.projects,
+      [scope]: {
+        ...projectEntry,
+        mcpServers: {
+          ...projectEntry?.mcpServers,
+          [serverName]: { ...projectEntry?.mcpServers?.[serverName], ...update },
+        },
+      },
+    },
   }
-  return config
 }
 
 /**
  * Remove an MCP server from config
  * Use projectPath = GLOBAL_MCP_PATH (or null) for global MCP servers
  * Automatically resolves worktree paths to original project paths
+ *
+ * Pure, and returns the *same* reference when there was nothing to remove so
+ * callers can cheaply detect a no-op.
  */
 export function removeMcpServerConfig(
   config: ClaudeConfig,
   projectPath: string | null,
   serverName: string
 ): ClaudeConfig {
+  const scope = resolveMcpScope(projectPath)
+
   // Global MCP servers
-  if (!projectPath || projectPath === GLOBAL_MCP_PATH) {
-    if (config.mcpServers?.[serverName]) {
-      delete config.mcpServers[serverName]
-    }
-    return config
+  if (scope === null) {
+    if (!config.mcpServers?.[serverName]) return config
+    const mcpServers = { ...config.mcpServers }
+    delete mcpServers[serverName]
+    return { ...config, mcpServers }
   }
+
   // Project-specific MCP servers
-  const resolvedPath = resolveProjectPathFromWorktree(projectPath) || projectPath
-  if (config.projects?.[resolvedPath]?.mcpServers?.[serverName]) {
-    delete config.projects[resolvedPath].mcpServers[serverName]
-    // Clean up empty objects
-    if (Object.keys(config.projects[resolvedPath].mcpServers).length === 0) {
-      delete config.projects[resolvedPath].mcpServers
-    }
-    if (Object.keys(config.projects[resolvedPath]).length === 0) {
-      delete config.projects[resolvedPath]
-    }
+  const projectEntry = config.projects?.[scope]
+  if (!projectEntry?.mcpServers?.[serverName]) return config
+
+  const mcpServers = { ...projectEntry.mcpServers }
+  delete mcpServers[serverName]
+
+  // Clean up empty objects so we don't leave hollow entries behind
+  const nextProject: ProjectConfig = { ...projectEntry }
+  if (Object.keys(mcpServers).length === 0) {
+    delete nextProject.mcpServers
+  } else {
+    nextProject.mcpServers = mcpServers
   }
-  return config
+
+  const projects = { ...config.projects }
+  if (Object.keys(nextProject).length === 0) {
+    delete projects[scope]
+  } else {
+    projects[scope] = nextProject
+  }
+  return { ...config, projects }
 }
 
 /**
