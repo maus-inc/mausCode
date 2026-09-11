@@ -1,6 +1,12 @@
-# Open Decisions (user-facing)
+# User-Facing Decisions (rebrand) — ALL RESOLVED
 
-Decisions that change the **public product**. Each was researched and a recommendation made by MausAgent. Nothing here blocks the rebrand implementation — the implementation uses the recommended value and is a one-line change if the human picks otherwise.
+Decisions that change the **public product**. Each was researched with a recommendation,
+presented to the human, and ratified on **2026-09-11**. This file is the durable record of
+what was decided and why — future work must follow these choices unless the human reverses one.
+
+**Resolution summary:** D1 `mauscode` · D2 "mausCode Runtime" · D3 read-only legacy
+detection · D4 local-only, env-configured control plane · D5 "compatibility agents" ·
+D6 version reset to `0.1.0`.
 
 ## D1 — CLI command name (⚠ public, user types it forever)
 
@@ -11,7 +17,7 @@ The app-installed terminal launcher is currently `1code`. The rebrand installs i
 - C. Keep `1code` — migration comfort, but ships the old brand as the product's primary command.
 
 **Consequence:** command name, install paths (`/usr/local/bin/...`), menu labels, launcher script name, docs.
-**Implemented as:** `mauscode` (option A). Change surface if decided otherwise: `src/shared/app-identity.ts` `CLI_COMMAND`, `resources/cli/`, platform installers, menu strings.
+**RESOLVED (2026-09-11):** A — `mauscode`. Wired in `src/shared/app-identity.ts`, `resources/cli/`, platform installers, menus, docs.
 
 ## D2 — Public name of the native runtime (⚠ public terminology)
 
@@ -22,7 +28,7 @@ mausCode owns a runtime derived and refined from JCode. The public term must mak
 - C. "mausCode/JCode Runtime" — dual brand; clunky in UI.
 
 **Consequence:** future UI (runtime picker, devices screen), docs, releases, benchmark claims.
-**Implemented as:** reserved terminology in `naming-system.md` only — **no runtime UI exists yet, so nothing user-visible is affected by this choice today.**
+**RESOLVED (2026-09-11):** A — "mausCode Runtime". Reserved in `naming-system.md`; no runtime UI exists yet, so nothing user-visible is affected today. First runtime integration MUST reuse this term.
 
 ## D3 — How much legacy 1Code terminology stays visible (⚠ public behavior for 1Code users)
 
@@ -33,7 +39,7 @@ mausCode can recognize data created by 1Code: `~/.21st/worktrees/` and project f
 - C. No legacy awareness — cleanest code; 1Code-era worktree paths stop resolving (git-activity/file-tracking features would misattribute files in old worktrees).
 
 **Consequence:** behavior for anyone switching from 1Code; amount of "legacy" comment code kept.
-**Implemented as:** A. (B can be added later as a first-run migration task — it's now well-scoped.)
+**RESOLVED (2026-09-11):** A — read-only detection. (B, auto-migration, remains a well-scoped follow-up if ever wanted.)
 
 ## D4 — mausCode control-plane domain / endpoints (⚠ public infrastructure)
 
@@ -44,7 +50,7 @@ The inherited app had its hosted features (sign-in, changelog, auto-update CDN, 
 - C. Ship the control plane as part of this repo immediately — out of scope for the identity workstream.
 
 **Consequence:** which hosts appear in CSP, updater, auth; what users see when they click "Sign in" (today: a clear "control plane not configured" path).
-**Implemented as:** A.
+**RESOLVED (2026-09-11):** A — local-only by default; `MAIN_VITE_API_URL` / `MAIN_VITE_UPDATE_FEED_URL` at build time, empty = hosted features off. When the control plane ships, set the vars + CSP host — zero code changes.
 
 ## D5 — Product term for external coding agents (⚠ public terminology)
 
@@ -54,7 +60,8 @@ Claude Code / Codex / OpenCode / Hermes are secondary compatibility options in t
 - B. "External agents" — accurate but neutral/dry.
 - C. "Other agents" — simplest, slightly dismissive of products we deliberately support.
 
-**Consequence:** future agent-picker UI grouping. **Implemented as:** reserved in `naming-system.md`; no current UI grouping exists, so nothing visible changes today.
+**Consequence:** future agent-picker UI grouping.
+**RESOLVED (2026-09-11):** A — "compatibility agents". Reserved in `naming-system.md`; no current UI grouping exists, so nothing visible changes today.
 
 ## D6 — App version line (minor, ⚠ release policy)
 

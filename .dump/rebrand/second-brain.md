@@ -17,7 +17,7 @@ evidence required for any perf claim, no new dependencies.
   IDENTIFIER REVIEW / LEGAL NOTICE PRESERVE / DEAD REFERENCE REMOVE). Full classification
   table in `research/product-identity-audit.md`.
 
-## Decisions (implemented per recommendation — human ratification pending, see open-decisions.md)
+## Decisions (all six ratified by the human 2026-09-11 — see `decisions/open-decisions.md`)
 
 - **D1 CLI = `mauscode`** — command, `/usr/local/bin/mauscode`, menu items, launcher script.
 - **D2 runtime = "mausCode Runtime"** — reserved in `naming-system.md` only; no runtime UI
@@ -93,21 +93,26 @@ rebased my commits onto it and resolved:
 
 ## Verification
 
-Environment: no bun in sandbox (SSL failure) → node 22.22.3 + npm. Working install:
-`ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install --legacy-peer-deps --ignore-scripts`
-(zod 3-vs-4 peer conflict → legacy-peer-deps; better-sqlite3 native build → ignore-scripts;
-native builds not needed for typecheck/bundle).
+**Environment recipe** (when bun is unavailable — e.g. sandboxed CI runners):
+`ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install --no-audit --no-fund --loglevel=error --legacy-peer-deps --ignore-scripts`
+- `--legacy-peer-deps`: zod 3 (project) vs zod 4 (`@anthropic-ai/claude-agent-sdk` peer).
+- `--ignore-scripts`: skips better-sqlite3 native build; not needed for typecheck/bundle.
+- **npm drift trap (cost us a build cycle):** without bun.lock, npm resolved
+  `@pierre/diffs@1.4.1` instead of the pinned 1.0.10 → `@shikijs/themes` lost its
+  `./ayu-light` export → renderer build failed. In verification environments only, pin
+  `npm i --no-save @pierre/diffs@1.0.10`. Do NOT add npm overrides to the repo — the
+  repo builds with bun + bun.lock.
 
-1. **Typecheck**: `./node_modules/.bin/tsc --noEmit` — **0 new errors**. Two rounds:
-   - vs `47e440b` (pre-rebase): 173 normalized error lines in both trees
-     (inherited debt: missing credential-manager/credentials modules, auth/oauth.ts,
-     web/server/api/root, chokidar typing, SDK option drift). Baselines in
-     /tmp/tsc-base-norm.txt, /tmp/tsc-now3-norm.txt. My diff initially introduced 6
-     errors (removed private wrapper, missing IS_DEV import, 4× wrong relative-import
-     depth/missing import after worktree-paths extraction) — all fixed and re-verified.
-   - vs `fd80933` (post-rebase, integrated tree): 80 unique error lines **byte-identical**
-     to the CI workstream's tree — zero added, zero removed. Baseline in
-     /tmp/tsc-fd80933.txt.
+1. **Typecheck** — zero regressions, verified against durable baselines:
+   - Integrated tree: **`node scripts/ci/typecheck-ratchet.mjs` passes** — 110 errors ≤
+     110 baseline in `.github/ci-baselines/typecheck.txt`. The inherited debt (missing
+     credential-manager/credentials modules, auth/oauth.ts, web/server/api/root, chokidar
+     typing, SDK option drift) is ratcheted, not hidden.
+   - Pre-rebase tree: `tsc --noEmit` output identical to base `47e440b`.
+   - **Process rule (this caught 6 real bugs):** after any multi-file extraction, diff
+     tsc output against the pre-change baseline before committing. The worktree-paths
+     extraction initially produced 6 new errors (removed private wrapper, missing IS_DEV
+     import, 4× wrong relative-import depth) — all caught and fixed pre-commit.
 2. **Build**: `electron-vite build` — main ✓ (865.79 kB), preload ✓ (11.95 kB). Renderer
    full vite build OOMs in this 3 GB-cgroup sandbox (exit 137 at ~3500 modules) —
    environmental, not code. Proven by two other means:
@@ -139,8 +144,9 @@ native builds not needed for typecheck/bundle).
   so `ts:check` should work now. `tsc --noEmit` remains the plain check used here.
 - zod 3 (project) vs zod 4 (@anthropic-ai/claude-agent-sdk peer) — bun tolerates, npm needs
   `--legacy-peer-deps`. Worth a deliberate pin decision later.
-- 173 pre-existing tsc errors (missing modules etc.) — inherited debt; flag for a
-  dedicated cleanup pass, not this mission.
+- Inherited red typecheck baseline (110 ratcheted errors, see
+  `.github/ci-baselines/typecheck.txt`: missing modules etc.) — flag for a dedicated
+  cleanup pass, not this mission.
 
 ## Risks / follow-ups
 

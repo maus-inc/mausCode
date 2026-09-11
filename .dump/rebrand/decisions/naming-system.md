@@ -1,6 +1,6 @@
 # mausCode Naming System
 
-**Status:** Approved for implementation in this repository (public items marked ⚠ are pending human confirmation — see `open-decisions.md`).
+**Status:** Approved for implementation in this repository. All public items marked ⚠ were confirmed by the human on 2026-09-11 (see `open-decisions.md`).
 **Authority:** MausAgent (naming/identity). Other agents should follow this file; the canonical short-form is also mirrored in `.dump/global/naming.md`.
 
 ## Ground rules

@@ -1,6 +1,10 @@
 # .dump
 
-Documentation and knowledge workspace for the project.
+The durable engineering memory of mausCode. Not a trash folder, not a transcript, not a
+scratchpad: decisions, audits, research, rejected approaches, and baselines that outlive
+the session. Write for the next engineer (or agent) who has to make the adjacent
+decision — conclusions first, evidence second, narrative only where it changes the
+decision.
 
 ## Structure
 
