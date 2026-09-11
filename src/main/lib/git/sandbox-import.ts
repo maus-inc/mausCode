@@ -85,7 +85,7 @@ export interface SandboxExportData {
 export async function parseExportStream(
 	stream: ReadableStream<Uint8Array>,
 ): Promise<SandboxExportData> {
-	console.log(`[sandbox-import] parseExportStream starting...`);
+	console.log("[sandbox-import] parseExportStream starting...");
 	const reader = stream.getReader();
 	const decoder = new TextDecoder();
 
@@ -124,7 +124,7 @@ export async function parseExportStream(
 			switch (chunk.type) {
 				case "meta":
 					result.meta = chunk;
-					console.log(`[sandbox-import] Meta chunk:`, {
+					console.log("[sandbox-import] Meta chunk:", {
 						branch: chunk.branch,
 						baseCommit: chunk.baseCommit,
 						headCommit: chunk.headCommit,
@@ -137,7 +137,7 @@ export async function parseExportStream(
 						result.bundle = Buffer.from(chunk.data, "base64");
 						console.log(`[sandbox-import] Bundle chunk: ${result.bundle.length} bytes`);
 					} else {
-						console.log(`[sandbox-import] Bundle chunk: null data`);
+						console.log("[sandbox-import] Bundle chunk: null data");
 					}
 					break;
 				case "staged_patch":
@@ -163,18 +163,18 @@ export async function parseExportStream(
 					console.error(`[sandbox-import] Error chunk received: ${chunk.error}`);
 					throw new Error(`Export failed: ${chunk.error}`);
 				case "done":
-					console.log(`[sandbox-import] Done chunk received`);
+					console.log("[sandbox-import] Done chunk received");
 					break;
 			}
 		}
 	}
 
 	if (!result.meta) {
-		console.error(`[sandbox-import] No meta chunk received!`);
+		console.error("[sandbox-import] No meta chunk received!");
 		throw new Error("Export stream missing metadata");
 	}
 
-	console.log(`[sandbox-import] parseExportStream completed:`, {
+	console.log("[sandbox-import] parseExportStream completed:", {
 		hasMeta: !!result.meta,
 		hasBundle: !!result.bundle,
 		hasStagedPatch: !!result.stagedPatch,
@@ -193,7 +193,7 @@ export async function applySandboxGitState(
 	worktreePath: string,
 	exportData: SandboxExportData,
 ): Promise<{ success: boolean; error?: string }> {
-	console.log(`[sandbox-import] applySandboxGitState starting...`);
+	console.log("[sandbox-import] applySandboxGitState starting...");
 	console.log(`[sandbox-import] Worktree path: ${worktreePath}`);
 
 	const git = simpleGit(worktreePath);
@@ -214,10 +214,10 @@ export async function applySandboxGitState(
 			console.log(`[sandbox-import] Setting up remote origin: ${exportData.meta.remoteUrl}`);
 			try {
 				await git.addRemote("origin", exportData.meta.remoteUrl);
-				console.log(`[sandbox-import] Added remote origin successfully`);
+				console.log("[sandbox-import] Added remote origin successfully");
 			} catch (err) {
 				// Remote might already exist
-				console.log(`[sandbox-import] Remote origin already exists or failed to add:`, err);
+				console.log("[sandbox-import] Remote origin already exists or failed to add:", err);
 			}
 		}
 
@@ -243,25 +243,25 @@ export async function applySandboxGitState(
 			const bundlePath = join(scratchDir, "export.bundle");
 			console.log(`[sandbox-import] Bundle temp path: ${bundlePath}`);
 			await writeFile(bundlePath, exportData.bundle);
-			console.log(`[sandbox-import] Bundle written to temp file`);
+			console.log("[sandbox-import] Bundle written to temp file");
 
 			// Verify the bundle is valid
-			console.log(`[sandbox-import] Verifying bundle...`);
+			console.log("[sandbox-import] Verifying bundle...");
 			const verifyResult = await execFileAsync("git", ["-C", worktreePath, "bundle", "verify", bundlePath], {
 				timeout: 30_000,
 			});
-			console.log(`[sandbox-import] Bundle verify output:`, verifyResult.stdout);
+			console.log("[sandbox-import] Bundle verify output:", verifyResult.stdout);
 
 			if (isFullExport) {
 				// Full export: fetch all refs from bundle, then checkout the branch
 				// Use --update-head-ok to allow fetching into the currently checked out branch
-				console.log(`[sandbox-import] Full export: fetching all refs from bundle...`);
+				console.log("[sandbox-import] Full export: fetching all refs from bundle...");
 				const fetchResult = await execFileAsync(
 					"git",
 					["-C", worktreePath, "fetch", "--update-head-ok", bundlePath, "refs/heads/*:refs/heads/*"],
 					{ timeout: 120_000 },
 				);
-				console.log(`[sandbox-import] Fetch output:`, fetchResult.stdout, fetchResult.stderr);
+				console.log("[sandbox-import] Fetch output:", fetchResult.stdout, fetchResult.stderr);
 
 				// Checkout the branch that was active in the sandbox (with force to update working tree)
 				const targetBranch = exportData.meta.branch;
@@ -280,7 +280,10 @@ export async function applySandboxGitState(
 				await git.reset(["--hard", "sandbox-import-temp"]);
 
 				// Clean up temp branch
-				await git.branch(["-D", "sandbox-import-temp"]).catch(() => {});
+				await git.branch(["-D", "sandbox-import-temp"]).catch((error) => {
+					// Best-effort cleanup of a temp branch; the import already succeeded.
+					console.warn(`[sandbox-import] Could not delete temp branch: ${error}`);
+				});
 			}
 		}
 
@@ -297,17 +300,21 @@ export async function applySandboxGitState(
 					["-C", worktreePath, "apply", "--cached", stagedPatchPath],
 					{ timeout: 60_000 },
 				);
-				console.log(`[sandbox-import] Staged patch applied successfully`);
+				console.log("[sandbox-import] Staged patch applied successfully");
 
 				// Also apply to working directory
 				await execFileAsync("git", ["-C", worktreePath, "checkout", "--", "."], {
 					timeout: 30_000,
-				}).catch(() => {});
+				}).catch((error) => {
+					// The staged copy is what matters; a working-tree refresh that
+					// fails here is not worth aborting the import over.
+					console.warn(`[sandbox-import] Could not refresh working tree: ${error}`);
+				});
 			} catch (error) {
 				console.warn(`[sandbox-import] Failed to apply staged patch: ${error}`);
 			}
 		} else {
-			console.log(`[sandbox-import] Step 3: No staged patch to apply`);
+			console.log("[sandbox-import] Step 3: No staged patch to apply");
 		}
 
 		// 4. Apply unstaged patch (don't stage)
@@ -320,12 +327,12 @@ export async function applySandboxGitState(
 				await execFileAsync("git", ["-C", worktreePath, "apply", unstagedPatchPath], {
 					timeout: 60_000,
 				});
-				console.log(`[sandbox-import] Unstaged patch applied successfully`);
+				console.log("[sandbox-import] Unstaged patch applied successfully");
 			} catch (error) {
 				console.warn(`[sandbox-import] Failed to apply unstaged patch: ${error}`);
 			}
 		} else {
-			console.log(`[sandbox-import] Step 4: No unstaged patch to apply`);
+			console.log("[sandbox-import] Step 4: No unstaged patch to apply");
 		}
 
 		// 5. Write untracked files
@@ -341,16 +348,18 @@ export async function applySandboxGitState(
 			}
 		}
 
-		console.log(`[sandbox-import] applySandboxGitState completed successfully!`);
+		console.log("[sandbox-import] applySandboxGitState completed successfully!");
 		return { success: true };
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		console.error(`[sandbox-import] applySandboxGitState FAILED: ${errorMessage}`);
-		console.error(`[sandbox-import] Stack:`, error);
+		console.error("[sandbox-import] Stack:", error);
 		return { success: false, error: errorMessage };
 	} finally {
 		if (scratchDir) {
-			await rm(scratchDir, { recursive: true, force: true }).catch(() => {});
+			await rm(scratchDir, { recursive: true, force: true }).catch((error) => {
+				console.warn(`[sandbox-import] Could not remove scratch dir: ${error}`);
+			});
 		}
 	}
 }
@@ -396,10 +405,10 @@ export async function importSandboxToWorktree(
 		}
 
 		// Parse the export stream
-		console.log(`[sandbox-import] Parsing export stream...`);
+		console.log("[sandbox-import] Parsing export stream...");
 		const exportData = await parseExportStream(response.body);
 
-		console.log(`[sandbox-import] Export data parsed:`, {
+		console.log("[sandbox-import] Export data parsed:", {
 			branch: exportData.meta.branch,
 			baseCommit: exportData.meta.baseCommit,
 			headCommit: exportData.meta.headCommit,
@@ -424,7 +433,7 @@ export async function importSandboxToWorktree(
 		};
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error(`[sandbox-import] Import failed:`, errorMessage);
+		console.error("[sandbox-import] Import failed:", errorMessage);
 		return { success: false, error: errorMessage };
 	}
 }
