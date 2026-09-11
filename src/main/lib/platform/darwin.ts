@@ -2,7 +2,7 @@
  * macOS Platform Provider
  */
 
-import { exec, execSync } from "node:child_process"
+import { exec } from "node:child_process"
 import { existsSync, lstatSync, readlinkSync } from "node:fs"
 import * as path from "node:path"
 import { promisify } from "node:util"

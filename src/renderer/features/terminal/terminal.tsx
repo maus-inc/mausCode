@@ -19,7 +19,7 @@ import {
   setupPasteHandler,
   setupResizeHandlers,
 } from "./helpers"
-import { getTerminalTheme, getTerminalThemeFromVSCode } from "./config"
+import { getTerminalThemeFromVSCode } from "./config"
 import { parseCwd } from "./parseCwd"
 import { sanitizeForTitle } from "./commandBuffer"
 import { shellEscapePaths } from "./utils"

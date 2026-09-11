@@ -15,9 +15,7 @@ import {
 } from "../../../components/ui/command"
 import {
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  DialogContent
 } from "../../../components/ui/dialog"
 import { Input } from "../../../components/ui/input"
 import { Button } from "../../../components/ui/button"

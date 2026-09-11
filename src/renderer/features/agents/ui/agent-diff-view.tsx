@@ -37,8 +37,7 @@ import {
 import {
   ClipboardIcon,
   ExternalLinkIcon,
-  FolderIcon,
-  UndoIcon,
+  FolderIcon
 } from "../../../components/ui/icons"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
@@ -53,10 +52,9 @@ import {
 import { Button } from "../../../components/ui/button"
 import {
   IconSpinner,
-  PullRequestIcon,
   IconChatBubble,
   ExpandIcon,
-  CollapseIcon,
+  CollapseIcon
 } from "../../../components/ui/icons"
 import {
   Tooltip,
@@ -76,7 +74,6 @@ import {
 const useIsHydrated = () => true // Desktop is always hydrated
 import { cn } from "../../../lib/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
-import { api } from "../../../lib/mock-api"
 import { trpcClient } from "../../../lib/trpc"
 import { remoteApi } from "../../../lib/remote-api"
 export type DiffViewMode = "unified" | "split"

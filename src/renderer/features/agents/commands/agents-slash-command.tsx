@@ -16,7 +16,6 @@ import { IconSpinner } from "../../../components/ui/icons"
 import type { SlashCommandOption, SlashTriggerPayload } from "./types"
 import {
   filterBuiltinCommands,
-  BUILTIN_SLASH_COMMANDS,
 } from "./builtin-commands"
 import type { AgentMode } from "../atoms"
 

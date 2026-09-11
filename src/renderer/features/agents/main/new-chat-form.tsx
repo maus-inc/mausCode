@@ -116,7 +116,6 @@ import {
   generateDraftId,
   deleteNewChatDraft,
   markDraftVisible,
-  type DraftProject,
 } from "../lib/drafts"
 import {
   CLAUDE_MODELS,

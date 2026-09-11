@@ -53,7 +53,6 @@ import {
   GITHUB_TRIGGER_OPTIONS,
   LINEAR_TRIGGER_OPTIONS,
   CLAUDE_MODELS,
-  getTriggerLabel,
   PlatformIcon,
   type Platform,
   type TriggerType,

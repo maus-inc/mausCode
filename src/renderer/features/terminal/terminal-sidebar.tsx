@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   IconDoubleChevronRight,
-  CustomTerminalIcon,
   IconSidePeek,
   IconBottomPanel,
 } from "@/components/ui/icons"

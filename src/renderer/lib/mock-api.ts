@@ -5,7 +5,7 @@
 
 import { useMemo } from "react"
 import { normalizeCodexToolPart } from "../../shared/codex-tool-normalizer"
-import { trpc, trpcClient } from "./trpc"
+import { trpc } from "./trpc"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFn = (...args: any[]) => any

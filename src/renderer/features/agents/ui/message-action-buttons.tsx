@@ -16,7 +16,6 @@ import {
   ttsPlaybackRateAtom,
   setTtsPlaybackRateAtom,
   PLAYBACK_SPEEDS,
-  type PlaybackSpeed,
 } from "../stores/message-store"
 
 // ============================================================================

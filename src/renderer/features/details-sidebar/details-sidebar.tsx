@@ -30,7 +30,6 @@ import {
   widgetOrderAtomFamily,
   WIDGET_REGISTRY,
   type WidgetId,
-  type DetailsSidebarTab,
 } from "./atoms"
 import { WidgetSettingsPopup } from "./widget-settings-popup"
 import { InfoSection } from "./sections/info-section"

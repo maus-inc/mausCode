@@ -22,7 +22,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { trpc } from "../../lib/trpc";
 import { preferredEditorAtom } from "../../lib/atoms";
 import { APP_META } from "../../../shared/external-apps";
-import { fileViewerOpenAtomFamily, diffViewDisplayModeAtom, diffSidebarOpenAtomFamily, diffActiveTabAtom } from "../agents/atoms";
+import { fileViewerOpenAtomFamily, diffViewDisplayModeAtom, diffSidebarOpenAtomFamily } from "../agents/atoms";
 import { useChangesStore } from "../../lib/stores/changes-store";
 import { usePRStatus } from "../../hooks/usePRStatus";
 import { useFileChangeListener } from "../../lib/hooks/use-file-change-listener";
@@ -32,9 +32,9 @@ import { ChangesFileFilter, type SubChatFilterItem } from "./components/changes-
 import { CommitInput } from "./components/commit-input";
 import { HistoryView, type CommitInfo } from "./components/history-view";
 import { getStatusIndicator } from "./utils/status";
-import { GitPullRequest, Eye } from "lucide-react";
+import { Eye } from "lucide-react";
 import type { ChangedFile as HistoryChangedFile } from "../../../shared/changes-types";
-import { viewedFilesAtomFamily, type ViewedFileState } from "../agents/atoms";
+import { viewedFilesAtomFamily } from "../agents/atoms";
 import { Kbd } from "../../components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 

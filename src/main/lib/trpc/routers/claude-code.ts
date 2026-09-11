@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { safeStorage, shell } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"

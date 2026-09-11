@@ -23,10 +23,7 @@ import { trpc } from "../../../../lib/trpc";
 import {
 	ClipboardIcon,
 	ExternalLinkIcon,
-	FolderIcon,
-	PlusIcon,
-	TrashIcon,
-	UndoIcon,
+	FolderIcon
 } from "../../../../components/ui/icons";
 import { Minus, Plus } from "lucide-react";
 import type { ChangedFile } from "../../../../../shared/changes-types";

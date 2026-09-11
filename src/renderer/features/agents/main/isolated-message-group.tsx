@@ -11,7 +11,7 @@ import {
   isRollingBackAtom,
 } from "../stores/message-store"
 import { MemoizedAssistantMessages } from "./messages-list"
-import { extractTextMentions, TextMentionBlocks, TextMentionBlock } from "../mentions/render-file-mentions"
+import { extractTextMentions, TextMentionBlock } from "../mentions/render-file-mentions"
 import { AgentImageItem } from "../ui/agent-image-item"
 import { IconTextUndo } from "../../../components/ui/icons"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"

@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-import { readdir, stat, readFile, writeFile, mkdir, rename as fsRename, rm } from "node:fs/promises"
+import { readdir, stat, readFile, writeFile, mkdir, rename as fsRename } from "node:fs/promises"
 import { join, relative, basename, extname, dirname, resolve, isAbsolute } from "node:path"
 import { app, shell } from "electron"
 import { watch } from "node:fs"
