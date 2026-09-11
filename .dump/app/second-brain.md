@@ -53,6 +53,18 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   no `permissions` capability so approval synthesis is dormant until the mausCode
   runtime patch; Codex stays on ACP; remote chats stay remote; project MCP
   passthrough deferred.
+- P1 verification track (2026-09-11, `e482f5e` accepted): no dev machine in
+  session — static verification only (13/13 unit tests; tsc zero-new-errors;
+  main bundle emits with P1 code; renderer bundle blocked pre-existing on
+  shiki/ayu-light under the npm tree; guards + legacy non-interference
+  audited by inspection). Record:
+  `benchmarks/2026-09-11-p1-verification.md`. Gate stays CLOSED; live smoke,
+  benchmarks, crash-kill, and `openspec validate` are CI/dev-owned.
+- Scaffolded, NOT implemented (awaiting explicit approval each):
+  `add-runtime-permissions` (permissions capability + deny-by-default; needs
+  PA-3 vendor-form ratification first — the expensive commitment),
+  `add-native-endpoint-config`, `add-native-mcp-passthrough`,
+  `add-native-session-init`, `add-codex-native-support` (decision-first).
 
 ## Important interfaces
 
