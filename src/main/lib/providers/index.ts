@@ -1,7 +1,15 @@
+import { getClaudeCapability, probeClaude } from "./claude"
 import { getCodexCapability, probeCodex } from "./codex"
 import { getOpencodeCapability, probeOpencode } from "./opencode"
 import { listBackends, registerBackend } from "./registry"
 import type { BackendAdapterMeta } from "./types"
+
+registerBackend({
+  id: "claude",
+  displayName: "Claude",
+  getCapability: getClaudeCapability,
+  probe: probeClaude,
+})
 
 registerBackend({
   id: "codex",
