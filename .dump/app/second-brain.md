@@ -48,11 +48,12 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   on empty local claude-code chats). 13/13 unit tests green
   (`node --test --experimental-strip-types`); tsc adds zero new errors vs
   baseline (repo baseline is dirty; `ts:check`/tsgo unavailable in sandbox).
-  Known P1 limits: plan mode refused on native (no read-only enforcement yet);
-  custom endpoints + offline/Ollama refused with clear errors; stock bridge has
+  Known P1 limits as shipped: plan mode refused on native (no read-only
+  enforcement yet); offline/Ollama refused with clear errors; stock bridge has
   no `permissions` capability so approval synthesis is dormant until the mausCode
-  runtime patch; Codex stays on ACP; remote chats stay remote; project MCP
-  passthrough deferred.
+  runtime patch; Codex stays on ACP; remote chats stay remote. (Custom
+  endpoints + project MCP + session-init were P1 limits too — retired by the
+  follow-ups below.)
 - P1 verification track (2026-09-11, `e482f5e` accepted): no dev machine in
   session — static verification only (13/13 unit tests; tsc zero-new-errors;
   main bundle emits with P1 code; renderer bundle blocked pre-existing on
@@ -60,11 +61,24 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   audited by inspection). Record:
   `benchmarks/2026-09-11-p1-verification.md`. Gate stays CLOSED; live smoke,
   benchmarks, crash-kill, and `openspec validate` are CI/dev-owned.
-- Scaffolded, NOT implemented (awaiting explicit approval each):
-  `add-runtime-permissions` (permissions capability + deny-by-default; needs
-  PA-3 vendor-form ratification first — the expensive commitment),
-  `add-native-endpoint-config`, `add-native-mcp-passthrough`,
-  `add-native-session-init`, `add-codex-native-support` (decision-first).
+- Follow-ups, all approved scope=all 2026-09-11, all committed on
+  `arena/01a08de4-mauscode` on top of `6be8f71` (scaffold):
+  `915bd01` → `d52a188` → `8072e05` → `1c50995` → `db77404`:
+  - `add-runtime-permissions` (`915bd01`, spec only): stdin-mirror 9-step Rust
+    patch spec, Option B capability shape, client no-change; CI/dev-owned
+    (no Rust toolchain in sandbox).
+  - `add-native-endpoint-config` (`d52a188`, implemented): daemon-level endpoint
+    settings (singleton + migration), honored-endpoint credential matching,
+    launch-env + restart, settings UI; live stub-E2E turn proves honoring.
+  - `add-native-mcp-passthrough` (`8072e05`, Phase 1 implemented): app-side
+    config mirror + schema-cache evidence; Phase 2 Rust relay specified.
+  - `add-native-session-init` (`1c50995`, implemented): honest native snapshot
+    (`toolsUnknown`, config-error notices), engine-toggle clearing.
+  - `add-codex-native-support` (`db77404`, analysis only): recommendation
+    WONTFIX recorded; human DEFERRED the decision pending a fork/cherry-pick
+    list — no behavior change.
+  Full runtime suite at head: 27/27 green; tsc error set identical to
+  baseline (99 = 99, none in new files).
 
 ## Important interfaces
 
