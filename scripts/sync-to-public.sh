@@ -28,7 +28,7 @@ echo ""
 echo "📝 Fetching release notes from private repo..."
 RELEASE_NOTES=$(gh release view "$TAG" --repo "$PRIVATE_REPO" --json body -q '.body' 2>/dev/null || echo "")
 
-if [ -z "$RELEASE_NOTES" ]; then
+if [[ -z "$RELEASE_NOTES" ]]; then
     echo "⚠️  No release found for $TAG in private repo"
     echo "   Please create a release in the private repo first:"
     echo "   gh release create $TAG --title \"1Code $TAG\" --notes \"...\""

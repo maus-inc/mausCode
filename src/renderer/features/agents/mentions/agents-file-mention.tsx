@@ -5,7 +5,6 @@ import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
 import { keepPreviousData } from "@tanstack/react-query"
 import {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -59,7 +58,6 @@ import {
   PythonIcon,
   GoIcon,
   RustIcon,
-  CodeIcon,
   ReactIcon,
   MarkdownInfoIcon,
   MarkdownIcon,

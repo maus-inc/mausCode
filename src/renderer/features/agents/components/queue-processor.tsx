@@ -11,7 +11,6 @@ import { appStore } from "../../../lib/jotai-store"
 import { loadingSubChatsAtom, setLoading, clearLoading } from "../atoms"
 import { MENTION_PREFIXES } from "../mentions/agents-mentions-editor"
 import { utf8ToBase64 } from "../utils/base64"
-import type { AgentQueueItem } from "../lib/queue-utils"
 
 // Delay between processing queue items (ms)
 const QUEUE_PROCESS_DELAY = 1000

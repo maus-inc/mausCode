@@ -24,7 +24,7 @@ import {
 } from './types.ts';
 import type { CredentialId, StoredCredential } from '../credentials/types.ts';
 import { getCredentialManager } from '../credentials/index.ts';
-import { CraftOAuth, getMcpBaseUrl, type OAuthCallbacks, type OAuthTokens } from '../auth/oauth.ts';
+import { CraftOAuth, getMcpBaseUrl, type OAuthCallbacks } from '../auth/oauth.ts';
 import {
   startGoogleOAuth,
   refreshGoogleToken,

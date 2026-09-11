@@ -20,6 +20,7 @@ import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/rou
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
+import { isSafeIpcToken, isSameApiOrigin } from "../lib/security/ipc-guards"
 
 // Flag to bypass close confirmation when app.quit() has already been confirmed
 let isQuitting = false
@@ -414,15 +415,20 @@ function registerIpcHandlers(): void {
       url: string,
       options?: { method?: string; body?: string; headers?: Record<string, string> },
     ) => {
-      console.log("[SignedFetch] IPC handler called with URL:", url)
       if (!validateSender(event)) {
         console.log("[SignedFetch] Unauthorized sender")
         return { ok: false, status: 403, data: null, error: "Unauthorized sender" }
       }
-      console.log("[SignedFetch] Sender validated OK")
+
+      // The renderer supplies the URL and this proxy attaches the user's auth
+      // token, so the origin must be the configured backend. Otherwise a
+      // compromised renderer can send the token to an arbitrary host.
+      if (!isSameApiOrigin(url, getBaseUrl())) {
+        console.warn("[SignedFetch] Rejected request to non-API origin")
+        return { ok: false, status: 403, data: null, error: "Untrusted request origin" }
+      }
 
       const token = await getAuthManager().getValidToken()
-      console.log("[SignedFetch] Token:", token ? "present" : "missing", "URL:", url)
       if (!token) {
         return { ok: false, status: 401, data: null, error: "Not authenticated" }
       }
@@ -469,10 +475,21 @@ function registerIpcHandlers(): void {
       url: string,
       options?: { method?: string; body?: string; headers?: Record<string, string> },
     ) => {
-      console.log("[StreamFetch] Starting stream:", streamId, url)
       if (!validateSender(event)) {
         console.log("[StreamFetch] Unauthorized sender")
         return { ok: false, status: 403, error: "Unauthorized sender" }
+      }
+
+      // streamId is interpolated into IPC channel names below; keep it a
+      // single opaque token so it cannot be smuggled into another channel.
+      if (!isSafeIpcToken(streamId)) {
+        console.warn("[StreamFetch] Rejected malformed stream id")
+        return { ok: false, status: 400, error: "Invalid stream id" }
+      }
+
+      if (!isSameApiOrigin(url, getBaseUrl())) {
+        console.warn("[StreamFetch] Rejected request to non-API origin")
+        return { ok: false, status: 403, error: "Untrusted request origin" }
       }
 
       const token = await getAuthManager().getValidToken()

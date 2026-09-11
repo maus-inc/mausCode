@@ -15,7 +15,6 @@ import {
   expandedWidgetAtomFamily,
   expandedWidgetSidebarWidthAtom,
   WIDGET_REGISTRY,
-  type WidgetId,
 } from "./atoms"
 import { InfoSection } from "./sections/info-section"
 import { PlanSection } from "./sections/plan-section"

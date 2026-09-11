@@ -45,7 +45,9 @@ export async function getListeningPortsForPids(
 	if (pids.length === 0) return []
 
 	// Check cache first
-	const cacheKey = pids.sort().join(",")
+	// Copy before sorting: `pids` belongs to the caller. Numeric comparator
+	// because the default sort is lexicographic.
+	const cacheKey = [...pids].sort((a, b) => a - b).join(",")
 	const cached = portCache.get(cacheKey)
 	if (cached && Date.now() - cached.timestamp < PORT_CACHE_TTL) {
 		return cached.ports

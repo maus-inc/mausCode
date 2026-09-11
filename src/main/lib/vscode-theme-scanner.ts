@@ -10,6 +10,7 @@ import * as path from "path"
 import * as os from "os"
 import { ipcMain } from "electron"
 import { parse as parseJsonc } from "jsonc-parser"
+import { isPathWithinRoots } from "./security/path-containment"
 
 /**
  * Source editor type
@@ -59,6 +60,24 @@ const EXTENSION_PATHS: { path: string; source: EditorSource }[] = [
   // Windsurf
   { path: path.join(os.homedir(), ".windsurf", "extensions"), source: "windsurf" },
 ]
+
+/**
+ * Canonical (symlink-resolved) extensions roots used to validate a theme path
+ * supplied by the renderer. Editors that are not installed simply fall back to
+ * their literal path, which can never match a canonicalized real file outside
+ * the allowed set.
+ */
+async function resolveExtensionRoots(): Promise<string[]> {
+  return Promise.all(
+    EXTENSION_PATHS.map(async ({ path: extensionsDir }) => {
+      try {
+        return await fs.realpath(extensionsDir)
+      } catch {
+        return path.resolve(extensionsDir)
+      }
+    }),
+  )
+}
 
 /**
  * Check if a directory exists
@@ -271,22 +290,24 @@ export function registerThemeScannerIPC(): void {
     }
   })
 
-  ipcMain.handle("vscode:load-theme", async (_, themePath: string) => {
+  ipcMain.handle("vscode:load-theme", async (_, themePath: unknown) => {
     try {
-      // Security: Validate path is within allowed directories
-      const normalizedPath = path.normalize(themePath)
-      const isAllowedPath = EXTENSION_PATHS.some(({ path: allowedDir }) => {
-        const normalizedAllowed = path.normalize(allowedDir)
-        // Ensure we check with path separator to avoid partial matches
-        return normalizedPath.startsWith(normalizedAllowed + path.sep) ||
-               normalizedPath.startsWith(normalizedAllowed)
-      })
+      if (typeof themePath !== "string" || themePath.length === 0) {
+        throw new Error("Theme path must be a non-empty string")
+      }
 
-      if (!isAllowedPath) {
+      // Security: canonicalize FIRST (realpath collapses ".." and resolves
+      // symlinks), then require the real path to sit inside a known editor
+      // extensions root. Validating before canonicalizing is what allows a
+      // symlink inside the extensions dir to read files outside it.
+      const canonicalPath = await fs.realpath(path.resolve(themePath))
+      const allowedRoots = await resolveExtensionRoots()
+
+      if (!isPathWithinRoots(allowedRoots, canonicalPath)) {
         throw new Error("Theme path is not within allowed directories")
       }
 
-      return await loadThemeFromPath(normalizedPath)
+      return await loadThemeFromPath(canonicalPath)
     } catch (error) {
       console.error("Error loading VS Code theme:", error)
       throw error

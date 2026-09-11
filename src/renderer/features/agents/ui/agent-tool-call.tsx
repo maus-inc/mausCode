@@ -11,7 +11,12 @@ import {
 interface AgentToolCallProps {
   icon: React.ComponentType<{ className?: string }>
   title: string
+  /** Rendered as text. Tool subtitles are built from agent/repository
+   *  controlled input, so this must never be treated as markup. */
   subtitle?: string
+  /** Styled +/- line counts (Edit tool). Structured rather than an HTML
+   *  string so the shared subtitle stays a plain-text, memo-friendly value. */
+  diffStats?: { added: number; removed: number }
   tooltipContent?: string
   isPending: boolean
   isError: boolean
@@ -19,35 +24,56 @@ interface AgentToolCallProps {
   onClick?: () => void
 }
 
+function DiffStatsBadge({ added, removed }: { added: number; removed: number }) {
+  return (
+    <>
+      <span style={{ fontSize: 11, color: "light-dark(#587C0B, #A3BE8C)" }}>+{added}</span>
+      {" "}
+      <span style={{ fontSize: 11, color: "light-dark(#AD0807, #AE5A62)" }}>-{removed}</span>
+    </>
+  )
+}
+
 export const AgentToolCall = memo(
   function AgentToolCall({
     icon: _Icon,
     title,
     subtitle,
+    diffStats,
     tooltipContent,
     isPending,
     isError: _isError,
     isNested,
     onClick,
   }: AgentToolCallProps) {
-    // Ensure title and subtitle are strings (copied from canvas)
+    // Ensure title is a string (copied from canvas)
     const titleStr = String(title)
     const subtitleStr = subtitle ? String(subtitle) : undefined
+    const hasSubtitle = !!subtitleStr || !!diffStats
+    // Built only when there is something to show, so the common case of a
+    // subtitle-less tool row allocates nothing extra.
+    const subtitleNode = hasSubtitle ? (
+      <>
+        {subtitleStr}
+        {diffStats ? <DiffStatsBadge added={diffStats.added} removed={diffStats.removed} /> : null}
+      </>
+    ) : null
 
     // Render subtitle with optional tooltip
     const clickableClass = onClick
       ? " cursor-pointer hover:text-muted-foreground transition-colors"
       : ""
 
-    const subtitleElement = subtitleStr ? (
+    const subtitleElement = hasSubtitle ? (
       tooltipContent ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <span
               className={`text-muted-foreground/60 font-normal truncate min-w-0${clickableClass}`}
-              dangerouslySetInnerHTML={{ __html: subtitleStr }}
               onClick={onClick}
-            />
+            >
+              {subtitleNode}
+            </span>
           </TooltipTrigger>
           <TooltipContent
             side="top"
@@ -61,9 +87,10 @@ export const AgentToolCall = memo(
       ) : (
         <span
           className={`text-muted-foreground/60 font-normal truncate min-w-0${clickableClass}`}
-          dangerouslySetInnerHTML={{ __html: subtitleStr }}
           onClick={onClick}
-        />
+        >
+          {subtitleNode}
+        </span>
       )
     ) : null
 

@@ -1,14 +1,13 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect } from "react"
+import { memo, useState, useMemo } from "react"
 import { ChevronRight } from "lucide-react"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { getToolStatus, type McpToolInfo } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
-import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
-import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
+import { HighlightedCode } from "../../../components/highlighted-code"
 
 interface AgentMcpToolCallProps {
   part: any
@@ -168,34 +167,15 @@ function formatOutputForDisplay(output: any): string {
   return text.length > 3000 ? text.slice(0, 3000) + "\n..." : text
 }
 
-/** Highlighted JSON code block using shiki */
+/** Highlighted JSON code block */
 function HighlightedJson({ code }: { code: string }) {
-  const [html, setHtml] = useState<string | null>(null)
-  const themeId = useCodeTheme()
-
-  useEffect(() => {
-    let cancelled = false
-    highlightCode(code, "json", themeId)
-      .then((result) => {
-        if (!cancelled) setHtml(result)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [code, themeId])
-
-  if (html) {
-    return (
-      <pre
-        className="text-[10px] font-mono leading-relaxed whitespace-pre-wrap break-words [&>pre]:!bg-transparent"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    )
-  }
-
   return (
-    <pre className="text-[10px] text-muted-foreground/60 whitespace-pre-wrap break-words font-mono leading-relaxed">
-      {code}
-    </pre>
+    <HighlightedCode
+      code={code}
+      language="json"
+      className="text-[10px] font-mono leading-relaxed whitespace-pre-wrap break-words"
+      fallbackClassName="text-[10px] text-muted-foreground/60 whitespace-pre-wrap break-words font-mono leading-relaxed"
+    />
   )
 }
 

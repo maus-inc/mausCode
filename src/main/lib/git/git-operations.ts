@@ -13,7 +13,6 @@ import {
 	withLockRetry,
 	hasUncommittedChanges,
 	getRepositoryState,
-	GIT_TIMEOUTS,
 } from "./git-factory";
 
 export { isUpstreamMissingError };

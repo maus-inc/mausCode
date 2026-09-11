@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useAtom, useAtomValue } from "jotai"
 import { useCallback, useEffect } from "react"
 import { selectedTeamIdAtom } from "../atoms"
-import { remoteApi, type RemoteChat, type RemoteChatWithSubChats } from "../remote-api"
+import { remoteApi } from "../remote-api"
 
 /**
  * Fetch user's teams and auto-select first team if none selected

@@ -41,14 +41,12 @@ import {
 } from "../agents/stores/sub-chat-store"
 import { useShallow } from "zustand/react/shallow"
 import {
-  PlusIcon,
   ArchiveIcon,
   IconDoubleChevronLeft,
   IconSpinner,
   LoadingDot,
   PlanIcon,
   AgentIcon,
-  IconOpenSidebar,
   ClockIcon,
   QuestionIcon,
 } from "../../components/ui/icons"
@@ -58,7 +56,6 @@ import {
   TooltipTrigger,
 } from "../../components/ui/tooltip"
 import { Kbd } from "../../components/ui/kbd"
-import { isDesktopApp, getShortcutKey } from "../../lib/utils/platform"
 import { useResolvedHotkeyDisplay } from "../../lib/hotkeys"
 import { TrafficLightSpacer } from "../agents/components/traffic-light-spacer"
 import { PopoverTrigger } from "../../components/ui/popover"

@@ -11,7 +11,7 @@ import {
 import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
-import { Circle, SkipForward, FileCode2 } from "lucide-react"
+import { SkipForward, FileCode2 } from "lucide-react"
 
 interface PlanStep {
   id: string

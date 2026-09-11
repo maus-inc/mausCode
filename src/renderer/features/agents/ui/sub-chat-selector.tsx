@@ -40,7 +40,6 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import { Kbd } from "../../../components/ui/kbd"
-import { getShortcutKey } from "../../../lib/utils/platform"
 import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import {
   ContextMenu,

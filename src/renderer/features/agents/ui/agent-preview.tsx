@@ -170,8 +170,10 @@ export function AgentPreview({
       if (event.data?.type === "SET_URL") {
         const newPath = event.data.url || "/"
 
-        // Skip srcdoc paths (edge case from iframe)
-        if (newPath.includes("srcdoc")) {
+        // The previewed page chooses this value and it ends up in the URL bar
+        // and in localStorage, so require a same-origin path. This also covers
+        // the srcdoc case the preview script emits.
+        if (typeof newPath !== "string" || !newPath.startsWith("/")) {
           return
         }
 

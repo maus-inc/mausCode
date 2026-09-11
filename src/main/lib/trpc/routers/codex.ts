@@ -12,7 +12,6 @@ import { basename, dirname, join, sep } from "node:path"
 import { z } from "zod"
 import {
   normalizeCodexAssistantMessage,
-  normalizeCodexStreamChunk,
 } from "../../../../shared/codex-tool-normalizer"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"

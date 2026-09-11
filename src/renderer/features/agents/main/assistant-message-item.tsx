@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
-import { CollapseIcon, ExpandIcon, PlanIcon } from "../../../components/ui/icons"
+import { CollapseIcon, ExpandIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom, showMessageJsonAtom } from "../atoms"

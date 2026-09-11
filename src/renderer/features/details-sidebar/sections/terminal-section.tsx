@@ -5,13 +5,10 @@ import { useAtom, useAtomValue } from "jotai"
 import { useTheme } from "next-themes"
 import { fullThemeDataAtom } from "@/lib/atoms"
 import { motion } from "motion/react"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
 import { Terminal } from "@/features/terminal/terminal"
 import { TerminalTabs } from "@/features/terminal/terminal-tabs"
 import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import {
-  terminalSidebarOpenAtomFamily,
   terminalsAtom,
   activeTerminalIdAtom,
   terminalCwdAtom,

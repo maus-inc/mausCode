@@ -3,9 +3,7 @@ import { trpc } from "../../../../lib/trpc";
 import { formatRelativeDate } from "../../utils/date";
 import { FileText, ArrowUp } from "lucide-react";
 import { cn } from "../../../../lib/utils";
-import { getStatusIndicator } from "../../utils/status";
-import { Button } from "../../../../components/ui/button";
-import type { ChangedFile } from "../../../../../shared/changes-types";
+import { getStatusIndicator } from "../../utils/status";import type { ChangedFile } from "../../../../../shared/changes-types";
 import {
 	ContextMenu,
 	ContextMenuContent,

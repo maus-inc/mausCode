@@ -42,6 +42,7 @@ export {
   getHighlighter,
   loadFullTheme,
   ensureThemeLoaded,
-  highlightCode,
+  highlightCodeTokens,
   getLoadedThemes,
 } from "./shiki-theme-loader"
+export type { HighlightToken, HighlightedLine } from "./shiki-theme-loader"

@@ -18,9 +18,9 @@ import {
   initAutoUpdater,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
+import { getApiUrl } from "./lib/config"
 import { closeDatabase, initDatabase } from "./lib/db"
 import {
-  getLaunchDirectory,
   isCliInstalled,
   installCli,
   uninstallCli,
@@ -77,14 +77,11 @@ if (app.isPackaged && !IS_DEV) {
   console.log("[App] Skipping Sentry initialization (dev mode)")
 }
 
-// URL configuration (exported for use in other modules)
-// In packaged app, ALWAYS use production URL to prevent localhost leaking into releases
-// In dev mode, allow override via MAIN_VITE_API_URL env variable
+// URL configuration (exported for use in other modules).
+// getApiUrl() owns the packaged/dev resolution rules; this alias exists for the
+// modules that already import the name from here.
 export function getBaseUrl(): string {
-  if (app.isPackaged) {
-    return "https://21st.dev"
-  }
-  return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
+  return getApiUrl()
 }
 
 export function getAppUrl(): string {

@@ -56,17 +56,13 @@ import {
   type SubChatMeta,
 } from "../stores/sub-chat-store"
 import { useShallow } from "zustand/react/shallow"
-import { motion, AnimatePresence } from "motion/react"
 // import { ResizableSidebar } from "@/app/(alpha)/canvas/[id]/{components}/resizable-sidebar"
 import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
 // import { useClerk, useUser } from "@clerk/nextjs"
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
-const useCombinedAuth = () => ({ userId: null }) // Desktop mock
-import { Button } from "../../../components/ui/button"
-import { AlignJustify } from "lucide-react"
+const useCombinedAuth = () => ({ userId: null })
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
-import { isDesktopApp } from "../../../lib/utils/platform"
 import { remoteTrpc } from "../../../lib/remote-trpc"
 import { SettingsContent } from "../../settings/settings-content"
 // Desktop mock

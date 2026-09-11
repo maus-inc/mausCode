@@ -30,7 +30,13 @@ export type ToolVariant = "simple" | "collapsible"
 export interface ToolMeta {
   icon: React.ComponentType<{ className?: string }>
   title: (part: any) => string
+  /** Plain text only. This is rendered as text, never as HTML: the values come
+   *  from tool input (file paths, grep patterns, ...) which is agent- and
+   *  repository-controlled. */
   subtitle?: (part: any) => string
+  /** Structured alternative to a formatted subtitle, for tools that need
+   *  styled output (e.g. Edit's +/- line counts). */
+  diffStats?: (part: any) => { added: number; removed: number } | undefined
   tooltipContent?: (part: any, projectPath?: string) => string
   variant: ToolVariant
 }
@@ -252,30 +258,24 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       if (!filePath) return "Edit" // Show "Edit" if no file path yet during streaming
       return filePath.split("/").pop() || "Edit"
     },
-    subtitle: (part) => {
-      // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+    diffStats: (part) => {
+      // Don't show stats while input is still streaming or the edit is pending
+      if (part.state === "input-streaming") return undefined
       const isPending =
         part.state !== "output-available" && part.state !== "output-error"
-      if (isPending) return ""
+      if (isPending) return undefined
 
       const oldString = part.input?.old_string || ""
       const newString = part.input?.new_string || ""
 
-      if (!oldString && !newString) {
-        return ""
-      }
+      if (!oldString && !newString) return undefined
+      if (oldString === newString) return undefined
 
-      // Always show actual line counts if there are any changes (copied from canvas)
-      if (oldString !== newString) {
-        const { addedLines, removedLines } = calculateDiffStats(
-          oldString,
-          newString,
-        )
-        return `<span style="font-size: 11px; color: light-dark(#587C0B, #A3BE8C)">+${addedLines}</span> <span style="font-size: 11px; color: light-dark(#AD0807, #AE5A62)">-${removedLines}</span>`
-      }
-
-      return ""
+      const { addedLines, removedLines } = calculateDiffStats(
+        oldString,
+        newString,
+      )
+      return { added: addedLines, removed: removedLines }
     },
     variant: "simple",
   },
