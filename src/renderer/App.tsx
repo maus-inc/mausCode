@@ -113,6 +113,24 @@ function AppContent() {
     }
   }, [cliConfig?.hasConfig, billingMethod, setBillingMethod, setApiKeyOnboardingCompleted])
 
+  // If user has local Claude Code credentials and selected the Claude
+  // subscription billing method, skip the OAuth onboarding.
+  // Transplanted from erenbertr/1code (Apache-2.0).
+  useEffect(() => {
+    if (
+      cliConfig?.hasConfig &&
+      billingMethod === "claude-subscription" &&
+      !anthropicOnboardingCompleted
+    ) {
+      setAnthropicOnboardingCompleted(true)
+    }
+  }, [
+    cliConfig?.hasConfig,
+    billingMethod,
+    anthropicOnboardingCompleted,
+    setAnthropicOnboardingCompleted,
+  ])
+
   // Fetch projects to validate selectedProject exists
   const { data: projects, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
@@ -139,7 +157,14 @@ function AppContent() {
     return <BillingMethodPage />
   }
 
-  if (billingMethod === "claude-subscription" && !anthropicOnboardingCompleted) {
+  // While we're still checking for local Claude creds, don't flash the
+  // onboarding page — the cliConfig effect above may auto-complete onboarding.
+  if (
+    billingMethod === "claude-subscription" &&
+    !anthropicOnboardingCompleted &&
+    !isLoadingCliConfig &&
+    !cliConfig?.hasConfig
+  ) {
     return <AnthropicOnboardingPage />
   }
 

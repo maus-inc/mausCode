@@ -34,10 +34,20 @@
 - [x] Verify: tsc 99→76 (zero main-process errors, zero-new), 43/43 runtime tests, secret scan clean, 0000–0009 replay OK
 - [x] Catalog action log + checkboxes updated
 
-## Phase 3 — erenbertr transports + UI + QoL
+## Phase 3 — erenbertr transports + UI + QoL (IN PROGRESS)
 
-- [ ] Gemini/OpenRouter/ACP transports, tool UI, selectors, automations inbox
-- [ ] Sidebar LAST, only after the lineage decision
+- [x] Batch A: renderer QoL + providers UI (82 files, +2483/-708): gemini/openrouter
+      transports + model browser + creation/selector/settings/transport wiring,
+      question/awaiting/commit-push sounds + read-state loop (markViewed),
+      pushed-checkmark, reactive tab cap, error boundaries, rename sync,
+      autofocus race fix, provider-inference catch-up; native/kanban/Zap kept
+- [x] Batch A verify: tsc 76->33 (zero new; new-chat-form 16->0), 70/70
+      runtime tests (4 jcode-vendored fails pre-existing, untouched), secret
+      scan clean (1 benign placeholder), api-bridge 0 additions
+- [ ] Batch B: remaining modified-file hunk triage (tool UI, selectors,
+      details-sidebar, terminal, misc) minus sidebar/kanban/build
+- [ ] Sidebar LAST, only after the lineage decision (agents-sidebar rewrite,
+      projects-rail, all-projects-page, footer wiring all HELD)
 
 ## Phase 4 — T3 contracts (needs explicit approval)
 
@@ -47,7 +57,13 @@
 
 - [ ] Evaluate as Codex-adapter upgrade; feeds adapter, not native
 
+## Phase 6 — SamSammane/1code-ui (repo now accessible; IN PROGRESS)
+
+- [x] Re-check access: HEAD `12f0676` resolves; fetched to `refs/harvest/1code-ui`
+- [ ] Review 3 commits (Cursor CLI integration, web API server, parity fixes)
+- [ ] Transplant decision + scoped port (excl. dist-web build output)
+- [ ] Verify + ledger update per pickup
+
 ## Pending (not in any phase until reviewed)
 
 - [ ] ning / sylv / jhckevin / Locus / T3 server-auth+orchestration+MCP
-- [ ] SamSammanne re-check (needs access)

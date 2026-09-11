@@ -16,7 +16,9 @@ export {
   selectedProjectAtom,
   agentsUnseenChangesAtom,
   agentsSubChatUnseenChangesAtom,
+  chatsAwaitingAnswerAtom,
   loadingSubChatsAtom,
+  pushedChatIdsAtom,
   setLoading,
   clearLoading,
   MODEL_ID_MAP,
@@ -509,7 +511,6 @@ if (typeof window !== "undefined") {
     const wasInPlanMode = oldValue === "true"
     localStorage.setItem(newKey, JSON.stringify(wasInPlanMode ? "plan" : "agent"))
     localStorage.removeItem(oldKey)
-    console.log("[atoms] Migrated isPlanMode to defaultAgentMode:", wasInPlanMode ? "plan" : "agent")
   }
 }
 
@@ -826,6 +827,18 @@ export function normalizeCodexApiKey(apiKey: string): string | null {
 export const hiddenModelsAtom = atomWithStorage<string[]>(
   "preferences:hidden-models-v4",
   ["gpt-5.1-codex-max", "gpt-5.1-codex-mini"],
+  undefined,
+  { getOnInit: true },
+)
+
+// ============================================
+// OPENROUTER (pinned models)
+// ============================================
+// OpenRouter exposes 200+ models; the user pins which ones surface in the picker.
+// Pinned set is persisted; OR catalog itself is fetched fresh from main process.
+export const pinnedOpenRouterModelsAtom = atomWithStorage<string[]>(
+  "preferences:openrouter-pinned-v1",
+  [],
   undefined,
   { getOnInit: true },
 )

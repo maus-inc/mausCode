@@ -696,7 +696,7 @@ export function SubChatSelector({
           ref={tabsContainerRef}
           className={cn(
             "flex items-center px-1 py-1 -my-1 gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-hide pr-12",
-            // Hide tabs when sidebar is open (desktop) or when only one chat exists
+            // Hide tabs when the sub-chats sidebar mode is active (desktop) or when only one chat is open
             (subChatsSidebarMode === "sidebar" && !isMobile) && "hidden",
             hasSingleChat && "invisible",
           )}
@@ -760,16 +760,16 @@ export function SubChatSelector({
                           }
                         }}
                         className={cn(
-                          "group relative flex items-center text-sm rounded-md transition-colors duration-75 cursor-pointer h-6 flex-shrink-0",
+                          "group relative flex items-center text-[13px] rounded-full transition-all duration-100 cursor-pointer h-6 flex-shrink-0",
                           "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
                           editingSubChatId === subChat.id
                             ? "overflow-visible px-0"
-                            : "overflow-hidden px-1.5 py-0.5 whitespace-nowrap min-w-[50px] gap-1.5",
+                            : "overflow-hidden px-2.5 py-0.5 whitespace-nowrap min-w-[50px] gap-1.5",
                           isActive
-                            ? "bg-muted text-foreground max-w-[180px]"
-                            : "hover:bg-muted/80 max-w-[150px]",
-                          isInSplitPair && "border border-border/60",
-                          isInSplitPair && !isActive && "bg-muted/40 hover:bg-muted/60",
+                            ? "bg-foreground/[0.06] text-foreground border border-border/60 max-w-[200px]"
+                            : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] border border-transparent max-w-[160px]",
+                          isInSplitPair && "border-border/60",
+                          isInSplitPair && !isActive && "bg-foreground/[0.03] hover:bg-foreground/[0.05]",
                           isInSplitPair && hasSplitPrev && "-ml-1 rounded-l-none",
                           isInSplitPair && hasSplitNext && "rounded-r-none",
                         )}
@@ -843,9 +843,9 @@ export function SubChatSelector({
                           <div
                             data-truncate-gradient
                             className={cn(
-                              "absolute right-0 top-0 bottom-0 w-6 pointer-events-none z-[1] rounded-r-md opacity-100 group-hover:opacity-0 transition-opacity duration-200",
+                              "absolute right-0 top-0 bottom-0 w-6 pointer-events-none z-[1] rounded-r-full opacity-100 group-hover:opacity-0 transition-opacity duration-200",
                               isActive
-                                ? "bg-gradient-to-l from-muted to-transparent"
+                                ? "bg-gradient-to-l from-muted/80 to-transparent"
                                 : "bg-gradient-to-l from-background to-transparent",
                             )}
                             style={{ display: truncatedTabsRef.current.has(subChat.id) ? "block" : "none" }}
@@ -855,10 +855,10 @@ export function SubChatSelector({
                         {/* Close button - only show when hovered and multiple tabs and not editing */}
                         {openSubChats.length > 1 &&
                           editingSubChatId !== subChat.id && (
-                            <div className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                            <div className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
                               <div
                                 className={cn(
-                                  "absolute right-0 top-0 bottom-0 w-9 flex items-center justify-center rounded-r-md",
+                                  "absolute right-0 top-0 bottom-0 w-9 flex items-center justify-center rounded-r-full",
                                   isActive
                                     ? "bg-[linear-gradient(to_left,hsl(var(--muted))_0%,hsl(var(--muted))_60%,transparent_100%)]"
                                     : "bg-[linear-gradient(to_left,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_0%,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_60%,transparent_100%)]",

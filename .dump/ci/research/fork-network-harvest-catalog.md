@@ -22,7 +22,7 @@ Survey of the entire public fork network of `21st-dev/1code` (618 forks) as of 2
 | sylvaindiv/1code |1 |65 (+4.8k/-0.9k) | One-shot big feat: agents sidebar redesign (dnd reorder, sub-chat archive, per-project emoji picker, new modes), DB migrations, dev-server router | ONE-FEATURE mine - sidebar reorder + sub-chat archive + emoji picker(check against our own sidebar plan; BIG overlap with erenbertr's sub-chat work - pick one lineage) |
 | ken-jo/1code |1 |4 (+57/-354) | `remove auth` - removes built-in login flow (src/main/index.ts -234, windows/main.ts rework, App.tsx) | REJECT for us - we want auth; but study its pattern if we ever want a "passwordless" mode |
 | PsyberKadi/1code |1 |1 (+21) | Adds `GITHUB_AUTOMATION_SNAPSHOT_2026-06-30.md` (freeze-recovery doc) | MAYBE - doc only; free for the taking if we want the snapshot |
-| SamSammanne/1code-ui |~14+ (from commit list) |web/desktop parity, Cursor CLI integration, standalone preview/config, dist-web builds, Cursor model resolution | UNVERIFIABLE via git (repo auth-blocked/private at scan time; commit list via web only) - user-visible via the commits URL: web-app-server, desktop/web parity, Cursor model resolution. Re-check later / ask for access |
+| SamSammanne/1code-ui | 3 on v0.0.72 (`12f0676`) | Cursor CLI integration (cursor router 941 lines, cursor-agent-binary, cursor-mcp, transport, login flow), web API server (src/web-server), desktop/web parity, standalone preview/config, Cursor model resolution (src/shared/cursor-model-id.ts) | ACCESSIBLE since 2026-09-11 re-check - fetched to refs/harvest/1code-ui; Phase 6 track opened (dist-web build output excluded) |
 | aletc1/1code |0 |- |tip==upstream ancestor; not actually ahead | SKIP |
 
 ## Cherry-pick ledger (live, will edit as we pick)
@@ -132,6 +132,8 @@ Delta base: `HEAD` (our init) <-> `forkup/main`. 230 files total: 66 A,, 123 M,,
 - 2026-09-11(c): app-track intake - pulled ledger onto arena; spot-verified (9/9 repos resolve, SamSammanne 404 re-confirmed, 1Code Apache-2.0/archived, T3 MIT, aadivar+normalizer paths exist); scaffolded `openspec/changes/add-fork-harvest-transplants/` (phased plan). No code transplanted yet - per-phase go-ahead pending.
 - 2026-09-11(d): Phase 1 TRANSPLANTED (aadivar usage widget; see checkbox above).
 - 2026-09-11(e): Phase 2 TRANSPLANTED (erenbertr backend core): normalizer+codex hunks, claude-token refresh, system-first auth, chats/projects routers + migration 0009, gemini/openrouter/github/usage routers + 8 lib files, renderer-crash recovery. Rejected: auth bypass, native-turn removals, token-crypto re-inline, build/ai feat. tsc 99->76 (zero main errors), 43/43 tests, secret scan clean.
+- 2026-09-11(g): Phase 3 Batch A TRANSPLANTED (erenbertr renderer QoL + providers UI, 82 files): transports, model browser, sounds/read-state/pushed-marks, reactive tab cap, error boundaries, rename sync; kept native/kanban/Zap/mock-api; rejected extraction rewrites, Cmd+T rebind (sidebar-held), approval-inline, log-strip. tsc 76->33 zero-new, 70/70 tests, secrets clean.
+- 2026-09-11(f): Phase 3 STARTED (erenbertr renderer; sidebar lineage still held); Phase 6 OPENED - SamSammane/1code-ui now accessible (HEAD 12f0676, fetched): Cursor CLI integration + web API server + parity fixes under review, dist-web output excluded.
 
 ## Notes on unrecoverable upstream
 - `cdn.21st.dev` v0.0.85-0.0.88 source: never published to any fetched fork(binaries exist only. If wanted, ask 21st-dev to publish(optional, repo archived.

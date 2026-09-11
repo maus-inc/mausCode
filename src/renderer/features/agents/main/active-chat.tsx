@@ -4,6 +4,7 @@ import {
   stripEmojis
 } from "../../../components/chat-markdown-renderer"
 import { Button } from "../../../components/ui/button"
+import { RenderErrorBoundary } from "../../../components/ui/error-boundary"
 import {
   AgentIcon,
   AttachIcon,
@@ -121,8 +122,10 @@ import {
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
   isCreatingPrAtom,
+  chatsAwaitingAnswerAtom,
   justCreatedIdsAtom,
   loadingSubChatsAtom,
+  maxMountedTabsAtom,
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
   pendingBuildPlanSubChatIdAtom,
@@ -132,6 +135,7 @@ import {
   pendingMentionAtom,
   pendingPlanApprovalsAtom,
   pendingPrMessageAtom,
+  pushedChatIdsAtom,
   pendingReviewMessageAtom,
   pendingUserQuestionsAtom,
   planEditRefetchTriggerAtomFamily,
@@ -170,6 +174,8 @@ import { usePastedTextFiles, type PastedTextFile } from "../hooks/use-pasted-tex
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import { ACPChatTransport } from "../lib/acp-chat-transport"
+import { isCodexModelSelection, isOpenRouterModelId } from "../lib/models"
+import { isAssistantMessageQuestion } from "../lib/is-question"
 import { respondToApproval } from "../lib/approval-routing"
 import { formatHistoryForContext } from "../lib/export-chat"
 import {
@@ -177,6 +183,8 @@ import {
   getSubChatDraftFull
 } from "../lib/drafts"
 import { IPCChatTransport } from "../lib/ipc-chat-transport"
+import { GeminiChatTransport } from "../lib/gemini-chat-transport"
+import { OpenRouterChatTransport } from "../lib/openrouter-chat-transport"
 import { NativeChatTransport } from "../lib/native-chat-transport"
 import {
   createQueueItem, createTextPreview, generateQueueId,
@@ -1939,17 +1947,19 @@ const ChatViewInner = memo(function ChatViewInner({
   workspaceName,
   workspaceBranch,
   workspaceRepoName,
+  onCommitAndPush,
+  isCommittingAndPush = false,
 }: {
   chat: Chat<any>
   subChatId: string
   parentChatId: string
-  provider?: "claude-code" | "codex"
+  provider?: "claude-code" | "codex" | "gemini" | "openrouter"
   isFirstSubChat: boolean
   onAutoRename: (userMessage: string, subChatId: string) => void
   onCreateNewSubChat?: () => void
   onProviderChange?: (
     subChatId: string,
-    provider: "claude-code" | "codex",
+    provider: "claude-code" | "codex" | "gemini" | "openrouter",
   ) => void
   refreshDiff?: () => void
   teamId?: string
@@ -1970,6 +1980,8 @@ const ChatViewInner = memo(function ChatViewInner({
   workspaceName?: string | null
   workspaceBranch?: string | null
   workspaceRepoName?: string | null
+  onCommitAndPush?: (filePaths: string[]) => void
+  isCommittingAndPush?: boolean
 }) {
   const hasTriggeredRenameRef = useRef(false)
   const hasTriggeredAutoGenerateRef = useRef(false)
@@ -2154,6 +2166,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
   // tRPC utils for cache invalidation
   const utils = api.useUtils()
+  const trpcUtilsLocal = trpc.useUtils()
 
   // Get sub-chat name from store
   const subChatName = useAgentSubChatStore(
@@ -2189,6 +2202,10 @@ const ChatViewInner = memo(function ChatViewInner({
           subChatId,
           name: newName,
         })
+        // Invalidate parent chat query so sidebar sub-chat list refreshes
+        if (parentChatId) {
+          trpcUtilsLocal.chats.get.invalidate({ id: parentChatId })
+        }
       } catch {
         // Revert on error (toast shown by mutation onError)
         useAgentSubChatStore
@@ -2196,7 +2213,7 @@ const ChatViewInner = memo(function ChatViewInner({
           .updateSubChatName(subChatId, subChatNameRef.current || "New Chat")
       }
     },
-    [subChatId],
+    [subChatId, parentChatId, trpcUtilsLocal],
   )
 
   // Plan mode state (per-subChat using atomFamily)
@@ -2698,6 +2715,20 @@ const ChatViewInner = memo(function ChatViewInner({
   const pendingQuestions = pendingQuestionsMap.get(subChatId) ?? null
 
   // Expired user questions (timed out but still answerable as normal messages)
+  const setPushedChatIdsInner = useSetAtom(pushedChatIdsAtom)
+
+  // Drop the pushed-checkmark for this chat as soon as the user resumes work
+  // (sends a new message). Cheap no-op when not currently marked.
+  const clearPushedMark = useCallback(() => {
+    if (!parentChatId) return
+    setPushedChatIdsInner((prev) => {
+      if (!prev.has(parentChatId)) return prev
+      const next = new Set(prev)
+      next.delete(parentChatId)
+      return next
+    })
+  }, [parentChatId, setPushedChatIdsInner])
+
   const [expiredQuestionsMap, setExpiredQuestionsMap] = useAtom(
     expiredUserQuestionsAtom,
   )
@@ -3498,7 +3529,7 @@ const ChatViewInner = memo(function ChatViewInner({
         store.addToAllSubChats({
           id: newSubChat.id,
           name: newSubChat.name || "Fork",
-          created_at: newSubChat.created_at || new Date().toISOString(),
+          created_at: newSubChat.createdAt?.toISOString() || new Date().toISOString(),
           mode: newMode,
         })
 
@@ -3796,15 +3827,20 @@ const ChatViewInner = memo(function ChatViewInner({
     if (!isActive) return
     if (isMobile) return // Don't autofocus on mobile
 
-    // Use requestAnimationFrame to ensure DOM is ready after render
-    requestAnimationFrame(() => {
+    // Use setTimeout to ensure focus happens after all React DOM updates
+    // and browser focus management has settled. requestAnimationFrame alone
+    // is too early when the terminal is open — the xterm textarea retains
+    // focus and the editor's focus() call doesn't stick.
+    const timeoutId = setTimeout(() => {
       // Skip if sidebar keyboard navigation is active (user is arrowing through sidebar items)
       if (appStore.get(suppressInputFocusAtom)) {
         appStore.set(suppressInputFocusAtom, false)
         return
       }
       editorRef.current?.focus()
-    })
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
   }, [isActive, subChatId, isMobile])
 
   // Refs for handleSend to avoid recreating callback on every messages change
@@ -3821,6 +3857,18 @@ const ChatViewInner = memo(function ChatViewInner({
     // Block sending while sandbox is still being set up
     if (sandboxSetupStatus !== "ready") {
       return
+    }
+
+    clearPushedMark()
+
+    // User is replying — clear the "awaiting your answer" flag for this chat
+    if (parentChatId) {
+      const current = appStore.get(chatsAwaitingAnswerAtom)
+      if (current.has(parentChatId)) {
+        const next = new Set(current)
+        next.delete(parentChatId)
+        appStore.set(chatsAwaitingAnswerAtom, next)
+      }
     }
 
     // Clear any expired questions when user sends a new message
@@ -4081,12 +4129,15 @@ const ChatViewInner = memo(function ChatViewInner({
     teamId,
     addToQueue,
     setExpiredQuestionsMap,
+    clearPushedMark,
   ])
 
   // Queue handlers for sending queued messages
   const handleSendFromQueue = useCallback(async (itemId: string) => {
     const item = popItemFromQueue(subChatId, itemId)
     if (!item) return
+
+    clearPushedMark()
 
     try {
       // Stop current stream if streaming and wait for status to become ready.
@@ -4175,7 +4226,7 @@ const ChatViewInner = memo(function ChatViewInner({
       // Requeue the item at the front so it isn't lost
       useMessageQueueStore.getState().prependItem(subChatId, item)
     }
-  }, [subChatId, popItemFromQueue, handleStop])
+  }, [subChatId, popItemFromQueue, handleStop, clearPushedMark])
 
   const handleRemoveFromQueue = useCallback((itemId: string) => {
     removeFromQueue(subChatId, itemId)
@@ -4187,6 +4238,8 @@ const ChatViewInner = memo(function ChatViewInner({
     if (sandboxSetupStatus !== "ready") {
       return
     }
+
+    clearPushedMark()
 
     // Get value from uncontrolled editor
     const inputValue = editorRef.current?.getValue() || ""
@@ -4309,6 +4362,7 @@ const ChatViewInner = memo(function ChatViewInner({
     subChatId,
     handleStop,
     clearAll,
+    clearPushedMark,
   ])
 
   // NOTE: Auto-processing of queue is now handled globally by QueueProcessor
@@ -4521,7 +4575,7 @@ const ChatViewInner = memo(function ChatViewInner({
   const shouldShowStackedCards =
     !displayQuestions && (queue.length > 0 || shouldShowStatusCard)
   const handleInputProviderChange = useCallback(
-    (nextProvider: "claude-code" | "codex") => {
+    (nextProvider: "claude-code" | "codex" | "gemini" | "openrouter") => {
       onProviderChange?.(subChatId, nextProvider)
     },
     [onProviderChange, subChatId],
@@ -4530,7 +4584,7 @@ const ChatViewInner = memo(function ChatViewInner({
   // Continue conversation with a different provider - creates new sub-chat with history attachment
   const isContinuingRef = useRef(false)
   const handleContinueWithProvider = useCallback(
-    async (targetProvider: "claude-code" | "codex") => {
+    async (targetProvider: "claude-code" | "codex" | "gemini" | "openrouter") => {
       if (isStreaming || isContinuingRef.current) return
       if (!messages || messages.length === 0) return
       isContinuingRef.current = true
@@ -4764,6 +4818,8 @@ const ChatViewInner = memo(function ChatViewInner({
                   worktreePath={projectPath}
                   onStop={handleStop}
                   hasQueueCardAbove={queue.length > 0}
+                  onCommitAndPush={projectPath ? onCommitAndPush : undefined}
+                  isCommittingAndPushing={isCommittingAndPush}
                 />
               )}
             </div>
@@ -4883,6 +4939,7 @@ export function ChatView({
   const unseenChanges = useAtomValue(agentsUnseenChangesAtom)
   const setUnseenChanges = useSetAtom(agentsUnseenChangesAtom)
   const setSubChatUnseenChanges = useSetAtom(agentsSubChatUnseenChangesAtom)
+  const setChatsAwaitingAnswer = useSetAtom(chatsAwaitingAnswerAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
   const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
   const setUndoStack = useSetAtom(undoStackAtom)
@@ -5107,7 +5164,8 @@ export function ChatView({
   const diffContent = diffCache.diffContent
 
   // Smart setters that update the cache
-  const setDiffStats = useCallback((val: any) => {
+  type DiffStatsValue = { isLoading: boolean; hasChanges: boolean; fileCount: number; additions: number; deletions: number }
+  const setDiffStats = useCallback((val: DiffStatsValue | ((prev: DiffStatsValue) => DiffStatsValue)) => {
     setDiffCache((prev) => {
       const newVal = typeof val === 'function' ? val(prev.diffStats) : val
       // Only update if something changed
@@ -5286,6 +5344,9 @@ export function ChatView({
       }
       return prev
     })
+    markChatViewed.mutate({ id: chatId })
+    // markChatViewed identity is stable across renders; intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, setUnseenChanges])
 
   // Get sub-chat state from store (reactive subscription for tabsToRender)
@@ -5307,7 +5368,7 @@ export function ChatView({
   const [
     subChatProviderOverrides,
     setSubChatProviderOverrides,
-  ] = useState<Record<string, "claude-code" | "codex">>({})
+  ] = useState<Record<string, "claude-code" | "codex" | "gemini" | "openrouter">>({})
 
   useEffect(() => {
     setSubChatProviderOverrides({})
@@ -5440,8 +5501,10 @@ export function ChatView({
 
   // Workspace isolation: limit mounted tabs to prevent memory growth
   // CRITICAL: Filter by workspace to prevent rendering sub-chats from other workspaces
-  // Always render: active + pinned, then fill with recent up to limit
-  const MAX_MOUNTED_TABS = 3
+  // Always render: active + pinned, then fill with recent up to limit.
+  // Limit is reactive — memory-monitor drops it to 1 under heap pressure so
+  // background tabs release their full state instead of dragging us to OOM.
+  const MAX_MOUNTED_TABS = useAtomValue(maxMountedTabsAtom)
   const tabsToRender = useMemo(() => {
     if (!activeSubChatId) return []
 
@@ -5507,7 +5570,7 @@ export function ChatView({
     }
 
     return result
-  }, [activeSubChatId, splitPaneIds, pinnedSubChatIds, openSubChatIds, allSubChats, agentSubChats])
+  }, [activeSubChatId, splitPaneIds, pinnedSubChatIds, openSubChatIds, allSubChats, agentSubChats, MAX_MOUNTED_TABS])
 
   // Prune chat instances from previous workspace when switching parent chat.
   // Prevents cross-workspace memory accumulation.
@@ -5564,6 +5627,15 @@ export function ChatView({
 
   // Merge PR mutation
   const trpcUtils = trpc.useUtils()
+
+  // Persist "viewed" state so the projects list can show unseen badges that
+  // survive app restarts. Fire-and-forget; the local atom clears immediately.
+  const markChatViewed = trpc.chats.markViewed.useMutation({
+    onSuccess: () => {
+      trpcUtils.projects.listWithStatus.invalidate()
+      trpcUtils.chats.list.invalidate()
+    },
+  })
 
   // Direct PR creation mutation (push branch and open GitHub)
   const createPrMutation = trpc.changes.createPR.useMutation({
@@ -6185,12 +6257,31 @@ Make sure to preserve all functionality from both branches when resolving confli
     commitChanges({ filePaths: selectedPaths })
   }, [commitChanges])
 
+  const setPushedChatIds = useSetAtom(pushedChatIdsAtom)
+
   const handleCommitAndPush = useCallback(async (selectedPaths: string[]) => {
     const didCommit = await commitChanges({ filePaths: selectedPaths })
-    if (didCommit) {
-      pushBranch()
+    if (!didCommit) return
+    const didPush = await pushBranch()
+    if (didPush && chatId) {
+      setPushedChatIds((prev) => {
+        if (prev.has(chatId)) return prev
+        const next = new Set(prev)
+        next.add(chatId)
+        return next
+      })
+      const isSoundEnabled = appStore.get(soundNotificationsEnabledAtom)
+      if (isSoundEnabled) {
+        try {
+          const audio = new Audio("./commitandpush.mp3")
+          audio.volume = 1.0
+          audio.play().catch(() => {})
+        } catch {
+          // Ignore audio errors
+        }
+      }
     }
-  }, [commitChanges, pushBranch])
+  }, [commitChanges, pushBranch, chatId, setPushedChatIds])
 
   const isCommittingCombined = isCommittingChanges || isPushing
 
@@ -6380,7 +6471,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   }, [agentSubChats, activeSubChatIdForPlan, setCurrentPlanPath])
 
   const inferProviderFromMessages = useCallback(
-    (subChatId?: string): "claude-code" | "codex" => {
+    (subChatId?: string): "claude-code" | "codex" | "gemini" | "openrouter" => {
       if (!subChatId) return "claude-code"
 
       const override = subChatProviderOverrides[subChatId]
@@ -6407,11 +6498,20 @@ Make sure to preserve all functionality from both branches when resolving confli
         const model = (message as any)?.metadata?.model
         if (typeof model !== "string") continue
         const normalizedModel = model.toLowerCase()
-        if (
-          normalizedModel.includes("codex") ||
-          normalizedModel.startsWith("gpt-")
-        ) {
+        // Codex selections persist as `modelId/reasoningEffort` (e.g. `gpt-5.5/high`),
+        // which would otherwise be misread as an OpenRouter `provider/model` id —
+        // so the Codex check must run before the OpenRouter slash check.
+        if (isCodexModelSelection(model)) {
           return "codex"
+        }
+        if (isOpenRouterModelId(model)) {
+          return "openrouter"
+        }
+        if (
+          normalizedModel.startsWith("gemini") ||
+          normalizedModel.startsWith("auto-gemini")
+        ) {
+          return "gemini"
         }
       }
 
@@ -6569,21 +6669,27 @@ Make sure to preserve all functionality from both branches when resolving confli
       const chatSandboxUrl = chatSandboxId ? `https://3003-${chatSandboxId}.e2b.app` : null
       const isRemoteChat = !!(agentChat as any)?.isRemote || !!chatSandboxId
 
-      // Fast path for existing chats. Only inspect messages when a local empty-chat provider override
-      // might require transport recreation.
+      const chatProvider = inferProviderFromMessages(subChatId)
+
+      // Fast path for existing chats. Recreate the runtime Chat if provider inference
+      // catches up after the first render, e.g. a new Codex chat initially rendered
+      // before its message metadata was in the query cache.
       const existing = agentChatStore.get(subChatId)
       if (existing) {
         if (isRemoteChat) return existing
 
-        const overrideProvider = subChatProviderOverrides[subChatId]
-        if (!overrideProvider) return existing
-
-        const existingProvider: "claude-code" | "codex" =
-          (existing as any)?.transport instanceof ACPChatTransport
+        const existingTransport = (existing as any)?.transport
+        const existingProvider: "claude-code" | "codex" | "gemini" | "openrouter" =
+          existingTransport instanceof ACPChatTransport
             ? "codex"
-            : "claude-code"
-        if (existingProvider === overrideProvider) return existing
+            : existingTransport instanceof GeminiChatTransport
+              ? "gemini"
+              : existingTransport instanceof OpenRouterChatTransport
+                ? "openrouter"
+                : "claude-code"
+        if (existingProvider === chatProvider) return existing
 
+        const overrideProvider = subChatProviderOverrides[subChatId]
         const subChatForOverride = agentSubChats.find((sc) => sc.id === subChatId)
         const rawExistingMessages = subChatForOverride?.messages
         const existingMessageCount = Array.isArray(rawExistingMessages)
@@ -6599,7 +6705,17 @@ Make sure to preserve all functionality from both branches when resolving confli
               })()
             : 0
 
-        if (existingMessageCount > 0) return existing
+        if (
+          overrideProvider &&
+          overrideProvider !== chatProvider &&
+          existingMessageCount > 0
+        ) {
+          return existing
+        }
+        if (useStreamingStatusStore.getState().isStreaming(subChatId)) {
+          return existing
+        }
+
         agentChatStore.delete(subChatId)
       }
 
@@ -6625,8 +6741,6 @@ Make sure to preserve all functionality from both branches when resolving confli
         .allSubChats.find((sc) => sc.id === subChatId)
       const subChatMode = subChatMeta?.mode || currentMode
 
-      const chatProvider = inferProviderFromMessages(subChatId)
-
       console.log("[getOrCreateChat] Transport selection", {
         subChatId: subChatId.slice(-8),
         isRemoteChat,
@@ -6635,7 +6749,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         worktreePath: worktreePath ? "exists" : "none",
       })
 
-      let transport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | NativeChatTransport | null = null
+      let transport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | NativeChatTransport | GeminiChatTransport | OpenRouterChatTransport | null = null
 
       if (isRemoteChat && chatSandboxUrl) {
         // Remote sandbox chat: use HTTP SSE transport
@@ -6653,6 +6767,19 @@ Make sure to preserve all functionality from both branches when resolving confli
           sandboxUrl: chatSandboxUrl,
           mode: subChatMode,
           model: modelString,
+        })
+      } else if (chatProvider === "gemini") {
+        transport = new GeminiChatTransport({
+          chatId,
+          subChatId,
+          ...(worktreePath ? { cwd: worktreePath } : {}),
+        })
+      } else if (chatProvider === "openrouter") {
+        transport = new OpenRouterChatTransport({
+          chatId,
+          subChatId,
+          ...(worktreePath ? { cwd: worktreePath } : {}),
+          ...(projectPath ? { projectPath } : {}),
         })
       } else if (worktreePath) {
         if (chatProvider === "codex") {
@@ -6730,7 +6857,11 @@ Make sure to preserve all functionality from both branches when resolving confli
             })
           }
 
-          // Also mark parent chat as unseen if user is not viewing it
+          // Also mark parent chat as unseen if user is not viewing it.
+          // If the user IS viewing it, bump lastViewedAt so the DB-derived
+          // isUnseen flag doesn't outrun the read state — without this the
+          // sub_chat's freshly bumped updatedAt makes the sidebar paint the
+          // chat blue once the user navigates away, even though it was read.
           if (!isViewingThisChat) {
             setUnseenChanges((prev: Set<string>) => {
               const next = new Set(prev)
@@ -6751,6 +6882,36 @@ Make sure to preserve all functionality from both branches when resolving confli
                 }
               }
             }
+          } else {
+            markChatViewed.mutate({ id: chatId })
+          }
+
+          // Mark chat as awaiting an answer when the model's final message is a
+          // text question. Persists across views — cleared when the user replies.
+          {
+            const finalMessages = (newChat as any).messages || []
+            let lastAssistant: any = null
+            for (let i = finalMessages.length - 1; i >= 0; i--) {
+              if (finalMessages[i]?.role === "assistant") {
+                lastAssistant = finalMessages[i]
+                break
+              }
+            }
+            const isQuestion = isAssistantMessageQuestion(lastAssistant?.parts)
+            setChatsAwaitingAnswer((prev: Set<string>) => {
+              const has = prev.has(chatId)
+              if (isQuestion && !has) {
+                const next = new Set(prev)
+                next.add(chatId)
+                return next
+              }
+              if (!isQuestion && has) {
+                const next = new Set(prev)
+                next.delete(chatId)
+                return next
+              }
+              return prev
+            })
           }
 
           // Show native notification if not manually aborted
@@ -6794,7 +6955,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   )
 
   const handleProviderChange = useCallback(
-    (subChatId: string, nextProvider: "claude-code" | "codex") => {
+    (subChatId: string, nextProvider: "claude-code" | "codex" | "gemini" | "openrouter") => {
       // Provider switch is only allowed for brand new sub-chats.
       const activeChat = agentChatStore.get(subChatId) as any
       let messageCount = Array.isArray(activeChat?.messages)
@@ -6933,7 +7094,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     })
 
     const chatProvider = newSubChatProvider
-    let newSubChatTransport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | NativeChatTransport | null = null
+    let newSubChatTransport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | NativeChatTransport | GeminiChatTransport | OpenRouterChatTransport | null = null
 
     if (isNewSubChatRemote && newSubChatSandboxUrl) {
       // Remote sandbox chat: use HTTP SSE transport
@@ -6947,6 +7108,19 @@ Make sure to preserve all functionality from both branches when resolving confli
         sandboxUrl: newSubChatSandboxUrl,
         mode: subChatMode,
         model: modelString,
+      })
+    } else if (chatProvider === "gemini") {
+      newSubChatTransport = new GeminiChatTransport({
+        chatId,
+        subChatId: newId,
+        ...(worktreePath ? { cwd: worktreePath } : {}),
+      })
+    } else if (chatProvider === "openrouter") {
+      newSubChatTransport = new OpenRouterChatTransport({
+        chatId,
+        subChatId: newId,
+        ...(worktreePath ? { cwd: worktreePath } : {}),
+        ...(projectPath ? { projectPath } : {}),
       })
     } else if (worktreePath) {
       if (chatProvider === "codex") {
@@ -7021,7 +7195,11 @@ Make sure to preserve all functionality from both branches when resolving confli
             })
           }
 
-          // Also mark parent chat as unseen if user is not viewing it
+          // Also mark parent chat as unseen if user is not viewing it.
+          // If the user IS viewing it, bump lastViewedAt so the DB-derived
+          // isUnseen flag doesn't outrun the read state — without this the
+          // sub_chat's freshly bumped updatedAt makes the sidebar paint the
+          // chat blue once the user navigates away, even though it was read.
           if (!isViewingThisChat) {
             setUnseenChanges((prev: Set<string>) => {
               const next = new Set(prev)
@@ -7042,6 +7220,36 @@ Make sure to preserve all functionality from both branches when resolving confli
                 }
               }
             }
+          } else {
+            markChatViewed.mutate({ id: chatId })
+          }
+
+          // Mark chat as awaiting an answer when the model's final message is a
+          // text question. Persists across views — cleared when the user replies.
+          {
+            const finalMessages = (newChat as any).messages || []
+            let lastAssistant: any = null
+            for (let i = finalMessages.length - 1; i >= 0; i--) {
+              if (finalMessages[i]?.role === "assistant") {
+                lastAssistant = finalMessages[i]
+                break
+              }
+            }
+            const isQuestion = isAssistantMessageQuestion(lastAssistant?.parts)
+            setChatsAwaitingAnswer((prev: Set<string>) => {
+              const has = prev.has(chatId)
+              if (isQuestion && !has) {
+                const next = new Set(prev)
+                next.add(chatId)
+                return next
+              }
+              if (!isQuestion && has) {
+                const next = new Set(prev)
+                next.delete(chatId)
+                return next
+              }
+              return prev
+            })
           }
 
           // Show native notification if not manually aborted
@@ -7416,6 +7624,15 @@ Make sure to preserve all functionality from both branches when resolving confli
               return { ...old, name }
             },
           )
+          // Also directly update the tRPC cache the sidebar reads from,
+          // and invalidate to guarantee a refetch
+          trpcUtils.chats.list.setData({}, (old) => {
+            if (!old) return old
+            return old.map((c) =>
+              c.id === chatIdToUpdate ? { ...c, name } : c,
+            )
+          })
+          trpcUtils.chats.list.invalidate()
         },
       })
     },
@@ -7427,6 +7644,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       renameChatMutation,
       selectedTeamId,
       selectedOllamaModel,
+      trpcUtils.chats.list,
       utils.agents.getAgentChats,
       utils.agents.getAgentChat,
     ],
@@ -7706,31 +7924,39 @@ Make sure to preserve all functionality from both branches when resolving confli
                             }
                           }}
                         >
-                          <ChatViewInner
-                            chat={chat}
-                            subChatId={paneId}
-                            parentChatId={chatId}
-                            provider={inferProviderFromMessages(paneId)}
-                            isFirstSubChat={isFirstSubChat}
-                            onAutoRename={handleAutoRename}
-                            onCreateNewSubChat={handleCreateNewSubChat}
-                            onProviderChange={handleProviderChange}
-                            teamId={selectedTeamId || undefined}
-                            repository={repository}
-                            streamId={agentChatStore.getStreamId(paneId)}
-                            isMobile={isMobileFullscreen}
-                            isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
-                            sandboxId={sandboxId || undefined}
-                            projectPath={worktreePath || undefined}
-                            isArchived={isArchived}
-                            onRestoreWorkspace={handleRestoreWorkspace}
-                            existingPrUrl={agentChat?.prUrl}
-                            isActive={paneId === activeSubChatId}
-                            isSplitPane={true}
-                            workspaceName={agentChat?.name ?? null}
-                            workspaceBranch={agentChat?.branch ?? null}
-                            workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
-                          />
+                          <RenderErrorBoundary
+                            title="Chat pane failed to render"
+                            description="A workspace UI error interrupted this pane. Reload the window to recover."
+                            resetKey={paneId}
+                          >
+                            <ChatViewInner
+                              chat={chat}
+                              subChatId={paneId}
+                              parentChatId={chatId}
+                              provider={inferProviderFromMessages(paneId)}
+                              isFirstSubChat={isFirstSubChat}
+                              onAutoRename={handleAutoRename}
+                              onCreateNewSubChat={handleCreateNewSubChat}
+                              onProviderChange={handleProviderChange}
+                              teamId={selectedTeamId || undefined}
+                              repository={repository}
+                              streamId={agentChatStore.getStreamId(paneId)}
+                              isMobile={isMobileFullscreen}
+                              isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
+                              sandboxId={sandboxId || undefined}
+                              projectPath={worktreePath || undefined}
+                              isArchived={isArchived}
+                              onRestoreWorkspace={handleRestoreWorkspace}
+                              existingPrUrl={agentChat?.prUrl}
+                              isActive={paneId === activeSubChatId}
+                              isSplitPane={true}
+                              workspaceName={agentChat?.name ?? null}
+                              workspaceBranch={agentChat?.branch ?? null}
+                              workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                              onCommitAndPush={handleCommitAndPush}
+                              isCommittingAndPush={isCommittingCombined}
+                            />
+                          </RenderErrorBoundary>
                         </div>
                       )
                     }]
@@ -7756,31 +7982,39 @@ Make sure to preserve all functionality from both branches when resolving confli
                               }}
                               aria-hidden
                             >
-                              <ChatViewInner
-                                chat={chat}
-                                subChatId={subChatId}
-                                parentChatId={chatId}
-                                provider={inferProviderFromMessages(subChatId)}
-                                isFirstSubChat={isFirstSubChat}
-                                onAutoRename={handleAutoRename}
-                                onCreateNewSubChat={handleCreateNewSubChat}
-                                onProviderChange={handleProviderChange}
-                                teamId={selectedTeamId || undefined}
-                                repository={repository}
-                                streamId={agentChatStore.getStreamId(subChatId)}
-                                isMobile={isMobileFullscreen}
-                                isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
-                                sandboxId={sandboxId || undefined}
-                                projectPath={worktreePath || undefined}
-                                isArchived={isArchived}
-                                onRestoreWorkspace={handleRestoreWorkspace}
-                                existingPrUrl={agentChat?.prUrl}
-                                isActive={false}
-                                isSplitPane={false}
-                                workspaceName={agentChat?.name ?? null}
-                                workspaceBranch={agentChat?.branch ?? null}
-                                workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
-                              />
+                              <RenderErrorBoundary
+                                title="Chat pane failed to render"
+                                description="A workspace UI error interrupted this pane. Reload the window to recover."
+                                resetKey={subChatId}
+                              >
+                                <ChatViewInner
+                                  chat={chat}
+                                  subChatId={subChatId}
+                                  parentChatId={chatId}
+                                  provider={inferProviderFromMessages(subChatId)}
+                                  isFirstSubChat={isFirstSubChat}
+                                  onAutoRename={handleAutoRename}
+                                  onCreateNewSubChat={handleCreateNewSubChat}
+                                  onProviderChange={handleProviderChange}
+                                  teamId={selectedTeamId || undefined}
+                                  repository={repository}
+                                  streamId={agentChatStore.getStreamId(subChatId)}
+                                  isMobile={isMobileFullscreen}
+                                  isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
+                                  sandboxId={sandboxId || undefined}
+                                  projectPath={worktreePath || undefined}
+                                  isArchived={isArchived}
+                                  onRestoreWorkspace={handleRestoreWorkspace}
+                                  existingPrUrl={agentChat?.prUrl}
+                                  isActive={false}
+                                  isSplitPane={false}
+                                  workspaceName={agentChat?.name ?? null}
+                                  workspaceBranch={agentChat?.branch ?? null}
+                                  workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                                  onCommitAndPush={handleCommitAndPush}
+                                  isCommittingAndPush={isCommittingCombined}
+                                />
+                              </RenderErrorBoundary>
                             </div>
                           )
                         })}
@@ -7819,31 +8053,39 @@ Make sure to preserve all functionality from both branches when resolving confli
                     }}
                     aria-hidden={!isActive}
                   >
-                    <ChatViewInner
-                      chat={chat}
-                      subChatId={subChatId}
-                      parentChatId={chatId}
-                      provider={inferProviderFromMessages(subChatId)}
-                      isFirstSubChat={isFirstSubChat}
-                      onAutoRename={handleAutoRename}
-                      onCreateNewSubChat={handleCreateNewSubChat}
-                      onProviderChange={handleProviderChange}
-                      teamId={selectedTeamId || undefined}
-                      repository={repository}
-                      streamId={agentChatStore.getStreamId(subChatId)}
-                      isMobile={isMobileFullscreen}
-                      isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
-                      sandboxId={sandboxId || undefined}
-                      projectPath={worktreePath || undefined}
-                      isArchived={isArchived}
-                      onRestoreWorkspace={handleRestoreWorkspace}
-                      existingPrUrl={agentChat?.prUrl}
-                      isActive={isActive}
-                      isSplitPane={false}
-                      workspaceName={agentChat?.name ?? null}
-                      workspaceBranch={agentChat?.branch ?? null}
-                      workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
-                    />
+                    <RenderErrorBoundary
+                      title="Chat pane failed to render"
+                      description="A workspace UI error interrupted this pane. Reload the window to recover."
+                      resetKey={subChatId}
+                    >
+                      <ChatViewInner
+                        chat={chat}
+                        subChatId={subChatId}
+                        parentChatId={chatId}
+                        provider={inferProviderFromMessages(subChatId)}
+                        isFirstSubChat={isFirstSubChat}
+                        onAutoRename={handleAutoRename}
+                        onCreateNewSubChat={handleCreateNewSubChat}
+                        onProviderChange={handleProviderChange}
+                        teamId={selectedTeamId || undefined}
+                        repository={repository}
+                        streamId={agentChatStore.getStreamId(subChatId)}
+                        isMobile={isMobileFullscreen}
+                        isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
+                        sandboxId={sandboxId || undefined}
+                        projectPath={worktreePath || undefined}
+                        isArchived={isArchived}
+                        onRestoreWorkspace={handleRestoreWorkspace}
+                        existingPrUrl={agentChat?.prUrl}
+                        isActive={isActive}
+                        isSplitPane={false}
+                        workspaceName={agentChat?.name ?? null}
+                        workspaceBranch={agentChat?.branch ?? null}
+                        workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                        onCommitAndPush={handleCommitAndPush}
+                        isCommittingAndPush={isCommittingCombined}
+                      />
+                    </RenderErrorBoundary>
                   </div>
                 )
               })

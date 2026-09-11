@@ -33,6 +33,8 @@ import {
   lastSelectedAgentIdAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedGeminiModelIdAtom,
+  lastSelectedOpenRouterModelIdAtom,
   lastSelectedBranchesAtom,
   lastSelectedModelIdAtom,
   lastSelectedRepoAtom,
@@ -41,13 +43,17 @@ import {
   selectedChatIsRemoteAtom,
   selectedDraftIdAtom,
   selectedProjectAtom,
+  subChatCodexModelIdAtomFamily,
+  subChatCodexThinkingAtomFamily,
+  subChatGeminiModelIdAtomFamily,
+  subChatOpenRouterModelIdAtomFamily,
   getNextMode,
   type AgentMode,
 } from "../atoms"
 import { defaultAgentModeAtom } from "../../../lib/atoms"
+import { appStore } from "../../../lib/jotai-store"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
-// import { selectedTeamIdAtom } from "@/lib/atoms/team"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
 import {
@@ -55,13 +61,12 @@ import {
   agentsSettingsDialogActiveTabAtom,
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
-  codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
-  normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
+  pinnedOpenRouterModelsAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -98,7 +103,6 @@ import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
-// import { CreateBranchDialog } from "@/app/(alpha)/agents/{components}/create-branch-dialog"
 import {
   PromptInput,
   PromptInputActions,
@@ -121,9 +125,9 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  GEMINI_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
-// import type { PlanType } from "@/lib/config/subscription-plans"
 type PlanType = string
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
@@ -169,6 +173,8 @@ const agents = [
   { id: "claude-code", name: "Claude Code", hasModels: true },
   { id: "cursor", name: "Cursor CLI", disabled: true },
   { id: "codex", name: "OpenAI Codex" },
+  { id: "gemini", name: "Google Gemini" },
+  { id: "openrouter", name: "OpenRouter" },
 ]
 
 interface NewChatFormProps {
@@ -327,8 +333,32 @@ export function NewChatForm({
   const [lastSelectedCodexThinking, setLastSelectedCodexThinking] = useAtom(
     lastSelectedCodexThinkingAtom,
   )
+  const [lastSelectedGeminiModelId, setLastSelectedGeminiModelId] = useAtom(
+    lastSelectedGeminiModelIdAtom,
+  )
   const [thinkingEnabled, setThinkingEnabled] = useAtom(
     extendedThinkingEnabledAtom,
+  )
+  const { data: geminiAuth } = trpc.gemini.getAuthStatus.useQuery()
+  const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
+  const isGeminiConnected =
+    (geminiAuth?.ok === true && geminiAuth.hasKey === true) ||
+    Boolean(geminiCliStatus?.installed && geminiCliStatus.loggedIn)
+
+  const [lastSelectedOpenRouterModelId, setLastSelectedOpenRouterModelId] =
+    useAtom(lastSelectedOpenRouterModelIdAtom)
+  const pinnedOpenRouterModels = useAtomValue(pinnedOpenRouterModelsAtom)
+  const { data: openRouterAuth } = trpc.openrouter.getAuthStatus.useQuery()
+  const isOpenRouterConnected =
+    openRouterAuth?.ok === true && openRouterAuth.hasKey === true
+  const { data: openRouterCatalog } = trpc.openrouter.listModels.useQuery(
+    undefined,
+    {
+      enabled: isOpenRouterConnected && pinnedOpenRouterModels.length > 0,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
   )
 
   const [selectedModel, setSelectedModel] = useState(
@@ -344,17 +374,10 @@ export function NewChatForm({
     }
   }, [lastSelectedModelId])
 
-  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
-  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
   const hiddenModels = useAtomValue(hiddenModelsAtom)
   const codexUiModels = useMemo(
-    () => {
-      let models = hasAppCodexApiKey
-        ? CODEX_MODELS.filter((model) => model.id !== "gpt-5.3-codex")
-        : CODEX_MODELS
-      return models.filter((model) => !hiddenModels.includes(model.id))
-    },
-    [hasAppCodexApiKey, hiddenModels],
+    () => CODEX_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
   )
   const selectedCodexModel = useMemo(
     () =>
@@ -363,6 +386,40 @@ export function NewChatForm({
       CODEX_MODELS[0]!,
     [codexUiModels, lastSelectedCodexModelId],
   )
+
+  const geminiUiModels = useMemo(
+    () => GEMINI_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedGeminiModel = useMemo(
+    () =>
+      geminiUiModels.find((model) => model.id === lastSelectedGeminiModelId) ||
+      geminiUiModels[0] ||
+      GEMINI_MODELS[0]!,
+    [geminiUiModels, lastSelectedGeminiModelId],
+  )
+
+  const openRouterUiModels = useMemo(() => {
+    if (!isOpenRouterConnected) return []
+    const catalogIndex = new Map(
+      openRouterCatalog?.available
+        ? openRouterCatalog.models.map((m) => [m.id, m.name] as const)
+        : [],
+    )
+    return pinnedOpenRouterModels
+      .filter((id) => !hiddenModels.includes(id))
+      .map((id) => ({ id, name: catalogIndex.get(id) ?? id }))
+  }, [isOpenRouterConnected, openRouterCatalog, pinnedOpenRouterModels, hiddenModels])
+  const selectedOpenRouterModel = useMemo(() => {
+    if (openRouterUiModels.length === 0) {
+      return { id: "", name: "" }
+    }
+    return (
+      openRouterUiModels.find((m) => m.id === lastSelectedOpenRouterModelId) ||
+      openRouterUiModels[0] ||
+      { id: "", name: "" }
+    )
+  }, [openRouterUiModels, lastSelectedOpenRouterModelId])
 
   const selectedCodexThinking = useMemo<CodexThinkingLevel>(() => {
     if (
@@ -401,11 +458,19 @@ export function NewChatForm({
     if (selectedAgent.id === "codex") {
       return `${selectedCodexModel.id}/${selectedCodexThinking}`
     }
+    if (selectedAgent.id === "gemini") {
+      return selectedGeminiModel.id
+    }
+    if (selectedAgent.id === "openrouter") {
+      return selectedOpenRouterModel.id || (selectedModel?.id ?? "opus")
+    }
     return selectedModel?.id ?? "opus"
   }, [
     selectedAgent.id,
     selectedCodexModel.id,
     selectedCodexThinking,
+    selectedGeminiModel.id,
+    selectedOpenRouterModel.id,
     selectedModel?.id,
   ])
 
@@ -416,6 +481,14 @@ export function NewChatForm({
   const selectedModelLabel = useMemo(() => {
     if (selectedAgent.id === "codex") {
       return selectedCodexModel.name
+    }
+
+    if (selectedAgent.id === "gemini") {
+      return selectedGeminiModel.name
+    }
+
+    if (selectedAgent.id === "openrouter") {
+      return selectedOpenRouterModel.name || "Select model"
     }
 
     if (availableModels.isOffline && availableModels.hasOllama) {
@@ -434,6 +507,8 @@ export function NewChatForm({
   }, [
     selectedAgent.id,
     selectedCodexModel.name,
+    selectedGeminiModel.name,
+    selectedOpenRouterModel.name,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
@@ -573,7 +648,6 @@ export function NewChatForm({
     try {
       const blob = await stopRecording()
       if (blob.size < 1000) {
-        console.log("[NewChatForm] Recording too short, ignoring")
         return
       }
       setIsTranscribing(true)
@@ -712,7 +786,13 @@ export function NewChatForm({
 
   // Fetch repos from team
   // Desktop: no remote repos, we use local projects
-  const reposData = { repositories: [] }
+  const reposData = { repositories: [] as Array<{
+    id: string
+    name: string
+    full_name: string
+    sandbox_status?: "not_setup" | "in_progress" | "ready" | "error"
+    pushed_at?: string | null
+  }> }
   const isLoadingRepos = false
 
   // Memoize repos arrays to prevent useEffect from running on every keystroke
@@ -1031,6 +1111,31 @@ export function NewChatForm({
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
     onSuccess: (data) => {
+      utils.chats.get.setData({ id: data.id }, data as any)
+
+      const firstSubChatId = data.subChats?.[0]?.id
+      if (firstSubChatId) {
+        if (selectedAgent.id === "codex") {
+          const [modelId, thinking] = selectedChatModel.split("/")
+          appStore.set(subChatCodexModelIdAtomFamily(firstSubChatId), modelId)
+          if (
+            thinking === "low" ||
+            thinking === "medium" ||
+            thinking === "high" ||
+            thinking === "xhigh"
+          ) {
+            appStore.set(subChatCodexThinkingAtomFamily(firstSubChatId), thinking)
+          }
+        } else if (selectedAgent.id === "gemini") {
+          appStore.set(subChatGeminiModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "openrouter") {
+          appStore.set(
+            subChatOpenRouterModelIdAtomFamily(firstSubChatId),
+            selectedChatModel,
+          )
+        }
+      }
+
       // Clear editor, images, files, pasted texts, and file contents cache only on success
       editorRef.current?.clear()
       clearImages()
@@ -1210,7 +1315,7 @@ export function NewChatForm({
     // Create chat with selected project, branch, and initial message
     createChatMutation.mutate({
       projectId: selectedProject.id,
-      name: message.trim().slice(0, 50), // Use first 50 chars as chat name
+      name: selectedProject.name || message.trim().slice(0, 50), // Use project name as workspace name
       model: selectedChatModel,
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
@@ -1635,15 +1740,6 @@ export function NewChatForm({
 
       <div className="flex flex-1 items-center justify-center overflow-y-auto relative">
         <div className="w-full max-w-2xl space-y-4 md:space-y-6 relative z-10 px-4">
-          {/* Title - only show when project is selected */}
-          {validatedProject && (
-            <div className="text-center">
-              <h1 className="text-2xl md:text-4xl font-medium tracking-tight">
-                What do you want to get done?
-              </h1>
-            </div>
-          )}
-
           {/* Input Area or Select Repo State */}
           {!validatedProject ? (
             // No project selected - show select repo button (like Sign in button)
@@ -1873,12 +1969,16 @@ export function NewChatForm({
                         <AgentModelSelector
                           open={isModelDropdownOpen}
                           onOpenChange={setIsModelDropdownOpen}
-                          selectedAgentId={selectedAgent.id as "claude-code" | "codex"}
+                          selectedAgentId={selectedAgent.id as "claude-code" | "codex" | "gemini" | "openrouter"}
                           onSelectedAgentIdChange={(provider) => {
                             if (provider === "claude-code") {
                               setSelectedAgent(claudeAgent)
-                            } else {
+                            } else if (provider === "codex") {
                               setSelectedAgent(enabledAgents.find((agent) => agent.id === "codex") || fallbackAgent)
+                            } else if (provider === "gemini") {
+                              setSelectedAgent(enabledAgents.find((agent) => agent.id === "gemini") || fallbackAgent)
+                            } else if (provider === "openrouter") {
+                              setSelectedAgent(enabledAgents.find((agent) => agent.id === "openrouter") || fallbackAgent)
                             }
                             setLastSelectedAgentId(provider)
                           }}
@@ -1928,6 +2028,26 @@ export function NewChatForm({
                             selectedThinking: selectedCodexThinking,
                             onSelectThinking: setLastSelectedCodexThinking,
                             isConnected: codexOnboardingCompleted,
+                          }}
+                          gemini={{
+                            models: geminiUiModels,
+                            selectedModelId: selectedGeminiModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = geminiUiModels.find((m) => m.id === modelId)
+                              if (!model) return
+                              setLastSelectedGeminiModelId(model.id)
+                            },
+                            isConnected: isGeminiConnected,
+                          }}
+                          openrouter={{
+                            models: openRouterUiModels,
+                            selectedModelId: selectedOpenRouterModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = openRouterUiModels.find((m) => m.id === modelId)
+                              if (!model) return
+                              setLastSelectedOpenRouterModelId(model.id)
+                            },
+                            isConnected: isOpenRouterConnected,
                           }}
                         />
                       </div>

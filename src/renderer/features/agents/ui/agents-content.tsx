@@ -1,21 +1,29 @@
 "use client"
 
+/**
+ * NOTE (transplant): web-hook stub signatures, updatedAt sort fixes, and the
+ * new-chat-form reset-counter keys were transplanted from erenbertr/1code
+ * (Apache-2.0). Their rail/all-projects/build/kanban restructure, AnimatePresence
+ * wrapper, and sidebar-prop changes were NOT taken (sidebar lineage held).
+ */
+
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useQuery } from "@tanstack/react-query"
 // import { useSearchParams, useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // Desktop: mock Next.js navigation hooks
-const useSearchParams = () => ({ get: () => null })
-const useRouter = () => ({ push: () => {}, replace: () => {} })
+const useSearchParams = () => ({ get: (_key: string) => null })
+const useRouter = () => ({ push: (_url: string) => {}, replace: (_url: string, _opts?: any) => {} })
 // Desktop: mock Clerk hooks
 const useUser = () => ({ user: null })
-const useClerk = () => ({ signOut: () => {} })
+const useClerk = () => ({ signOut: (_opts?: any) => {} })
 import {
   selectedAgentChatIdAtom,
   selectedChatIsRemoteAtom,
   previousAgentChatIdAtom,
   selectedDraftIdAtom,
   showNewChatFormAtom,
+  newChatFormResetCounterAtom,
   agentsMobileViewModeAtom,
   agentsPreviewSidebarOpenAtom,
   agentsSidebarOpenAtom,
@@ -81,6 +89,7 @@ export function AgentsContent() {
   const chatSourceMode = useAtomValue(chatSourceModeAtom)
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
+  const newChatResetCounter = useAtomValue(newChatFormResetCounterAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
   const [betaAutomationsEnabled, setBetaAutomationsEnabled] = useAtom(betaAutomationsEnabledAtom)
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
@@ -321,7 +330,7 @@ export function AgentsContent() {
   const sortedChats = agentChats
     ? [...agentChats].sort(
         (a, b) =>
-          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+          new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(),
       )
     : []
 
@@ -460,8 +469,8 @@ export function AgentsContent() {
             // Get sorted chat list
             const sortedChats = [...agentChats].sort(
               (a, b) =>
-                new Date(b.updated_at).getTime() -
-                new Date(a.updated_at).getTime(),
+                new Date(b.updatedAt ?? 0).getTime() -
+                new Date(a.updatedAt ?? 0).getTime(),
             )
             isNavigatingRef.current = true
             setTimeout(() => {
@@ -951,6 +960,7 @@ export function AgentsContent() {
               // NewChatForm for creating new agent
               <div className="h-full flex flex-col relative overflow-hidden">
                 <NewChatForm
+                  key={`new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`}
                   isMobileFullscreen={true}
                   onBackToChats={() => setMobileViewMode("chats")}
                 />
@@ -1021,13 +1031,13 @@ export function AgentsContent() {
             </div>
           ) : selectedDraftId || showNewChatForm ? (
             <div className="h-full flex flex-col relative overflow-hidden">
-              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
+              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`} />
             </div>
           ) : betaKanbanEnabled ? (
             <KanbanView />
           ) : (
             <div className="h-full flex flex-col relative overflow-hidden">
-              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
+              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`} />
             </div>
           )}
         </div>

@@ -1,3 +1,9 @@
+/**
+ * NOTE (transplant): inlined question/compact chunk handling, stale-question
+ * clearing fix, extractText/extractImages, and log removals were transplanted
+ * from erenbertr/1code (Apache-2.0). Their auth-error toast replacement was
+ * NOT taken — this tree keeps the login-modal retry flow.
+ */
 import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
@@ -18,17 +24,14 @@ import {
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
 import {
+  askUserQuestionResultsAtom,
+  compactingSubChatsAtom,
+  expiredUserQuestionsAtom,
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
+  pendingUserQuestionsAtom,
   subChatModelIdAtomFamily,
 } from "../atoms"
-import {
-  applyCompactingChunks,
-  applyQuestionChunks,
-  clearStalePendingQuestion,
-  extractPromptImages,
-  extractPromptText,
-} from "./chat-chunk-atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
 
@@ -134,6 +137,13 @@ type IPCChatTransportConfig = {
   model?: string
 }
 
+// Image attachment type matching the tRPC schema
+type ImageAttachment = {
+  base64Data: string
+  mediaType: string
+  filename?: string
+}
+
 export class IPCChatTransport implements ChatTransport<UIMessage> {
   constructor(private config: IPCChatTransportConfig) {}
 
@@ -145,8 +155,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const lastUser = [...options.messages]
       .reverse()
       .find((m) => m.role === "user")
-    const prompt = extractPromptText(lastUser)
-    const images = extractPromptImages(lastUser)
+    const prompt = this.extractText(lastUser)
+    const images = this.extractImages(lastUser)
 
     // Get sessionId for resume (server preserves sessionId on abort so
     // the next message can resume with full conversation context)
@@ -187,11 +197,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
         .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
         ?.mode || this.config.mode
 
-    // Stream debug logging
+    // Stream tracking
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
-    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"}`)
 
     return new ReadableStream({
       start: (controller) => {
@@ -218,22 +227,77 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               chunkCount++
               lastChunkType = chunk.type
 
-              applyQuestionChunks(chunk, {
-                subChatId: this.config.subChatId,
-                chatId: this.config.chatId,
-              })
-              applyCompactingChunks(chunk, this.config.subChatId)
+              // Handle AskUserQuestion - show question UI
+              if (chunk.type === "ask-user-question") {
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                const newMap = new Map(currentMap)
+                newMap.set(this.config.subChatId, {
+                  subChatId: this.config.subChatId,
+                  parentChatId: this.config.chatId,
+                  toolUseId: chunk.toolUseId,
+                  questions: chunk.questions,
+                })
+                appStore.set(pendingUserQuestionsAtom, newMap)
+
+                // Clear any expired question (new question replaces it)
+                const currentExpired = appStore.get(expiredUserQuestionsAtom)
+                if (currentExpired.has(this.config.subChatId)) {
+                  const newExpiredMap = new Map(currentExpired)
+                  newExpiredMap.delete(this.config.subChatId)
+                  appStore.set(expiredUserQuestionsAtom, newExpiredMap)
+                }
+              }
+
+              // Handle AskUserQuestion timeout - move to expired (keep UI visible)
+              if (chunk.type === "ask-user-question-timeout") {
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                const pending = currentMap.get(this.config.subChatId)
+                if (pending && pending.toolUseId === chunk.toolUseId) {
+                  // Remove from pending
+                  const newPendingMap = new Map(currentMap)
+                  newPendingMap.delete(this.config.subChatId)
+                  appStore.set(pendingUserQuestionsAtom, newPendingMap)
+
+                  // Move to expired (so UI keeps showing the question)
+                  const currentExpired = appStore.get(expiredUserQuestionsAtom)
+                  const newExpiredMap = new Map(currentExpired)
+                  newExpiredMap.set(this.config.subChatId, pending)
+                  appStore.set(expiredUserQuestionsAtom, newExpiredMap)
+                }
+              }
+
+              // Handle AskUserQuestion result - store for real-time updates
+              if (chunk.type === "ask-user-question-result") {
+                const currentResults = appStore.get(askUserQuestionResultsAtom)
+                const newResults = new Map(currentResults)
+                newResults.set(chunk.toolUseId, chunk.result)
+                appStore.set(askUserQuestionResultsAtom, newResults)
+              }
+
+              // Handle compacting status - track in atom for UI display
+              if (
+                (chunk.type === "tool-input-start" && chunk.toolName === "Compact") ||
+                (chunk.type === "tool-input-available" && chunk.toolName === "Compact")
+              ) {
+                const compacting = appStore.get(compactingSubChatsAtom)
+                const newCompacting = new Set(compacting)
+                // Compacting started
+                newCompacting.add(this.config.subChatId)
+                appStore.set(compactingSubChatsAtom, newCompacting)
+              }
+              if (
+                (chunk.type === "tool-output-available" && chunk.toolCallId?.startsWith("compact-")) ||
+                (chunk.type === "tool-output-error" && chunk.toolCallId?.startsWith("compact-"))
+              ) {
+                const compacting = appStore.get(compactingSubChatsAtom)
+                const newCompacting = new Set(compacting)
+                // Compacting finished
+                newCompacting.delete(this.config.subChatId)
+                appStore.set(compactingSubChatsAtom, newCompacting)
+              }
 
               // Handle session init - store MCP servers, plugins, tools info
               if (chunk.type === "session-init") {
-                console.log("[MCP] Received session-init:", {
-                  tools: chunk.tools?.length,
-                  mcpServers: chunk.mcpServers,
-                  plugins: chunk.plugins,
-                  skills: chunk.skills?.length,
-                  // Debug: show all tools to check for MCP tools (format: mcp__servername__toolname)
-                  allTools: chunk.tools,
-                })
                 appStore.set(sessionInfoAtom, {
                   tools: chunk.tools,
                   mcpServers: chunk.mcpServers,
@@ -242,9 +306,33 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 })
               }
 
-              clearStalePendingQuestion(chunk, this.config.subChatId)
+              // Clear pending questions ONLY when agent has moved on
+              // Don't clear on tool-input-* chunks (still building the question input)
+              // Clear when we get tool-output-* (answer received) or text-delta (agent moved on)
+              const shouldClearOnChunk =
+                chunk.type !== "ask-user-question" &&
+                chunk.type !== "ask-user-question-timeout" &&
+                chunk.type !== "ask-user-question-result" &&
+                !chunk.type.startsWith("tool-input") && // Don't clear while input is being built
+                chunk.type !== "start" &&
+                chunk.type !== "start-step"
+
+              if (shouldClearOnChunk) {
+                const currentMap = appStore.get(pendingUserQuestionsAtom)
+                if (currentMap.has(this.config.subChatId)) {
+                  const newMap = new Map(currentMap)
+                  newMap.delete(this.config.subChatId)
+                  appStore.set(pendingUserQuestionsAtom, newMap)
+                }
+                // NOTE: Do NOT clear expired questions here. After a timeout,
+                // the agent continues and emits new chunks — that's expected.
+                // Expired questions should persist until the user answers,
+                // dismisses, or sends a new message.
+              }
 
               // Handle authentication errors - show Claude login modal
+              // NOTE (mausCode): kept our modal+retry flow; their toast-only
+              // replacement was NOT transplanted.
               if (chunk.type === "auth-error") {
                 // Store the failed message for retry after successful auth
                 // readyToRetry=false prevents immediate retry - modal sets it to true on OAuth success
@@ -359,12 +447,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               try {
                 controller.enqueue(chunk)
               } catch (e) {
-                // CRITICAL: Log when enqueue fails - this could explain missing chunks!
-                console.log(`[SD] R:ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`)
+                // Stream already closed, ignore enqueue failure
               }
 
               if (chunk.type === "finish") {
-                console.log(`[SD] R:FINISH sub=${subId} n=${chunkCount}`)
                 try {
                   controller.close()
                 } catch {
@@ -373,7 +459,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
             },
             onError: (err: Error) => {
-              console.log(`[SD] R:ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`)
               // Track transport errors in Sentry
               Sentry.captureException(err, {
                 tags: {
@@ -390,7 +475,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               controller.error(err)
             },
             onComplete: () => {
-              console.log(`[SD] R:COMPLETE sub=${subId} n=${chunkCount} last=${lastChunkType}`)
               // Note: Don't clear pending questions here - let active-chat.tsx handle it
               // via the stream stop detection effect. Clearing here causes race conditions
               // where sync effect immediately restores from messages.
@@ -405,7 +489,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
         // Handle abort
         options.abortSignal?.addEventListener("abort", () => {
-          console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
           sub.unsubscribe()
           // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
           try {
@@ -422,5 +505,53 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     return null // Not needed for local app
   }
 
+  private extractText(msg: UIMessage | undefined): string {
+    if (!msg) return ""
+    if (msg.parts) {
+      const textParts: string[] = []
+      const fileContents: string[] = []
 
+      for (const p of msg.parts) {
+        const partType = (p as any).type as string
+        if (partType === "text" && (p as any).text) {
+          textParts.push((p as any).text)
+        } else if (partType === "file-content") {
+          // Hidden file content - add to prompt but not displayed in UI
+          const fc = p as any
+          const fileName = fc.filePath?.split("/").pop() || fc.filePath || "file"
+          fileContents.push(`\n--- ${fileName} ---\n${fc.content}`)
+        }
+      }
+
+      // Combine text and file contents
+      return textParts.join("\n") + fileContents.join("")
+    }
+    return ""
+  }
+
+  /**
+   * Extract images from message parts
+   * Looks for parts with type "data-image" that have base64Data
+   */
+  private extractImages(msg: UIMessage | undefined): ImageAttachment[] {
+    if (!msg || !msg.parts) return []
+
+    const images: ImageAttachment[] = []
+
+    for (const part of msg.parts) {
+      // Check for data-image parts with base64 data
+      if (part.type === "data-image" && (part as any).data) {
+        const data = (part as any).data
+        if (data.base64Data && data.mediaType) {
+          images.push({
+            base64Data: data.base64Data,
+            mediaType: data.mediaType,
+            filename: data.filename,
+          })
+        }
+      }
+    }
+
+    return images
+  }
 }

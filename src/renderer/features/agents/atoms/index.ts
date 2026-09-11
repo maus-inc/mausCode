@@ -45,12 +45,34 @@ export const selectedDraftIdAtom = atom<string | null>(null)
 // Set to true when "New Workspace" is clicked
 export const showNewChatFormAtom = atom<boolean>(true)
 
+// Counter that increments every time the user requests a fresh new chat form
+// (e.g. clicks the "+" button or invokes Cmd+N) while already in the new chat view.
+// Used as part of the NewChatForm key to force a remount so the existing draft
+// is preserved (via the unmount cleanup that calls markDraftVisible) and the user
+// gets a clean blank form. Not persisted — resets on reload.
+export const newChatFormResetCounterAtom = atom<number>(0)
+
+// Write-only atom that bumps the reset counter. Use via useSetAtom().
+export const requestNewChatFormResetAtom = atom(null, (get, set) => {
+  set(newChatFormResetCounterAtom, get(newChatFormResetCounterAtom) + 1)
+})
+
 // When true, suppress auto-focus on chat input (e.g. during sidebar keyboard navigation)
 export const suppressInputFocusAtom = atom<boolean>(false)
 
 // Pending mention to insert into the editor from external components (e.g. MCP widget in sidebar)
 // When set, active-chat picks it up, calls editorRef.insertMention(), and resets to null
 export const pendingMentionAtom = atom<FileMentionOption | null>(null)
+
+// Maximum number of sub-chat tabs kept mounted at once.
+//
+// All non-active tabs are rendered with opacity:0 so tab switching is instant.
+// Each mounted tab holds its full message state, tool results, etc. in memory.
+// Under memory pressure the memory-monitor drops this to 1 (active tab only)
+// so finished background tabs release their state. When pressure clears the
+// limit goes back to the default.
+export const DEFAULT_MAX_MOUNTED_TABS = 3
+export const maxMountedTabsAtom = atom<number>(DEFAULT_MAX_MOUNTED_TABS)
 
 // Preview paths storage - stores all preview paths keyed by chatId
 const previewPathsStorageAtom = atomWithStorage<Record<string, string>>(
@@ -138,6 +160,25 @@ export const mobileDeviceAtomFamily = atomFamily((chatId: string) =>
 // Set when generation starts, cleared when onFinish fires
 export const loadingSubChatsAtom = atom<Map<string, string>>(new Map())
 
+// Chats that just completed a Commit + Push from the status card.
+// Persisted to localStorage so the check icon survives app restarts;
+// cleared when the user resumes the chat by sending a message.
+const pushedChatIdsStorageAtom = atomWithStorage<string[]>(
+  "agents:pushedChatIds",
+  [],
+)
+
+type PushedChatIdsUpdate = Set<string> | ((prev: Set<string>) => Set<string>)
+
+export const pushedChatIdsAtom = atom<Set<string>, [PushedChatIdsUpdate], void>(
+  (get) => new Set(get(pushedChatIdsStorageAtom)),
+  (get, set, update) => {
+    const current = new Set(get(pushedChatIdsStorageAtom))
+    const next = typeof update === "function" ? update(current) : update
+    set(pushedChatIdsStorageAtom, Array.from(next))
+  },
+)
+
 // Helper to set loading state
 export const setLoading = (
   setter: (fn: (prev: Map<string, string>) => Map<string, string>) => void,
@@ -204,6 +245,13 @@ export const selectedProjectAtom = atomWithWindowStorage<SelectedProject>(
   { getOnInit: true },
 )
 
+// Per-project last opened chat ID — window-scoped, persisted.
+// Lets us restore the previously focused chat when the user switches back
+// to a project they were working in.
+export const lastChatIdPerProjectAtom = atomWithWindowStorage<
+  Record<string, string>
+>("agents:lastChatIdPerProject", {}, { getOnInit: true })
+
 export const lastSelectedAgentIdAtom = atomWithStorage<string>(
   "agents:lastSelectedAgentId",
   "claude-code",
@@ -220,7 +268,7 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
 
 export const lastSelectedCodexModelIdAtom = atomWithStorage<string>(
   "agents:lastSelectedCodexModelId",
-  "gpt-5.3-codex",
+  "gpt-5.5",
   undefined,
   { getOnInit: true },
 )
@@ -232,6 +280,84 @@ export const lastSelectedCodexThinkingAtom = atomWithStorage<CodexThinkingPrefer
   "high",
   undefined,
   { getOnInit: true },
+)
+
+export const lastSelectedGeminiModelIdAtom = atomWithStorage<string>(
+  "agents:lastSelectedGeminiModelId",
+  "auto-gemini-3",
+  undefined,
+  { getOnInit: true },
+)
+
+const subChatGeminiModelIdsStorageAtom = atomWithStorage<Record<string, string>>(
+  "agents:subChatGeminiModelIds",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const subChatGeminiModelIdAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      if (!subChatId) return get(lastSelectedGeminiModelIdAtom)
+      return (
+        get(subChatGeminiModelIdsStorageAtom)[subChatId] ??
+        get(lastSelectedGeminiModelIdAtom)
+      )
+    },
+    (get, set, newModelId: string) => {
+      if (!subChatId) {
+        set(lastSelectedGeminiModelIdAtom, newModelId)
+        return
+      }
+      const current = get(subChatGeminiModelIdsStorageAtom)
+      if (current[subChatId] === newModelId) return
+      set(subChatGeminiModelIdsStorageAtom, {
+        ...current,
+        [subChatId]: newModelId,
+      })
+    },
+  ),
+)
+
+// ============================================
+// OPENROUTER MODEL SELECTION
+// ============================================
+
+export const lastSelectedOpenRouterModelIdAtom = atomWithStorage<string>(
+  "agents:lastSelectedOpenRouterModelId",
+  "",
+  undefined,
+  { getOnInit: true },
+)
+
+const subChatOpenRouterModelIdsStorageAtom = atomWithStorage<
+  Record<string, string>
+>("agents:subChatOpenRouterModelIds", {}, undefined, { getOnInit: true })
+
+export const subChatOpenRouterModelIdAtomFamily = atomFamily(
+  (subChatId: string) =>
+    atom(
+      (get) => {
+        if (!subChatId) return get(lastSelectedOpenRouterModelIdAtom)
+        return (
+          get(subChatOpenRouterModelIdsStorageAtom)[subChatId] ??
+          get(lastSelectedOpenRouterModelIdAtom)
+        )
+      },
+      (get, set, newModelId: string) => {
+        if (!subChatId) {
+          set(lastSelectedOpenRouterModelIdAtom, newModelId)
+          return
+        }
+        const current = get(subChatOpenRouterModelIdsStorageAtom)
+        if (current[subChatId] === newModelId) return
+        set(subChatOpenRouterModelIdsStorageAtom, {
+          ...current,
+          [subChatId]: newModelId,
+        })
+      },
+    ),
 )
 
 // Storage for per-subChat Claude model selection.
@@ -369,6 +495,7 @@ export const subChatEngineAtomFamily = atomFamily((subChatId: string) =>
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
   opus: "opus",
+  "opus[1m]": "opus[1m]", // Transplanted from erenbertr/1code (Apache-2.0)
   sonnet: "sonnet",
   haiku: "haiku",
 }
@@ -538,6 +665,14 @@ export const agentsSubChatsSidebarModeAtom = atomWithWindowStorage<
   "tabs" | "sidebar"
 >("agents-subchats-mode", "tabs", { getOnInit: true })
 
+// Track which workspaces are expanded in the unified sidebar tree
+// Persisted per-window so each Electron window has its own expansion state
+export const expandedWorkspaceIdsAtom = atomWithWindowStorage<string[]>(
+  "agents:expandedWorkspaceIds",
+  [],
+  { getOnInit: true },
+)
+
 // Sub-chats sidebar width (left side of chat area)
 export const agentsSubChatsSidebarWidthAtom = atomWithStorage<number>(
   "agents-subchats-sidebar-width",
@@ -549,6 +684,11 @@ export const agentsSubChatsSidebarWidthAtom = atomWithStorage<number>(
 // Track chats with unseen changes (finished streaming but user hasn't opened them)
 // Updated by onFinish callback in Chat instances
 export const agentsUnseenChangesAtom = atom<Set<string>>(new Set<string>())
+
+// Track chats whose latest assistant message ends with a text question (awaiting
+// the user's answer). Persists across views — only cleared when the user sends a
+// new message in that chat. Used for the sidebar orange "question" indicator.
+export const chatsAwaitingAnswerAtom = atom<Set<string>>(new Set<string>())
 
 // Current todos state per sub-chat
 // Syncs the first (creation) todo tool with subsequent updates
@@ -1027,6 +1167,16 @@ export const workspaceDiffCacheAtomFamily = atomFamily((chatId: string) =>
       })
     },
   ),
+)
+
+// Chat font size preference (persisted to localStorage)
+// Controls body text size in assistant responses and user message bubbles
+export type ChatFontSize = 12 | 13 | 14 | 15 | 16
+export const chatFontSizeAtom = atomWithStorage<ChatFontSize>(
+  "preferences:chat-font-size",
+  14, // Default matches previous hardcoded text-sm (14px)
+  undefined,
+  { getOnInit: true },
 )
 
 // Show raw JSON for each message in chat (dev only)

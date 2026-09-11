@@ -42,6 +42,10 @@ interface SubChatStatusCardProps {
   onStop?: () => void
   /** Whether there's a queue card above this one - affects border radius */
   hasQueueCardAbove?: boolean
+  /** Optional handler for commit + push action; receives the file paths to commit */
+  onCommitAndPush?: (filePaths: string[]) => void
+  /** Whether commit + push is currently in progress */
+  isCommittingAndPushing?: boolean
 }
 
 export const SubChatStatusCard = memo(function SubChatStatusCard({
@@ -53,6 +57,8 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   worktreePath,
   onStop,
   hasQueueCardAbove = false,
+  onCommitAndPush,
+  isCommittingAndPushing = false,
 }: SubChatStatusCardProps) {
   const isBusy = isStreaming || isCompacting
   const [isExpanded, setIsExpanded] = useState(false)
@@ -233,6 +239,23 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
               className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"
             >
               Review
+            </Button>
+          )}
+
+          {/* Commit + Push button */}
+          {!isBusy && uncommittedFiles.length > 0 && onCommitAndPush && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isCommittingAndPushing}
+              onClick={(e) => {
+                e.stopPropagation()
+                const filePaths = uncommittedFiles.map((f) => f.displayPath)
+                onCommitAndPush(filePaths)
+              }}
+              className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"
+            >
+              {isCommittingAndPushing ? "Committing…" : "Commit + Push"}
             </Button>
           )}
         </div>

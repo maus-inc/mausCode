@@ -21,7 +21,7 @@ interface FileAgent {
   tools?: string[]
   disallowedTools?: string[]
   model?: "sonnet" | "opus" | "haiku" | "inherit"
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
   path: string
 }
 
@@ -132,7 +132,7 @@ function AgentDetail({
             <SelectContent>
               <SelectItem value="inherit">Inherit from parent</SelectItem>
               <SelectItem value="sonnet">Sonnet 4.6</SelectItem>
-              <SelectItem value="opus">Opus 4.6</SelectItem>
+              <SelectItem value="opus">Opus 4.8</SelectItem>
               <SelectItem value="haiku">Haiku 4.5</SelectItem>
             </SelectContent>
           </Select>
@@ -251,7 +251,7 @@ function CreateAgentForm({
             <SelectContent>
               <SelectItem value="inherit">Inherit from parent</SelectItem>
               <SelectItem value="sonnet">Sonnet 4.6</SelectItem>
-              <SelectItem value="opus">Opus 4.6</SelectItem>
+              <SelectItem value="opus">Opus 4.8</SelectItem>
               <SelectItem value="haiku">Haiku 4.5</SelectItem>
             </SelectContent>
           </Select>
@@ -381,7 +381,7 @@ export function AgentsCustomAgentsTab() {
         model: data.model,
         tools: agent.tools,
         disallowedTools: agent.disallowedTools,
-        source: agent.source,
+        source: agent.source as "user" | "project",
         cwd: selectedProject?.path,
       })
       toast.success("Agent saved", { description: agent.name })

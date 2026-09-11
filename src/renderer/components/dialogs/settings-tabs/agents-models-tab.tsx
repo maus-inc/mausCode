@@ -1,3 +1,10 @@
+/**
+ * NOTE (transplant): system-managed account display, Gemini/OpenRouter
+ * account sections + key handlers, provider icons, and the extended model
+ * list were transplanted from erenbertr/1code (Apache-2.0). Their
+ * NativeEndpointsSection deletion and modal-to-local-CLI setup replacement
+ * were NOT taken (ours kept).
+ */
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronDown, MoreHorizontal, Plus, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -13,10 +20,25 @@ import {
   hiddenModelsAtom,
   normalizeCodexApiKey,
   openaiApiKeyAtom,
+  pinnedOpenRouterModelsAtom,
   type CustomClaudeConfig,
 } from "../../../lib/atoms"
 import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
-import { CLAUDE_MODELS, CODEX_MODELS } from "../../../features/agents/lib/models"
+import { CLAUDE_MODELS, CODEX_MODELS, GEMINI_MODELS } from "../../../features/agents/lib/models"
+import { OpenRouterModelBrowser } from "./openrouter-model-browser"
+
+const GeminiIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M12 2L13.09 8.26L20 9.27L15 14.14L16.18 21.02L12 17.77L7.82 21.02L9 14.14L4 9.27L10.91 8.26L12 2Z" />
+  </svg>
+)
+
+const OpenRouterIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M3 12c4.5 0 4.5-6 9-6s4.5 6 9 6" />
+    <path d="M3 12c4.5 0 4.5 6 9 6s4.5-6 9-6" />
+  </svg>
+)
 import { trpc } from "../../../lib/trpc"
 import { Badge } from "../../ui/badge"
 import { Button } from "../../ui/button"
@@ -72,6 +94,7 @@ function AccountRow({
     displayName: string | null
     email: string | null
     connectedAt: string | null
+    source?: "db" | "legacy" | "system"
   }
   isActive: boolean
   onSetActive: () => void
@@ -79,6 +102,15 @@ function AccountRow({
   onRemove: () => void
   isLoading: boolean
 }) {
+  const isSystemManaged = account.source === "system"
+  const subtitle = isSystemManaged
+    ? "Connected via Claude Code CLI"
+    : account.email
+      ? account.email
+      : account.connectedAt
+        ? `Connected ${new Date(account.connectedAt).toLocaleDateString(undefined, { dateStyle: "short" })}`
+        : null
+
   return (
     <div className="flex items-center justify-between p-3 hover:bg-muted/50">
       <div className="flex items-center gap-3">
@@ -86,22 +118,14 @@ function AccountRow({
           <div className="text-sm font-medium">
             {account.displayName || "Anthropic Account"}
           </div>
-          {account.email && (
-            <div className="text-xs text-muted-foreground">{account.email}</div>
-          )}
-          {!account.email && account.connectedAt && (
-            <div className="text-xs text-muted-foreground">
-              Connected{" "}
-              {new Date(account.connectedAt).toLocaleDateString(undefined, {
-                dateStyle: "short",
-              })}
-            </div>
+          {subtitle && (
+            <div className="text-xs text-muted-foreground">{subtitle}</div>
           )}
         </div>
       </div>
 
       <div className="flex items-center gap-2">
-        {!isActive && (
+        {!isActive && !isSystemManaged && (
           <Button
             size="sm"
             variant="ghost"
@@ -116,22 +140,24 @@ function AccountRow({
             Active
           </Badge>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost" className="h-7 w-7">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
-            <DropdownMenuItem
-              className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
-              onClick={onRemove}
-            >
-              Remove
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!isSystemManaged && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-7 w-7">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
+              <DropdownMenuItem
+                className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
+                onClick={onRemove}
+              >
+                Remove
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   )
@@ -397,6 +423,48 @@ export function AgentsModelsTab() {
   const codexLogoutMutation = trpc.codex.logout.useMutation()
   const trpcUtils = trpc.useUtils()
 
+  // Gemini API key state (encrypted via Electron safeStorage; never touches localStorage)
+  const { data: geminiAuth, isLoading: isGeminiAuthLoading } =
+    trpc.gemini.getAuthStatus.useQuery()
+  const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
+  const setGeminiKeyMutation = trpc.gemini.setApiKey.useMutation()
+  const clearGeminiKeyMutation = trpc.gemini.clearApiKey.useMutation()
+  const [geminiApiKey, setGeminiApiKey] = useState("")
+  const [isSavingGeminiKey, setIsSavingGeminiKey] = useState(false)
+  const hasGeminiKey = geminiAuth?.ok === true && geminiAuth.hasKey === true
+  const hasGeminiCliAuth = Boolean(
+    geminiCliStatus?.installed && geminiCliStatus.loggedIn,
+  )
+  const isGeminiConnected = hasGeminiKey || hasGeminiCliAuth
+  const geminiMaskedKey =
+    geminiAuth?.ok === true && geminiAuth.hasKey === true
+      ? geminiAuth.maskedKey
+      : ""
+
+  // OpenRouter API key state
+  const { data: openRouterAuth, isLoading: isOpenRouterAuthLoading } =
+    trpc.openrouter.getAuthStatus.useQuery()
+  const setOpenRouterKeyMutation = trpc.openrouter.setApiKey.useMutation()
+  const clearOpenRouterKeyMutation = trpc.openrouter.clearApiKey.useMutation()
+  const [openRouterApiKey, setOpenRouterApiKey] = useState("")
+  const [isSavingOpenRouterKey, setIsSavingOpenRouterKey] = useState(false)
+  const hasOpenRouterKey =
+    openRouterAuth?.ok === true && openRouterAuth.hasKey === true
+  const openRouterMaskedKey =
+    openRouterAuth?.ok === true && openRouterAuth.hasKey === true
+      ? openRouterAuth.maskedKey
+      : ""
+  const pinnedOpenRouterModels = useAtomValue(pinnedOpenRouterModelsAtom)
+  const { data: openRouterCatalog } = trpc.openrouter.listModels.useQuery(
+    undefined,
+    {
+      enabled: hasOpenRouterKey,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  )
+
   useEffect(() => {
     setModel(storedConfig.model)
     setBaseUrl(storedConfig.baseUrl)
@@ -563,6 +631,89 @@ export function AgentsModelsTab() {
     }
   }
 
+  const handleGeminiApiKeyBlur = async () => {
+    const trimmed = geminiApiKey.trim()
+    if (!trimmed) return
+    if (!trimmed.startsWith("AIza")) {
+      toast.error("Invalid Gemini API key format. Key should start with 'AIza'")
+      setGeminiApiKey("")
+      return
+    }
+    setIsSavingGeminiKey(true)
+    try {
+      await setGeminiKeyMutation.mutateAsync({ apiKey: trimmed })
+      await trpcUtils.gemini.getAuthStatus.invalidate()
+      setGeminiApiKey("")
+      toast.success("Gemini API key saved")
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to save Gemini API key"
+      toast.error(message)
+    } finally {
+      setIsSavingGeminiKey(false)
+    }
+  }
+
+  const handleRemoveGeminiKey = async () => {
+    setIsSavingGeminiKey(true)
+    try {
+      await clearGeminiKeyMutation.mutateAsync()
+      await trpcUtils.gemini.getAuthStatus.invalidate()
+      setGeminiApiKey("")
+      toast.success("Gemini API key removed")
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to remove Gemini API key"
+      toast.error(message)
+    } finally {
+      setIsSavingGeminiKey(false)
+    }
+  }
+
+  const handleOpenRouterApiKeyBlur = async () => {
+    const trimmed = openRouterApiKey.trim()
+    if (!trimmed) return
+    if (!trimmed.startsWith("sk-or-")) {
+      toast.error("Invalid OpenRouter API key format. Key should start with 'sk-or-'")
+      setOpenRouterApiKey("")
+      return
+    }
+    setIsSavingOpenRouterKey(true)
+    try {
+      await setOpenRouterKeyMutation.mutateAsync({ apiKey: trimmed })
+      await trpcUtils.openrouter.getAuthStatus.invalidate()
+      await trpcUtils.openrouter.listModels.invalidate()
+      setOpenRouterApiKey("")
+      toast.success("OpenRouter API key saved")
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to save OpenRouter API key"
+      toast.error(message)
+    } finally {
+      setIsSavingOpenRouterKey(false)
+    }
+  }
+
+  const handleRemoveOpenRouterKey = async () => {
+    setIsSavingOpenRouterKey(true)
+    try {
+      await clearOpenRouterKeyMutation.mutateAsync()
+      await trpcUtils.openrouter.getAuthStatus.invalidate()
+      setOpenRouterApiKey("")
+      toast.success("OpenRouter API key removed")
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to remove OpenRouter API key"
+      toast.error(message)
+    } finally {
+      setIsSavingOpenRouterKey(false)
+    }
+  }
+
   const handleSaveOpenAI = async () => {
     if (trimmedOpenAIKey === storedOpenAIKey) return // No change
     if (trimmedOpenAIKey && !trimmedOpenAIKey.startsWith("sk-")) {
@@ -595,15 +746,36 @@ export function AgentsModelsTab() {
 
   // All models merged into one list for the top section
   const allModels = useMemo(() => {
-    const items: { id: string; name: string; provider: "claude" | "codex" }[] = []
+    const items: {
+      id: string
+      name: string
+      provider: "claude" | "codex" | "gemini" | "openrouter"
+    }[] = []
     for (const m of CLAUDE_MODELS) {
       items.push({ id: m.id, name: `${m.name} ${m.version}`, provider: "claude" })
     }
     for (const m of CODEX_MODELS) {
       items.push({ id: m.id, name: m.name, provider: "codex" })
     }
+    for (const m of GEMINI_MODELS) {
+      items.push({ id: m.id, name: m.name, provider: "gemini" })
+    }
+    if (hasOpenRouterKey && pinnedOpenRouterModels.length > 0) {
+      const catalogIndex = new Map(
+        openRouterCatalog?.available
+          ? openRouterCatalog.models.map((m) => [m.id, m.name] as const)
+          : [],
+      )
+      for (const id of pinnedOpenRouterModels) {
+        items.push({
+          id,
+          name: catalogIndex.get(id) ?? id,
+          provider: "openrouter",
+        })
+      }
+    }
     return items
-  }, [])
+  }, [hasOpenRouterKey, pinnedOpenRouterModels, openRouterCatalog])
 
   const [modelSearch, setModelSearch] = useState("")
   const filteredModels = useMemo(() => {
@@ -652,8 +824,12 @@ export function AgentsModelsTab() {
                     <span className="text-sm font-medium">{m.name}</span>
                     {m.provider === "claude" ? (
                       <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    ) : (
+                    ) : m.provider === "codex" ? (
                       <CodexIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : m.provider === "gemini" ? (
+                      <GeminiIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <OpenRouterIcon className="h-3.5 w-3.5 text-muted-foreground" />
                     )}
                   </div>
                   <Switch
@@ -759,6 +935,124 @@ export function AgentsModelsTab() {
             </>
           )}
         </div>
+      </div>
+
+      {/* Gemini Account */}
+      <div className="space-y-2">
+        <div className="pb-2 flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-medium text-foreground">
+              Gemini Account
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              {hasGeminiKey
+                ? `API key stored encrypted via OS keychain · ${geminiMaskedKey}`
+                : hasGeminiCliAuth
+                  ? `Gemini CLI connected via ${geminiCliStatus?.authSource ?? "local auth"}`
+                  : "Connect a Google AI Studio API key or run `gemini` to sign in"}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="flex items-center justify-between gap-6 p-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">Gemini API Key</Label>
+                {isGeminiConnected && (
+                  <Badge variant="secondary" className="text-xs">
+                    Active
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Gemini CLI OAuth is supported; an API key is optional
+              </p>
+            </div>
+            <div className="flex-shrink-0 w-80 flex items-center gap-2">
+              <Input
+                type="password"
+                value={geminiApiKey}
+                onChange={(e) => setGeminiApiKey(e.target.value)}
+                onBlur={handleGeminiApiKeyBlur}
+                className="w-full font-mono"
+                placeholder={hasGeminiKey ? "•••••••••••••" : "AIza..."}
+                disabled={isSavingGeminiKey || isGeminiAuthLoading}
+              />
+              {hasGeminiKey && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => void handleRemoveGeminiKey()}
+                  disabled={isSavingGeminiKey}
+                  aria-label="Remove Gemini API key"
+                  className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* OpenRouter Account */}
+      <div className="space-y-2">
+        <div className="pb-2 flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-medium text-foreground">
+              OpenRouter Account
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              {hasOpenRouterKey
+                ? `API key stored encrypted via OS keychain · ${openRouterMaskedKey}`
+                : "Connect an OpenRouter API key (openrouter.ai/keys)"}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="flex items-center justify-between gap-6 p-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">OpenRouter API Key</Label>
+                {hasOpenRouterKey && (
+                  <Badge variant="secondary" className="text-xs">
+                    Active
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pay-as-you-go access to 200+ models
+              </p>
+            </div>
+            <div className="flex-shrink-0 w-80 flex items-center gap-2">
+              <Input
+                type="password"
+                value={openRouterApiKey}
+                onChange={(e) => setOpenRouterApiKey(e.target.value)}
+                onBlur={handleOpenRouterApiKeyBlur}
+                className="w-full font-mono"
+                placeholder={hasOpenRouterKey ? "•••••••••••••" : "sk-or-..."}
+                disabled={isSavingOpenRouterKey || isOpenRouterAuthLoading}
+              />
+              {hasOpenRouterKey && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => void handleRemoveOpenRouterKey()}
+                  disabled={isSavingOpenRouterKey}
+                  aria-label="Remove OpenRouter API key"
+                  className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {hasOpenRouterKey && <OpenRouterModelBrowser />}
       </div>
 
       {/* ===== API Keys Section (Collapsible) ===== */}

@@ -341,6 +341,41 @@ function wouldExceedStorageLimit(
   return existingSize + newSize > MAX_DRAFT_STORAGE_BYTES
 }
 
+function draftUpdatedAt(value: DraftContent | NewChatDraft): number {
+  return typeof value.updatedAt === "number" ? value.updatedAt : 0
+}
+
+/**
+ * Evict oldest drafts (by updatedAt, excluding `keepKey`) from `drafts` until
+ * `newDraft` would fit under MAX_DRAFT_STORAGE_BYTES. Mutates `drafts`.
+ *
+ * Falls back to keeping just the new draft if everything else combined still
+ * doesn't leave room (e.g. attachments alone exceed the budget).
+ */
+function evictOldestDraftsToFit(
+  drafts: GlobalDraftsRaw,
+  newDraft: DraftContent | NewChatDraft,
+  keepKey: string
+): void {
+  const newSize = estimateDraftSize(newDraft)
+
+  // Sort other drafts oldest-first; drop them one by one.
+  const evictable = Object.entries(drafts)
+    .filter(([k]) => k !== keepKey)
+    .sort(([, a], [, b]) => draftUpdatedAt(a) - draftUpdatedAt(b))
+
+  for (const [key] of evictable) {
+    const currentSize = JSON.stringify(drafts).length * 2
+    if (currentSize + newSize <= MAX_DRAFT_STORAGE_BYTES) return
+    delete drafts[key]
+  }
+
+  // Still doesn't fit — give the new draft a clean slate. This only happens
+  // when the new draft alone is bigger than MAX_DRAFT_STORAGE_BYTES, which is
+  // a sign the attachment is enormous; the actual write below may throw, and
+  // saveSubChatDraftWithAttachments handles that as "save_failed".
+}
+
 /**
  * Convert blob URL to base64 data
  */
@@ -606,19 +641,12 @@ export async function saveSubChatDraftWithAttachments(
     ...(draftTextContexts.length > 0 && { textContexts: draftTextContexts }),
   }
 
-  // Check storage limits before saving
+  // Make room for the new draft (text + attachments) by evicting the oldest
+  // OTHER drafts until it fits. We never drop attachments from the draft the
+  // user is currently editing — that's why the silent "skipping attachment
+  // persistence" fallback was a problem.
   if (wouldExceedStorageLimit(globalDrafts, draft)) {
-    console.warn(
-      "[drafts] Storage limit would be exceeded, skipping attachment persistence"
-    )
-    // Save without attachments as fallback
-    globalDrafts[key] = { text, updatedAt: Date.now() }
-    try {
-      saveGlobalDrafts(globalDrafts)
-      return { success: true, error: "attachments_skipped" }
-    } catch {
-      return { success: false, error: "storage_full" }
-    }
+    evictOldestDraftsToFit(globalDrafts, draft, key)
   }
 
   globalDrafts[key] = draft

@@ -14,7 +14,12 @@ import { utf8ToBase64 } from "../utils/base64"
 import type { AgentQueueItem } from "../lib/queue-utils"
 
 // Delay between processing queue items (ms)
-const QUEUE_PROCESS_DELAY = 1000
+const QUEUE_PROCESS_DELAY = 7000
+
+// Periodic safety re-check interval (ms) — catches missed status transitions
+// (e.g., race conditions where streaming→ready transition doesn't fire the
+// status subscription, leaving the queue stuck waiting).
+const QUEUE_SAFETY_CHECK_INTERVAL = 2000
 
 /**
  * Global queue processor component.
@@ -184,15 +189,15 @@ export function QueueProcessor() {
       }
     }
 
-    // Schedule processing for a sub-chat with delay
+    // Schedule processing for a sub-chat with delay.
+    // If a timer is already pending for this sub-chat, leave it alone so that
+    // repeated checkAllQueues calls (from the safety interval or store
+    // subscriptions) cannot starve a long delay by resetting it on every tick.
     const scheduleProcessing = (subChatId: string) => {
-      // Clear any existing timer for this sub-chat
-      const existingTimer = timersRef.current.get(subChatId)
-      if (existingTimer) {
-        clearTimeout(existingTimer)
+      if (timersRef.current.has(subChatId)) {
+        return
       }
 
-      // Schedule new processing
       const timer = setTimeout(() => {
         timersRef.current.delete(subChatId)
         processQueue(subChatId)
@@ -237,10 +242,16 @@ export function QueueProcessor() {
     // Initial check
     checkAllQueues()
 
+    // Periodic safety re-check: catches missed status transitions that could
+    // leave the queue stalled (e.g., subscription edge cases on stream end,
+    // component remounts mid-stream, or transports that don't fire onFinish).
+    const safetyInterval = setInterval(checkAllQueues, QUEUE_SAFETY_CHECK_INTERVAL)
+
     // Cleanup
     return () => {
       unsubscribeQueue()
       unsubscribeStatus()
+      clearInterval(safetyInterval)
 
       // Clear all timers
       for (const timer of timersRef.current.values()) {

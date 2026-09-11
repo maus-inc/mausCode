@@ -1,5 +1,13 @@
 "use client"
 
+/**
+ * NOTE (transplant): Gemini/OpenRouter provider wiring (model atoms, auth
+ * queries, selector props, placeholder names) was transplanted from
+ * erenbertr/1code (Apache-2.0). Their engine-toggle removal was NOT taken —
+ * this tree keeps the native/legacy switch (locked to legacy for the new
+ * providers, which the native runtime cannot serve).
+ */
+
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronDown, RefreshCw, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -49,6 +57,7 @@ import {
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
+  pinnedOpenRouterModelsAtom,
   selectedOllamaModelAtom,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
@@ -58,12 +67,16 @@ import { cn } from "../../../lib/utils"
 import {
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedGeminiModelIdAtom,
   lastSelectedModelIdAtom,
+  lastSelectedOpenRouterModelIdAtom,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
   subChatEngineAtomFamily,
   type SubChatEngine,
+  subChatGeminiModelIdAtomFamily,
   subChatModelIdAtomFamily,
+  subChatOpenRouterModelIdAtomFamily,
   subChatModeAtomFamily,
   getNextMode,
   type AgentMode,
@@ -72,7 +85,10 @@ import {
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { agentChatStore } from "../stores/agent-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
-import { AgentModelSelector } from "../components/agent-model-selector"
+import {
+  AgentModelSelector,
+  type AgentProviderId,
+} from "../components/agent-model-selector"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import {
@@ -82,6 +98,7 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  GEMINI_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
@@ -187,7 +204,7 @@ export interface ChatInputAreaProps {
   // Context
   subChatId: string
   parentChatId: string
-  provider?: "claude-code" | "codex"
+  provider?: AgentProviderId
   teamId?: string
   repository?: string
   sandboxId?: string
@@ -204,9 +221,9 @@ export interface ChatInputAreaProps {
   // Callback to send message with question answer (Enter sends immediately, not to queue)
   onSubmitWithQuestionAnswer?: () => void
   // Callback to switch provider for brand new (empty) sub-chats
-  onProviderChange?: (provider: "claude-code" | "codex") => void
+  onProviderChange?: (provider: AgentProviderId) => void
   // Callback to continue chat with a different provider (creates new sub-chat with history)
-  onContinueWithProvider?: (provider: "claude-code" | "codex") => void
+  onContinueWithProvider?: (provider: AgentProviderId) => void
   // Whether this sub-chat tab is the active/visible one (prevents window-level hotkeys in background tabs)
   isActive?: boolean
 }
@@ -479,6 +496,45 @@ export const ChatInputArea = memo(function ChatInputArea({
   const setLastSelectedModelId = useSetAtom(lastSelectedModelIdAtom)
   const setLastSelectedCodexModelId = useSetAtom(lastSelectedCodexModelIdAtom)
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
+  const subChatGeminiModelIdAtom = useMemo(
+    () => subChatGeminiModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatGeminiModelId, setSelectedSubChatGeminiModelId] = useAtom(
+    subChatGeminiModelIdAtom,
+  )
+  const setLastSelectedGeminiModelId = useSetAtom(lastSelectedGeminiModelIdAtom)
+  const { data: geminiAuth } = trpc.gemini.getAuthStatus.useQuery()
+  const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
+  const isGeminiConnected =
+    (geminiAuth?.ok === true && geminiAuth.hasKey === true) ||
+    Boolean(geminiCliStatus?.installed && geminiCliStatus.loggedIn)
+
+  // OpenRouter
+  const subChatOpenRouterModelIdAtom = useMemo(
+    () => subChatOpenRouterModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [
+    selectedSubChatOpenRouterModelId,
+    setSelectedSubChatOpenRouterModelId,
+  ] = useAtom(subChatOpenRouterModelIdAtom)
+  const setLastSelectedOpenRouterModelId = useSetAtom(
+    lastSelectedOpenRouterModelIdAtom,
+  )
+  const { data: openRouterAuth } = trpc.openrouter.getAuthStatus.useQuery()
+  const isOpenRouterConnected =
+    openRouterAuth?.ok === true && openRouterAuth.hasKey === true
+  const pinnedOpenRouterModels = useAtomValue(pinnedOpenRouterModelsAtom)
+  const { data: openRouterCatalog } = trpc.openrouter.listModels.useQuery(
+    undefined,
+    {
+      enabled: isOpenRouterConnected && pinnedOpenRouterModels.length > 0,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  )
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
   const availableModels = useAvailableModels()
   const [selectedModel, setSelectedModel] = useState(
@@ -503,8 +559,6 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatModelId(selectedModel.id)
   }, [provider, selectedModel?.id, setSelectedSubChatModelId])
 
-  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
-  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
   const hiddenModels = useAtomValue(hiddenModelsAtom)
 
   // Connection status for providers
@@ -514,13 +568,42 @@ export const ChatInputArea = memo(function ChatInputArea({
   const { data: claudeCodeIntegration } =
     trpc.claudeCode.getIntegration.useQuery()
   const codexUiModels = useMemo(
-    () => {
-      let models = hasAppCodexApiKey
-        ? CODEX_MODELS.filter((model) => model.id !== "gpt-5.3-codex")
-        : CODEX_MODELS
-      return models.filter((model) => !hiddenModels.includes(model.id))
-    },
-    [hasAppCodexApiKey, hiddenModels],
+    () => CODEX_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const geminiUiModels = useMemo(
+    () => GEMINI_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const openRouterUiModels = useMemo(() => {
+    if (!isOpenRouterConnected) return []
+    const catalogIndex = new Map(
+      openRouterCatalog?.available
+        ? openRouterCatalog.models.map((m) => [m.id, m.name] as const)
+        : [],
+    )
+    return pinnedOpenRouterModels
+      .filter((id) => !hiddenModels.includes(id))
+      .map((id) => ({ id, name: catalogIndex.get(id) ?? id }))
+  }, [isOpenRouterConnected, openRouterCatalog, pinnedOpenRouterModels, hiddenModels])
+  const selectedOpenRouterModel = useMemo(() => {
+    if (openRouterUiModels.length === 0) {
+      return { id: "", name: "" }
+    }
+    return (
+      openRouterUiModels.find(
+        (m) => m.id === selectedSubChatOpenRouterModelId,
+      ) ||
+      openRouterUiModels[0] ||
+      { id: "", name: "" }
+    )
+  }, [openRouterUiModels, selectedSubChatOpenRouterModelId])
+  const selectedGeminiModel = useMemo(
+    () =>
+      geminiUiModels.find((m) => m.id === selectedSubChatGeminiModelId) ||
+      geminiUiModels[0] ||
+      GEMINI_MODELS[0]!,
+    [geminiUiModels, selectedSubChatGeminiModelId],
   )
   const selectedCodexModel = useMemo(
     () =>
@@ -592,19 +675,20 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Determine current Ollama model (selected or recommended)
   const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
 
-  // Debug: log selected Ollama model
-  useEffect(() => {
-    if (availableModels.isOffline) {
-      console.log(`[Ollama UI] selectedOllamaModel atom value: ${selectedOllamaModel || "(null)"}, currentOllamaModel: ${currentOllamaModel}`)
-    }
-  }, [selectedOllamaModel, currentOllamaModel, availableModels.isOffline])
-
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
 
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
       return selectedCodexModel.name
+    }
+
+    if (provider === "gemini") {
+      return selectedGeminiModel.name
+    }
+
+    if (provider === "openrouter") {
+      return selectedOpenRouterModel.name || "Select model"
     }
 
     if (availableModels.isOffline && availableModels.hasOllama) {
@@ -623,6 +707,8 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [
     provider,
     selectedCodexModel.name,
+    selectedGeminiModel.name,
+    selectedOpenRouterModel.name,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
@@ -699,8 +785,13 @@ export const ChatInputArea = memo(function ChatInputArea({
   )
   const [engine, setEngine] = useAtom(subChatEngineAtom)
   // Native engine supports local claude-code chats only (Codex stays on the
-  // CLI adapter by WONTFIX decision; no remote sandboxes yet)
-  const canSwitchEngine = canSwitchProvider && provider !== "codex"
+  // CLI adapter by WONTFIX decision; Gemini/OpenRouter use their own
+  // transports; no remote sandboxes yet)
+  const canSwitchEngine =
+    canSwitchProvider &&
+    provider !== "codex" &&
+    provider !== "gemini" &&
+    provider !== "openrouter"
 
   const setSessionInfo = useSetAtom(sessionInfoAtom)
   const switchEngine = useCallback((next: SubChatEngine) => {
@@ -805,7 +896,6 @@ export const ChatInputArea = memo(function ChatInputArea({
 
       // Don't transcribe very short recordings (likely accidental clicks)
       if (blob.size < 1000) {
-        console.log("[VoiceInput] Recording too short, ignoring")
         if (voiceMountedRef.current) setIsTranscribing(false)
         return
       }
@@ -1180,8 +1270,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        // @ts-expect-error - Electron's webUtils API
-        const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
+        const filePath: string | undefined = (window as any).webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
 
         let mentionId: string
         let mentionPath: string
@@ -1648,6 +1737,28 @@ export const ChatInputArea = memo(function ChatInputArea({
                           setLastSelectedCodexThinking(thinking)
                         },
                         isConnected: codexOnboardingCompleted,
+                      }}
+                      gemini={{
+                        models: geminiUiModels,
+                        selectedModelId: selectedGeminiModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = geminiUiModels.find((m) => m.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatGeminiModelId(model.id)
+                          setLastSelectedGeminiModelId(model.id)
+                        },
+                        isConnected: isGeminiConnected,
+                      }}
+                      openrouter={{
+                        models: openRouterUiModels,
+                        selectedModelId: selectedOpenRouterModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = openRouterUiModels.find((m) => m.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatOpenRouterModelId(model.id)
+                          setLastSelectedOpenRouterModelId(model.id)
+                        },
+                        isConnected: isOpenRouterConnected,
                       }}
                     />
                   </div>
