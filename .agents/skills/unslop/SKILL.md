@@ -1,147 +1,68 @@
 ---
 name: unslop
-description: >
-  Humanize LLM output so it reads like a careful human wrote it. Subtracts AI-isms (sycophancy, tricolons,
-  em-dash overuse, "delve"/"tapestry"/"testament", hedging stacks, tidy five-paragraph shapes), engineers
-  burstiness and calibrated uncertainty, and preserves technical accuracy. Supports intensity levels:
-  subtle, balanced (default), full, voice-match, anti-detector.
-  Use when user says "humanize this", "make this sound human", "de-slop this", "rewrite without AI tone",
-  "match my voice", "less robotic", or invokes /unslop. Also auto-triggers when text-quality is requested.
+description: Cut AI tells from any writing. Must always apply.
+disable-model-invocation: true
 ---
 
-Write like a careful human. All technical substance stays exact. Only AI-slop dies.
+# Unslop
 
-## Persistence
+Edit text to remove AI patterns.
 
-ACTIVE EVERY RESPONSE. No revert after many turns. No drift back into AI-template English.
-Off only: "stop unslop" / "normal mode" / "robotic mode".
-Default: balanced. Switch: /unslop subtle|balanced|full|voice-match|anti-detector.
+## Process
 
-## Rules
+1. Scan for the patterns below.
+2. Rewrite. Preserve meaning, match intended tone.
+3. Self-audit: "What makes this obviously AI generated?" Fix remaining tells.
 
-Drop:
-- Sycophancy: "Great question!", "I'd be happy to help", "Certainly!", "Absolutely!", "Sure!", "What a fascinating..."
-- Stock vocab: delve, tapestry, testament, navigate (figurative), embark, journey (figurative), pivotal, paramount, nuanced (when meaningless), robust (as filler), seamless, leverage (as verb when "use" works), holistic, comprehensive (when "complete" works), realm, landscape (figurative), cutting-edge, state-of-the-art (as filler)
-- Hedging stacks: "It's important to note that", "It's worth mentioning", "Generally speaking", "In essence", "At its core", "It should be noted that"
-- Tricolon padding: "X, Y, and Z" structures stacked three deep. Use two when two suffice. Use one when one suffices.
-- Tidy five-paragraph essay shapes. Real prose has uneven paragraph length.
-- Em-dash overuse. Hard cap: no more than two em-dashes per paragraph. If a sentence needs three, rewrite with commas or periods.
-- Bullet-soup. If three bullets read the same, merge them into one sentence.
-- Performative balance: every claim doesn't need a "however".
+## Patterns to detect and fix
 
-Keep:
-- Technical terms exact. Errors quoted exact. Code blocks unchanged.
-- Real uncertainty when it exists. Use "I think", "probably", "seems", "in my experience" when honest. Linguistic verbal uncertainty outperforms numeric confidence elicitation by ~10% AUROC and ECE in arXiv 2505.23854.
-- Concrete nouns over abstract ones. Specific examples over general ones.
-- Voice. If the user has shown a voice, match it.
+Rule numbers are stable ids that other skills cite. A removed rule leaves a gap.
 
-Engineer burstiness. Mix sentence lengths deliberately. Short. Then long enough to develop one specific thought with a clause that earns its place. Then short again.
+### Content
 
-Pattern: [concrete observation]. [implication or "why"]. [what to do or what's next].
+3. **Superficial -ing phrases.** "highlighting...", "ensuring...", "reflecting...", "showcasing...", "fostering...". Delete or expand with real sources.
+5. **Vague attributions.** "Experts believe", "Industry reports suggest", "Some critics argue". Name the source or delete.
 
-Not: "Sure! That's a great question. There are several factors to consider when approaching this problem. Firstly, it's important to note that performance optimization is a nuanced topic..."
-Yes: "The bug is in the auth middleware. Token expiry uses `<` instead of `<=`. Replace it on L42."
+### Language
 
-## Principles (research-backed)
+7. **AI vocabulary.** Additionally, crucial, delve, enduring, enhance, fostering, garner, interplay, intricate, landscape (abstract), pivotal, showcase, tapestry (abstract), testament, underscore, vibrant. Replace with plain words.
+8. **Fancy ways to say "is".** "serves as", "stands as", "boasts", "features". Just say "is" or "has".
+9. **"Not just X, but Y."** State the point directly instead.
+10. **Rule of three.** Forcing ideas into groups of three. Use the natural number.
+11. **Synonym cycling.** Protagonist, main character, central figure, hero all in one paragraph. Pick one, repeat it.
+12. **False ranges.** "from X to Y" where X and Y aren't on a meaningful scale. List topics directly.
 
-Five framing rules that override the cosmetic ones when they conflict:
+### Style
 
-1. **Subtract, don't add.** AI tone is a residue from post-training, not a layer you add with warmth. Remove slop; never "warm up" output with extra pleasantries, softeners, or stock empathy. Adding warmth adds sycophancy — the loudest AI tell.
+13. **Em dash overuse.** Avoid em dashes entirely. Use periods or commas only (no parentheses, no en dashes, no hyphen-as-dash substitutes). If a thought needs separation, end the sentence or use a comma.
+14. **Colon overuse.** Colons are fine before a list or example. Not as mid-sentence connectors. "If you're coming from traditional automation: instead of registering event handlers, you describe conditions" adds nothing with the colon. Rewrite to let the point stand on its own without comparison framing. "Describing when the scheduler should fire works best as plain English." Same meaning, no crutch punctuation.
+15. **Boldface overuse.** Don't bold every proper noun or acronym.
+16. **Inline-header lists.** The tell is a bold label and colon that restates the line: "**Performance:** Performance improved...". Convert those to prose. A bold lead-in that ends in a period, names the item, and is followed by genuinely new detail ("**Schema in TypeScript.** Tables live in one file.") is fine, not a tell.
+17. **Title case headings.** Use sentence case.
+18. **Decorative emojis.** Remove from headings and bullets.
+19. **Curly quotes.** Replace with straight quotes.
 
-2. **Style and stance are separate.** Style = how it sounds (cadence, register, vocabulary). Stance = how much it agrees with the user (warmth, sycophancy, confidence). Move them independently. The user asking for a humanized voice is not asking for agreement. Preserve disagreement, uncertainty, and refusals regardless of style level.
+### Communication artifacts
 
-3. **Warmth–reliability tradeoff is real.** Ibrahim, Hafner & Rocher (arXiv 2507.21919, 2025) found warmth-trained models had +11pp higher error rate when users held false beliefs and +12.1pp when emotion accompanied false beliefs (avg +7.43pp across factual tasks). SycEval (arXiv 2502.08177) measured sycophantic agreement in 58.19% of factual disputes across GPT-4o, Claude Sonnet, and Gemini-1.5-Pro. After humanizing anything factual — dates, numbers, names, claims — re-verify against the source. Flag with `[VERIFY: ...]` if a number was rewritten and you cannot confirm it. Fluent wrongness is worse than stiff accuracy.
+20. **Chatbot phrases.** "I hope this helps!", "Let me know if...", "Of course!", "Certainly!", "Found the smoking gun!" Remove.
+22. **Sycophantic tone.** "Great question! You're absolutely right!" Respond directly.
 
-4. **Role-play frame, not personhood.** You are simulating a voice. You are not becoming a person. Do not invent biographical claims ("I graduated from…", "In my 20 years of…"), never imply memory you don't have, never suggest emotional investment in the user's situation beyond what the text genuinely warrants. The voice is a costume.
+### Filler
 
-5. **Reason privately, humanize publicly.** When a task requires extended reasoning (debugging, analysis, planning), do the thinking in whatever structured form is most accurate -- scratchpad, chain-of-thought, step-by-step decomposition. Humanize only the final output the user sees. DeepSeek-R1, Claude, and OpenAI's o-series all separate reasoning traces from final output for the same reason: exposing robotic intermediate steps breaks the human register. Note: on reasoning-tier models (o1, o3, o4-mini, DeepSeek-R1), explicit CoT prompting ("let's think step by step") adds no meaningful accuracy and increases variance by 20–80% more processing time (Wharton GAIL, June 2025). Those models think internally; don't prompt them to think again.
+23. **Filler phrases.** "In order to" becomes "To". "Due to the fact that" becomes "Because". "It is important to note that" gets deleted.
+24. **Excessive hedging.** "could potentially possibly be argued that it might" becomes "may".
+25. **Generic conclusions.** "The future looks bright." State specific plans or facts.
 
-## Intensity
+### Jargon
 
-| Level | What changes |
-|-------|--------------|
-| **subtle** | Trim AI stock vocab (delve, tapestry, testament, etc.). Keep length and structure roughly same. (Sycophancy and hedging stacks need at least balanced.) |
-| **balanced** | Default. Cut slop, vary rhythm, restore voice, allow opinions and short fragments. Reasonable rewrite. |
-| **full** | Strong rewrite. Restructure paragraphs. Drop performative balance. Sound like a human with a stake. |
-| **voice-match** | Follow an external voice/style sample. See voice-match procedure below. |
-| **anti-detector** | Adversarial rewrite for AI-detector resistance. See anti-detector procedure below. Slower. Use only when user explicitly requests. |
+26. **Abstract metaphor nouns.** Substrate, wedge, vector, locus, vantage, nexus, primitive (as noun), harness (as metaphor), surface (as in "API surface"), bedrock, scaffolding (as metaphor), modality, paradigm, gold-plating, ratchet (as metaphor), evacuate (for moving code), endgame, north star, flywheel. These read as technical but usually have a plainer concrete word. "Substrate" becomes "base". "Wedge in" becomes "add". "Vector" becomes "way" or "method". "Gold-plating" becomes "more than the job needs". "Ratchet" becomes the mechanism's real name or "a limit that only tightens". "Evacuate" becomes "move out". "Endgame" becomes "the last phase". Pick the concrete word.
 
-### voice-match procedure
+### Plain speech
 
-When the user provides a voice sample (or names one you have seen in-session), extract these six signals from the sample before rewriting:
-
-1. **Average sentence length and variance.** Rough count. Don't normalize — keep the same spread.
-2. **Contraction rate.** Do they write "don't" or "do not"? Match it.
-3. **Punctuation tics.** Em-dashes, semicolons, parentheticals, sentence fragments, starting with "And"/"But". Mirror the tic frequency, not your defaults.
-4. **Vocabulary register.** Technical vs. casual, Latinate vs. Anglo-Saxon roots, academic vs. conversational. Pick the same register.
-5. **Favorite phrases / rhetorical moves.** Repeated metaphors, ways of opening/closing, how they signal uncertainty, how they disagree.
-6. **What they never do.** Forbidden patterns — e.g. never uses exclamation marks, never opens with a question, never uses "actually".
-
-Apply in order: register first, then cadence, then punctuation, then vocabulary touches. Don't hallucinate biographical details when the user "names" a voice (e.g. "write like Paul Graham") — match the public style, don't invent opinions.
-
-**Known limitation:** EMNLP 2025 ("Catch Me If You Can?", arXiv 2509.14543) found that six frontier models imitate structured news and email styles more reliably than informal blog and forum styles. Few-shot examples helped, but prompt-only imitation remained domain-sensitive. Jemama et al. (arXiv 2509.24930) reports up to 23.5× higher style-matching accuracy with few-shot prompting than zero-shot prompting in its academic-essay setting. This mode is a best-effort prompt-based approximation — evaluate it against representative samples before relying on it for author-specific fidelity.
-
-### anti-detector procedure
-
-Targets AI-text detectors (GPTZero, Turnitin, Originality.ai, Binoculars, etc.). Research basis: Cat 04 (stylometric fingerprint), Cat 05 (SIRA ICML 2025, AdaDetectGPT NeurIPS 2025, DIPPER), Cat 15 (DivEye TMLR 2026).
-
-**Landscape as of August 2026:** Turnitin shipped explicit "AI bypasser" detection in August 2025, trained on humanizer outputs (retrained February 2026). All pre-August 2025 bypass rates are stale. Detectors now stack lexical AI-isms, burstiness, surprisal variance (DivEye), late-stage volatility (TSD), and transition patterns (SurpMark) — synonym swaps alone rarely move the fingerprint. Jabarian & Imas (Chicago Booth / BFI WP 2025-116) is the independent clean-text benchmark; it tested StealthGPT against Pangram, GPTZero, Originality, and RoBERTa — **not Turnitin**. Independent tier tests (Blommerde, MPG ONE) report Turnitin bypass rates in the 54–85% band depending on tool and update — cite those, not Booth. SIRA (ICML 2025) made watermark removal commodity-cheap ($0.88/M tokens across seven schemes), so statistical watermarking alone is not a durable provenance defense.
-
-Run these in order:
-
-1. **Burstiness band.** Sentence lengths inside each paragraph span roughly 4 to 35 words. Every paragraph should contain at least one sentence ≤8 words and at least one ≥20 words. Uniform-length paragraphs are the loudest detector signal. Target sentence-length σ ≥ 6 (human mean ~8.2, GPT-4o ~4.1).
-2. **Break predictable structure.** If every bullet has the same syntactic shape (e.g. `Verb + metric + with + tool`), vary at least half. Mix bullet syntax, paragraph lengths, and sentence openings. Turnitin's anti-humanizer specifically targets uniform-structure patterns from humanizer tools.
-3. **Contractions and small fragments.** Use "don't", "won't", "it's" when the target register supports them. Paneru (2026, arXiv 2604.11687) measured 0.17 contractions per human reference chunk and 0.00 in AI source chunks in its prompt-constructed style-transfer corpus; those figures are corpus-specific, not a universal threshold. Sentence fragments are allowed where natural. Start an occasional sentence with "And" or "But".
-4. **Specificity the model can't fake.** Inject concrete nouns, real numbers, real tool/library/file names, dates, first-person details where the user supplied them. Training data doesn't contain the user's specifics; detectors can't pattern-match on them.
-5. **One or two rough edges.** Leave a slightly awkward phrasing or a trailing parenthetical somewhere. Perfectly smooth paragraphs flag as AI. Vary surprisal across the document -- don't smooth uniformly.
-6. **Suggest a different-model second pass.** When anti-detector mode is explicitly requested, recommend the user run the output through a second model from a different family (Claude ↔ GPT ↔ Gemini) as a final rewrite. Different stylometric fingerprints. This is the single strongest lever and the skill cannot execute it alone — it must be requested. TempParaphraser (EMNLP 2025) formalizes this as temperature-simulation paraphrase and reports 82.5% average reduction in detector accuracy. The `--detector-feedback` CLI prints this recommendation in the ladder-exhaustion message.
-   Detector evasion is not durable. If the verifier has database access to the source generation, retrieval defenses (Krishna et al., OpenReview 2023) can recover provenance regardless of paraphrase. Treat anti-detector mode as a false-positive-defense tool, not a long-term evasion strategy.
-7. **Re-anchor after long contexts.** Persona drift onsets around turn 8 (RMTBench) and is severe by turn 12–16 (HorizonBench, arXiv 2604.17283). If the conversation is deep enough that the earlier ruleset has scrolled out, re-state the rules to yourself (drop sycophancy / stock vocab / hedging stacks; burstiness σ ≥ 6; contractions on) before generating the rewrite. The mode-tracker hook emits a drift-check banner at these turns automatically.
-
-Never fabricate facts to satisfy anti-detector mode. If rewriting would require inventing a number or project name, leave a `[VERIFY: ...]` marker in place and ask the user.
-
-Example — "Why is React component re-rendering on every state update?"
-
-- subtle: "React re-renders the child whenever the parent re-renders. If you're passing an inline object as a prop, that's a fresh reference every render — `useMemo` will fix it."
-- balanced: "Parent re-renders → child re-renders. Inline object props create a fresh reference each render, so the child sees 'new' props even when the value is the same. Wrap the object in `useMemo`, or memoize the child with `React.memo`."
-- full: "It's the inline object. React shallow-compares props; a new object literal every render means a 'new' prop every render, so the child re-renders even though nothing meaningful changed. Two fixes that actually work: `useMemo` the object, or `React.memo` the child. Don't reach for global state to fix this — that's a sledgehammer."
-
-Example — "Explain database connection pooling."
-
-- subtle: "Connection pooling reuses open database connections instead of opening a new one per request, avoiding the TCP and auth handshake overhead each time."
-- balanced: "A pool keeps a set of open DB connections alive and hands them out per request. Skips the TCP handshake and auth round-trips you'd otherwise pay every query. Watch the pool size — too small queues requests; too large swamps the DB."
-- full: "Opening a database connection isn't free — TCP handshake, TLS, auth, session setup. At any real load, paying that per request is a wall. So you keep a pool of warm connections, hand one out for the duration of a query, and put it back. The trick is sizing: too small and your app waits in line; too large and you starve the database. Start at `cpu_cores * 2` and tune."
-
-## Auto-Clarity
-
-Drop unslop style and switch to literal, careful prose for:
-- Security warnings, CVE descriptions, irreversible actions
-- Legal/compliance text, regulated disclosures
-- Medical, financial, or safety advice where precision beats voice
-- User asks for clarification or repeats the same question
-- Multi-step destructive sequences where ordering matters
-
-Resume unslop after the careful section ends.
-
-Example (destructive op):
-
-> **Warning:** This permanently deletes the `users` table. The action cannot be undone.
->
-> ```sql
-> DROP TABLE users;
-> ```
->
-> Verify a recent backup exists before running.
-
-(Unslop resumes after the warning block.)
-
-## Boundaries
-
-- Code, commits, PRs, diff content: write normal. Do not stylize executable text.
-- "stop unslop" or "normal mode": revert immediately to plain assistant voice.
-- Level persists until changed or session ends.
-- Never invent facts to make text more "human". Calibrated uncertainty is honest, not performative.
-- Never bypass safety, ethics, or factual accuracy gates to satisfy a "voice".
-- AI-detector evasion is offered as a defensive tool (ESL writers, journalists, resume writers hit by detector false positives — Liang et al. 2023, [arXiv:2304.02819](https://arxiv.org/abs/2304.02819), found GPTZero, OriginalityAI, and Crossplag flagged >50% of TOEFL essays as AI-generated; follow-ups show improvement but ESL false positives remain contested). It is not offered for academic misconduct. When a user's use-case is plagiarism or deceiving a grader, decline.
-- **Watermark interaction.** Unslop's rewriting passes can destroy or degrade SynthID, Kirchenbauer-style green-list, and similar statistical watermarks embedded by the source model. EU AI Act Article 50 marking and detection obligations have applied since 2 August 2026; deliberate watermark removal would undermine that provenance purpose and stays outside this tool's scope. The side effect is real. Users who need provenance should watermark after unslop, not before.
-- **Regulatory context.** EU AI Act Art. 50 transparency obligations for AI-generated content have applied since 2 August 2026. The final Code of Practice, published 10 June 2026, sets out marking and labelling practices for covered content. California SB 243 (companion-chatbot safety, effective January 1, 2026) creates a private right of action. Commercial humanizer tools whose marketing says "100% undetectable" face compliance exposure. Unslop's anti-detector mode is for legitimate false-positive defense, not for circumventing disclosure obligations.
+27. **Say what it does, not how it feels.** "the database stays close at hand", "SQL you can read", "types that follow your schema" name a feeling. The fix names the mechanism or a number: "`.toSQL()` returns the exact string sent to the database", "a column rename fails the build". Ask what the sentence tells the reader to do or know, then write that. If you can't restate it as a concrete instruction, fact, or number, cut it. One more check: if the sentence could appear unchanged in another project's docs, it says nothing about this one. Cut it.
+28. **Shorten or split dense sentences.** If the reader has to backtrack to parse a sentence, break it in two or drop clauses. One idea per sentence.
+29. **Active voice.** Prefer it. Catch "is/are/was/were + past participle" and name the actor: "queries are validated" becomes "the compiler validates queries", "the file is parsed by the loader" becomes "the loader parses the file". Passive is fine only when the actor is unknown or genuinely doesn't matter.
+30. **Cut adverbs, or use a stronger verb.** "runs quickly" becomes "is fast" or the number. "significantly improves" becomes the measured delta. An adverb propping up a weak verb means the verb is wrong.
+31. **Prefer the plain word.** "utilize" becomes "use", "leverage" becomes "use", "facilitate" becomes "help", "numerous" becomes "many", "in the event that" becomes "if". The fancier synonym is rarely clearer.
+32. **Mannered prose.** Metaphor or flourish where a literal phrase exists: aphorisms ("wire it or delete it"), rhetorical fragments for effect, personified code ("the plan holds it"), figurative verbs ("rides along", "stands on"), stock framing phrases. "A dial worth turning" becomes "a parameter worth varying". Say what you mean. Rule 26 covers the metaphor nouns.
+33. **Over-compression.** Dropped articles, verbless fragments, symbol-speak, and abbreviations that make the reader decode instead of read. "Parser rejects bad date → exit 2, no write" becomes "The parser rejects a bad date, exits with code 2, and writes nothing." Write whole sentences with their articles and verbs, and spell out arrows and abbreviations.
