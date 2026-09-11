@@ -127,6 +127,7 @@ Delta base: `HEAD` (our init) ↔ `forkup/main`. 230 files total: 66 A, 123 M, 4
 ## Action log
 - 2026-09-11: full fork-network scan (618 forks); candidates identified; catalog created.
 - 2026-09-11(b): Category-A file map produced (above); Category-C maps added; SamSammanne Not Found; t3code fetched. Next: t3code deep-research + transplant per approval.
+- 2026-09-11(c): app-track intake — pulled ledger onto arena; spot-verified (9/9 repos resolve, SamSammanne 404 re-confirmed, 1Code Apache-2.0/archived, T3 MIT, aadivar+normalizer paths exist); scaffolded `openspec/changes/add-fork-harvest-transplants/` (phased plan). No code transplanted yet — per-phase go-ahead pending.
 
 ## Notes on unrecoverable upstream
 - `cdn.21st.dev` v0.0.85–0.0.88 source: never published to any fetched fork (binaries exist only. If wanted, ask 21st-dev to publish](optional, repo archived.

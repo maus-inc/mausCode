@@ -77,6 +77,18 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   - `add-codex-native-support` (`db77404`, analysis only): recommendation
     WONTFIX recorded; human DEFERRED the decision pending a fork/cherry-pick
     list — no behavior change.
+- Fork-harvest intake (2026-09-11): pulled the harvest ledger
+  (`.dump/ci/research/`, commits `fb47761`+`140eb25`) onto the arena branch;
+  spot-verified (9/9 repos resolve, SamSammanne confirmed gone, 1Code
+  Apache-2.0 archived, T3 MIT, key transplant paths exist). Scaffolded
+  `add-fork-harvest-transplants` (phased: aadivar widget → erenbertr backend
+  → transports/UI → T3 contracts → codex-app-server eval); NO code
+  transplanted yet — per-phase go-ahead pending. Codex mapping: harvest
+  items strengthen the Codex adapter, don't provision native OAuth, so the
+  native decision is substantively unchanged (still deferred, re-asked).
+  Pending user gates: sidebar lineage (erenbertr vs sylv), Effect adoption,
+  per-phase go-aheads. Not adopted from the harvest: foreign co-author
+  trailers, PAT push, `init`-branch workflow (arena only here).
   Full runtime suite at head: 27/27 green; tsc error set identical to
   baseline (99 = 99, none in new files).
 

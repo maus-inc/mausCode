@@ -8,6 +8,11 @@
       — DEFERRED 2026-09-11: human will supply a list of upstream forks with
       cherry-picks first; the decision waits for that list. Analysis complete
       in `analysis.md` (recommendation: WONTFIX, revisit-gated).
+      UPDATE: list received 2026-09-11 (`.dump/ci/research/`
+      fork-network-harvest-catalog.md). Its Codex items (erenbertr 0.137 bump,
+      ACP repair, tool normalizer; T3 effect-codex-app-server) upgrade the
+      Codex ADAPTER, not Codex-on-native — nothing provisions OAuth through
+      the harness, so the substance is unchanged. Decision re-asked.
 - [ ] Run `openspec validate add-codex-native-support --strict --no-interactive`
       in an environment with the OpenSpec CLI and resolve findings
 
