@@ -29,6 +29,15 @@ Detail lives in `research/` and `plans/`; this file states what is true.
 - I-4 native never depends on adapters. I-5 secrets are refs at every boundary.
 - I-6 benchmarks gate every phase.
 
+## Proven (2026-09-11, sandbox)
+
+- `packages/runtime-client/` (fork of SDK 1.2.0-dev, MIT preserved): typecheck +
+  43/43 tests green; live proof vs stock binary 1.1.0 — launch 52–57ms,
+  createSession 5–12ms, ping/list/attach green; daemon+bridge ≈57MB RSS (1 idle
+  session). Details + caveats: `benchmarks/2026-09-11-stock-jcode-sandbox.md`.
+- `docs/protocol.md` v0 is the normative contract; change control via OpenSpec
+  `runtime-protocol` capability. Remaining P0: 1Code-baseline app numbers (CI-owned).
+
 ## Important interfaces
 
 - `RuntimeProvider.launch/status/stop` → `RuntimeHandle { request, events }`.
