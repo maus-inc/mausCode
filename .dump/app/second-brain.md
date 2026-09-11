@@ -37,6 +37,11 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   session). Details + caveats: `benchmarks/2026-09-11-stock-jcode-sandbox.md`.
 - `docs/protocol.md` v0 is the normative contract; change control via OpenSpec
   `runtime-protocol` capability. Remaining P0: 1Code-baseline app numbers (CI-owned).
+- `runtime/jcode/` vendors stock JCode at ce4e789 (MIT preserved, .git/assets excluded
+  per its UPSTREAM.md; tree verified byte-identical). Parity tests resolve to it with
+  zero env config (43/43). First change on the vendor: none yet — stock.
+- P1 change `add-native-local-execution` scaffolded (additive runtime host + router,
+  daemon-owned sessions, benchmark gate). Awaiting human approval to implement.
 
 ## Important interfaces
 
