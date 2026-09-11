@@ -1,12 +1,17 @@
 ---
 name: unslop
 description: Cut AI tells from any writing. Must always apply.
-disable-model-invocation: true
 ---
 
 # Unslop
 
 Edit text to remove AI patterns.
+
+## Invocation
+
+All agents invoke this skill for all chats. It applies to all user-facing text,
+including documentation andthe frontend UI..
+
 
 ## Process
 
