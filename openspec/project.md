@@ -1,7 +1,7 @@
 # Project Context
 
 ## Purpose
-**21st Agents** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+**mausCode** - A local-first agent workspace by maus-inc. Users create chat sessions linked to local project folders, run coding agents (Claude Code, Codex) in isolated git worktrees, and see real-time tool execution (bash, file edits, web search, etc.). Product/UI foundation inherited from the archived 1Code project (Apache-2.0) — see `UPSTREAM.md`.
 
 ## Tech Stack
 | Layer | Tech |
@@ -53,6 +53,7 @@
 - Dev vs Production use separate userData paths and protocols
 
 ## External Dependencies
-- **Claude Code SDK**: `@anthropic-ai/claude-code` for AI interactions
-- **21st.dev CDN**: Auto-update manifests and releases at `cdn.21st.dev`
-- **OAuth Provider**: Authentication flow
+- **Claude Code SDK**: `@anthropic-ai/claude-agent-sdk` for AI interactions
+- **mausCode control plane**: not yet public — configured via `MAIN_VITE_API_URL` (build-time), empty by default (local-only mode)
+- **Update feed**: not yet public — configured via `MAIN_VITE_UPDATE_FEED_URL` (build-time), disabled by default
+- **OAuth Provider**: control-plane authentication flow (available once the control plane ships)
