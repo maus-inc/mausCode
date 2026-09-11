@@ -7,7 +7,7 @@
 - [x] 5. Gates: tsc zero-delta (25), vitest 45/45 (affected) + 427/427 full, contracts 382/382, runtime 27/27, secrets clean, build main+preload green (renderer prod bundle OOMs on 4GB sandbox — env limit); line-by-line diff review; @pierre/diffs pinned to locked 1.0.10 (see .dump/app/decisions/pin-pierre-diffs-2026-09-11.md); commit + push
 - [x] 6. claude align (existing SDK router -> provider interface + manifest, no rewrite; profile+probe+register; router already speaks the shared dialect)
 - [ ] 6b. FOLLOW-UP: thread resultSubtype (success/error) through claude finish metadata so claude chats show the Success/Failed badge like codex/opencode (needs care in the 3.4k-line router; explicitly not in the no-rewrite align)
-- [ ] 7. NEXT: hermes full-fidelity (ACP chat + cron/skills/plugins/memory/gateway surfaces in manifest)
+- [x] 7. hermes full-fidelity (ACP chat router mirroring cursor + read-only runCommand state passthrough + manifest reporting gateway/channels/TUI/Electron as Hermes-owned; mock ACP tests 8/8)
 - [ ] 8. NEXT: cursor native (print/stream-json/resume upgrade from ACP path)
 - [ ] 9. NEXT: grok build (official CLI recon; community grok-cli fallback)
 - [ ] 10. NEXT: qwen via ACP, then SDK when stable (serialize config-file MCP injection)

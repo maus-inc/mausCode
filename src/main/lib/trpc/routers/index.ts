@@ -29,6 +29,7 @@ import { runtimeRouter } from "./runtime"
 import { usageRouter } from "./usage"
 import { providersRouter } from "./providers"
 import { opencodeRouter } from "./opencode"
+import { hermesRouter } from "./hermes"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -67,6 +68,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     usage: usageRouter,
     providers: providersRouter,
     opencode: opencodeRouter,
+    hermes: hermesRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

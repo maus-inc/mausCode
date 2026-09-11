@@ -1,4 +1,5 @@
 import { getClaudeCapability, probeClaude } from "./claude"
+import { getHermesCapability, probeHermes } from "./hermes"
 import { getCodexCapability, probeCodex } from "./codex"
 import { getOpencodeCapability, probeOpencode } from "./opencode"
 import { listBackends, registerBackend } from "./registry"
@@ -9,6 +10,13 @@ registerBackend({
   displayName: "Claude",
   getCapability: getClaudeCapability,
   probe: probeClaude,
+})
+
+registerBackend({
+  id: "hermes",
+  displayName: "Hermes",
+  getCapability: getHermesCapability,
+  probe: probeHermes,
 })
 
 registerBackend({
