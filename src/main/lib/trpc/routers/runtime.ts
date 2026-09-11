@@ -18,6 +18,11 @@ import {
   getRuntimeManager,
   NativeCredentialError,
   NativeTranslator,
+  normalizeEndpointUrl,
+  probeEndpoint,
+  readEndpointSettings,
+  restartRuntime,
+  writeEndpointSettings,
 } from "../../runtime"
 import { publicProcedure, router } from "../index"
 
@@ -120,6 +125,19 @@ export const runtimeRouter = router({
               return
             }
 
+            // Attach FIRST: the bridge rejects stateful requests (including
+            // set_api_key) until the client has subscribed with a working_dir.
+            // Credentials are still applied before the turn starts.
+            let sessionId: string
+            try {
+              sessionId = await ensureNativeSession(client, input.subChatId, input.cwd)
+            } catch (error) {
+              fail(
+                `NATIVE_SESSION_FAILED: ${error instanceof Error ? error.message : String(error)}`,
+              )
+              return
+            }
+
             try {
               await applyNativeCredentials(client, {
                 customToken: input.customToken,
@@ -136,20 +154,22 @@ export const runtimeRouter = router({
               return
             }
 
-            let sessionId: string
-            try {
-              sessionId = await ensureNativeSession(client, input.subChatId, input.cwd)
-            } catch (error) {
-              fail(
-                `NATIVE_SESSION_FAILED: ${error instanceof Error ? error.message : String(error)}`,
-              )
-              return
-            }
-
             if (input.model) {
-              try {
-                await client.setModel(sessionId, input.model)
-              } catch {
+              // The account model list loads async after set_api_key; a fresh
+              // daemon rejects set_model until it lands. Retry briefly before
+              // falling back to the daemon default.
+              let modelOk = false
+              for (let attempt = 0; attempt < 4 && !modelOk; attempt++) {
+                try {
+                  await client.setModel(sessionId, input.model)
+                  modelOk = true
+                } catch {
+                  if (attempt < 3) {
+                    await new Promise((resolve) => setTimeout(resolve, 1000))
+                  }
+                }
+              }
+              if (!modelOk) {
                 safeEmit({
                   type: "retry-notification",
                   message: `Model "${input.model}" is unavailable on the native runtime; using the daemon default.`,
@@ -289,6 +309,50 @@ export const runtimeRouter = router({
       const message = await client.compact(sessionId)
       return { ok: true as const, message }
     }),
+
+  endpoints: router({
+    get: publicProcedure.query(() => readEndpointSettings()),
+
+    set: publicProcedure
+      .input(
+        z.object({
+          openaiBaseUrl: z.string().optional(),
+          anthropicBaseUrl: z.string().optional(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        // Empty string clears; anything else must be a valid http(s) URL.
+        const clean = (raw: string | undefined): string | null => {
+          if (raw === undefined || raw.trim() === "") return null
+          return normalizeEndpointUrl(raw)
+        }
+        let settings
+        try {
+          settings = {
+            openaiBaseUrl: clean(input.openaiBaseUrl),
+            anthropicBaseUrl: clean(input.anthropicBaseUrl),
+          }
+        } catch (error) {
+          throw new Error(error instanceof Error ? error.message : "Invalid endpoint URL")
+        }
+        writeEndpointSettings(settings)
+        // Endpoint changes apply at daemon launch: abort in-flight native turns
+        // and relaunch so the new env takes effect. Daemon sessions persist.
+        abortAllNativeTurns()
+        await restartRuntime()
+        return settings
+      }),
+
+    probe: publicProcedure
+      .input(z.object({ url: z.string() }))
+      .mutation(async ({ input }) => {
+        try {
+          return await probeEndpoint(input.url)
+        } catch (error) {
+          return { ok: false, detail: error instanceof Error ? error.message : "Invalid URL" }
+        }
+      }),
+  }),
 
   status: publicProcedure.query(async () => {
     const manager = getRuntimeManager()

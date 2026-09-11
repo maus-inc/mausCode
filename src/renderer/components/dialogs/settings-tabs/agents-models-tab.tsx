@@ -260,6 +260,116 @@ function AnthropicAccountsSection() {
   )
 }
 
+function NativeEndpointsSection() {
+  const trpcUtils = trpc.useUtils()
+  const { data: endpoints, isLoading } = trpc.runtime.endpoints.get.useQuery()
+  const [openaiUrl, setOpenaiUrl] = useState<string | null>(null)
+  const [anthropicUrl, setAnthropicUrl] = useState<string | null>(null)
+  const [probeResult, setProbeResult] = useState<string | null>(null)
+  const setMutation = trpc.runtime.endpoints.set.useMutation()
+  const probeMutation = trpc.runtime.endpoints.probe.useMutation()
+
+  const savedOpenai = endpoints?.openaiBaseUrl ?? ""
+  const savedAnthropic = endpoints?.anthropicBaseUrl ?? ""
+
+  const save = useCallback(
+    (next: { openaiBaseUrl: string; anthropicBaseUrl: string }) => {
+      if (next.openaiBaseUrl === savedOpenai && next.anthropicBaseUrl === savedAnthropic) return
+      setMutation.mutate(next, {
+        onSuccess: () => {
+          toast.success("Native endpoints saved — daemon restarted")
+          void trpcUtils.runtime.endpoints.get.invalidate()
+        },
+        onError: (err) => toast.error(`Failed to save endpoints: ${err.message}`),
+      })
+    },
+    [savedOpenai, savedAnthropic, setMutation, trpcUtils],
+  )
+
+  const probe = useCallback(
+    (url: string) => {
+      if (!url.trim()) return
+      setProbeResult(null)
+      probeMutation.mutate(
+        { url },
+        {
+          onSuccess: (res) => setProbeResult(res.ok ? `✓ ${res.detail}` : `✗ ${res.detail}`),
+          onError: (err) => setProbeResult(`✗ ${err.message}`),
+        },
+      )
+    },
+    [probeMutation],
+  )
+
+  if (isLoading) {
+    return <div className="p-4 text-center text-sm text-muted-foreground">Loading endpoints...</div>
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="pb-2">
+        <h4 className="text-sm font-medium text-foreground">Native Engine Endpoints</h4>
+        <p className="text-xs text-muted-foreground">
+          Daemon-level custom endpoints for the Native engine (applied at daemon start; saving
+          restarts the daemon, sessions persist). A native chat's custom base URL must match one
+          of these — or an ambient *_BASE_URL env var — or the turn is refused.
+        </p>
+      </div>
+      <div className="bg-background rounded-lg border border-border overflow-hidden">
+        <div className="flex items-center justify-between gap-6 p-4">
+          <div className="flex-1">
+            <Label className="text-sm font-medium">OpenAI-compatible base URL</Label>
+            <p className="text-xs text-muted-foreground">OPENAI_BASE_URL for the daemon</p>
+          </div>
+          <div className="flex-shrink-0 w-80 flex items-center gap-2">
+            <Input
+              value={openaiUrl ?? savedOpenai}
+              onChange={(e) => setOpenaiUrl(e.target.value)}
+              onBlur={(e) => save({ openaiBaseUrl: e.target.value, anthropicBaseUrl: anthropicUrl ?? savedAnthropic })}
+              className="w-full font-mono"
+              placeholder="https://proxy.local/v1"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => probe(openaiUrl ?? savedOpenai)}
+              disabled={probeMutation.isPending}
+            >
+              Test
+            </Button>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-6 p-4 border-t border-border">
+          <div className="flex-1">
+            <Label className="text-sm font-medium">Anthropic base URL</Label>
+            <p className="text-xs text-muted-foreground">ANTHROPIC_BASE_URL for the daemon</p>
+          </div>
+          <div className="flex-shrink-0 w-80 flex items-center gap-2">
+            <Input
+              value={anthropicUrl ?? savedAnthropic}
+              onChange={(e) => setAnthropicUrl(e.target.value)}
+              onBlur={(e) => save({ openaiBaseUrl: openaiUrl ?? savedOpenai, anthropicBaseUrl: e.target.value })}
+              className="w-full font-mono"
+              placeholder="https://proxy.local/anthropic"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => probe(anthropicUrl ?? savedAnthropic)}
+              disabled={probeMutation.isPending}
+            >
+              Test
+            </Button>
+          </div>
+        </div>
+      </div>
+      {probeResult && (
+        <p className="text-xs text-muted-foreground px-1">{probeResult}</p>
+      )}
+    </div>
+  )
+}
+
 export function AgentsModelsTab() {
   const [storedConfig, setStoredConfig] = useAtom(customClaudeConfigAtom)
   const [model, setModel] = useState(storedConfig.model)
@@ -805,6 +915,9 @@ export function AgentsModelsTab() {
           </div>
         </CollapsibleContent>
       </Collapsible>
+
+      {/* ===== Native Engine Endpoints ===== */}
+      <NativeEndpointsSection />
     </div>
   )
 }

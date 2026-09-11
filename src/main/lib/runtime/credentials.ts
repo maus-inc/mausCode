@@ -16,6 +16,7 @@ import { eq } from "drizzle-orm"
 import type { JcodeClient } from "@maus-inc/runtime-client"
 import { anthropicAccounts, anthropicSettings, getDatabase } from "../db"
 import { decryptToken } from "../token-crypto"
+import { isHonoredEndpoint, readEndpointSettings } from "./endpoints"
 
 export interface NativeCredentialRequest {
   /** Per-chat override (legacy `customConfig` shape, minus baseUrl). */
@@ -64,12 +65,20 @@ export async function applyNativeCredentials(
   request: NativeCredentialRequest,
 ): Promise<NativeCredentialResult> {
   if (request.customBaseUrl) {
-    throw new NativeCredentialError(
-      "custom-endpoint",
-      "Custom provider endpoints are not supported on the native runtime yet " +
-        "(per-chat endpoint overrides need daemon-level config). Use the legacy " +
-        "transport for custom endpoints, or unset the custom base URL.",
-    )
+    // Daemon-level endpoints only (see endpoints.ts): accept the chat's custom
+    // endpoint when the daemon will actually honor it — an explicitly
+    // configured setting or an ambient env override. Anything else stays a
+    // loud refusal: silently running against a different endpoint than the
+    // user selected would be a credential-routing lie.
+    if (!isHonoredEndpoint(request.customBaseUrl, readEndpointSettings())) {
+      throw new NativeCredentialError(
+        "custom-endpoint",
+        `The endpoint ${request.customBaseUrl} is not configured for the ` +
+          "native engine (native endpoints are daemon-level: configure it in " +
+          "Settings → Models → Native endpoints, or export the matching " +
+          "*_BASE_URL env var). Unset the custom base URL or use legacy.",
+      )
+    }
   }
   const providers: string[] = []
   const anthropicToken = getActiveAnthropicToken()

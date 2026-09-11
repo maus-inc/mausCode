@@ -119,6 +119,17 @@ export const anthropicAccounts = sqliteTable("anthropic_accounts", {
   desktopUserId: text("desktop_user_id"), // Reference to 21st.dev user
 })
 
+// Native-engine custom provider endpoints (daemon-level: the stock daemon honors
+// endpoint overrides only via process env, so these are applied at daemon launch)
+export const nativeEndpointSettings = sqliteTable("native_endpoint_settings", {
+  id: text("id").primaryKey().default("singleton"), // Single row
+  openaiBaseUrl: text("openai_base_url"), // Custom OpenAI-compatible endpoint (https?://…)
+  anthropicBaseUrl: text("anthropic_base_url"), // Custom Anthropic endpoint (https?://…)
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // Tracks which Anthropic account is currently active
 export const anthropicSettings = sqliteTable("anthropic_settings", {
   id: text("id").primaryKey().default("singleton"), // Single row
@@ -140,3 +151,4 @@ export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
 export type AnthropicAccount = typeof anthropicAccounts.$inferSelect
 export type NewAnthropicAccount = typeof anthropicAccounts.$inferInsert
 export type AnthropicSettings = typeof anthropicSettings.$inferSelect
+export type NativeEndpointSettings = typeof nativeEndpointSettings.$inferSelect
