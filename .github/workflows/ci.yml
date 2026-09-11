@@ -23,7 +23,7 @@ jobs:
     name: Quality gates (lint, test, typecheck)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # biome --since needs the base ref
       - uses: oven-sh/setup-bun@v2
@@ -48,7 +48,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2022, macos-14]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -68,14 +68,17 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-14]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
       - name: Install dependencies (full install incl. native module rebuild)
         run: bun install --frozen-lockfile
       - name: Fetch bundled agent binaries for this platform
-        # electron-builder extraResources expects resources/bin/<platform-arch> + VERSION
+        # electron-builder extraResources expects resources/bin/<platform-arch> + VERSION.
+        # GITHUB_TOKEN avoids api.github.com anonymous rate limits (60/hr/IP, macOS pool).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bun run claude:download
           bun run codex:download
@@ -88,7 +91,7 @@ jobs:
     name: Security gates
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -96,8 +99,16 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: "Dependency audit (ratchet: no new critical advisories)"
         run: bun run ratchet:audit
-      - name: Secrets scan
-        uses: gitleaks/gitleaks-action@v2
+      - name: Secrets scan (gitleaks, pinned + checksum-verified)
+        # gitleaks-action requires a paid license for org-owned repos; the CLI does not.
+        run: |
+          VERSION=8.30.1
+          EXPECTED=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          TARBALL="gitleaks_${VERSION}_linux_x64.tar.gz"
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${TARBALL}" -o /tmp/gitleaks.tar.gz
+          echo "${EXPECTED}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks dir --verbose .
       - name: Dependency review (PR-affecting changes)
         if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v4
