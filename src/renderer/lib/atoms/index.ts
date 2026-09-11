@@ -428,6 +428,17 @@ export const analyticsOptOutAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
+// Preferences - Local-only mode (opt-in, default off)
+// When true, product-hosted services (remote sandbox backend, analytics,
+// official-cloud external links) are blocked. User-owned endpoints
+// (provider APIs, Ollama, git remotes) stay reachable.
+export const localOnlyModeAtom = atomWithStorage<boolean>(
+  "preferences:local-only-mode",
+  false,
+  undefined,
+  { getOnInit: true },
+)
+
 // Beta: Enable git features in diff sidebar (commit, staging, file selection)
 // When enabled, shows checkboxes for file selection and commit UI in diff sidebar
 // When disabled, shows simple file list with "Create PR" button

@@ -207,6 +207,18 @@ export function App() {
     }
     syncOptOutStatus()
 
+    // Sync local-only mode to main process
+    const syncLocalOnlyStatus = async () => {
+      try {
+        const enabled =
+          localStorage.getItem("preferences:local-only-mode") === "true"
+        await window.desktopApi?.setLocalOnlyMode(enabled)
+      } catch (error) {
+        console.warn("[LocalOnly] Failed to sync status:", error)
+      }
+    }
+    syncLocalOnlyStatus()
+
     // Identify user if already authenticated
     const identifyUser = async () => {
       try {

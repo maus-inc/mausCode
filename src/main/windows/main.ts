@@ -318,10 +318,25 @@ function registerIpcHandlers(): void {
     setOptOut(optedOut)
   })
 
+  // Local-only mode (pushed from the renderer's persisted setting)
+  ipcMain.handle("local-only:set", async (_event, enabled: boolean) => {
+    const { setLocalOnlyMode } = await import("../lib/local-only")
+    setLocalOnlyMode(enabled)
+  })
+
   // Shell
-  ipcMain.handle("shell:open-external", (_event, url: string) =>
-    shell.openExternal(url),
-  )
+  ipcMain.handle("shell:open-external", async (_event, url: string) => {
+    try {
+      const { assertRemoteAllowed } = await import("../lib/local-only")
+      assertRemoteAllowed("open-external", url)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.log("[Shell] open-external blocked by local-only mode:", url)
+      return { blocked: true as const, message }
+    }
+    await shell.openExternal(url)
+    return { blocked: false as const }
+  })
 
   // Open the directory in the OS file manager (Finder / Explorer / Files).
   // Transplanted from erenbertr/1code (Apache-2.0) for the projects rail.
@@ -606,6 +621,18 @@ function registerIpcHandlers(): void {
       if (!validateSender(event)) {
         console.log("[StreamFetch] Unauthorized sender")
         return { ok: false, status: 403, error: "Unauthorized sender" }
+      }
+
+      try {
+        const { assertRemoteAllowed } = await import("../lib/local-only")
+        assertRemoteAllowed("stream-fetch", url)
+      } catch (error) {
+        console.log("[StreamFetch] Blocked by local-only mode:", url)
+        return {
+          ok: false,
+          status: 451,
+          error: error instanceof Error ? error.message : String(error),
+        }
       }
 
       const token = await getAuthManager().getValidToken()

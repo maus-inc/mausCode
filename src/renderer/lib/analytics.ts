@@ -35,6 +35,18 @@ function isOptedOut(): boolean {
 }
 
 /**
+ * Check if local-only mode is on (blocks hosted services incl. analytics).
+ * Reads directly from localStorage to avoid circular dependencies.
+ */
+function isLocalOnly(): boolean {
+  try {
+    return localStorage.getItem("preferences:local-only-mode") === "true"
+  } catch {
+    return false
+  }
+}
+
+/**
  * Get common properties for all events
  */
 function getCommonProperties() {
@@ -101,8 +113,8 @@ export function capture(
   // Skip in development mode
   if (isDev) return
 
-  // Skip if user opted out
-  if (isOptedOut()) return
+  // Skip if user opted out or local-only mode is on
+  if (isOptedOut() || isLocalOnly()) return
 
   if (!initialized) return
 
@@ -124,8 +136,8 @@ export function identify(
   // Skip in development mode
   if (isDev) return
 
-  // Skip if user opted out
-  if (isOptedOut()) return
+  // Skip if user opted out or local-only mode is on
+  if (isOptedOut() || isLocalOnly()) return
 
   if (!initialized) return
 

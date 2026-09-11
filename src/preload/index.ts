@@ -129,6 +129,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // Analytics
   setAnalyticsOptOut: (optedOut: boolean) => ipcRenderer.invoke("analytics:set-opt-out", optedOut),
+  setLocalOnlyMode: (enabled: boolean) => ipcRenderer.invoke("local-only:set", enabled),
 
   // Native features
   setBadge: (count: number | null) => ipcRenderer.invoke("app:set-badge", count),
@@ -350,10 +351,11 @@ export interface DesktopApi {
   toggleDevTools: () => Promise<void>
   unlockDevTools: () => Promise<void>
   setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
+  setLocalOnlyMode: (enabled: boolean) => Promise<void>
   setBadge: (count: number | null) => Promise<void>
   setBadgeIcon: (imageData: string | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
-  openExternal: (url: string) => Promise<void>
+  openExternal: (url: string) => Promise<{ blocked: boolean; message?: string }>
   openFolder: (path: string) => Promise<{ success: boolean; error?: string }>
   openTerminal: (path: string) => Promise<{ success: boolean; error?: string }>
   openVSCode: (path: string) => Promise<{ success: boolean; error?: string }>

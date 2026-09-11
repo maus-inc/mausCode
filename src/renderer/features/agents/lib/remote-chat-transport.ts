@@ -1,5 +1,8 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
+import { appStore } from "../../../lib/jotai-store"
+import { localOnlyModeAtom } from "../../../lib/atoms"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 
 // Cache the API base URL (fetched once from main process)
 let cachedApiBase: string | null = null
@@ -41,6 +44,13 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
     messages: UIMessage[]
     abortSignal?: AbortSignal
   }): Promise<ReadableStream<UIMessageChunk>> {
+    if (appStore.get(localOnlyModeAtom)) {
+      toast.error(LOCAL_ONLY_BLOCKED_MESSAGE, {
+        description:
+          "Remote sandbox chats need hosted services. Turn off local-only mode to use them.",
+      })
+      throw new Error(`${LOCAL_ONLY_BLOCKED_MESSAGE}: remote-chat`)
+    }
     if (!window.desktopApi?.streamFetch) {
       console.error("[RemoteTransport] Desktop API not available")
       toast.error("Desktop API not available", {

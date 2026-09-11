@@ -5,6 +5,7 @@ import {
   autoAdvanceTargetAtom,
   ctrlTabTargetAtom,
   defaultAgentModeAtom,
+  localOnlyModeAtom,
   desktopNotificationsEnabledAtom,
   extendedThinkingEnabledAtom,
   notifyWhenFocusedAtom,
@@ -151,6 +152,7 @@ export function AgentsPreferencesTab() {
   const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useAtom(desktopNotificationsEnabledAtom)
   const [notifyWhenFocused, setNotifyWhenFocused] = useAtom(notifyWhenFocusedAtom)
   const [analyticsOptOut, setAnalyticsOptOut] = useAtom(analyticsOptOutAtom)
+  const [localOnlyMode, setLocalOnlyMode] = useAtom(localOnlyModeAtom)
   const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
   const [autoAdvanceTarget, setAutoAdvanceTarget] = useAtom(autoAdvanceTargetAtom)
   const [defaultAgentMode, setDefaultAgentMode] = useAtom(defaultAgentModeAtom)
@@ -169,6 +171,16 @@ export function AgentsPreferencesTab() {
 
   const handleCoAuthoredByToggle = (enabled: boolean) => {
     setCoAuthoredByMutation.mutate({ enabled })
+  }
+
+  // Sync local-only mode to main process
+  const handleLocalOnlyToggle = async (enabled: boolean) => {
+    setLocalOnlyMode(enabled)
+    try {
+      await window.desktopApi?.setLocalOnlyMode(enabled)
+    } catch (error) {
+      console.error("Failed to sync local-only mode to main process:", error)
+    }
   }
 
   // Sync opt-out status to main process
@@ -472,6 +484,22 @@ export function AgentsPreferencesTab() {
           <Switch
             checked={!analyticsOptOut}
             onCheckedChange={(enabled) => handleAnalyticsToggle(!enabled)}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-6 p-4 border-t border-border">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              Local-only mode
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Block hosted services: remote sandbox chats, usage analytics,
+              and links to hosted clouds. Your provider API keys, Ollama,
+              and git remotes keep working.
+            </span>
+          </div>
+          <Switch
+            checked={localOnlyMode}
+            onCheckedChange={handleLocalOnlyToggle}
           />
         </div>
       </div>

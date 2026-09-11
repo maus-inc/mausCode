@@ -4,6 +4,7 @@
  */
 
 import { PostHog } from "posthog-node"
+import { isLocalOnlyMode } from "./local-only"
 import { app } from "electron"
 import * as fs from "fs"
 import * as path from "path"
@@ -139,8 +140,8 @@ export function capture(
   // Skip in development mode
   if (isDev()) return
 
-  // Skip if user opted out
-  if (userOptedOut) return
+  // Skip if user opted out or local-only mode is on
+  if (userOptedOut || isLocalOnlyMode()) return
 
   if (!posthog) return
 
@@ -168,8 +169,8 @@ export function identify(
   // Skip in development mode
   if (isDev()) return
 
-  // Skip if user opted out
-  if (userOptedOut) return
+  // Skip if user opted out or local-only mode is on
+  if (userOptedOut || isLocalOnlyMode()) return
 
   if (!posthog) return
 
