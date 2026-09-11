@@ -342,6 +342,30 @@ export const subChatModeAtomFamily = atomFamily((subChatId: string) =>
   ),
 )
 
+// Execution engine per sub-chat: legacy SDK transports ("legacy") or the
+// mausCode native runtime ("native"). Defaults to legacy; the benchmark gate
+// decides any future default change.
+export type SubChatEngine = "legacy" | "native"
+
+// Storage for all sub-chat engines (persisted per subChatId)
+const subChatEnginesStorageAtom = atomWithStorage<Record<string, SubChatEngine>>(
+  "agents:subChatEngines",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+// atomFamily to get/set engine per subChatId
+export const subChatEngineAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => get(subChatEnginesStorageAtom)[subChatId] ?? "legacy",
+    (get, set, newEngine: SubChatEngine) => {
+      const current = get(subChatEnginesStorageAtom)
+      set(subChatEnginesStorageAtom, { ...current, [subChatId]: newEngine })
+    },
+  ),
+)
+
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
   opus: "opus",

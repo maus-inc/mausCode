@@ -40,13 +40,26 @@ Detail lives in `research/` and `plans/`; this file states what is true.
 - `runtime/jcode/` vendors stock JCode at ce4e789 (MIT preserved, .git/assets excluded
   per its UPSTREAM.md; tree verified byte-identical). Parity tests resolve to it with
   zero env config (43/43). First change on the vendor: none yet — stock.
-- P1 change `add-native-local-execution` scaffolded (additive runtime host + router,
-  daemon-owned sessions, benchmark gate). Awaiting human approval to implement.
+- P1 change `add-native-local-execution` implemented on branch
+  `arena/01a08de4-mauscode` (human-approved 2026-09-11): additive Electron-main
+  runtime host (`main/lib/runtime/`: manager/translate/sessions/credentials) +
+  `runtime` tRPC router (chat/cancel/respondApproval/rewind/compact/status) +
+  `NativeChatTransport` + per-sub-chat engine flag (Legacy default, Native opt-in
+  on empty local claude-code chats). 13/13 unit tests green
+  (`node --test --experimental-strip-types`); tsc adds zero new errors vs
+  baseline (repo baseline is dirty; `ts:check`/tsgo unavailable in sandbox).
+  Known P1 limits: plan mode refused on native (no read-only enforcement yet);
+  custom endpoints + offline/Ollama refused with clear errors; stock bridge has
+  no `permissions` capability so approval synthesis is dormant until the mausCode
+  runtime patch; Codex stays on ACP; remote chats stay remote; project MCP
+  passthrough deferred.
 
 ## Important interfaces
 
 - `RuntimeProvider.launch/status/stop` → `RuntimeHandle { request, events }`.
-- `ApiEvent→UIMessageChunk` translation (`main/lib/runtime/translate.ts`, planned).
+- `ApiEvent→UIMessageChunk` translation (`main/lib/runtime/translate.ts`).
+  Cross-process wire constants (`native:` question prefix, `NATIVE_` error
+  prefix) live in `src/shared/runtime-protocol.ts`.
 - tRPC 20 routers shrink to adapters; `chats` keeps product workflows; `changes`
   (git) kept whole; terminal manager kept for local.
 
@@ -93,3 +106,7 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   (provisional: `mauscode`, `dev.maus-inc.mauscode`); JCode vendor form + attribution
   placement (provisional: copied tree under `runtime/jcode` + UPSTREAM.md + MIT notice);
   telemetry policy contents; release channel/CDN owner. See `decisions/`.
+- P1 user-facing provisionals needing confirmation: engine toggle labels
+  ("Legacy"/"Native"); refusal copy for plan mode / offline / custom endpoints
+  on native; whether native stays opt-in per-chat pending the benchmark gate.
+  See `decisions/provisional-assumptions.md` (PA-7+).

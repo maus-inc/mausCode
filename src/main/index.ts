@@ -30,6 +30,8 @@ import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
 import { getAllMcpConfigHandler, hasActiveClaudeSessions, abortAllClaudeSessions } from "./lib/trpc/routers/claude"
 import { getAllCodexMcpConfigHandler, hasActiveCodexStreams, abortAllCodexStreams } from "./lib/trpc/routers/codex"
+import { shutdownRuntime } from "./lib/runtime"
+import { abortAllNativeTurns, hasActiveNativeTurns } from "./lib/trpc/routers/runtime"
 import {
   createMainWindow,
   createWindow,
@@ -708,7 +710,7 @@ if (gotTheLock) {
               label: "Quit",
               accelerator: "CmdOrCtrl+Q",
               click: async () => {
-                if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+                if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveNativeTurns()) {
                   const { dialog } = await import("electron")
                   const { response } = await dialog.showMessageBox({
                     type: "warning",
@@ -721,6 +723,7 @@ if (gotTheLock) {
                   })
                   if (response === 1) {
                     abortAllClaudeSessions()
+                    abortAllNativeTurns()
                     abortAllCodexStreams()
                     setIsQuitting(true)
                     app.quit()
@@ -793,7 +796,7 @@ if (gotTheLock) {
               click: () => {
                 const win = BrowserWindow.getFocusedWindow()
                 if (!win) return
-                if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+                if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveNativeTurns()) {
                   dialog
                     .showMessageBox(win, {
                       type: "warning",
@@ -808,6 +811,7 @@ if (gotTheLock) {
                     .then(({ response }) => {
                       if (response === 1) {
                         abortAllClaudeSessions()
+                        abortAllNativeTurns()
                         abortAllCodexStreams()
                         win.webContents.reloadIgnoringCache()
                       }
@@ -1003,6 +1007,8 @@ if (gotTheLock) {
   app.on("before-quit", async () => {
     console.log("[App] Shutting down...")
     cancelAllPendingOAuth()
+    abortAllNativeTurns()
+    await shutdownRuntime().catch(() => {})
     await cleanupGitWatchers()
     await shutdownAnalytics()
     await closeDatabase()

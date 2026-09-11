@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm"
-import { safeStorage, shell } from "electron"
+import { shell } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
 import { getClaudeShellEnvironment } from "../../claude"
@@ -13,6 +13,7 @@ import {
 } from "../../db"
 import { createId } from "../../db/utils"
 import { publicProcedure, router } from "../index"
+import { decryptToken, encryptToken } from "../../token-crypto"
 
 /**
  * Get desktop auth token for server API calls
@@ -22,27 +23,7 @@ async function getDesktopToken(): Promise<string | null> {
   return authManager.getValidToken()
 }
 
-/**
- * Encrypt token using Electron's safeStorage
- */
-function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[ClaudeCode] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-  return safeStorage.encryptString(token).toString("base64")
-}
 
-/**
- * Decrypt token using Electron's safeStorage
- */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
-}
 
 /**
  * Store OAuth token - now uses multi-account system

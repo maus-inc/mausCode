@@ -145,6 +145,7 @@ import {
   agentsSidebarOpenAtom,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
+  subChatEngineAtomFamily,
   subChatModelIdAtomFamily,
   subChatModeAtomFamily,
   suppressInputFocusAtom,
@@ -169,12 +170,14 @@ import { usePastedTextFiles, type PastedTextFile } from "../hooks/use-pasted-tex
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import { ACPChatTransport } from "../lib/acp-chat-transport"
+import { respondToApproval } from "../lib/approval-routing"
 import { formatHistoryForContext } from "../lib/export-chat"
 import {
   clearSubChatDraft,
   getSubChatDraftFull
 } from "../lib/drafts"
 import { IPCChatTransport } from "../lib/ipc-chat-transport"
+import { NativeChatTransport } from "../lib/native-chat-transport"
 import {
   createQueueItem, createTextPreview, generateQueueId,
   toQueuedFile,
@@ -2944,7 +2947,7 @@ const ChatViewInner = memo(function ChatViewInner({
         await sendUserMessage(formatAnswersAsText(answers))
       } else {
         // Question is still live - use tool approval path
-        await trpcClient.claude.respondToolApproval.mutate({
+        await respondToApproval(subChatId, {
           toolUseId: displayQuestions.toolUseId,
           approved: true,
           updatedInput: { questions: displayQuestions.questions, answers },
@@ -2973,7 +2976,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     // Try to notify backend (may fail if already aborted - that's ok)
     try {
-      await trpcClient.claude.respondToolApproval.mutate({
+      await respondToApproval(subChatId, {
         toolUseId,
         approved: false,
         message: QUESTIONS_SKIPPED_MESSAGE,
@@ -3026,7 +3029,7 @@ const ChatViewInner = memo(function ChatViewInner({
           await sendUserMessage(customText)
         } else {
           // Live: use existing tool approval flow
-          await trpcClient.claude.respondToolApproval.mutate({
+          await respondToApproval(subChatId, {
             toolUseId: displayQuestions.toolUseId,
             approved: true,
             updatedInput: {
@@ -3123,7 +3126,7 @@ const ChatViewInner = memo(function ChatViewInner({
       if (!toolUseId) return
       setPlanApprovalPending((prev) => ({ ...prev, [toolUseId]: true }))
       try {
-        await trpcClient.claude.respondToolApproval.mutate({
+        await respondToApproval(subChatId, {
           toolUseId,
           approved,
         })
@@ -6632,7 +6635,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         worktreePath: worktreePath ? "exists" : "none",
       })
 
-      let transport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | null = null
+      let transport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | NativeChatTransport | null = null
 
       if (isRemoteChat && chatSandboxUrl) {
         // Remote sandbox chat: use HTTP SSE transport
@@ -6661,6 +6664,15 @@ Make sure to preserve all functionality from both branches when resolving confli
             projectPath,
             mode: subChatMode,
             provider: "codex",
+          })
+        } else if (appStore.get(subChatEngineAtomFamily(subChatId)) === "native") {
+          console.log("[getOrCreateChat] Using NativeChatTransport")
+          transport = new NativeChatTransport({
+            chatId,
+            subChatId,
+            cwd: worktreePath,
+            projectPath,
+            mode: subChatMode,
           })
         } else {
           // Local worktree chat: use IPC transport
@@ -6898,6 +6910,10 @@ Make sure to preserve all functionality from both branches when resolving confli
       subChatCodexThinkingAtomFamily(newId),
       appStore.get(subChatCodexThinkingAtomFamily(sourceSubChatId)),
     )
+    appStore.set(
+      subChatEngineAtomFamily(newId),
+      appStore.get(subChatEngineAtomFamily(sourceSubChatId)),
+    )
 
     // Add to open tabs and set as active
     store.addToOpenSubChats(newId)
@@ -6917,7 +6933,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     })
 
     const chatProvider = newSubChatProvider
-    let newSubChatTransport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | null = null
+    let newSubChatTransport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | NativeChatTransport | null = null
 
     if (isNewSubChatRemote && newSubChatSandboxUrl) {
       // Remote sandbox chat: use HTTP SSE transport
@@ -6942,6 +6958,15 @@ Make sure to preserve all functionality from both branches when resolving confli
           projectPath,
           mode: newSubChatMode,
           provider: "codex",
+        })
+      } else if (appStore.get(subChatEngineAtomFamily(newId)) === "native") {
+        console.log("[createNewSubChat] Using NativeChatTransport")
+        newSubChatTransport = new NativeChatTransport({
+          chatId,
+          subChatId: newId,
+          cwd: worktreePath,
+          projectPath,
+          mode: newSubChatMode,
         })
       } else {
         // Local worktree chat: use IPC transport

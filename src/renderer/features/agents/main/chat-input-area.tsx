@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, RefreshCw } from "lucide-react"
+import { ChevronDown, RefreshCw, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
@@ -60,6 +60,8 @@ import {
   lastSelectedModelIdAtom,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
+  subChatEngineAtomFamily,
+  type SubChatEngine,
   subChatModelIdAtomFamily,
   subChatModeAtomFamily,
   getNextMode,
@@ -67,6 +69,7 @@ import {
   type SubChatFileChange,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import { agentChatStore } from "../stores/agent-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentModelSelector } from "../components/agent-model-selector"
 import { AgentSendButton } from "../components/agent-send-button"
@@ -687,6 +690,22 @@ export const ChatInputArea = memo(function ChatInputArea({
     [subChatId],
   )
   const [subChatMode, setSubChatMode] = useAtom(subChatModeAtom)
+
+  // Execution engine - per-subChat, switchable only on empty chats (mirrors canSwitchProvider)
+  const subChatEngineAtom = useMemo(
+    () => subChatEngineAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [engine, setEngine] = useAtom(subChatEngineAtom)
+  // Native engine supports local claude-code chats only (no Codex, no remote sandboxes yet)
+  const canSwitchEngine = canSwitchProvider && provider !== "codex"
+
+  const switchEngine = useCallback((next: SubChatEngine) => {
+    if (!canSwitchEngine || next === engine) return
+    // Drop the pre-created empty Chat so the next send rebuilds with the new transport
+    agentChatStore.delete(subChatId)
+    setEngine(next)
+  }, [canSwitchEngine, engine, setEngine, subChatId])
 
   // Helper to update mode (atomFamily + Zustand store sync)
   const updateMode = useCallback((newMode: AgentMode) => {
@@ -1542,6 +1561,20 @@ export const ChatInputArea = memo(function ChatInputArea({
                         document.body,
                       )}
                   </DropdownMenu>
+
+                  <button
+                    onClick={() => switchEngine(engine === "native" ? "legacy" : "native")}
+                    disabled={!canSwitchEngine}
+                    title={
+                      engine === "native"
+                        ? "Engine: Native (mausCode runtime). Click to switch back to Legacy. Switchable on empty chats only."
+                        : "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
+                    }
+                    className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Zap className={`h-3.5 w-3.5 shrink-0 ${engine === "native" ? "text-amber-500" : ""}`} />
+                    <span className="truncate">{engine === "native" ? "Native" : "Legacy"}</span>
+                  </button>
 
                   <div className="group/model-controls flex items-center gap-0.5">
                     <AgentModelSelector

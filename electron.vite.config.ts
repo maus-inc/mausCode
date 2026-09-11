@@ -24,6 +24,7 @@ export default defineConfig({
           "better-sqlite3",
           "@prisma/client",
           "@anthropic-ai/claude-agent-sdk", // ESM module - must use dynamic import
+          "@maus-inc/runtime-client", // ESM module - must use dynamic import
         ],
         output: {
           format: "cjs",

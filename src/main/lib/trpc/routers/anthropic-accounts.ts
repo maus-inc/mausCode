@@ -1,33 +1,13 @@
 import { eq, sql } from "drizzle-orm"
-import { safeStorage } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
 import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../../db"
 import { createId } from "../../db/utils"
 import { publicProcedure, router } from "../index"
+import { decryptToken, encryptToken } from "../../token-crypto"
 import { clearClaudeCaches } from "./claude"
 
-/**
- * Encrypt token using Electron's safeStorage
- */
-function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[AnthropicAccounts] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-  return safeStorage.encryptString(token).toString("base64")
-}
 
-/**
- * Decrypt token using Electron's safeStorage
- */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
-}
 
 /**
  * Multi-account Anthropic management router

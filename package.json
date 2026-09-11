@@ -34,11 +34,15 @@
     "ts:check": "tsgo --noEmit",
     "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",
     "@anthropic-ai/claude-agent-sdk": "0.2.45",
     "@git-diff-view/react": "^0.0.35",
     "@git-diff-view/shiki": "^0.0.36",
+    "@maus-inc/runtime-client": "file:packages/runtime-client",
     "@mcpc-tech/acp-ai-provider": "^0.2.4",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@monaco-editor/react": "^4.7.0",
