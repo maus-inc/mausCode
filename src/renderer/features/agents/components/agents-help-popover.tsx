@@ -13,6 +13,7 @@ import { KeyboardIcon } from "../../../components/ui/icons"
 import { DiscordIcon } from "../../../icons"
 import { useSetAtom } from "jotai"
 import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "../../../lib/atoms"
+import { getApiBaseUrl } from "../../../lib/api-fetch"
 
 interface ReleaseHighlight {
   version: string
@@ -69,8 +70,12 @@ export function AgentsHelpPopover({
 
   useEffect(() => {
     let cancelled = false
-    window.desktopApi
-      .signedFetch("https://21st.dev/api/changelog/desktop?per_page=3")
+    getApiBaseUrl()
+      .then((baseUrl) =>
+        window.desktopApi.signedFetch(
+          `${baseUrl}/api/changelog/desktop?per_page=3`,
+        ),
+      )
       .then((result) => {
         if (cancelled) return
         const data = result.data as {

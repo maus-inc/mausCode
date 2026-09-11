@@ -10,7 +10,9 @@ let cachedBaseUrl: string | null = null
 
 /**
  * Get the API base URL (cached after first call)
- * Always returns https://21st.dev (both in dev and production)
+ *
+ * Resolved by the main process: https://21st.dev when packaged, or
+ * MAIN_VITE_API_URL when set in development.
  */
 export async function getApiBaseUrl(): Promise<string> {
   if (cachedBaseUrl) return cachedBaseUrl
