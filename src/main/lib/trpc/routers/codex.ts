@@ -1,25 +1,23 @@
 /**
  * NOTE (transplant): reasoning-effort model parsing (`model/effort` selection,
- * `buildCodexProviderArgs`, session fingerprinting), the codex-acp adapter
- * clarification, and text-delta chunk coalescing in the stream loop were
+ * `buildCodexProviderArgs`, session fingerprinting), and text-delta chunk
+ * coalescing in the stream loop were
  * transplanted from erenbertr/1code (Apache-2.0, © the 1Code contributors).
+ *
+ * Chat sessions spawn `codex app-server` (native JSON-RPC) via the ported T3
+ * Effect client in `../../codex-app-server/session`. The legacy codex-acp
+ * (Zed ACP adapter) path was removed in the app-server migration.
  */
-import { createACPProvider, type ACPProvider } from "@mcpc-tech/acp-ai-provider"
 import { observable } from "@trpc/server/observable"
-import { streamText } from "ai"
 import { eq } from "drizzle-orm"
 import { app } from "electron"
 import { spawn, type ChildProcess } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync } from "node:fs"
-import { readdir, readFile } from "node:fs/promises"
-import { homedir } from "node:os"
-import { basename, dirname, join, sep } from "node:path"
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises"
+import { homedir, tmpdir } from "node:os"
+import { basename, join } from "node:path"
 import { z } from "zod"
-import {
-  normalizeCodexAssistantMessage,
-  normalizeCodexStreamChunk,
-} from "../../../../shared/codex-tool-normalizer"
+import { normalizeCodexAssistantMessage } from "../../../../shared/codex-tool-normalizer"
 import { createChunkCoalescer } from "../../claude"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveCliBinaryPath } from "../../cli-binaries"
@@ -31,6 +29,12 @@ import {
   type McpToolInfo,
 } from "../../mcp-auth"
 import { publicProcedure, router } from "../index"
+import {
+  createCodexAppServerSession,
+  type CodexAppServerSession,
+  type CodexSessionChunk,
+  type CodexTurnInput,
+} from "../../codex-app-server/session"
 
 const imageAttachmentSchema = z.object({
   base64Data: z.string(),
@@ -39,7 +43,7 @@ const imageAttachmentSchema = z.object({
 })
 
 type CodexProviderSession = {
-  provider: ACPProvider
+  session: CodexAppServerSession
   cwd: string
   authFingerprint: string | null
   mcpFingerprint: string
@@ -196,58 +200,6 @@ const codexMcpListEntrySchema = z
   .passthrough()
 
 type CodexMcpListEntry = z.infer<typeof codexMcpListEntrySchema>
-
-function getCodexAcpPackageName(): string {
-  const platform = process.platform
-  const arch = process.arch
-
-  if (platform === "darwin") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-darwin-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-darwin-x64"
-  }
-
-  if (platform === "linux") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-linux-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-linux-x64"
-  }
-
-  if (platform === "win32") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-win32-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-win32-x64"
-  }
-
-  throw new Error(`Unsupported platform/arch for codex-acp: ${platform}/${arch}`)
-}
-
-function toUnpackedAsarPath(filePath: string): string {
-  const unpackedPath = filePath.replace(
-    `${sep}app.asar${sep}`,
-    `${sep}app.asar.unpacked${sep}`,
-  )
-
-  if (unpackedPath !== filePath && existsSync(unpackedPath)) {
-    return unpackedPath
-  }
-
-  return filePath
-}
-
-// ACP chat sessions must go through codex-acp (Zed's ACP adapter). The official
-// `codex mcp-server` only speaks MCP and rejects ACP `initialize`, which breaks
-// every chat with "method not found: initialize".
-function resolveCodexAcpBinaryPath(): string {
-  const packageName = getCodexAcpPackageName()
-  const binaryName = process.platform === "win32" ? "codex-acp.exe" : "codex-acp"
-  const codexPackageRoot = dirname(
-    require.resolve("@zed-industries/codex-acp/package.json"),
-  )
-  const resolvedPath = require.resolve(`${packageName}/bin/${binaryName}`, {
-    // Resolve relative to the wrapper package so nested optional deps work in packaged apps.
-    paths: [codexPackageRoot],
-  })
-
-  return toUnpackedAsarPath(resolvedPath)
-}
 
 function resolveBundledCodexCliPath(): string {
   const binaryName = process.platform === "win32" ? "codex.exe" : "codex"
@@ -1105,6 +1057,12 @@ function getLastSessionId(messages: any[]): string | undefined {
   return typeof sessionId === "string" ? sessionId : undefined
 }
 
+function getLastThreadId(messages: any[]): string | undefined {
+  const lastAssistant = [...messages].reverse().find((message) => message?.role === "assistant")
+  const threadId = lastAssistant?.metadata?.threadId
+  return typeof threadId === "string" ? threadId : undefined
+}
+
 function extractCodexModelId(rawModel: unknown): string | undefined {
   if (typeof rawModel !== "string" || rawModel.length === 0) {
     return undefined
@@ -1189,23 +1147,7 @@ function buildCodexProviderEnv(authConfig?: { apiKey: string }): Record<string, 
   }
 }
 
-function getCodexAuthMethodId(authConfig?: {
-  apiKey: string
-}): "codex-api-key" | undefined {
-  const apiKey = authConfig?.apiKey?.trim()
-  if (!apiKey) {
-    return undefined
-  }
-
-  // codex-acp advertises auth methods:
-  // - chatgpt
-  // - codex-api-key
-  // - openai-api-key
-  // For app-managed API key path we want deterministic key auth.
-  return "codex-api-key"
-}
-
-// codex-acp takes no subcommand — only `-c key=value` config overrides.
+// `-c key=value` config overrides, placed before the `app-server` subcommand.
 function buildCodexProviderArgs(reasoningEffort?: string): string[] {
   const args: string[] = []
 
@@ -1245,8 +1187,20 @@ function buildUserParts(
   return parts
 }
 
-function buildModelMessageContent(
-  prompt: string,
+function imageExtensionForMediaType(mediaType: string): string {
+  const subtype = mediaType.split("/")[1]?.split(";")[0]?.trim()
+  if (subtype && /^[a-z0-9]+$/i.test(subtype)) {
+    return subtype.toLowerCase()
+  }
+  return "png"
+}
+
+/**
+ * app-server image inputs are file paths (`localImage`), so base64 attachments
+ * are staged under the OS temp dir for the duration of the turn and removed
+ * afterwards (best effort).
+ */
+async function writeCodexImageTempFiles(
   images:
     | Array<{
         base64Data?: string
@@ -1254,35 +1208,56 @@ function buildModelMessageContent(
         filename?: string
       }>
     | undefined,
-): any[] {
-  const content: any[] = [{ type: "text", text: prompt }]
+  runId: string,
+): Promise<{ paths: string[]; cleanup: () => Promise<void> }> {
+  const noFiles = { paths: [], cleanup: async () => {} }
+  if (!images || images.length === 0) {
+    return noFiles
+  }
 
-  if (images && images.length > 0) {
-    for (const image of images) {
-      if (!image.base64Data || !image.mediaType) continue
-      content.push({
-        type: "file",
-        mediaType: image.mediaType,
-        data: image.base64Data,
-        ...(image.filename ? { filename: image.filename } : {}),
-      })
+  const dir = await mkdtemp(join(tmpdir(), `mauscode-codex-${runId}-`))
+  const cleanup = async () => {
+    try {
+      await rm(dir, { recursive: true, force: true })
+    } catch {
+      // Best effort: temp files must never fail the turn.
     }
   }
 
-  return content
+  try {
+    const paths: string[] = []
+    for (let index = 0; index < images.length; index++) {
+      const image = images[index]
+      if (!image?.base64Data || !image.mediaType) continue
+      const extension = imageExtensionForMediaType(image.mediaType)
+      const safeName =
+        image.filename && image.filename.trim().length > 0
+          ? basename(image.filename)
+          : `image-${index}.${extension}`
+      const filePath = join(dir, safeName)
+      await writeFile(filePath, Buffer.from(image.base64Data, "base64"))
+      paths.push(filePath)
+    }
+    return { paths, cleanup }
+  } catch (error) {
+    await cleanup()
+    throw error
+  }
 }
 
-function getOrCreateProvider(params: {
+async function getOrCreateSession(params: {
   subChatId: string
   cwd: string
-  mcpServers: CodexMcpServerForSession[]
   mcpFingerprint: string
-  existingSessionId?: string
+  existingThreadId?: string
+  legacySessionId?: string
   reasoningEffort?: string
+  model?: string
   authConfig?: {
     apiKey: string
   }
-}): ACPProvider {
+  onChunk: (chunk: CodexSessionChunk) => void
+}): Promise<CodexAppServerSession> {
   const authFingerprint = getAuthFingerprint(params.authConfig)
   const existing = providerSessions.get(params.subChatId)
 
@@ -1293,53 +1268,59 @@ function getOrCreateProvider(params: {
     existing.mcpFingerprint === params.mcpFingerprint &&
     existing.reasoningEffort === (params.reasoningEffort || null)
   ) {
-    return existing.provider
+    existing.session.setOnChunk(params.onChunk)
+    return existing.session
   }
 
   if (existing) {
-    existing.provider.cleanup()
-    providerSessions.delete(params.subChatId)
+    await cleanupProvider(params.subChatId)
   }
 
   const hasAppManagedApiKey = Boolean(params.authConfig?.apiKey?.trim())
-  // When app-managed key auth is used, avoid resuming older persisted session IDs.
+  // When app-managed key auth is used, avoid resuming older persisted threads.
   // Those can be tied to unauthenticated/CLI-auth state and trigger auth loops.
-  const existingSessionIdForProvider = hasAppManagedApiKey
-    ? undefined
-    : params.existingSessionId
+  const resumeIds = hasAppManagedApiKey
+    ? {}
+    : {
+        ...(params.existingThreadId
+          ? { existingThreadId: params.existingThreadId }
+          : {}),
+        ...(params.legacySessionId
+          ? { legacySessionId: params.legacySessionId }
+          : {}),
+      }
 
-  const provider = createACPProvider({
-    command: resolveCodexAcpBinaryPath(),
-    args: buildCodexProviderArgs(params.reasoningEffort),
+  const session = await createCodexAppServerSession({
+    binaryPath: resolveBundledCodexCliPath(),
+    argv: [...buildCodexProviderArgs(params.reasoningEffort), "app-server"],
+    cwd: params.cwd,
     env: buildCodexProviderEnv(params.authConfig),
-    authMethodId: getCodexAuthMethodId(params.authConfig),
-    session: {
-      cwd: params.cwd,
-      mcpServers: params.mcpServers,
-    },
-    ...(existingSessionIdForProvider
-      ? { existingSessionId: existingSessionIdForProvider }
-      : {}),
-    persistSession: true,
+    model: params.model,
+    onChunk: params.onChunk,
+    ...resumeIds,
   })
 
   providerSessions.set(params.subChatId, {
-    provider,
+    session,
     cwd: params.cwd,
     authFingerprint,
     mcpFingerprint: params.mcpFingerprint,
     reasoningEffort: params.reasoningEffort || null,
   })
 
-  return provider
+  return session
 }
 
-function cleanupProvider(subChatId: string): void {
+async function cleanupProvider(subChatId: string): Promise<void> {
   const existing = providerSessions.get(subChatId)
   if (!existing) return
 
-  existing.provider.cleanup()
   providerSessions.delete(subChatId)
+  try {
+    await existing.session.dispose()
+  } catch (error) {
+    console.error("[codex] Failed to dispose app-server session:", error)
+  }
 }
 
 export const codexRouter = router({
@@ -1641,7 +1622,7 @@ export const codexRouter = router({
           existingStream.cancelRequested = true
           existingStream.controller.abort()
           // Ensure old run cannot continue emitting after supersede.
-          cleanupProvider(input.subChatId)
+          void cleanupProvider(input.subChatId)
         }
 
         const abortController = new AbortController()
@@ -1709,9 +1690,8 @@ export const codexRouter = router({
             const metadataModel = selectedReasoningEffort
               ? `${selectedModelId}/${selectedReasoningEffort}`
               : selectedModelId
-            // codex-acp exposes models as `modelId/reasoningEffort` (e.g.
-            // `gpt-5.5/high`) — a bare model id is rejected as unavailable.
-            const acpModelId = `${selectedModelId}/${selectedReasoningEffort || "high"}`
+            // app-server takes model and reasoning effort as separate fields
+            // (thread/start + turn/start) — no `model/effort` concat needed.
 
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
@@ -1781,7 +1761,7 @@ export const codexRouter = router({
             }
 
             if (input.forceNewSession) {
-              cleanupProvider(input.subChatId)
+              await cleanupProvider(input.subChatId)
             }
 
             let mcpSnapshot: CodexMcpSnapshot = {
@@ -1804,30 +1784,24 @@ export const codexRouter = router({
               console.error("[codex] Failed to resolve MCP servers:", mcpError)
             }
 
-            const provider = getOrCreateProvider({
-              subChatId: input.subChatId,
-              cwd: input.cwd,
-              mcpServers: mcpSnapshot.mcpServersForSession,
-              mcpFingerprint: mcpSnapshot.fingerprint,
-              existingSessionId:
-                input.forceNewSession
-                  ? undefined
-                  : input.sessionId ?? getLastSessionId(existingMessages),
-              reasoningEffort: selectedReasoningEffort,
-              authConfig: input.authConfig,
-            })
-
+            // Accumulate the assistant message from app-server chunks while also
+            // forwarding chunks to the renderer. Shape mirrors the AI-SDK
+            // UIMessage parts the ACP path produced, so persistence and the
+            // renderer stay untouched.
+            const accumulatedParts: any[] = []
+            const accumulatedText: Record<string, string> = {}
+            const toolPartIndexByCallId: Record<string, number> = {}
             const startedAt = Date.now()
-            let latestSessionId =
-              provider.getSessionId() ||
-              input.sessionId ||
-              getLastSessionId(existingMessages)
+            let latestSessionId: string | undefined =
+              input.sessionId || getLastSessionId(existingMessages)
+            let latestThreadId: string | undefined =
+              getLastThreadId(existingMessages)
             let usagePromise: Promise<CodexUsageMetadata | null> | null = null
 
             const resolveUsageOnce = (): Promise<CodexUsageMetadata | null> => {
               if (usagePromise) return usagePromise
 
-              const sessionId = latestSessionId || provider.getSessionId()
+              const sessionId = latestSessionId
               if (!sessionId) {
                 return Promise.resolve(null)
               }
@@ -1838,121 +1812,172 @@ export const codexRouter = router({
               return usagePromise
             }
 
-            const result = streamText({
-              model: provider.languageModel(acpModelId),
-              messages: [
-                {
-                  role: "user",
-                  content: buildModelMessageContent(input.prompt, input.images),
-                },
-              ],
-              tools: provider.tools,
-              abortSignal: abortController.signal,
-            })
-
-            const uiStream = result.toUIMessageStream({
-              originalMessages: messagesForStream,
-              generateMessageId: () => crypto.randomUUID(),
-              messageMetadata: ({ part }) => {
-                const sessionId = provider.getSessionId() || undefined
-                if (sessionId) {
-                  latestSessionId = sessionId
-                }
-
-                if (part.type === "finish") {
-                  return {
-                    model: metadataModel,
-                    sessionId,
-                    durationMs: Date.now() - startedAt,
-                    resultSubtype: part.finishReason === "error" ? "error" : "success",
-                  }
-                }
-
-                if (sessionId) {
-                  return {
-                    model: metadataModel,
-                    sessionId,
-                  }
-                }
-
-                return { model: metadataModel }
-              },
-              onFinish: async ({ responseMessage, isContinuation }) => {
-                try {
-                  const usageMetadata = await resolveUsageOnce()
-                  const responseWithUsage = usageMetadata
-                    ? {
-                        ...responseMessage,
-                        metadata: {
-                          ...((responseMessage as any)?.metadata || {}),
-                          ...usageMetadata,
-                        },
-                      }
-                    : responseMessage
-                  const cleanedResponseMessage =
-                    cleanAssistantMessageForPersistence(responseWithUsage)
-
-                  if (!cleanedResponseMessage) {
-                    persistSubChatMessages(messagesForStream)
-                    return
-                  }
-
-                  const messagesToPersist = [
-                    ...(isContinuation
-                      ? messagesForStream.slice(0, -1)
-                      : messagesForStream),
-                    cleanedResponseMessage,
-                  ]
-
-                  persistSubChatMessages(messagesToPersist)
-                } catch (error) {
-                  console.error("[codex] Failed to persist messages:", error)
-                }
-              },
-              onError: (error) => extractCodexError(error).message,
-            })
-
-            const reader = uiStream.getReader()
-            let pendingFinishChunk: any | null = null
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
-
-              if (value?.type === "error") {
+            const handleSessionChunk = (chunk: CodexSessionChunk) => {
+              if (chunk?.type === "error") {
                 // Drain buffered text before the error chunk (ordering).
                 coalescer.flush()
-                const normalized = extractCodexError(value)
-
+                const normalized = extractCodexError(chunk)
                 if (isCodexAuthError(normalized)) {
-                  safeEmit({ ...value, type: "auth-error", errorText: normalized.message })
+                  safeEmit({
+                    ...chunk,
+                    type: "auth-error",
+                    errorText: normalized.message,
+                  })
                 } else {
-                  safeEmit({ ...value, errorText: normalized.message })
+                  safeEmit({ ...chunk, errorText: normalized.message })
                 }
-                continue
+                return
               }
 
-              if (value?.type === "finish") {
-                pendingFinishChunk = value
-                continue
+              if (chunk?.type === "text-start" && typeof chunk.id === "string") {
+                accumulatedText[chunk.id] = ""
+              } else if (
+                chunk?.type === "text-delta" &&
+                typeof chunk.id === "string" &&
+                typeof chunk.delta === "string"
+              ) {
+                accumulatedText[chunk.id] =
+                  (accumulatedText[chunk.id] ?? "") + chunk.delta
+              } else if (
+                chunk?.type === "text-end" &&
+                typeof chunk.id === "string"
+              ) {
+                accumulatedParts.push({
+                  type: "text",
+                  text: accumulatedText[chunk.id] ?? "",
+                })
+                delete accumulatedText[chunk.id]
+              } else if (chunk?.type === "tool-input-available") {
+                const part = {
+                  type: `tool-${chunk.toolName}`,
+                  toolCallId: chunk.toolCallId,
+                  toolName: chunk.toolName,
+                  input: chunk.input,
+                  state: "call",
+                  startedAt: Date.now(),
+                }
+                toolPartIndexByCallId[chunk.toolCallId] = accumulatedParts.length
+                accumulatedParts.push(part)
+              } else if (chunk?.type === "tool-output-available") {
+                const index = toolPartIndexByCallId[chunk.toolCallId]
+                if (index !== undefined && accumulatedParts[index]) {
+                  accumulatedParts[index] = {
+                    ...accumulatedParts[index],
+                    result: chunk.output,
+                    output: chunk.output,
+                    state: "result",
+                  }
+                }
               }
 
-              coalescer.push(value)
+              coalescer.push(chunk)
+            }
+
+            const session = await getOrCreateSession({
+              subChatId: input.subChatId,
+              cwd: input.cwd,
+              mcpFingerprint: mcpSnapshot.fingerprint,
+              existingThreadId: input.forceNewSession
+                ? undefined
+                : getLastThreadId(existingMessages),
+              legacySessionId: input.forceNewSession
+                ? undefined
+                : (input.sessionId ?? getLastSessionId(existingMessages)),
+              reasoningEffort: selectedReasoningEffort,
+              model: selectedModelId,
+              authConfig: input.authConfig,
+              onChunk: handleSessionChunk,
+            })
+            latestSessionId = session.sessionId
+            latestThreadId = session.threadId
+
+            if (abortController.signal.aborted) {
+              // Cancelled while spawning: the finally below disposes the
+              // session (aborted runs always clean up).
+              safeComplete()
+              return
+            }
+            abortController.signal.addEventListener(
+              "abort",
+              () => {
+                void session.interrupt()
+              },
+              { once: true },
+            )
+
+            const turnInput: CodexTurnInput[] = [
+              { type: "text", text: input.prompt },
+            ]
+            const { paths: imagePaths, cleanup: cleanupImageFiles } =
+              await writeCodexImageTempFiles(input.images, input.runId)
+            for (const imagePath of imagePaths) {
+              turnInput.push({ type: "localImage", path: imagePath })
+            }
+
+            let turnResult: Awaited<
+              ReturnType<CodexAppServerSession["startTurn"]>
+            >
+            if (abortController.signal.aborted) {
+              await cleanupImageFiles()
+              turnResult = { status: "interrupted" }
+            } else {
+              try {
+                turnResult = await session.startTurn(turnInput, {
+                  model: selectedModelId,
+                  effort: selectedReasoningEffort,
+                })
+              } finally {
+                await cleanupImageFiles()
+              }
             }
 
             // Drain any buffered text-delta before the post-stream emits.
             coalescer.flush()
 
-            if (pendingFinishChunk) {
-              const usageMetadata = await resolveUsageOnce()
-              if (usageMetadata) {
-                safeEmit({
-                  type: "message-metadata",
-                  messageMetadata: usageMetadata,
-                })
+            const usageMetadata = await resolveUsageOnce()
+            if (usageMetadata) {
+              safeEmit({
+                type: "message-metadata",
+                messageMetadata: usageMetadata,
+              })
+            }
+
+            const finishMetadata = {
+              model: metadataModel,
+              sessionId: latestSessionId,
+              threadId: latestThreadId,
+              durationMs: Date.now() - startedAt,
+              // Mirror the ACP/AI-SDK routers: only true errors fail; user
+              // interrupts render without the "Failed" badge.
+              resultSubtype: turnResult.status === "error" ? "error" : "success",
+            }
+            safeEmit({ type: "message-metadata", messageMetadata: finishMetadata })
+
+            safeEmit({ type: "finish" })
+
+            try {
+              const responseMessage = {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                parts: accumulatedParts,
+                metadata: {
+                  ...finishMetadata,
+                  ...(usageMetadata ?? {}),
+                },
               }
-              safeEmit(pendingFinishChunk)
-            } else {
-              safeEmit({ type: "finish" })
+              const cleanedResponseMessage =
+                cleanAssistantMessageForPersistence(responseMessage)
+
+              if (!cleanedResponseMessage) {
+                persistSubChatMessages(messagesForStream)
+              } else {
+                persistSubChatMessages([
+                  ...messagesForStream,
+                  cleanedResponseMessage,
+                ])
+              }
+            } catch (error) {
+              console.error("[codex] Failed to persist messages:", error)
             }
 
             safeComplete()
@@ -1974,7 +1999,7 @@ export const codexRouter = router({
               const shouldCleanupProvider =
                 abortController.signal.aborted || activeStream.cancelRequested
               if (shouldCleanupProvider) {
-                cleanupProvider(input.subChatId)
+                await cleanupProvider(input.subChatId)
               }
               activeStreams.delete(input.subChatId)
             }
@@ -2019,8 +2044,8 @@ export const codexRouter = router({
 
   cleanup: publicProcedure
     .input(z.object({ subChatId: z.string() }))
-    .mutation(({ input }) => {
-      cleanupProvider(input.subChatId)
+    .mutation(async ({ input }) => {
+      await cleanupProvider(input.subChatId)
 
       const activeStream = activeStreams.get(input.subChatId)
       if (activeStream) {
