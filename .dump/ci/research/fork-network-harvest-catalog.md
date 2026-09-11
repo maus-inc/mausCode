@@ -14,10 +14,10 @@ Survey of the entire public fork network of `21st-dev/1code` (618 forks) as of 2
 | Fork | Commits | Changed files | Nature | Verdict |
 |---|---|---|---|---|
 | lupanpan1030/agent-code-for-me (`Locus`) | 1,174 | 2,103 (+367k/−48k) | Mature parallel product: local-first workbench + runtime boundary for Claude Code/Codex; sessions, capability truth, audit, handoff; OpenSpec workflow identical to ours; i18n bilingual-UI branch | DEEP MINE — highest value; cherry-pick domains, not wholesale |
-| erenbertr/1code | 89 | 230 (+20.6k/−8.5k) | Big feature fork: Codex CLI 0.→0.137, Gemini/OpenRouter ACP, mind-map AI builder, streaming/memory fixes, usage-stats, sub-chat sidebar rework | CHERRY-PICK base — user approved: everything except kanban + mind-map + feature removals |
+| erenbertr/1code | 89 | 230 (+20.6k/−8.5k) | Big feature fork: Codex CLI 0.<->0.137, Gemini/OpenRouter ACP, mind-map AI builder, streaming/memory fixes, usage-stats, sub-chat sidebar rework | CHERRY-PICK base — user approved: everything except kanban + mind-map + feature removals |
 | aadivar/1code | 77 (sync commits) | 22 (+1.7k) | Sync/continuity fork: replays upstream into git, tags releases, adds Claude Code usage-stats widget | WIDGET ONLY (claude-usage router + usage-widget.tsx, widget-settings-popup tweak) |
-| ningzhaoxing/1code | 30 |302 (+31.5k/−8.9k) | Skills + security-mining fork: Claude skills install/core, tooling management, vulnerability-research workbench, security-mining record workflow, UI polish (Chinese-annotated) | CAREFUL REVIEW — skills/security-mining concepts win; check for copypasta/hardcoded paths (Chinese UI strings possibly中国的专有)„cherrypick with care" |
-| jhckevin/1code |4 |161 (+7.3k/−9.6k) | OpenCodex replatform: app-server launch profiles, backend-route model, auth-manager DELETED(−301), sandbox-import DELETED(−426), release-config scripts, brand → opencodex | SKIP wholesale — net-negative + architecture fork; mine: `opencodex-backend-route.ts` model, release-config.mjs, banner-model, changelog-url(upstream-independent pieces); do NOT take its auth deletions |
+| ningzhaoxing/1code | 30 |302 (+31.5k/−8.9k) | Skills + security-mining fork: Claude skills install/core, tooling management, vulnerability-research workbench, security-mining record workflow, UI polish (Chinese-annotated) | CAREFUL REVIEW — skills/security-mining concepts win; check for copypasta/hardcoded paths (Chinese UI strings possiblyChina)„cherrypick with care" |
+| jhckevin/1code |4 |161 (+7.3k/−9.6k) | OpenCodex replatform: app-server launch profiles, backend-route model, auth-manager DELETED(−301), sandbox-import DELETED(−426), release-config scripts, brand <-> opencodex | SKIP wholesale — net-negative + architecture fork; mine: `opencodex-backend-route.ts` model, release-config.mjs, banner-model, changelog-url(upstream-independent pieces); do NOT take its auth deletions |
 | sylvaindiv/1code |1 |65 (+4.8k/−0.9k) | One-shot big feat: agents sidebar redesign (dnd reorder, sub-chat archive, per-project emoji picker, new modes), DB migrations, dev-server router | ONE-FEATURE mine — sidebar reorder + sub-chat archive + emoji picker (check against our own sidebar plan; BIG overlap with erenbertr's sub-chat work — pick one lineage) |
 | ken-jo/1code |1 |4 (+57/−354) | `remove auth` — removes built-in login flow (src/main/index.ts −234, windows/main.ts rework, App.tsx) | REJECT for us — we want auth; but study its pattern if we ever want a "passwordless" mode |
 | PsyberKadi/1code |1 |1 (+21) | Adds `GITHUB_AUTOMATION_SNAPSHOT_2026-06-30.md` (freeze-recovery doc) | MAYBE — doc only; free for the taking if we want the snapshot |
@@ -27,14 +27,14 @@ Survey of the entire public fork network of `21st-dev/1code` (618 forks) as of 2
 ## Cherry-pick ledger (live, will edit as we pick)
 
 ### Category А — Approved by user (from erenbertr/1code)
-- [ ] Codex upgrades: bundled CLI 0..→0..137.0, codex-acp adapter repair, tool-normalizer `src/shared/codex-tool-normalizer.ts`
+- [ ] Codex upgrades: bundled CLI 0..<->0..137.0, codex-acp adapter repair, tool-normalizer `src/shared/codex-tool-normalizer.ts`
 - [ ] Gemini ACP provider integration (message history + images, auto-alias/model fallback)
 - [ ] OpenRouter provider + model selection (new-chat form, agent selector, workspace instructions in system prompt)
 - [ ] Streaming stability fixes (abort listener removal, renderer crash-under-heap fixes, tab eviction)
 - [ ] Usage-stats footer (quota %, 80% orange, reset-time label)
 - [ ] Sidebar QoL (restore previously opened chat, file refresh button, drag/manual reorder via sort_order)
 - [ ] Details-sidebar / misc polish (as diff-reviewed)
-EXCLUDED by user: kanban (5 files)、mind-map AI builder (React-Flow build surface), any "AI-bro feature removal" (their deletions: kanban, claude-login-modal.tsx, agents-subchats-sidebar.tsx — we keep ours)
+EXCLUDED by user: kanban (5 files)mind-map AI builder (React-Flow build surface), any "AI-bro feature removal" (their deletions: kanban, claude-login-modal.tsx, agents-subchats-sidebar.tsx — we keep ours)
 
 
 
@@ -59,18 +59,18 @@ EXCLUDED by user: kanban (5 files)、mind-map AI builder (React-Flow build surfa
 - [ ] `aletc1`: not actually ahead
 - [ ] stale forks (tip==old upstream tags: rakshanNagesh19205, schulzfel, arafat877, varun-coditas, linrf et al.)
 
-## Care flags (全局)
+## Care flags ((global))
 1. **Two sidebar lineages conflict** — `erenbertr` (sub-chats-sidebar rework) vs `sylvaindiv` (dnd reorder+archive). Choose ONE; do not merge both blindly.
-2. **Our `init` tree already diverged** (maus rebrand, CI ratchets, agent workspaces). Every pickup must be **re-applied on our tree**, not `git cherry-pick` blindly — expect conflicts with our branding/CI edits. Prefer file/hunk-level transplant reviewed by owie。
-3. **Database migrations must be re-sequenced** — drizzle migrations from forks (sylv, jhckevin, others) assume their history; ours diverged. Port schema changes manually; never copy migration files verbatim (conflicts with maus drizzle journal)．
+2. **Our `init` tree already diverged** (maus rebrand, CI ratchets, agent workspaces). Every pickup must be **re-applied on our tree**, not `git cherry-pick` blindly — expect conflicts with our branding/CI edits. Prefer file/hunk-level transplant reviewed by owie
+3. **Database migrations must be re-sequenced** — drizzle migrations from forks (sylv, jhckevin, others) assume their history; ours diverged. Port schema changes manually; never copy migration files verbatim (conflicts with maus drizzle journal).
 4. **License/source hygiene** — all these forks inherit 1Code's license;copying small file-level pieces is fine; no vendored binaries or secrets (some forks ship `.claude/settings.local.json` — skip those files entirely).
-5. **Priority: value per file, not per commit** — big forks rewritten whole files (Locus 367k insertions、。We harvest **specific files/features**, never whole-tree merge.
+5. **Priority: value per file, not per commit** — big forks rewritten whole files (Locus 367k insertionsWe harvest **specific files/features**, never whole-tree merge.
 
 
 
 ## Category A — File map (erenbertr/1code, vs our current tree)
 
-Delta base: `HEAD` (our init) ↔ `forkup/main`. 230 files total: 66 A, 123 M, 40 D,  ̄1 R.
+Delta base: `HEAD` (our init) <-> `forkup/main`. 230 files total: 66 A, 123 M, 40 D,  1 R.
 
 ### Exclusion-safety (already enforced)
 - `feat/build` (mind-map AI builder): 9 files — EXCLUDED (user)
@@ -89,7 +89,7 @@ Delta base: `HEAD` (our init) ↔ `forkup/main`. 230 files total: 66 A, 123 M, 4
 **`src/main` (17 A + 19 M — backend core)**
 - tRPC routers/mutations for agents/provider/sub-chats — TAKE (new router files A; M-routers merge)
 
-- codex binary bump (`0..→0..137`), ACP adapter repair, `src/shared/codex-tool-normalizer.ts` — TAKE (matches our codex-native scaffold)
+- codex binary bump (`0..<->0..137`), ACP adapter repair, `src/shared/codex-tool-normalizer.ts` — TAKE (matches our codex-native scaffold)
 - auth/streaming/auto-updater tweaks — REVIEW each файл
 **`drizzle` (12 A:— 0008-0013 + snapshots + journal)**
 - Schema файлы for agents/sub-chats/automations — PORT MANUALLY (never copy migrations verbatim; re-sequence against our maus journal; see Care flag 3)
@@ -109,7 +109,7 @@ Delta base: `HEAD` (our init) ↔ `forkup/main`. 230 files total: 66 A, 123 M, 4
 ### Category A — implementation notes
 - Prefer **file/hunk transplant** over `git cherry-pick` (our tree diverged: branding, CI ratchets, drizzle journal)
 - Each TAKE file: re-apply to our `init`-derived feature branch; click through for conflicts; keep maus branding"
-- Order: backend core (src/main + shared normalizer) → agent transports → UI components → drizzle port → sidebar (final, after lineage decision)
+- Order: backend core (src/main + shared normalizer) <-> agent transports <-> UI components <-> drizzle port <-> sidebar (final, after lineage decision)
 
 ## Category C — File maps (small mines)
 
@@ -134,34 +134,34 @@ Delta base: `HEAD` (our init) ↔ `forkup/main`. 230 files total: 66 A, 123 M, 4
 ## Deep-research: T3 Code (pingdotgg/t3code) — port base for "optional backend for external CLIs"
 
 ### What it is
-- "Agent harness control surface"~~ monorepo (`@t3tools/monorepo`, 3,833 commits, 1,049 branches, active nightly (today: v0.0.41-nightly.20260911)。
-- clients: desktop/web/mobile/server/marketing apps;; packages: client-runtime, contracts, effect-acp, effect-codex-app-server, shared, ssh, tailscale. Supports Claude Code, Codex, **Cursor**, Grok Build, OpenCode, Antigravity — the exact multi-provider "external CLI" row我们 want.
+- "Agent harness control surface"~~ monorepo (`@t3tools/monorepo`, 3,833 commits, 1,049 branches, active nightly (today: v0.0.41-nightly.20260911)
+- clients: desktop/web/mobile/server/marketing apps;; packages: client-runtime, contracts, effect-acp, effect-codex-app-server, shared, ssh, tailscale. Supports Claude Code, Codex, **Cursor**, Grok Build, OpenCode, Antigravity — the exact multi-provider "external CLI" row want.
 
 
 ### Why it's the right port base (not building blind)
-- **`packages/contracts` (67 files, tested)**: THE shared contract layer — agentSessions, assets, auth, device, environment, git, ipc, editor, keybindings, model, baseSchemas… — crisp types/validators for agent+device+environment; maps 1:1 to our scaffolds' needs (native-session-init, runtime-permissions, native-endpoint-config, mcp-passthrough)。 We were going to design these from scratch — they're already designed+tested。
+- **`packages/contracts` (67 files, tested)**: THE shared contract layer — agentSessions, assets, auth, device, environment, git, ipc, editor, keybindings, model, baseSchemas… — crisp types/validators for agent+device+environment; maps 1:1 to our scaffolds' needs (native-session-init, runtime-permissions, native-endpoint-config, mcp-passthrough) We were going to design these from scratch — they're already designed+tested
 - **`packages/effect-codex-app-server`**: a Codex app-server protocol package (client/protocol/rpc/schema/stdio — **generated from Codex's official schema**,with tests + mock peer + probe). Directly fills our `add-codex-native-support` scaffold — instead of implementing the Codex app-server protocol blind, port+refactor this (huge de-risk).
-- **`apps/server/src`**: backend surface already built+tests: auth/ (EnvironmentAuth, PairingGrantStore, RpcAuthorization, ServerSecretStore), orchestration/ (engine + provider adapters, integration-tested), provider/ (per-provider adapters), mcp/ (the 26 mcp-* branch surfaces: checkpoints, controls, conversations, environment, preview-controls, projects, queue-inputs, scheduled-tasks, terminals, thread-search/state, workspaces), processes/terminals/workspaces/device/cli/background/…. — the "optional backend for external CLIs" whole, already wrought。
-- **`apps/desktop/web/mobile`**: a full harness-control-plane product (mobile remote!!) — concepts to borrow (auth pairing, remote control, previews, transfer budgets) even if we don't port the apps themselves。
+- **`apps/server/src`**: backend surface already built+tests: auth/ (EnvironmentAuth, PairingGrantStore, RpcAuthorization, ServerSecretStore), orchestration/ (engine + provider adapters, integration-tested), provider/ (per-provider adapters), mcp/ (the 26 mcp-* branch surfaces: checkpoints, controls, conversations, environment, preview-controls, projects, queue-inputs, scheduled-tasks, terminals, thread-search/state, workspaces), processes/terminals/workspaces/device/cli/background/…. — the "optional backend for external CLIs" whole, already wrought
+- **`apps/desktop/web/mobile`**: a full harness-control-plane product (mobile remote!!) — concepts to borrow (auth pairing, remote control, previews, transfer budgets) even if we don't port the apps themselves
 
 
 ### What to port, in order (draft — for approval, not started)
-1. **`contracts` → our shared package** (`src/shared` or new `packages/contracts`) — agentSessions/auth/device/environment/git/editor/model types+validators; adapt filenames/ids to maus; interop-tested。 (Feeds our add-native-* scaffolds')
-2. **`effect-codex-app-server` → our codex-native impl**: port protocol/client/rpc/schema (keep generated schema tied to Codex's repo), wire into our `add-codex-native-support` scaffold; delete meta-gen namespaces we don't use。
-3. **server auth pairing** (EnvironmentAuth, PairingGrantStore, RpcAuthorization, ServerSecretStore, device/) → our backend-auth design (replaces building our own device-pairing from scratch)。
-4. **orchestration + provider adapters** (integration-tested) → our "external CLI backend" execution engine (with our runtime-permissions ratchet wiring)。
-5. **mcp surface** — port mcp server packages (controls/environment/projects/terminals/workspaces… in dependency order; each maps to a checkpoint in our scaffold list)。
-6. **apps surfaces** — borrow concepts only: transfer-budget, previews, remote/mobile pairing, dev-server router (from sylvaindiv too )。
+1. **`contracts` <-> our shared package** (`src/shared` or new `packages/contracts`) — agentSessions/auth/device/environment/git/editor/model types+validators; adapt filenames/ids to maus; interop-tested (Feeds our add-native-* scaffolds')
+2. **`effect-codex-app-server` <-> our codex-native impl**: port protocol/client/rpc/schema (keep generated schema tied to Codex's repo), wire into our `add-codex-native-support` scaffold; delete meta-gen namespaces we don't use
+3. **server auth pairing** (EnvironmentAuth, PairingGrantStore, RpcAuthorization, ServerSecretStore, device/) <-> our backend-auth design (replaces building our own device-pairing from scratch)
+4. **orchestration + provider adapters** (integration-tested) <-> our "external CLI backend" execution engine (with our runtime-permissions ratchet wiring)
+5. **mcp surface** — port mcp server packages (controls/environment/projects/terminals/workspaces… in dependency order; each maps to a checkpoint in our scaffold list)
+6. **apps surfaces** — borrow concepts only: transfer-budget, previews, remote/mobile pairing, dev-server router (from sylvaindiv too )
 
 
 ### Port notes / care flags (t3code-specific)
-- **Monorepo vs our app**: we're a single Electron app + future optional server; port **files/features**, not the monorepo tooling (no workspace deps, no tailscale/ssh — those are their infra; skip unless we need remote)。
-- **Dependencies**: t3 uses Effect platform heavily (effect-acp, effect-codex-app-server); contracts may carry effect/fp-ts deps — decision: adopt effect for contract/adapter layers;; our app core stays as-is。
+- **Monorepo vs our app**: we're a single Electron app + future optional server; port **files/features**, not the monorepo tooling (no workspace deps, no tailscale/ssh — those are their infra; skip unless we need remote)
+- **Dependencies**: t3 uses Effect platform heavily (effect-acp, effect-codex-app-server); contracts may carry effect/fp-ts deps — decision: adopt effect for contract/adapter layers;; our app core stays as-is
 - **License**: **MIT** (verified: LICENSE file, T3 Tools Inc, 2026) — clear to port with attribution
-- **Tests**: port their tests along (contracts 67 = half tests;; codex-app-server fully tested) — they're the safety net that makes "port without building blind" survivable。
-- **Size**: do NOT boil ocean — this section is the *plan*; actual porting = separate feature branches, one package/area at a time (contracts first), reviewed per step (order above)。
+- **Tests**: port their tests along (contracts 67 = half tests;; codex-app-server fully tested) — they're the safety net that makes "port without building blind" survivable
+- **Size**: do NOT boil ocean — this section is the *plan*; actual porting = separate feature branches, one package/area at a time (contracts first), reviewed per step (order above)
 
 
 ### Cross-references
 - Our scaffolds this maps to: add-codex-native-support, add-runtime-permissions, add-native-endpoint-config, add-native-mcp-passthrough, add-native-session-init(see openspec/changes/))
-- Locus (lupanpan130) branch parallel: effect-acp/conversations/orchestration concepts overlap — mining both, prefer whichever is cleaner时
+- Locus (lupanpan130) branch parallel: effect-acp/conversations/orchestration concepts overlap — mining both, prefer whichever is cleaner
