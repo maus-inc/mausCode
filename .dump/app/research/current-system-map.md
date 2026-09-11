@@ -1,8 +1,8 @@
 # Current system map — inherited 1Code app + upstream JCode
 
-Checkout: `arena/01a08de4-mauscode` at f6d5e4c (base = origin/main 9f1bc76 "Release
-v0.0.72" + init scaffolding). JCode upstream inspected at ce4e789 (v0.84.0, /tmp clone).
-All paths relative to repo root unless noted. Verified by reading source, not docs.
+Provenance: 1Code tree at origin/main 9f1bc76 ("Release v0.0.72"); JCode upstream at
+1jehuang/jcode ce4e789 (v0.84.0). All paths relative to repo root unless noted.
+Verified by reading source, not docs.
 
 ## 1. Current frontend architecture
 
@@ -250,8 +250,8 @@ must close (one `AgentRuntime` interface, see §17).
   eviction; renderer mirrors server state in multiple stores.
 - Baseline to capture before changes: cold start, first-token latency (Claude +
   Codex), session create/resume, memory idle/loaded, event throughput. Bun is the
-  package manager but is not installed in this sandbox (node v22 only) — CI must own
-  these numbers first.
+  package manager; CI owns these numbers (see `../decisions/provisional-assumptions.md`
+  PA-6 for environment constraints).
 
 ## 16. Current JCode architecture (upstream v0.84.0, MIT, Jeremy Huang)
 
@@ -354,3 +354,50 @@ existing `UIMessageChunk` stream so renderer code keeps working during migration
 Non-goals for the seam: JCode TUI crates (never ship), swarm/ambient/overnight/
 gmail/selfdev (do not vendor-gate on them; keep compiling, disable by default),
 daemon idle-shutdown default (desktop wants explicit lifecycle).
+
+## 18. Module disposition (KEEP / ADAPT / REPLACE / REMOVE)
+
+Module-level verdicts complementing the execution-seam table in §17. Read both
+before touching an inherited module. Rule: replace execution authority, keep
+product modules; never rewrite a stable module for cleanliness.
+
+| Module | Path | Verdict | Rationale |
+|---|---|---|---|
+| Git core (status/diff/staging/worktrees/watcher/cache/security) | `src/main/lib/git/` (~25 files) | KEEP then ADAPT | Hardened paths (`security/`, `path-validation.ts`); runtime owns git only after protocol parity |
+| Terminal/PTY (manager/session/port/env/history) | `src/main/lib/terminal/` | ADAPT then REPLACE | Good surface; daemon-side PTY arrives with node placements |
+| Files router | `src/main/lib/trpc/routers/files.ts` (511) | ADAPT | Becomes protocol file surface; keep local fast path + watcher |
+| Projects router | `src/main/lib/trpc/routers/projects.ts` (549) | ADAPT | Workspace-adjacent; maps to workspace model |
+| Chats/sessions router | `src/main/lib/trpc/routers/chats.ts` (2196) | ADAPT (heavily) | Session behavior worth preserving; execution authority moves out |
+| Claude router | `src/main/lib/trpc/routers/claude.ts` (3230) | REPLACE core, KEEP UX patterns | Execution → harness; keep streaming/approval/plan-mode UX |
+| Codex router | `src/main/lib/trpc/routers/codex.ts` (1949) | ADAPT to compatibility adapter | Reference implementation of the adapter interface |
+| Claude settings/accounts/Ollama/voice | `claude-code.ts`, `claude-settings.ts`, `anthropic-accounts.ts`, `ollama.ts`, `voice.ts` | ADAPT | Seeds for runtime-level BYOK provider config |
+| Commands/skills/plugins/agents routers | `commands.ts`, `skills.ts`, `plugins.ts`, `agents.ts` | KEEP | Runtime-agnostic product modules; same file formats JCode uses |
+| Auth (OAuth, auth-manager/store, mcp-auth) | `src/main/auth*`, `src/main/lib/oauth.ts` | REIMPLEMENT | 21st-service-coupled; device-registry auth is a new design |
+| Auto-updater | `src/main/lib/auto-updater.ts` | REIMPLEMENT | Feed points at `cdn.21st.dev`; needs maus-owned channel |
+| Analytics/Sentry/PostHog | `lib/analytics.ts`, `renderer/lib/analytics.ts` | REMOVE, then re-add deliberately | Needs maus-inc telemetry policy first |
+| DB schema (projects/chats/sub_chats) | `src/main/lib/db/schema/` | ADAPT | Sound local-first base; extend toward workspace/device model |
+| CLI (`1code` command) | `src/main/lib/cli.ts`, `src/main/lib/platform/` | REIMPLEMENT | Becomes `mauscode` CLI surface |
+| Worktree config/naming | `src/main/lib/git/worktree*` | KEEP | Good product behavior, no backend coupling |
+| Renderer `features/*` (agents, terminal, changes, kanban, …) | `src/renderer/` | KEEP as reference implementation | No redesign before the native vertical slice works |
+| `credential-manager.ts` (821 lines) | `src/main/lib/credential-manager.ts` | REMOVE | Dead: imports nonexistent modules, zero references |
+| `mock-api.ts` | `src/renderer/lib/mock-api.ts` | REMOVE | Self-marked DEPRECATED |
+
+## 19. Inherited service coupling points (strip list)
+
+Everything below terminates at 21st infrastructure and must be replaced, not
+resurrected. No mausCode behavior may depend on these hosts.
+
+- `src/main/index.ts`: API base `https://21st.dev`, renderer URL, About menu,
+  `dev.21st.1code` app id, `1code` PATH installer, `shell.openExternal(21st.dev)`.
+- `src/main/windows/main.ts`: window title, trusted origins (`21st.dev`).
+- `electron-builder.yml` + `package.json`: appId / productName / artifact names /
+  homepage / author.
+- `src/main/lib/{config,auth-manager,oauth,mcp-auth,auto-updater,analytics}.ts`:
+  service URLs, OAuth, CDN feed (`https://cdn.21st.dev/releases/desktop`), telemetry.
+- `src/renderer/lib/{remote-api,remote-trpc,api-fetch}.ts`,
+  `features/agents/lib/remote-chat-transport.ts`: hosted-backend assumptions.
+- `resources/bin/` (gitignored): release pipeline downloads Claude/Codex binaries via
+  `scripts/download-*-binary.mjs`.
+- Docs: `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `openspec/project.md` still
+  describe 21st/1Code. `LICENSE` is Apache-2.0: retain, and preserve upstream
+  attribution in any NOTICE/UPSTREAM handling. Never strip it.
