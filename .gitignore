@@ -30,3 +30,10 @@ electron.vite.config.*.mjs
 
 # Claude binary (downloaded at build time)
 resources/bin/
+
+# Test / benchmark outputs
+coverage/
+test-results/
+
+# Cloudflare Wrangler local state (legacy deploy tooling)
+.wrangler/

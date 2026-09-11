@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, "arena/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Renderer build OOMs below ~3 GB heap (monaco + mermaid + shiki graph);
+  # see .dump/ci/research/repository-infrastructure-audit.md section 6.
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  quality:
+    name: Quality gates (lint, test, typecheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # biome --since needs the base ref
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: "Install dependencies (scripts skipped: no native modules needed here)"
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Lint + format (changed files only)
+        # Repo-wide rollout is a ratchet step; gate only what the PR touches.
+        # biome is in devDependencies; `bun x` resolves it from node_modules.
+        run: node scripts/ci/lint-changed.mjs "${{ github.event.pull_request.base.sha || 'origin/main' }}"
+      - name: Unit tests
+        run: bun run test
+      - name: "Typecheck (ratchet: no new errors vs baseline)"
+        run: bun run ratchet:typecheck
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: "Install dependencies (scripts skipped: bundling needs no native rebuild)"
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build all targets (main, preload, renderer)
+        run: bun run build
+      - name: Report bundle sizes
+        shell: bash
+        run: du -sh out/main out/preload out/renderer 2>/dev/null || true
+
+  package:
+    name: Package (${{ matrix.os }}, unsigned)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install dependencies (full install incl. native module rebuild)
+        run: bun install --frozen-lockfile
+      - name: Fetch bundled agent binaries for this platform
+        # electron-builder extraResources expects resources/bin/<platform-arch> + VERSION
+        run: |
+          bun run claude:download
+          bun run codex:download
+      - name: Build
+        run: bun run build
+      - name: Package (electron-builder --dir, no signing/notarization)
+        run: bunx electron-builder --dir
+
+  security:
+    name: Security gates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: "Dependency audit (ratchet: no new critical advisories)"
+        run: bun run ratchet:audit
+      - name: Secrets scan
+        uses: gitleaks/gitleaks-action@v2
+      - name: Dependency review (PR-affecting changes)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: critical

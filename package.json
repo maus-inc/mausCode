@@ -1,12 +1,11 @@
 {
-  "name": "21st-desktop",
+  "name": "mauscode",
   "version": "0.0.72",
   "private": true,
-  "description": "1Code - UI for parallel work with AI agents",
-  "homepage": "https://21st.dev",
+  "description": "mausCode - agent workspace powered by a lightweight native runtime",
+  "homepage": "https://github.com/maus-inc/mausCode",
   "author": {
-    "name": "21st.dev",
-    "email": "support@21st.dev"
+    "name": "maus-inc"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -19,20 +18,22 @@
     "package:linux": "electron-builder --linux",
     "dist": "electron-builder",
     "dist:manifest": "node scripts/generate-update-manifest.mjs",
-    "dist:upload": "node scripts/upload-release.mjs",
     "claude:download": "node scripts/download-claude-binary.mjs --version=2.1.45",
     "claude:download:all": "node scripts/download-claude-binary.mjs --version=2.1.45 --all",
     "codex:download": "node scripts/download-codex-binary.mjs --version=0.98.0",
     "codex:download:all": "node scripts/download-codex-binary.mjs --version=0.98.0 --all",
-    "release": "rm -rf release && bun i && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && bun run dist:manifest && ./scripts/upload-release-wrangler.sh",
     "release:dev": "rm -rf release && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && rm -rf node_modules && bun i",
-    "sync:public": "./scripts/sync-to-public.sh",
     "icon:generate": "node scripts/generate-icon.mjs",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "ts:check": "tsgo --noEmit",
-    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs"
+    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs",
+    "test": "vitest run",
+    "lint": "node scripts/ci/lint-changed.mjs",
+    "typecheck": "tsc --noEmit",
+    "ratchet:typecheck": "node scripts/ci/typecheck-ratchet.mjs",
+    "ratchet:audit": "node scripts/ci/audit-ratchet.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",
@@ -137,17 +138,20 @@
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.4.5",
-    "vite": "^6.3.4"
+    "vite": "^6.3.4",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "@biomejs/biome": "2.5.13",
+    "vitest": "5.0.0"
   },
   "build": {
-    "appId": "dev.21st.agents",
-    "productName": "1Code",
+    "appId": "io.github.maus-inc.mauscode",
+    "productName": "mausCode",
     "npmRebuild": true,
     "protocols": [
       {
-        "name": "1Code",
+        "name": "mausCode",
         "schemes": [
-          "twentyfirst-agents"
+          "mauscode"
         ]
       }
     ],
@@ -207,7 +211,7 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "1Code needs microphone access for voice dictation"
+        "NSMicrophoneUsageDescription": "mausCode needs microphone access for voice dictation"
       }
     },
     "dmg": {
@@ -252,8 +256,9 @@
       "uninstallerIcon": "build/icon.ico"
     },
     "publish": {
-      "provider": "generic",
-      "url": "https://cdn.21st.dev/releases/desktop"
+      "provider": "github",
+      "owner": "maus-inc",
+      "repo": "mausCode"
     }
   },
   "pnpm": {
