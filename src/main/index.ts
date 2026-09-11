@@ -39,17 +39,14 @@ import {
 } from "./windows/main"
 import { windowManager } from "./windows/window-manager"
 
-import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
-
-// Deep link protocol (must match package.json build.protocols.schemes)
-// Use different protocol in dev to avoid conflicts with production app
-const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
+import { IS_DEV, AUTH_SERVER_PORT, PROTOCOL, DEV_USER_DATA_NAME } from "./constants"
+import { getApiUrl } from "./lib/config"
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
 if (IS_DEV) {
   const { join } = require("path")
-  const devUserData = join(app.getPath("userData"), "..", "Agents Dev")
+  const devUserData = join(app.getPath("userData"), "..", DEV_USER_DATA_NAME)
   app.setPath("userData", devUserData)
   console.log("[Dev] Using separate userData path:", devUserData)
 }
@@ -77,18 +74,11 @@ if (app.isPackaged && !IS_DEV) {
   console.log("[App] Skipping Sentry initialization (dev mode)")
 }
 
-// URL configuration (exported for use in other modules)
-// In packaged app, ALWAYS use production URL to prevent localhost leaking into releases
-// In dev mode, allow override via MAIN_VITE_API_URL env variable
+// Control-plane base URL — single source of truth lives in lib/config.ts
+// (MAIN_VITE_API_URL env override, empty by default = local-only mode).
+// Kept under the historical name because windows/main.ts imports it.
 export function getBaseUrl(): string {
-  if (app.isPackaged) {
-    return "https://21st.dev"
-  }
-  return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
-}
-
-export function getAppUrl(): string {
-  return process.env.ELECTRON_RENDERER_URL || "https://21st.dev/agents"
+  return getApiUrl()
 }
 
 // Auth manager singleton (use the one from auth-manager module)
@@ -120,26 +110,29 @@ export async function handleAuthCode(code: string): Promise<void> {
       console.warn("[Auth] Failed to fetch user plan for analytics:", e)
     }
 
-    // Set desktop token cookie using persist:main partition
-    const ses = session.fromPartition("persist:main")
-    try {
-      // First remove any existing cookie to avoid HttpOnly conflict
-      await ses.cookies.remove(getBaseUrl(), "x-desktop-token")
-      await ses.cookies.set({
-        url: getBaseUrl(),
-        name: "x-desktop-token",
-        value: authData.token,
-        expirationDate: Math.floor(
-          new Date(authData.expiresAt).getTime() / 1000,
-        ),
-        httpOnly: false,
-        secure: getBaseUrl().startsWith("https"),
-        sameSite: "lax" as const,
-      })
-      console.log("[Auth] Desktop token cookie set")
-    } catch (cookieError) {
-      // Cookie setting is optional - auth data is already saved to disk
-      console.warn("[Auth] Cookie set failed (non-critical):", cookieError)
+    // Set desktop token cookie using persist:main partition (control plane only)
+    const apiBase = getBaseUrl()
+    if (apiBase) {
+      const ses = session.fromPartition("persist:main")
+      try {
+        // First remove any existing cookie to avoid HttpOnly conflict
+        await ses.cookies.remove(apiBase, "x-desktop-token")
+        await ses.cookies.set({
+          url: apiBase,
+          name: "x-desktop-token",
+          value: authData.token,
+          expirationDate: Math.floor(
+            new Date(authData.expiresAt).getTime() / 1000,
+          ),
+          httpOnly: false,
+          secure: apiBase.startsWith("https"),
+          sameSite: "lax" as const,
+        })
+        console.log("[Auth] Desktop token cookie set")
+      } catch (cookieError) {
+        // Cookie setting is optional - auth data is already saved to disk
+        console.warn("[Auth] Cookie set failed (non-critical):", cookieError)
+      }
     }
 
     // Notify all windows and reload them to show app
@@ -192,7 +185,7 @@ function handleDeepLink(url: string): void {
   try {
     const parsed = new URL(url)
 
-    // Handle auth callback: twentyfirst-agents://auth?code=xxx
+    // Handle auth callback: mauscode://auth?code=xxx
     if (parsed.pathname === "/auth" || parsed.host === "auth") {
       const code = parsed.searchParams.get("code")
       if (code) {
@@ -201,7 +194,7 @@ function handleDeepLink(url: string): void {
       }
     }
 
-    // Handle MCP OAuth callback: twentyfirst-agents://mcp-oauth?code=xxx&state=yyy
+    // Handle MCP OAuth callback: mauscode://mcp-oauth?code=xxx&state=yyy
     if (parsed.pathname === "/mcp-oauth" || parsed.host === "mcp-oauth") {
       const code = parsed.searchParams.get("code")
       const state = parsed.searchParams.get("state")
@@ -283,9 +276,16 @@ console.log("[Protocol] =============================================")
 
 // Note: app.on("open-url") will be registered in app.whenReady()
 
-// SVG favicon as data URI for auth callback pages (matches web app favicon)
-const FAVICON_SVG = `<svg width="32" height="32" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="1024" height="1024" fill="#0033FF"/><path fill-rule="evenodd" clip-rule="evenodd" d="M800.165 148C842.048 148 876 181.952 876 223.835V686.415C876 690.606 872.606 694 868.415 694H640.915C636.729 694 633.335 697.394 633.335 701.585V868.415C633.335 872.606 629.936 876 625.75 876H223.835C181.952 876 148 842.048 148 800.165V702.59C148 697.262 150.807 692.326 155.376 689.586L427.843 526.1C434.031 522.388 431.956 513.238 425.327 512.118L423.962 512H155.585C151.394 512 148 508.606 148 504.415V337.585C148 333.394 151.394 330 155.585 330H443.75C447.936 330 451.335 326.606 451.335 322.415V155.585C451.335 151.394 454.729 148 458.915 148H800.165ZM458.915 330C454.729 330 451.335 333.394 451.335 337.585V686.415C451.335 690.606 454.729 694 458.915 694H625.75C629.936 694 633.335 690.606 633.335 686.415V337.585C633.335 333.394 629.936 330 625.75 330H458.915Z" fill="#F4F4F4"/></svg>`
-const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
+// mausCode glyph favicon (64px PNG from the official brand asset) as data URI
+// for auth callback pages and the local auth-callback server /favicon route.
+const FAVICON_DATA_URI =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAFVBMVEX///8ODg8ODQ4ODg4PDg8PDw8PDxBo6R6vAAACCUlEQVRIx+1UW3KjQAyEMgeICpQD7F4gFEm+l1pyABU1/vcH3P8I2y3N8HA4wH5ELjBmelqtlsZV9RP/ccgvxm9c8nK13vSyRX8F6CwtKSVdxOSK4iZYsyT4ErG3CwWmiv2mZkC8XRCYcrsZURcAQfpkfgHzHTCSO0USCnkGNH3s1tXvSZ+rEGxNXFwXai1V1EOJXqZx6mhRp9Bg9hLCGaPf2+JhS66UMgBPr+sCTWqHcqAmGFpVrISsAAiu3n86oJeoW1GZA26jA1iri+Qj2hMWOcEcDKkwGLtnTkPy2ycBHy4yGDScx7IDdA0AfJLMQG+FCAJqTSVFLjMeo0dSNdCyA0qKu/ubCKDbBMiyixz2IZSasDn6btmoU3xxXwBA9X3kapcyb5NzYqiH98FfKwHerOXPad4hgfZqYdBcZhlX892YOY0q7Cyy6TwpWLIGH6wDACNEO41Hos3+ZqMiAdvFhlPHXNp9KFOSKAdeOBRz+KsHAEYQx0DppUqKbh5F1iMTEGCiezdt0/DlJVIAB1ef2l1Vf5UDCg3RsL3d5eCMtIce8NDzTOapLgwD/JOUCTAcj+6cou6N5xRbkR8v71adATdVP6jqKXSJtx/pvuYyb6yYHuIDcx5SBcNaAM0areV/SvYZ8Y433SP6+Jq2QLJcejtNUx/z0sgOiLP1HGO7/YMMbfUTl/EP+zbExawQYEQAAAAASUVORK5CYII="
+
+// Favicon PNG bytes (decoded from the data URI above) for the /favicon route
+const FAVICON_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAFVBMVEX///8ODg8ODQ4ODg4PDg8PDw8PDxBo6R6vAAACCUlEQVRIx+1UW3KjQAyEMgeICpQD7F4gFEm+l1pyABU1/vcH3P8I2y3N8HA4wH5ELjBmelqtlsZV9RP/ccgvxm9c8nK13vSyRX8F6CwtKSVdxOSK4iZYsyT4ErG3CwWmiv2mZkC8XRCYcrsZURcAQfpkfgHzHTCSO0USCnkGNH3s1tXvSZ+rEGxNXFwXai1V1EOJXqZx6mhRp9Bg9hLCGaPf2+JhS66UMgBPr+sCTWqHcqAmGFpVrISsAAiu3n86oJeoW1GZA26jA1iri+Qj2hMWOcEcDKkwGLtnTkPy2ycBHy4yGDScx7IDdA0AfJLMQG+FCAJqTSVFLjMeo0dSNdCyA0qKu/ubCKDbBMiyixz2IZSasDn6btmoU3xxXwBA9X3kapcyb5NzYqiH98FfKwHerOXPad4hgfZqYdBcZhlX892YOY0q7Cyy6TwpWLIGH6wDACNEO41Hos3+ZqMiAdvFhlPHXNp9KFOSKAdeOBRz+KsHAEYQx0DppUqKbh5F1iMTEGCiezdt0/DlJVIAB1ef2l1Vf5UDCg3RsL3d5eCMtIce8NDzTOapLgwD/JOUCTAcj+6cou6N5xRbkR8v71adATdVP6jqKXSJtx/pvuYyb6yYHuIDcx5SBcNaAM0areV/SvYZ8Y433SP6+Jq2QLJcejtNUx/z0sgOiLP1HGO7/YMMbfUTl/EP+zbExawQYEQAAAAASUVORK5CYII=",
+  "base64"
+)
 
 // Start local HTTP server for auth callbacks
 // This catches http://localhost:{AUTH_SERVER_PORT}/auth/callback?code=xxx and /callback (for MCP OAuth)
@@ -294,8 +294,8 @@ const server = createServer((req, res) => {
 
     // Serve favicon
     if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
-      res.writeHead(200, { "Content-Type": "image/svg+xml" })
-      res.end(FAVICON_SVG)
+      res.writeHead(200, { "Content-Type": "image/png" })
+      res.end(FAVICON_PNG)
       return
     }
 
@@ -317,7 +317,7 @@ const server = createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - Authentication</title>
+  <title>mausCode - Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -401,7 +401,7 @@ const server = createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - MCP Authentication</title>
+  <title>mausCode - MCP Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -571,10 +571,10 @@ if (gotTheLock) {
 
     // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
     if (process.platform === "win32") {
-      app.setAppUserModelId(IS_DEV ? "dev.21st.1code.dev" : "dev.21st.1code")
+      app.setAppUserModelId(IS_DEV ? "dev.mausinc.mauscode.dev" : "dev.mausinc.mauscode")
     }
 
-    console.log(`[App] Starting 1Code${IS_DEV ? " (DEV)" : ""}...`)
+    console.log(`[App] Starting mausCode${IS_DEV ? " (DEV)" : ""}...`)
 
     // Verify protocol registration after app is ready
     // This helps diagnose first-install issues where the protocol isn't recognized yet
@@ -598,10 +598,10 @@ if (gotTheLock) {
 
     // Set About panel options with Claude Code version
     app.setAboutPanelOptions({
-      applicationName: "1Code",
+      applicationName: "mausCode",
       applicationVersion: app.getVersion(),
       version: `Claude Code ${claudeCodeVersion}`,
-      copyright: "Copyright © 2026 21st.dev",
+      copyright: "Copyright © 2026 maus-inc",
     })
 
     // Track update availability for menu
@@ -628,7 +628,7 @@ if (gotTheLock) {
           label: app.name,
           submenu: [
             {
-              label: "About 1Code",
+              label: "About mausCode",
               click: () => app.showAboutPanel(),
             },
             {
@@ -664,8 +664,8 @@ if (gotTheLock) {
             { type: "separator" },
             {
               label: isCliInstalled()
-                ? "Uninstall '1code' Command..."
-                : "Install '1code' Command in PATH...",
+                ? "Uninstall 'mauscode' Command..."
+                : "Install 'mauscode' Command in PATH...",
               ...(terminalMenuIcon && { icon: terminalMenuIcon }),
               click: async () => {
                 const { dialog } = await import("electron")
@@ -675,7 +675,7 @@ if (gotTheLock) {
                     dialog.showMessageBox({
                       type: "info",
                       message: "CLI command uninstalled",
-                      detail: "The '1code' command has been removed from your PATH.",
+                      detail: "The 'mauscode' command has been removed from your PATH.",
                     })
                     buildMenu()
                   } else {
@@ -688,7 +688,7 @@ if (gotTheLock) {
                       type: "info",
                       message: "CLI command installed",
                       detail:
-                        "You can now use '1code .' in any terminal to open 1Code in that directory.",
+                        "You can now use 'mauscode .' in any terminal to open mausCode in that directory.",
                     })
                     buildMenu()
                   } else {
@@ -843,7 +843,7 @@ if (gotTheLock) {
               label: "Learn More",
               click: async () => {
                 const { shell } = await import("electron")
-                await shell.openExternal("https://21st.dev")
+                await shell.openExternal("https://github.com/maus-inc/mausCode")
               },
             },
           ],
@@ -912,17 +912,19 @@ if (gotTheLock) {
     // Set up callback to update cookie when token is refreshed
     authManager.setOnTokenRefresh(async (authData) => {
       console.log("[Auth] Token refreshed, updating cookie...")
+      const apiBase = getBaseUrl()
+      if (!apiBase) return
       const ses = session.fromPartition("persist:main")
       try {
         await ses.cookies.set({
-          url: getBaseUrl(),
+          url: apiBase,
           name: "x-desktop-token",
           value: authData.token,
           expirationDate: Math.floor(
             new Date(authData.expiresAt).getTime() / 1000,
           ),
           httpOnly: false,
-          secure: getBaseUrl().startsWith("https"),
+          secure: apiBase.startsWith("https"),
           sameSite: "lax" as const,
         })
         console.log("[Auth] Desktop token cookie updated after refresh")
@@ -973,7 +975,7 @@ if (gotTheLock) {
       }
     }, 3000)
 
-    // Handle directory argument from CLI (e.g., `1code /path/to/project`)
+    // Handle directory argument from CLI (e.g., `mauscode /path/to/project`)
     parseLaunchDirectory()
 
     // Handle deep link from app launch (Windows/Linux)

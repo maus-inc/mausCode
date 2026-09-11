@@ -1,8 +1,8 @@
 {
-  "name": "mauscode",
+  "name": "mauscode-desktop",
   "version": "0.0.72",
   "private": true,
-  "description": "mausCode - agent workspace powered by a lightweight native runtime",
+  "description": "mausCode - UI for parallel work with AI agents",
   "homepage": "https://github.com/maus-inc/mausCode",
   "author": {
     "name": "maus-inc"
@@ -22,6 +22,7 @@
     "claude:download:all": "node scripts/download-claude-binary.mjs --version=2.1.45 --all",
     "codex:download": "node scripts/download-codex-binary.mjs --version=0.98.0",
     "codex:download:all": "node scripts/download-codex-binary.mjs --version=0.98.0 --all",
+
     "release:dev": "rm -rf release && bun run claude:download && bun run codex:download && bun run build && bun run package:mac && rm -rf node_modules && bun i",
     "icon:generate": "node scripts/generate-icon.mjs",
     "db:generate": "drizzle-kit generate",
@@ -144,7 +145,7 @@
     "vitest": "5.0.0"
   },
   "build": {
-    "appId": "io.github.maus-inc.mauscode",
+    "appId": "dev.mausinc.mauscode",
     "productName": "mausCode",
     "npmRebuild": true,
     "protocols": [
