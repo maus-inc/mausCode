@@ -39,10 +39,12 @@ $ git rev-list --max-parents=0 9f1bc76
 
 ## Checks
 
-This repo has no `.github/workflows`, no eslint, biome, or prettier config, and no `.deepsource.toml`. The two gates that run are `npm test` and `npx tsc --noEmit`. There is no CI here to report green.
+This repo has no `.github/` directory at all, no eslint, biome, or prettier config, and no `.deepsource.toml` or `sonar-project.properties`. The only gates defined in the repository are `npm test` (`tsx --test "src/**/*.test.ts"`) and `npx tsc --noEmit`. Neither runs automatically, so both results below are from running them by hand.
 
 `npm test` passes 28 of 28. That includes two new tests in `src/main/lib/git/watcher/git-watcher.test.ts`. The second drives a real `.git/index` write, which is the only path the watcher watches, and asserts both subscribers receive it.
 
 The first pins the single-watcher invariant. It does not fail against base, because base never had the race. I checked it against both relevant states by swapping the file and running it directly: at `c997f21` it reports two distinct watchers, and at this commit it reports one. Its value is as a guard against reintroducing the leak, not as a reproduction of a base defect.
 
 `npx tsc --noEmit` reports 110 errors, all pre-existing. I normalized both the base and head output by stripping line and column numbers and diffed the sorted sets. They are identical, so this branch adds no type errors. I checked the set rather than the count because a count can hold steady while the errors underneath change.
+
+Third-party GitHub Apps are configured outside the repository and do report on this PR. Current status: Buoy Design Review pass, Socket Security pass, CodeRabbit pass, Sourcery skipping, Kilo Code Review pending. These are review bots rather than a build or test pipeline, so they do not stand in for the two gates above.
