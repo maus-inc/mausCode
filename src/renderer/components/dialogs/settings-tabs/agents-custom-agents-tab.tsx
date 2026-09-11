@@ -1,18 +1,18 @@
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtomValue } from "jotai"
-import { Plus } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { toast } from "sonner"
 import { selectedProjectAtom, settingsAgentsSidebarWidthAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { Button } from "../../ui/button"
+import { Plus } from "lucide-react"
 import { CustomAgentIconFilled } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
-import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import { Textarea } from "../../ui/textarea"
-import { useListKeyboardNav } from "./use-list-keyboard-nav"
+import { Button } from "../../ui/button"
+import { ResizableSidebar } from "../../ui/resizable-sidebar"
+import { toast } from "sonner"
 
 interface FileAgent {
   name: string
@@ -32,11 +32,7 @@ function AgentDetail({
   isSaving,
 }: {
   agent: FileAgent
-  onSave: (data: {
-    description: string
-    prompt: string
-    model?: "sonnet" | "opus" | "haiku" | "inherit"
-  }) => void
+  onSave: (data: { description: string; prompt: string; model?: "sonnet" | "opus" | "haiku" | "inherit" }) => void
   isSaving: boolean
 }) {
   const [description, setDescription] = useState(agent.description)
@@ -83,24 +79,21 @@ function AgentDetail({
     }
   }, [description, prompt, model, agent.description, agent.prompt, agent.model, onSave])
 
-  const handleModelChange = useCallback(
-    (value: string) => {
-      setModel(value)
-      // Auto-save with new model value
-      if (
-        description !== agent.description ||
-        prompt !== agent.prompt ||
-        value !== (agent.model || "inherit")
-      ) {
-        onSave({
-          description,
-          prompt,
-          model: value as FileAgent["model"],
-        })
-      }
-    },
-    [description, prompt, agent.description, agent.prompt, agent.model, onSave],
-  )
+  const handleModelChange = useCallback((value: string) => {
+    setModel(value)
+    // Auto-save with new model value
+    if (
+      description !== agent.description ||
+      prompt !== agent.prompt ||
+      value !== (agent.model || "inherit")
+    ) {
+      onSave({
+        description,
+        prompt,
+        model: value as FileAgent["model"],
+      })
+    }
+  }, [description, prompt, agent.description, agent.prompt, agent.model, onSave])
 
   return (
     <div className="h-full overflow-y-auto">
@@ -203,13 +196,7 @@ function CreateAgentForm({
   isSaving,
   hasProject,
 }: {
-  onCreated: (data: {
-    name: string
-    description: string
-    prompt: string
-    model?: string
-    source: "user" | "project"
-  }) => void
+  onCreated: (data: { name: string; description: string; prompt: string; model?: string; source: "user" | "project" }) => void
   onCancel: () => void
   isSaving: boolean
   hasProject: boolean
@@ -228,14 +215,8 @@ function CreateAgentForm({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">New Agent</h3>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => onCreated({ name, description, prompt, model, source })}
-              disabled={!canSave || isSaving}
-            >
+            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+            <Button size="sm" onClick={() => onCreated({ name, description, prompt, model, source })} disabled={!canSave || isSaving}>
               {isSaving ? "Creating..." : "Create"}
             </Button>
           </div>
@@ -249,9 +230,7 @@ function CreateAgentForm({
             placeholder="my-agent"
             autoFocus
           />
-          <p className="text-[11px] text-muted-foreground">
-            Lowercase letters, numbers, and hyphens
-          </p>
+          <p className="text-[11px] text-muted-foreground">Lowercase letters, numbers, and hyphens</p>
         </div>
 
         <div className="space-y-1.5">
@@ -330,51 +309,40 @@ export function AgentsCustomAgentsTab() {
   }, [])
   const selectedProject = useAtomValue(selectedProjectAtom)
 
-  const {
-    data: agents = [],
-    isLoading,
-    refetch,
-  } = trpc.agents.list.useQuery(selectedProject?.path ? { cwd: selectedProject.path } : undefined)
+  const { data: agents = [], isLoading, refetch } = trpc.agents.list.useQuery(
+    selectedProject?.path ? { cwd: selectedProject.path } : undefined,
+  )
 
   const updateMutation = trpc.agents.update.useMutation()
   const createMutation = trpc.agents.create.useMutation()
 
-  const handleCreate = useCallback(
-    async (data: {
-      name: string
-      description: string
-      prompt: string
-      model?: string
-      source: "user" | "project"
-    }) => {
-      try {
-        const result = await createMutation.mutateAsync({
-          name: data.name,
-          description: data.description,
-          prompt: data.prompt,
-          model: (data.model && data.model !== "inherit"
-            ? data.model
-            : undefined) as FileAgent["model"],
-          source: data.source,
-          cwd: selectedProject?.path,
-        })
-        toast.success("Agent created", { description: result.name })
-        setShowAddForm(false)
-        await refetch()
-        setSelectedAgentName(result.name)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to create"
-        toast.error("Failed to create", { description: message })
-      }
-    },
-    [createMutation, selectedProject?.path, refetch],
-  )
+  const handleCreate = useCallback(async (data: {
+    name: string; description: string; prompt: string; model?: string; source: "user" | "project"
+  }) => {
+    try {
+      const result = await createMutation.mutateAsync({
+        name: data.name,
+        description: data.description,
+        prompt: data.prompt,
+        model: (data.model && data.model !== "inherit" ? data.model : undefined) as FileAgent["model"],
+        source: data.source,
+        cwd: selectedProject?.path,
+      })
+      toast.success("Agent created", { description: result.name })
+      setShowAddForm(false)
+      await refetch()
+      setSelectedAgentName(result.name)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create"
+      toast.error("Failed to create", { description: message })
+    }
+  }, [createMutation, selectedProject?.path, refetch])
 
   const filteredAgents = useMemo(() => {
     if (!searchQuery.trim()) return agents
     const q = searchQuery.toLowerCase()
-    return agents.filter(
-      (a) => a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q),
+    return agents.filter((a) =>
+      a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
     )
   }, [agents, searchQuery])
 
@@ -383,7 +351,7 @@ export function AgentsCustomAgentsTab() {
 
   const allAgentNames = useMemo(
     () => [...userAgents, ...projectAgents].map((a) => a.name),
-    [userAgents, projectAgents],
+    [userAgents, projectAgents]
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
@@ -400,32 +368,29 @@ export function AgentsCustomAgentsTab() {
     setSelectedAgentName(agents[0]!.name)
   }, [agents, selectedAgentName, isLoading])
 
-  const handleSave = useCallback(
-    async (
-      agent: FileAgent,
-      data: { description: string; prompt: string; model?: FileAgent["model"] },
-    ) => {
-      try {
-        await updateMutation.mutateAsync({
-          originalName: agent.name,
-          name: agent.name,
-          description: data.description,
-          prompt: data.prompt,
-          model: data.model,
-          tools: agent.tools,
-          disallowedTools: agent.disallowedTools,
-          source: agent.source as "user" | "project",
-          cwd: selectedProject?.path,
-        })
-        toast.success("Agent saved", { description: agent.name })
-        await refetch()
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to save"
-        toast.error("Failed to save", { description: message })
-      }
-    },
-    [updateMutation, selectedProject?.path, refetch],
-  )
+  const handleSave = useCallback(async (
+    agent: FileAgent,
+    data: { description: string; prompt: string; model?: FileAgent["model"] },
+  ) => {
+    try {
+      await updateMutation.mutateAsync({
+        originalName: agent.name,
+        name: agent.name,
+        description: data.description,
+        prompt: data.prompt,
+        model: data.model,
+        tools: agent.tools,
+        disallowedTools: agent.disallowedTools,
+        source: agent.source as "user" | "project",
+        cwd: selectedProject?.path,
+      })
+      toast.success("Agent saved", { description: agent.name })
+      await refetch()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save"
+      toast.error("Failed to save", { description: message })
+    }
+  }, [updateMutation, selectedProject?.path, refetch])
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -442,10 +407,7 @@ export function AgentsCustomAgentsTab() {
         exitWidth={240}
         disableClickToClose={true}
       >
-        <div
-          className="flex flex-col h-full bg-background border-r overflow-hidden"
-          style={{ borderRightWidth: "0.5px" }}
-        >
+        <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
           {/* Search + Add */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
@@ -457,10 +419,7 @@ export function AgentsCustomAgentsTab() {
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
             />
             <button
-              onClick={() => {
-                setShowAddForm(true)
-                setSelectedAgentName(null)
-              }}
+              onClick={() => { setShowAddForm(true); setSelectedAgentName(null) }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
               title="Create new agent"
             >
@@ -468,12 +427,7 @@ export function AgentsCustomAgentsTab() {
             </button>
           </div>
           {/* Agent list */}
-          <div
-            ref={listRef}
-            onKeyDown={listKeyDown}
-            tabIndex={-1}
-            className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none"
-          >
+          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-xs text-muted-foreground">Loading...</p>
@@ -516,11 +470,13 @@ export function AgentsCustomAgentsTab() {
                               "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
                               isSelected
                                 ? "bg-foreground/5 text-foreground"
-                                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                             )}
                           >
                             <div className="flex items-center gap-2">
-                              <span className="text-sm truncate flex-1">{agent.name}</span>
+                              <span className="text-sm truncate flex-1">
+                                {agent.name}
+                              </span>
                               {agent.model && agent.model !== "inherit" && (
                                 <span className="text-[10px] text-muted-foreground shrink-0">
                                   {agent.model}
@@ -557,11 +513,13 @@ export function AgentsCustomAgentsTab() {
                               "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
                               isSelected
                                 ? "bg-foreground/5 text-foreground"
-                                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                             )}
                           >
                             <div className="flex items-center gap-2">
-                              <span className="text-sm truncate flex-1">{agent.name}</span>
+                              <span className="text-sm truncate flex-1">
+                                {agent.name}
+                              </span>
                               {agent.model && agent.model !== "inherit" && (
                                 <span className="text-[10px] text-muted-foreground shrink-0">
                                   {agent.model}
@@ -581,6 +539,7 @@ export function AgentsCustomAgentsTab() {
                 )}
               </div>
             )}
+
           </div>
         </div>
       </ResizableSidebar>
@@ -604,7 +563,9 @@ export function AgentsCustomAgentsTab() {
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <CustomAgentIconFilled className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
-              {agents.length > 0 ? "Select an agent to view details" : "No custom agents found"}
+              {agents.length > 0
+                ? "Select an agent to view details"
+                : "No custom agents found"}
             </p>
             {agents.length === 0 && (
               <Button

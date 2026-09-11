@@ -2,19 +2,19 @@
  * Ported from pingdotgg/t3code packages/effect-codex-app-server (MIT, (c) 2026 T3 Tools Inc.).
  * Verbatim except this header. Upstream schema ref 678157ac (2026-07-19); see README.md.
  */
-import * as NodeOS from "node:os"
+import * as NodeOS from "node:os";
 
-let nextServerRequestId = 10_000
-let pendingSkillsListRequestId: number | string | null = null
-let pendingUserInputRequestId: number | null = null
+let nextServerRequestId = 10_000;
+let pendingSkillsListRequestId: number | string | null = null;
+let pendingUserInputRequestId: number | null = null;
 
 const writeMessage = (message: unknown) => {
-  process.stdout.write(`${JSON.stringify(message)}\n`)
-}
+  process.stdout.write(`${JSON.stringify(message)}\n`);
+};
 
 const respond = (id: number | string, result: unknown) => {
-  writeMessage({ id, result })
-}
+  writeMessage({ id, result });
+};
 
 const respondError = (id: number | string, code: number, message: string) => {
   writeMessage({
@@ -23,26 +23,26 @@ const respondError = (id: number | string, code: number, message: string) => {
       code,
       message,
     },
-  })
-}
+  });
+};
 
 const sendRequest = (method: string, params: unknown) => {
-  const id = nextServerRequestId++
-  writeMessage({ id, method, params })
-  return id
-}
+  const id = nextServerRequestId++;
+  writeMessage({ id, method, params });
+  return id;
+};
 
 const handleMethod = (message: Record<string, unknown>) => {
-  const method = message.method
+  const method = message.method;
   if (typeof method !== "string") {
-    return
+    return;
   }
 
   switch (method) {
     case "initialize": {
       // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone mock peer process has no Effect runtime.
-      const platform = NodeOS.platform()
-      const stderrBytes = Number(process.env.CODEX_APP_SERVER_TEST_STDERR_BYTES ?? 0)
+      const platform = NodeOS.platform();
+      const stderrBytes = Number(process.env.CODEX_APP_SERVER_TEST_STDERR_BYTES ?? 0);
       if (Number.isFinite(stderrBytes) && stderrBytes > 0) {
         process.stderr.write("x".repeat(stderrBytes), () => {
           respond(message.id as number | string, {
@@ -50,17 +50,17 @@ const handleMethod = (message: Record<string, unknown>) => {
             codexHome: process.cwd(),
             platformFamily: platform === "win32" ? "windows" : "unix",
             platformOs: platform === "darwin" ? "macos" : platform,
-          })
-        })
-        return
+          });
+        });
+        return;
       }
       respond(message.id as number | string, {
         userAgent: "mock-codex-app-server",
         codexHome: process.cwd(),
         platformFamily: platform === "win32" ? "windows" : "unix",
         platformOs: platform === "darwin" ? "macos" : platform,
-      })
-      return
+      });
+      return;
     }
     case "initialized": {
       writeMessage({
@@ -71,8 +71,8 @@ const handleMethod = (message: Record<string, unknown>) => {
           threadId: "thread-1",
           turnId: "turn-1",
         },
-      })
-      return
+      });
+      return;
     }
     case "account/read": {
       respond(message.id as number | string, {
@@ -82,11 +82,11 @@ const handleMethod = (message: Record<string, unknown>) => {
           planType: "plus",
         },
         requiresOpenaiAuth: false,
-      })
-      return
+      });
+      return;
     }
     case "skills/list": {
-      pendingSkillsListRequestId = message.id as number | string
+      pendingSkillsListRequestId = message.id as number | string;
       pendingUserInputRequestId = sendRequest("item/tool/requestUserInput", {
         itemId: "item-approval-1",
         threadId: "thread-1",
@@ -104,23 +104,23 @@ const handleMethod = (message: Record<string, unknown>) => {
             ],
           },
         ],
-      })
-      return
+      });
+      return;
     }
     default: {
       if (message.id !== undefined) {
-        respondError(message.id as number | string, -32601, `Unhandled request: ${method}`)
+        respondError(message.id as number | string, -32601, `Unhandled request: ${method}`);
       }
     }
   }
-}
+};
 
 const handleResponse = (message: Record<string, unknown>) => {
   if (message.id !== pendingUserInputRequestId) {
-    return
+    return;
   }
 
-  pendingUserInputRequestId = null
+  pendingUserInputRequestId = null;
 
   respond(pendingSkillsListRequestId!, {
     data: [
@@ -130,35 +130,35 @@ const handleResponse = (message: Record<string, unknown>) => {
         skills: [],
       },
     ],
-  })
-  pendingSkillsListRequestId = null
-}
+  });
+  pendingSkillsListRequestId = null;
+};
 
-let remainder = ""
+let remainder = "";
 
-process.stdin.setEncoding("utf8")
+process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
-  remainder += chunk
-  const lines = remainder.split("\n")
-  remainder = lines.pop() ?? ""
+  remainder += chunk;
+  const lines = remainder.split("\n");
+  remainder = lines.pop() ?? "";
 
   for (const line of lines) {
-    const trimmed = line.trim()
+    const trimmed = line.trim();
     if (trimmed.length === 0) {
-      continue
+      continue;
     }
 
-    const message = JSON.parse(trimmed) as Record<string, unknown>
+    const message = JSON.parse(trimmed) as Record<string, unknown>;
     if ("method" in message) {
-      handleMethod(message)
-      continue
+      handleMethod(message);
+      continue;
     }
     if ("id" in message) {
-      handleResponse(message)
+      handleResponse(message);
     }
   }
-})
+});
 
 process.stdin.on("end", () => {
-  process.exit(0)
-})
+  process.exit(0);
+});

@@ -6,8 +6,10 @@
 import { assert, it } from "@effect/vitest"
 import { createCodexAppServerSession } from "./session.ts"
 
-const peerPath = new URL("./test/fixtures/codex-app-server-turn-mock-peer.ts", import.meta.url)
-  .pathname
+const peerPath = new URL(
+  "./test/fixtures/codex-app-server-turn-mock-peer.ts",
+  import.meta.url,
+).pathname
 
 const spawnSession = (
   onChunk: (chunk: any) => void,

@@ -8,22 +8,22 @@
  * matching the Rust reader.
  */
 export class NdjsonDecoder {
-  private buffer = ""
+  private buffer = "";
 
   push(chunk: Buffer | string): unknown[] {
-    this.buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8")
-    const out: unknown[] = []
-    let index = this.buffer.indexOf("\n")
+    this.buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    const out: unknown[] = [];
+    let index = this.buffer.indexOf("\n");
     while (index !== -1) {
-      const line = this.buffer.slice(0, index).trim()
-      this.buffer = this.buffer.slice(index + 1)
-      if (line !== "") out.push(JSON.parse(line))
-      index = this.buffer.indexOf("\n")
+      const line = this.buffer.slice(0, index).trim();
+      this.buffer = this.buffer.slice(index + 1);
+      if (line !== "") out.push(JSON.parse(line));
+      index = this.buffer.indexOf("\n");
     }
-    return out
+    return out;
   }
 }
 
 export function encodeFrame(frame: unknown): string {
-  return `${JSON.stringify(frame)}\n`
+  return `${JSON.stringify(frame)}\n`;
 }

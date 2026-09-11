@@ -3,17 +3,23 @@
  */
 
 import { existsSync } from "node:fs"
-import { copyFile, mkdir, rmdir, unlink } from "node:fs/promises"
+import { copyFile, mkdir, unlink, rmdir } from "node:fs/promises"
 import * as path from "node:path"
 import { BasePlatformProvider } from "./base"
-import type { CliConfig, EnvironmentConfig, PathConfig, ShellConfig } from "./types"
+import type {
+  ShellConfig,
+  PathConfig,
+  CliConfig,
+  EnvironmentConfig,
+} from "./types"
 
 export class WindowsPlatformProvider extends BasePlatformProvider {
   readonly platform = "win32" as const
   readonly displayName = "Windows"
 
   getShellConfig(): ShellConfig {
-    const powershellPath = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    const powershellPath =
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
     const cmdPath = process.env.COMSPEC || "C:\\Windows\\System32\\cmd.exe"
 
     return {
@@ -82,7 +88,10 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
 
   override getDefaultShell(): string {
     // Prefer PowerShell, fall back to cmd.exe
-    return process.env.COMSPEC || "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    return (
+      process.env.COMSPEC ||
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    )
   }
 
   override async detectShell(): Promise<string> {
@@ -103,7 +112,7 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
   }
 
   async installCli(
-    sourcePath: string,
+    sourcePath: string
   ): Promise<{ success: boolean; error?: string; pathHint?: string }> {
     const cliConfig = this.getCliConfig()
     const installPath = cliConfig.installPath
@@ -128,14 +137,18 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
       // $env:Path += ";${installDir}"
 
       console.log("[CLI] Installed mauscode command to", installPath)
-      console.log("[CLI] To use from terminal, add to PATH:", `$env:Path += ";${installDir}"`)
+      console.log(
+        "[CLI] To use from terminal, add to PATH:",
+        `$env:Path += ";${installDir}"`
+      )
 
       return {
         success: true,
         pathHint: `To use mauscode from terminal, add to your PATH: ${installDir}`,
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Installation failed"
+      const errorMessage =
+        error instanceof Error ? error.message : "Installation failed"
       console.error("[CLI] Failed to install:", error)
       return { success: false, error: errorMessage }
     }
@@ -163,7 +176,8 @@ export class WindowsPlatformProvider extends BasePlatformProvider {
       console.log("[CLI] Uninstalled mauscode command")
       return { success: true }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Uninstallation failed"
+      const errorMessage =
+        error instanceof Error ? error.message : "Uninstallation failed"
       console.error("[CLI] Failed to uninstall:", error)
       return { success: false, error: errorMessage }
     }

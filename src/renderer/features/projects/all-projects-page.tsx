@@ -6,21 +6,35 @@
  */
 "use client"
 
+
+import { useCallback, useMemo, useRef, useState } from "react"
 import { useSetAtom } from "jotai"
+import { toast } from "sonner"
 import {
+  MoreHorizontal,
   ExternalLink,
   Eye,
   EyeOff,
   FolderOpen,
   FolderPlus,
-  MoreHorizontal,
   Pencil,
   RefreshCw,
   Search,
   Trash2,
 } from "lucide-react"
-import { useCallback, useMemo, useRef, useState } from "react"
-import { toast } from "sonner"
+import { trpc } from "../../lib/trpc"
+import { cn } from "../../lib/utils"
+import { Button } from "../../components/ui/button"
+import { Input } from "../../components/ui/input"
+import { LoadingDot } from "../../components/ui/icons"
+import { ProjectIcon } from "../../components/ui/project-icon"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,21 +45,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog"
-import { Button } from "../../components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu"
-import { LoadingDot } from "../../components/ui/icons"
-import { Input } from "../../components/ui/input"
-import { ProjectIcon } from "../../components/ui/project-icon"
-import { agentsSidebarOpenAtom } from "../../lib/atoms"
-import { trpc } from "../../lib/trpc"
-import { cn } from "../../lib/utils"
 import { selectedProjectAtom } from "../agents/atoms"
+import { agentsSidebarOpenAtom } from "../../lib/atoms"
 
 type Project = {
   id: string
@@ -82,7 +83,6 @@ function ProjectStatusBadges({
   return (
     <div
       className="flex shrink-0 items-center gap-1.5"
-      role="status"
       aria-label={`${inProgressCount} in progress, ${unseenCount} unseen`}
     >
       {inProgressCount > 0 && (
@@ -90,16 +90,19 @@ function ProjectStatusBadges({
           title={`${inProgressCount} chat${inProgressCount === 1 ? "" : "s"} in progress`}
           className="flex items-center gap-1 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
         >
-          <LoadingDot isLoading={true} className="h-3 w-3 text-muted-foreground" />
+          <LoadingDot
+            isLoading={true}
+            className="h-3 w-3 text-muted-foreground"
+          />
           {inProgressCount}
         </span>
       )}
       {unseenCount > 0 && (
         <span
           title={`${unseenCount} chat${unseenCount === 1 ? "" : "s"} with unseen updates`}
-          className="flex items-center gap-1 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+          className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-[#307BD0]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           {unseenCount}
         </span>
       )}
@@ -152,11 +155,8 @@ function ProjectCard({
           className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none"
         >
           <span
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-foreground/10",
-              !project.accentColor && "bg-muted",
-            )}
-            style={project.accentColor ? { backgroundColor: project.accentColor } : undefined}
+            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-foreground/10"
+            style={{ backgroundColor: project.accentColor ?? "rgba(255,255,255,0.04)" }}
           >
             <ProjectIcon project={project} className="h-7 w-7" />
           </span>
@@ -164,7 +164,6 @@ function ProjectCard({
             {isRenaming ? (
               <input
                 ref={renameInputRef}
-                // biome-ignore lint/a11y/noAutofocus: just-entered rename mode from user action; focus must move to the editor
                 autoFocus
                 value={draftName}
                 onChange={(e) => onDraftNameChange(e.target.value)}
@@ -179,7 +178,7 @@ function ProjectCard({
                   }
                 }}
                 onBlur={onCommitRename}
-                className="block w-full truncate bg-transparent text-sm font-medium outline-none rounded focus-visible:ring-1 focus-visible:ring-ring/70"
+                className="block w-full truncate bg-transparent text-sm font-medium outline-none"
               />
             ) : (
               <span className="block truncate text-sm font-medium text-foreground">
@@ -203,8 +202,16 @@ function ProjectCard({
             e.stopPropagation()
             onToggleRailVisibility()
           }}
-          aria-label={isHiddenFromRail ? "Show in left rail" : "Hide from left rail"}
-          title={isHiddenFromRail ? "Show in left rail" : "Hide from left rail"}
+          aria-label={
+            isHiddenFromRail
+              ? "Show in left rail"
+              : "Hide from left rail"
+          }
+          title={
+            isHiddenFromRail
+              ? "Show in left rail"
+              : "Hide from left rail"
+          }
           className={cn(
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors",
             isHiddenFromRail
@@ -212,7 +219,11 @@ function ProjectCard({
               : "text-foreground/80 hover:bg-foreground/[0.06] hover:text-foreground",
           )}
         >
-          {isHiddenFromRail ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {isHiddenFromRail ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
         </button>
 
         <DropdownMenu>
@@ -277,7 +288,9 @@ function ProjectCard({
               {project.gitProvider}
             </span>
           )}
-          {project.gitRemoteUrl && <span className="truncate">{project.gitRemoteUrl}</span>}
+          {project.gitRemoteUrl && (
+            <span className="truncate">{project.gitRemoteUrl}</span>
+          )}
         </div>
       )}
     </div>
@@ -286,12 +299,15 @@ function ProjectCard({
 
 export function AllProjectsPage() {
   const utils = trpc.useUtils()
-  const { data: projects, isLoading } = trpc.projects.listWithStatus.useQuery(undefined, {
-    // Light polling so in-progress / unseen badges stay fresh while the
-    // page is open; cheap query (small JS aggregation over local SQLite).
-    refetchInterval: 5000,
-    refetchOnWindowFocus: true,
-  })
+  const { data: projects, isLoading } = trpc.projects.listWithStatus.useQuery(
+    undefined,
+    {
+      // Light polling so in-progress / unseen badges stay fresh while the
+      // page is open; cheap query (small JS aggregation over local SQLite).
+      refetchInterval: 5000,
+      refetchOnWindowFocus: true,
+    },
+  )
   const setSelectedProject = useSetAtom(selectedProjectAtom)
   const setSidebarOpen = useSetAtom(agentsSidebarOpenAtom)
 
@@ -321,7 +337,12 @@ export function AllProjectsPage() {
         name: project.name,
         path: project.path,
         gitRemoteUrl: project.gitRemoteUrl ?? null,
-        gitProvider: (project.gitProvider as "github" | "gitlab" | "bitbucket" | null) ?? null,
+        gitProvider:
+          (project.gitProvider as
+            | "github"
+            | "gitlab"
+            | "bitbucket"
+            | null) ?? null,
         gitOwner: project.gitOwner ?? null,
         gitRepo: project.gitRepo ?? null,
       })
@@ -368,7 +389,12 @@ export function AllProjectsPage() {
         name: project.name,
         path: project.path,
         gitRemoteUrl: project.gitRemoteUrl,
-        gitProvider: (project.gitProvider as "github" | "gitlab" | "bitbucket" | null) ?? null,
+        gitProvider:
+          (project.gitProvider as
+            | "github"
+            | "gitlab"
+            | "bitbucket"
+            | null) ?? null,
         gitOwner: project.gitOwner,
         gitRepo: project.gitRepo,
       })
@@ -396,7 +422,9 @@ export function AllProjectsPage() {
   const handleCommitRename = useCallback(() => {
     if (!renamingId) return
     const trimmed = draftName.trim()
-    const original = (projects as Project[] | undefined)?.find((p) => p.id === renamingId)
+    const original = (projects as Project[] | undefined)?.find(
+      (p) => p.id === renamingId,
+    )
     setRenamingId(null)
     if (!original || !trimmed || trimmed === original.name) return
     renameProject.mutate({ id: renamingId, name: trimmed })
@@ -518,10 +546,7 @@ export function AllProjectsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this project?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes{" "}
-              <span className="font-medium text-foreground">
-                {pendingDelete ? projectLabel(pendingDelete) : ""}
-              </span>{" "}
+              This removes <span className="font-medium text-foreground">{pendingDelete ? projectLabel(pendingDelete) : ""}</span>{" "}
               and all of its chats from mausCode. The folder on disk is not deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>

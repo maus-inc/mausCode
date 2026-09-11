@@ -2,8 +2,8 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
-import { describe, expect, it } from "vitest"
+import * as Schema from "effect/Schema";
+import { describe, expect, it } from "vitest";
 
 import {
   ProjectReadFileError,
@@ -12,10 +12,10 @@ import {
   ProjectSearchEntriesError,
   ProjectSearchEntriesInput,
   ProjectWriteFileError,
-} from "./project.ts"
+} from "./project.ts";
 
-const decodeSearchEntriesInput = Schema.decodeUnknownSync(ProjectSearchEntriesInput)
-const decodeSearchContentsInput = Schema.decodeUnknownSync(ProjectSearchContentsInput)
+const decodeSearchEntriesInput = Schema.decodeUnknownSync(ProjectSearchEntriesInput);
+const decodeSearchContentsInput = Schema.decodeUnknownSync(ProjectSearchContentsInput);
 
 describe("project search inputs", () => {
   it("allows an empty entries query for bounded frecency browsing", () => {
@@ -24,9 +24,9 @@ describe("project search inputs", () => {
       query: "   ",
       limit: 10,
       kind: "file",
-    })
-    expect(decoded.query).toBe("")
-  })
+    });
+    expect(decoded.query).toBe("");
+  });
 
   it("preserves whitespace in content search queries", () => {
     const decoded = decodeSearchContentsInput({
@@ -36,14 +36,14 @@ describe("project search inputs", () => {
       caseSensitive: false,
       wholeWord: false,
       useRegex: false,
-    })
-    expect(decoded.query).toBe(" foo ")
-  })
-})
+    });
+    expect(decoded.query).toBe(" foo ");
+  });
+});
 
 describe("project RPC errors", () => {
   it("derives stable messages from structured request context while retaining causes", () => {
-    const cause = new Error("sensitive platform detail")
+    const cause = new Error("sensitive platform detail");
     const searchError = new ProjectSearchEntriesError({
       cwd: "/workspace",
       queryLength: "authorization: Bearer secret-token".length,
@@ -52,7 +52,7 @@ describe("project RPC errors", () => {
       normalizedCwd: "/workspace",
       detail: "index unavailable",
       cause,
-    })
+    });
     const readError = new ProjectReadFileError({
       cwd: "/workspace",
       relativePath: "src/index.ts",
@@ -61,18 +61,18 @@ describe("project RPC errors", () => {
       operationPath: "/workspace/src/index.ts",
       resolvedPath: "/workspace/src/index.ts",
       cause,
-    })
+    });
 
-    expect(searchError.message).toBe("Failed to search workspace entries in '/workspace'.")
-    expect(searchError.message).not.toContain(cause.message)
-    expect(searchError.normalizedCwd).toBe("/workspace")
-    expect(searchError.queryLength).toBe("authorization: Bearer secret-token".length)
-    expect(searchError).not.toHaveProperty("query")
-    expect(searchError.message).not.toMatch(/Bearer|secret-token/)
-    expect(searchError.cause).toBe(cause)
-    expect(readError.message).toBe("Failed to read workspace file 'src/index.ts' in '/workspace'.")
-    expect(readError.message).not.toContain(cause.message)
-    expect(readError.cause).toBe(cause)
+    expect(searchError.message).toBe("Failed to search workspace entries in '/workspace'.");
+    expect(searchError.message).not.toContain(cause.message);
+    expect(searchError.normalizedCwd).toBe("/workspace");
+    expect(searchError.queryLength).toBe("authorization: Bearer secret-token".length);
+    expect(searchError).not.toHaveProperty("query");
+    expect(searchError.message).not.toMatch(/Bearer|secret-token/);
+    expect(searchError.cause).toBe(cause);
+    expect(readError.message).toBe("Failed to read workspace file 'src/index.ts' in '/workspace'.");
+    expect(readError.message).not.toContain(cause.message);
+    expect(readError.cause).toBe(cause);
 
     const contentSearchError = new ProjectSearchContentsError({
       cwd: "/workspace",
@@ -80,34 +80,34 @@ describe("project RPC errors", () => {
       limit: 100,
       failure: "search_index_search_failed",
       cause,
-    })
-    expect(contentSearchError.message).toBe("Failed to search workspace contents in '/workspace'.")
-    expect(contentSearchError.message).not.toContain(cause.message)
-    expect(contentSearchError).not.toHaveProperty("query")
-    expect(contentSearchError.cause).toBe(cause)
-  })
+    });
+    expect(contentSearchError.message).toBe("Failed to search workspace contents in '/workspace'.");
+    expect(contentSearchError.message).not.toContain(cause.message);
+    expect(contentSearchError).not.toHaveProperty("query");
+    expect(contentSearchError.cause).toBe(cause);
+  });
 
   it("decodes legacy message-only errors during rolling upgrades", () => {
-    const decodeSearchError = Schema.decodeUnknownSync(ProjectSearchEntriesError)
-    const decodeWriteError = Schema.decodeUnknownSync(ProjectWriteFileError)
+    const decodeSearchError = Schema.decodeUnknownSync(ProjectSearchEntriesError);
+    const decodeWriteError = Schema.decodeUnknownSync(ProjectWriteFileError);
 
     const searchError = decodeSearchError({
       _tag: "ProjectSearchEntriesError",
       message: "Legacy project search failure.",
       query: "legacy sensitive query",
-    })
+    });
     const writeError = decodeWriteError({
       _tag: "ProjectWriteFileError",
       message: "Legacy project write failure.",
-    })
+    });
 
-    expect(searchError.message).toBe("Legacy project search failure.")
-    expect(searchError.cwd).toBeUndefined()
-    expect(searchError.queryLength).toBeUndefined()
-    expect(searchError).not.toHaveProperty("query")
-    expect(searchError.failure).toBeUndefined()
-    expect(writeError.message).toBe("Legacy project write failure.")
-    expect(writeError.relativePath).toBeUndefined()
-    expect(writeError.failure).toBeUndefined()
-  })
-})
+    expect(searchError.message).toBe("Legacy project search failure.");
+    expect(searchError.cwd).toBeUndefined();
+    expect(searchError.queryLength).toBeUndefined();
+    expect(searchError).not.toHaveProperty("query");
+    expect(searchError.failure).toBeUndefined();
+    expect(writeError.message).toBe("Legacy project write failure.");
+    expect(writeError.relativePath).toBeUndefined();
+    expect(writeError.failure).toBeUndefined();
+  });
+});

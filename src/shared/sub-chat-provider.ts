@@ -27,5 +27,8 @@ export type SubChatProvider = (typeof SUB_CHAT_PROVIDERS)[number]
 export const subChatProviderSchema = z.enum(SUB_CHAT_PROVIDERS)
 
 export function isSubChatProvider(value: unknown): value is SubChatProvider {
-  return typeof value === "string" && (SUB_CHAT_PROVIDERS as readonly string[]).includes(value)
+  return (
+    typeof value === "string" &&
+    (SUB_CHAT_PROVIDERS as readonly string[]).includes(value)
+  )
 }

@@ -2,12 +2,12 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
-import { describe, expect, it } from "vitest"
+import * as Schema from "effect/Schema";
+import { describe, expect, it } from "vitest";
 
-import { ExecutionEnvironmentDescriptor } from "./environment.ts"
+import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 
-const decodeDescriptor = Schema.decodeUnknownSync(ExecutionEnvironmentDescriptor)
+const decodeDescriptor = Schema.decodeUnknownSync(ExecutionEnvironmentDescriptor);
 
 const descriptor = {
   environmentId: "environment-1",
@@ -15,12 +15,12 @@ const descriptor = {
   platform: { os: "darwin", arch: "arm64" },
   serverVersion: "0.0.32",
   capabilities: { repositoryIdentity: true },
-} as const
+} as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
   it("treats a missing pull-request capability as unsupported under version skew", () => {
-    expect(decodeDescriptor(descriptor).capabilities.pullRequests).toBeUndefined()
-  })
+    expect(decodeDescriptor(descriptor).capabilities.pullRequests).toBeUndefined();
+  });
 
   it("preserves an advertised pull-request capability", () => {
     expect(
@@ -28,12 +28,12 @@ describe("ExecutionEnvironmentDescriptor", () => {
         ...descriptor,
         capabilities: { ...descriptor.capabilities, pullRequests: true },
       }).capabilities.pullRequests,
-    ).toBe(true)
-  })
+    ).toBe(true);
+  });
 
   it("treats a missing attachment upload capability as unsupported", () => {
-    expect(decodeDescriptor(descriptor).capabilities.attachmentUploads).toBeUndefined()
-  })
+    expect(decodeDescriptor(descriptor).capabilities.attachmentUploads).toBeUndefined();
+  });
 
   it("preserves an advertised attachment upload capability", () => {
     expect(
@@ -41,8 +41,8 @@ describe("ExecutionEnvironmentDescriptor", () => {
         ...descriptor,
         capabilities: { ...descriptor.capabilities, attachmentUploads: true },
       }).capabilities.attachmentUploads,
-    ).toBe(true)
-  })
+    ).toBe(true);
+  });
 
   it("preserves the server's generic attachment upload limit", () => {
     expect(
@@ -53,6 +53,6 @@ describe("ExecutionEnvironmentDescriptor", () => {
           fileAttachments: { maxUploadBytes: 50 * 1024 * 1024 },
         },
       }).capabilities.fileAttachments,
-    ).toEqual({ maxUploadBytes: 50 * 1024 * 1024 })
-  })
-})
+    ).toEqual({ maxUploadBytes: 50 * 1024 * 1024 });
+  });
+});

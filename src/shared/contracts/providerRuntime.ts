@@ -2,27 +2,27 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Effect from "effect/Effect"
-import * as Schema from "effect/Schema"
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import {
   EventId,
   IsoDateTime,
   NonNegativeInt,
-  PositiveInt,
   ProviderItemId,
+  PositiveInt,
   RuntimeItemId,
   RuntimeRequestId,
   RuntimeTaskId,
   ThreadId,
   TrimmedNonEmptyString,
   TurnId,
-} from "./baseSchemas.ts"
-import { ProviderApprovalOption } from "./orchestration.ts"
-import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts"
-import { ProviderUsageLimitsUpdate } from "./providerUsageLimits.ts"
+} from "./baseSchemas.ts";
+import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
+import { ProviderUsageLimitsUpdate } from "./providerUsageLimits.ts";
+import { ProviderApprovalOption } from "./orchestration.ts";
 
-const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString
-const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown)
+const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
+const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
 
 const RuntimeEventRawSource = Schema.Union([
   Schema.Literal("codex.app-server.notification"),
@@ -34,26 +34,26 @@ const RuntimeEventRawSource = Schema.Union([
   Schema.Literal("opencode.sdk.event"),
   Schema.Literal("acp.jsonrpc"),
   Schema.TemplateLiteral(["acp.", Schema.String, ".extension"]),
-])
-export type RuntimeEventRawSource = typeof RuntimeEventRawSource.Type
+]);
+export type RuntimeEventRawSource = typeof RuntimeEventRawSource.Type;
 
 export const RuntimeEventRaw = Schema.Struct({
   source: RuntimeEventRawSource,
   method: Schema.optional(TrimmedNonEmptyStringSchema),
   messageType: Schema.optional(TrimmedNonEmptyStringSchema),
   payload: Schema.Unknown,
-})
-export type RuntimeEventRaw = typeof RuntimeEventRaw.Type
+});
+export type RuntimeEventRaw = typeof RuntimeEventRaw.Type;
 
-const ProviderRequestId = TrimmedNonEmptyStringSchema
-export type ProviderRequestId = typeof ProviderRequestId.Type
+const ProviderRequestId = TrimmedNonEmptyStringSchema;
+export type ProviderRequestId = typeof ProviderRequestId.Type;
 
 const ProviderRefs = Schema.Struct({
   providerTurnId: Schema.optional(TrimmedNonEmptyStringSchema),
   providerItemId: Schema.optional(ProviderItemId),
   providerRequestId: Schema.optional(ProviderRequestId),
-})
-export type ProviderRefs = typeof ProviderRefs.Type
+});
+export type ProviderRefs = typeof ProviderRefs.Type;
 
 const RuntimeSessionState = Schema.Literals([
   "starting",
@@ -62,8 +62,8 @@ const RuntimeSessionState = Schema.Literals([
   "waiting",
   "stopped",
   "error",
-])
-export type RuntimeSessionState = typeof RuntimeSessionState.Type
+]);
+export type RuntimeSessionState = typeof RuntimeSessionState.Type;
 
 const RuntimeThreadState = Schema.Literals([
   "active",
@@ -72,17 +72,17 @@ const RuntimeThreadState = Schema.Literals([
   "closed",
   "compacted",
   "error",
-])
-export type RuntimeThreadState = typeof RuntimeThreadState.Type
+]);
+export type RuntimeThreadState = typeof RuntimeThreadState.Type;
 
-const RuntimeTurnState = Schema.Literals(["completed", "failed", "interrupted", "cancelled"])
-export type RuntimeTurnState = typeof RuntimeTurnState.Type
+const RuntimeTurnState = Schema.Literals(["completed", "failed", "interrupted", "cancelled"]);
+export type RuntimeTurnState = typeof RuntimeTurnState.Type;
 
-const RuntimePlanStepStatus = Schema.Literals(["pending", "inProgress", "completed"])
-export type RuntimePlanStepStatus = typeof RuntimePlanStepStatus.Type
+const RuntimePlanStepStatus = Schema.Literals(["pending", "inProgress", "completed"]);
+export type RuntimePlanStepStatus = typeof RuntimePlanStepStatus.Type;
 
-const RuntimeItemStatus = Schema.Literals(["inProgress", "completed", "failed", "declined"])
-export type RuntimeItemStatus = typeof RuntimeItemStatus.Type
+const RuntimeItemStatus = Schema.Literals(["inProgress", "completed", "failed", "declined"]);
+export type RuntimeItemStatus = typeof RuntimeItemStatus.Type;
 
 const RuntimeContentStreamKind = Schema.Literals([
   "assistant_text",
@@ -92,11 +92,11 @@ const RuntimeContentStreamKind = Schema.Literals([
   "command_output",
   "file_change_output",
   "unknown",
-])
-export type RuntimeContentStreamKind = typeof RuntimeContentStreamKind.Type
+]);
+export type RuntimeContentStreamKind = typeof RuntimeContentStreamKind.Type;
 
-const RuntimeSessionExitKind = Schema.Literals(["graceful", "error"])
-export type RuntimeSessionExitKind = typeof RuntimeSessionExitKind.Type
+const RuntimeSessionExitKind = Schema.Literals(["graceful", "error"]);
+export type RuntimeSessionExitKind = typeof RuntimeSessionExitKind.Type;
 
 const RuntimeErrorClass = Schema.Literals([
   "provider_error",
@@ -104,8 +104,8 @@ const RuntimeErrorClass = Schema.Literals([
   "permission_error",
   "validation_error",
   "unknown",
-])
-export type RuntimeErrorClass = typeof RuntimeErrorClass.Type
+]);
+export type RuntimeErrorClass = typeof RuntimeErrorClass.Type;
 
 const TOOL_LIFECYCLE_ITEM_TYPES = [
   "command_execution",
@@ -115,13 +115,13 @@ const TOOL_LIFECYCLE_ITEM_TYPES = [
   "collab_agent_tool_call",
   "web_search",
   "image_view",
-] as const
+] as const;
 
-export const ToolLifecycleItemType = Schema.Literals(TOOL_LIFECYCLE_ITEM_TYPES)
-export type ToolLifecycleItemType = typeof ToolLifecycleItemType.Type
+export const ToolLifecycleItemType = Schema.Literals(TOOL_LIFECYCLE_ITEM_TYPES);
+export type ToolLifecycleItemType = typeof ToolLifecycleItemType.Type;
 
 export function isToolLifecycleItemType(value: string): value is ToolLifecycleItemType {
-  return TOOL_LIFECYCLE_ITEM_TYPES.includes(value as ToolLifecycleItemType)
+  return TOOL_LIFECYCLE_ITEM_TYPES.includes(value as ToolLifecycleItemType);
 }
 
 export const CanonicalItemType = Schema.Literals([
@@ -135,8 +135,8 @@ export const CanonicalItemType = Schema.Literals([
   "context_compaction",
   "error",
   "unknown",
-])
-export type CanonicalItemType = typeof CanonicalItemType.Type
+]);
+export type CanonicalItemType = typeof CanonicalItemType.Type;
 
 export const CanonicalRequestType = Schema.Literals([
   "command_execution_approval",
@@ -149,8 +149,8 @@ export const CanonicalRequestType = Schema.Literals([
   "dynamic_tool_call",
   "auth_tokens_refresh",
   "unknown",
-])
-export type CanonicalRequestType = typeof CanonicalRequestType.Type
+]);
+export type CanonicalRequestType = typeof CanonicalRequestType.Type;
 
 const ProviderRuntimeEventType = Schema.Literals([
   "session.started",
@@ -202,58 +202,58 @@ const ProviderRuntimeEventType = Schema.Literals([
   "files.persisted",
   "runtime.warning",
   "runtime.error",
-])
-export type ProviderRuntimeEventType = typeof ProviderRuntimeEventType.Type
+]);
+export type ProviderRuntimeEventType = typeof ProviderRuntimeEventType.Type;
 
-const SessionStartedType = Schema.Literal("session.started")
-const SessionConfiguredType = Schema.Literal("session.configured")
-const SessionStateChangedType = Schema.Literal("session.state.changed")
-const SessionExitedType = Schema.Literal("session.exited")
-const ThreadStartedType = Schema.Literal("thread.started")
-const ThreadStateChangedType = Schema.Literal("thread.state.changed")
-const ThreadMetadataUpdatedType = Schema.Literal("thread.metadata.updated")
-const ThreadTokenUsageUpdatedType = Schema.Literal("thread.token-usage.updated")
-const ThreadRealtimeStartedType = Schema.Literal("thread.realtime.started")
-const ThreadRealtimeItemAddedType = Schema.Literal("thread.realtime.item-added")
-const ThreadRealtimeAudioDeltaType = Schema.Literal("thread.realtime.audio.delta")
-const ThreadRealtimeErrorType = Schema.Literal("thread.realtime.error")
-const ThreadRealtimeClosedType = Schema.Literal("thread.realtime.closed")
-const TurnStartedType = Schema.Literal("turn.started")
-const TurnCompletedType = Schema.Literal("turn.completed")
-const TurnAbortedType = Schema.Literal("turn.aborted")
-const TurnPlanUpdatedType = Schema.Literal("turn.plan.updated")
-const TurnProposedDeltaType = Schema.Literal("turn.proposed.delta")
-const TurnProposedCompletedType = Schema.Literal("turn.proposed.completed")
-const TurnDiffUpdatedType = Schema.Literal("turn.diff.updated")
-const ItemStartedType = Schema.Literal("item.started")
-const ItemUpdatedType = Schema.Literal("item.updated")
-const ItemCompletedType = Schema.Literal("item.completed")
-const ContentDeltaType = Schema.Literal("content.delta")
-const RequestOpenedType = Schema.Literal("request.opened")
-const RequestResolvedType = Schema.Literal("request.resolved")
-const UserInputRequestedType = Schema.Literal("user-input.requested")
-const UserInputResolvedType = Schema.Literal("user-input.resolved")
-const TaskStartedType = Schema.Literal("task.started")
-const TaskProgressType = Schema.Literal("task.progress")
-const TaskUpdatedType = Schema.Literal("task.updated")
-const TaskCompletedType = Schema.Literal("task.completed")
-const HookStartedType = Schema.Literal("hook.started")
-const HookProgressType = Schema.Literal("hook.progress")
-const HookCompletedType = Schema.Literal("hook.completed")
-const ToolProgressType = Schema.Literal("tool.progress")
-const ToolSummaryType = Schema.Literal("tool.summary")
-const AuthStatusType = Schema.Literal("auth.status")
-const AccountUpdatedType = Schema.Literal("account.updated")
-const AccountRateLimitsUpdatedType = Schema.Literal("account.rate-limits.updated")
-const McpStatusUpdatedType = Schema.Literal("mcp.status.updated")
-const McpOauthCompletedType = Schema.Literal("mcp.oauth.completed")
-const ModelReroutedType = Schema.Literal("model.rerouted")
-const ConfigWarningType = Schema.Literal("config.warning")
-const DeprecationNoticeType = Schema.Literal("deprecation.notice")
-const FilesPersistedType = Schema.Literal("files.persisted")
-const ToolDeniedType = Schema.Literal("tool.denied")
-const RuntimeWarningType = Schema.Literal("runtime.warning")
-const RuntimeErrorType = Schema.Literal("runtime.error")
+const SessionStartedType = Schema.Literal("session.started");
+const SessionConfiguredType = Schema.Literal("session.configured");
+const SessionStateChangedType = Schema.Literal("session.state.changed");
+const SessionExitedType = Schema.Literal("session.exited");
+const ThreadStartedType = Schema.Literal("thread.started");
+const ThreadStateChangedType = Schema.Literal("thread.state.changed");
+const ThreadMetadataUpdatedType = Schema.Literal("thread.metadata.updated");
+const ThreadTokenUsageUpdatedType = Schema.Literal("thread.token-usage.updated");
+const ThreadRealtimeStartedType = Schema.Literal("thread.realtime.started");
+const ThreadRealtimeItemAddedType = Schema.Literal("thread.realtime.item-added");
+const ThreadRealtimeAudioDeltaType = Schema.Literal("thread.realtime.audio.delta");
+const ThreadRealtimeErrorType = Schema.Literal("thread.realtime.error");
+const ThreadRealtimeClosedType = Schema.Literal("thread.realtime.closed");
+const TurnStartedType = Schema.Literal("turn.started");
+const TurnCompletedType = Schema.Literal("turn.completed");
+const TurnAbortedType = Schema.Literal("turn.aborted");
+const TurnPlanUpdatedType = Schema.Literal("turn.plan.updated");
+const TurnProposedDeltaType = Schema.Literal("turn.proposed.delta");
+const TurnProposedCompletedType = Schema.Literal("turn.proposed.completed");
+const TurnDiffUpdatedType = Schema.Literal("turn.diff.updated");
+const ItemStartedType = Schema.Literal("item.started");
+const ItemUpdatedType = Schema.Literal("item.updated");
+const ItemCompletedType = Schema.Literal("item.completed");
+const ContentDeltaType = Schema.Literal("content.delta");
+const RequestOpenedType = Schema.Literal("request.opened");
+const RequestResolvedType = Schema.Literal("request.resolved");
+const UserInputRequestedType = Schema.Literal("user-input.requested");
+const UserInputResolvedType = Schema.Literal("user-input.resolved");
+const TaskStartedType = Schema.Literal("task.started");
+const TaskProgressType = Schema.Literal("task.progress");
+const TaskUpdatedType = Schema.Literal("task.updated");
+const TaskCompletedType = Schema.Literal("task.completed");
+const HookStartedType = Schema.Literal("hook.started");
+const HookProgressType = Schema.Literal("hook.progress");
+const HookCompletedType = Schema.Literal("hook.completed");
+const ToolProgressType = Schema.Literal("tool.progress");
+const ToolSummaryType = Schema.Literal("tool.summary");
+const AuthStatusType = Schema.Literal("auth.status");
+const AccountUpdatedType = Schema.Literal("account.updated");
+const AccountRateLimitsUpdatedType = Schema.Literal("account.rate-limits.updated");
+const McpStatusUpdatedType = Schema.Literal("mcp.status.updated");
+const McpOauthCompletedType = Schema.Literal("mcp.oauth.completed");
+const ModelReroutedType = Schema.Literal("model.rerouted");
+const ConfigWarningType = Schema.Literal("config.warning");
+const DeprecationNoticeType = Schema.Literal("deprecation.notice");
+const FilesPersistedType = Schema.Literal("files.persisted");
+const ToolDeniedType = Schema.Literal("tool.denied");
+const RuntimeWarningType = Schema.Literal("runtime.warning");
+const RuntimeErrorType = Schema.Literal("runtime.error");
 
 const ProviderRuntimeEventBase = Schema.Struct({
   eventId: EventId,
@@ -269,52 +269,52 @@ const ProviderRuntimeEventBase = Schema.Struct({
   requestId: Schema.optional(RuntimeRequestId),
   providerRefs: Schema.optional(ProviderRefs),
   raw: Schema.optional(RuntimeEventRaw),
-})
-export type ProviderRuntimeEventBase = typeof ProviderRuntimeEventBase.Type
+});
+export type ProviderRuntimeEventBase = typeof ProviderRuntimeEventBase.Type;
 
 const SessionStartedPayload = Schema.Struct({
   message: Schema.optional(TrimmedNonEmptyStringSchema),
   resume: Schema.optional(Schema.Unknown),
-})
-export type SessionStartedPayload = typeof SessionStartedPayload.Type
+});
+export type SessionStartedPayload = typeof SessionStartedPayload.Type;
 
 const SessionConfiguredPayload = Schema.Struct({
   config: UnknownRecordSchema,
-})
-export type SessionConfiguredPayload = typeof SessionConfiguredPayload.Type
+});
+export type SessionConfiguredPayload = typeof SessionConfiguredPayload.Type;
 
 const SessionStateChangedPayload = Schema.Struct({
   state: RuntimeSessionState,
   reason: Schema.optional(TrimmedNonEmptyStringSchema),
   detail: Schema.optional(Schema.Unknown),
-})
-export type SessionStateChangedPayload = typeof SessionStateChangedPayload.Type
+});
+export type SessionStateChangedPayload = typeof SessionStateChangedPayload.Type;
 
 const SessionExitedPayload = Schema.Struct({
   reason: Schema.optional(TrimmedNonEmptyStringSchema),
   recoverable: Schema.optional(Schema.Boolean),
   exitKind: Schema.optional(RuntimeSessionExitKind),
-})
-export type SessionExitedPayload = typeof SessionExitedPayload.Type
+});
+export type SessionExitedPayload = typeof SessionExitedPayload.Type;
 
 const ThreadStartedPayload = Schema.Struct({
   providerThreadId: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type ThreadStartedPayload = typeof ThreadStartedPayload.Type
+});
+export type ThreadStartedPayload = typeof ThreadStartedPayload.Type;
 
 const ThreadStateChangedPayload = Schema.Struct({
   state: RuntimeThreadState,
   beforeTokens: Schema.optional(NonNegativeInt),
   afterTokens: Schema.optional(NonNegativeInt),
   detail: Schema.optional(Schema.Unknown),
-})
-export type ThreadStateChangedPayload = typeof ThreadStateChangedPayload.Type
+});
+export type ThreadStateChangedPayload = typeof ThreadStateChangedPayload.Type;
 
 const ThreadMetadataUpdatedPayload = Schema.Struct({
   name: Schema.optional(TrimmedNonEmptyStringSchema),
   metadata: Schema.optional(UnknownRecordSchema),
-})
-export type ThreadMetadataUpdatedPayload = typeof ThreadMetadataUpdatedPayload.Type
+});
+export type ThreadMetadataUpdatedPayload = typeof ThreadMetadataUpdatedPayload.Type;
 
 export const ThreadTokenUsageSnapshot = Schema.Struct({
   usedTokens: NonNegativeInt,
@@ -333,44 +333,44 @@ export const ThreadTokenUsageSnapshot = Schema.Struct({
   durationMs: Schema.optional(NonNegativeInt),
   compactsAutomatically: Schema.optional(Schema.Boolean),
   autoCompactThreshold: Schema.optional(PositiveInt),
-})
-export type ThreadTokenUsageSnapshot = typeof ThreadTokenUsageSnapshot.Type
+});
+export type ThreadTokenUsageSnapshot = typeof ThreadTokenUsageSnapshot.Type;
 
 const ThreadTokenUsageUpdatedPayload = Schema.Struct({
   usage: ThreadTokenUsageSnapshot,
-})
-export type ThreadTokenUsageUpdatedPayload = typeof ThreadTokenUsageUpdatedPayload.Type
+});
+export type ThreadTokenUsageUpdatedPayload = typeof ThreadTokenUsageUpdatedPayload.Type;
 
 const ThreadRealtimeStartedPayload = Schema.Struct({
   realtimeSessionId: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type ThreadRealtimeStartedPayload = typeof ThreadRealtimeStartedPayload.Type
+});
+export type ThreadRealtimeStartedPayload = typeof ThreadRealtimeStartedPayload.Type;
 
 const ThreadRealtimeItemAddedPayload = Schema.Struct({
   item: Schema.Unknown,
-})
-export type ThreadRealtimeItemAddedPayload = typeof ThreadRealtimeItemAddedPayload.Type
+});
+export type ThreadRealtimeItemAddedPayload = typeof ThreadRealtimeItemAddedPayload.Type;
 
 const ThreadRealtimeAudioDeltaPayload = Schema.Struct({
   audio: Schema.Unknown,
-})
-export type ThreadRealtimeAudioDeltaPayload = typeof ThreadRealtimeAudioDeltaPayload.Type
+});
+export type ThreadRealtimeAudioDeltaPayload = typeof ThreadRealtimeAudioDeltaPayload.Type;
 
 const ThreadRealtimeErrorPayload = Schema.Struct({
   message: TrimmedNonEmptyStringSchema,
-})
-export type ThreadRealtimeErrorPayload = typeof ThreadRealtimeErrorPayload.Type
+});
+export type ThreadRealtimeErrorPayload = typeof ThreadRealtimeErrorPayload.Type;
 
 const ThreadRealtimeClosedPayload = Schema.Struct({
   reason: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type ThreadRealtimeClosedPayload = typeof ThreadRealtimeClosedPayload.Type
+});
+export type ThreadRealtimeClosedPayload = typeof ThreadRealtimeClosedPayload.Type;
 
 const TurnStartedPayload = Schema.Struct({
   model: Schema.optional(TrimmedNonEmptyStringSchema),
   effort: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type TurnStartedPayload = typeof TurnStartedPayload.Type
+});
+export type TurnStartedPayload = typeof TurnStartedPayload.Type;
 
 /**
  * Normalized main-agent usage for one turn. Input includes cache reads and
@@ -384,7 +384,7 @@ const TurnTokenUsageCommonFields = {
   cacheCreationTokens: Schema.optional(NonNegativeInt),
   reasoningTokens: Schema.optional(NonNegativeInt),
   hasSubagents: Schema.Boolean,
-}
+};
 export const TurnTokenUsage = Schema.Union([
   Schema.Struct({
     ...TurnTokenUsageCommonFields,
@@ -398,8 +398,8 @@ export const TurnTokenUsage = Schema.Union([
     inputTokens: Schema.optional(NonNegativeInt),
     outputTokens: Schema.optional(NonNegativeInt),
   }),
-])
-export type TurnTokenUsage = typeof TurnTokenUsage.Type
+]);
+export type TurnTokenUsage = typeof TurnTokenUsage.Type;
 
 const TurnCompletedPayload = Schema.Struct({
   state: RuntimeTurnState,
@@ -409,44 +409,44 @@ const TurnCompletedPayload = Schema.Struct({
   totalCostUsd: Schema.optional(Schema.Number),
   errorMessage: Schema.optional(TrimmedNonEmptyStringSchema),
   tokenUsage: Schema.optional(TurnTokenUsage),
-})
-export type TurnCompletedPayload = typeof TurnCompletedPayload.Type
+});
+export type TurnCompletedPayload = typeof TurnCompletedPayload.Type;
 
 const TurnAbortedPayload = Schema.Struct({
   reason: TrimmedNonEmptyStringSchema,
   tokenUsage: Schema.optional(TurnTokenUsage),
-})
-export type TurnAbortedPayload = typeof TurnAbortedPayload.Type
+});
+export type TurnAbortedPayload = typeof TurnAbortedPayload.Type;
 
 const RuntimePlanStep = Schema.Struct({
   step: TrimmedNonEmptyStringSchema,
   status: RuntimePlanStepStatus,
-})
-export type RuntimePlanStep = typeof RuntimePlanStep.Type
+});
+export type RuntimePlanStep = typeof RuntimePlanStep.Type;
 
 const TurnPlanUpdatedPayload = Schema.Struct({
   explanation: Schema.optional(Schema.NullOr(TrimmedNonEmptyStringSchema)),
   plan: Schema.Array(RuntimePlanStep),
-})
-export type TurnPlanUpdatedPayload = typeof TurnPlanUpdatedPayload.Type
+});
+export type TurnPlanUpdatedPayload = typeof TurnPlanUpdatedPayload.Type;
 
 const TurnProposedDeltaPayload = Schema.Struct({
   delta: Schema.String,
-})
-export type TurnProposedDeltaPayload = typeof TurnProposedDeltaPayload.Type
+});
+export type TurnProposedDeltaPayload = typeof TurnProposedDeltaPayload.Type;
 
 const TurnProposedCompletedPayload = Schema.Struct({
   planMarkdown: TrimmedNonEmptyStringSchema,
-})
-export type TurnProposedCompletedPayload = typeof TurnProposedCompletedPayload.Type
+});
+export type TurnProposedCompletedPayload = typeof TurnProposedCompletedPayload.Type;
 
 const TurnDiffUpdatedPayload = Schema.Struct({
   unifiedDiff: Schema.String,
-})
-export type TurnDiffUpdatedPayload = typeof TurnDiffUpdatedPayload.Type
+});
+export type TurnDiffUpdatedPayload = typeof TurnDiffUpdatedPayload.Type;
 
-export const ToolActivitySurface = Schema.Literals(["browser", "computer"])
-export type ToolActivitySurface = typeof ToolActivitySurface.Type
+export const ToolActivitySurface = Schema.Literals(["browser", "computer"]);
+export type ToolActivitySurface = typeof ToolActivitySurface.Type;
 
 export const ToolActivityNativeAppReference = Schema.Union([
   Schema.TaggedStruct("app-id", {
@@ -458,8 +458,8 @@ export const ToolActivityNativeAppReference = Schema.Union([
   Schema.TaggedStruct("display-name", {
     displayName: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(160)),
   }),
-])
-export type ToolActivityNativeAppReference = typeof ToolActivityNativeAppReference.Type
+]);
+export type ToolActivityNativeAppReference = typeof ToolActivityNativeAppReference.Type;
 
 export const ToolActivityIcon = Schema.Union([
   Schema.TaggedStruct("website", {
@@ -474,16 +474,16 @@ export const ToolActivityIcon = Schema.Union([
     logoUrl: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(4096)),
     logoUrlDark: Schema.optional(TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(4096))),
   }),
-])
-export type ToolActivityIcon = typeof ToolActivityIcon.Type
+]);
+export type ToolActivityIcon = typeof ToolActivityIcon.Type;
 
 export const ToolActivitySource = Schema.Struct({
   key: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(512)),
   name: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(160)),
   kind: Schema.Literals(["browser", "computer", "integration"]),
   icon: Schema.optional(ToolActivityIcon),
-})
-export type ToolActivitySource = typeof ToolActivitySource.Type
+});
+export type ToolActivitySource = typeof ToolActivitySource.Type;
 
 export const ItemLifecyclePayload = Schema.Struct({
   itemType: CanonicalItemType,
@@ -501,16 +501,16 @@ export const ItemLifecyclePayload = Schema.Struct({
    */
   agentId: Schema.optional(TrimmedNonEmptyStringSchema),
   parentToolUseId: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type ItemLifecyclePayload = typeof ItemLifecyclePayload.Type
+});
+export type ItemLifecyclePayload = typeof ItemLifecyclePayload.Type;
 
 const ContentDeltaPayload = Schema.Struct({
   streamKind: RuntimeContentStreamKind,
   delta: Schema.String,
   contentIndex: Schema.optional(Schema.Int),
   summaryIndex: Schema.optional(Schema.Int),
-})
-export type ContentDeltaPayload = typeof ContentDeltaPayload.Type
+});
+export type ContentDeltaPayload = typeof ContentDeltaPayload.Type;
 
 const RequestOpenedPayload = Schema.Struct({
   requestType: CanonicalRequestType,
@@ -518,22 +518,22 @@ const RequestOpenedPayload = Schema.Struct({
   appName: Schema.optional(TrimmedNonEmptyStringSchema),
   options: Schema.optional(Schema.Array(ProviderApprovalOption)),
   args: Schema.optional(Schema.Unknown),
-})
-export type RequestOpenedPayload = typeof RequestOpenedPayload.Type
+});
+export type RequestOpenedPayload = typeof RequestOpenedPayload.Type;
 
 const RequestResolvedPayload = Schema.Struct({
   requestType: CanonicalRequestType,
   decision: Schema.optional(TrimmedNonEmptyStringSchema),
   resolution: Schema.optional(Schema.Unknown),
-})
-export type RequestResolvedPayload = typeof RequestResolvedPayload.Type
+});
+export type RequestResolvedPayload = typeof RequestResolvedPayload.Type;
 
 const UserInputQuestionOption = Schema.Struct({
   label: TrimmedNonEmptyStringSchema,
   description: Schema.String,
   value: Schema.optional(Schema.String),
-})
-export type UserInputQuestionOption = typeof UserInputQuestionOption.Type
+});
+export type UserInputQuestionOption = typeof UserInputQuestionOption.Type;
 
 export const UserInputQuestion = Schema.Struct({
   id: TrimmedNonEmptyStringSchema,
@@ -544,19 +544,19 @@ export const UserInputQuestion = Schema.Struct({
   multiSelect: Schema.optional(Schema.Boolean).pipe(
     Schema.withConstructorDefault(Effect.succeed(false)),
   ),
-})
-export type UserInputQuestion = typeof UserInputQuestion.Type
+});
+export type UserInputQuestion = typeof UserInputQuestion.Type;
 
 export const UserInputRequestedPayload = Schema.Struct({
   questions: Schema.Array(UserInputQuestion),
   responseMode: Schema.optional(Schema.Literal("message")),
-})
-export type UserInputRequestedPayload = typeof UserInputRequestedPayload.Type
+});
+export type UserInputRequestedPayload = typeof UserInputRequestedPayload.Type;
 
 const UserInputResolvedPayload = Schema.Struct({
   answers: UnknownRecordSchema,
-})
-export type UserInputResolvedPayload = typeof UserInputResolvedPayload.Type
+});
+export type UserInputResolvedPayload = typeof UserInputResolvedPayload.Type;
 
 /**
  * Typed per-task usage rollup. Field names match the orchestration-v2 subagent
@@ -572,14 +572,14 @@ export const RuntimeTaskUsage = Schema.Struct({
   reasoningOutputTokens: Schema.optional(NonNegativeInt),
   toolUses: Schema.optional(NonNegativeInt),
   durationMs: Schema.optional(NonNegativeInt),
-})
-export type RuntimeTaskUsage = typeof RuntimeTaskUsage.Type
+});
+export type RuntimeTaskUsage = typeof RuntimeTaskUsage.Type;
 
 export const TaskWorkflowPhase = Schema.Struct({
   index: NonNegativeInt,
   title: TrimmedNonEmptyStringSchema,
-})
-export type TaskWorkflowPhase = typeof TaskWorkflowPhase.Type
+});
+export type TaskWorkflowPhase = typeof TaskWorkflowPhase.Type;
 
 export const TaskRunHandles = Schema.Struct({
   runId: Schema.optional(TrimmedNonEmptyStringSchema),
@@ -587,8 +587,8 @@ export const TaskRunHandles = Schema.Struct({
   transcriptDir: Schema.optional(TrimmedNonEmptyStringSchema),
   /** Only http/https URLs may be stored here — sanitized at the adapter. */
   sessionUrl: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type TaskRunHandles = typeof TaskRunHandles.Type
+});
+export type TaskRunHandles = typeof TaskRunHandles.Type;
 
 /**
  * Watch-loop task types: Monitor-tool tasks plus background shells (a shell
@@ -601,30 +601,30 @@ export const MONITOR_TASK_TYPES: ReadonlySet<string> = new Set([
   "monitor_mcp",
   "local_bash",
   "shell",
-])
+]);
 /** Task types that are neither agents nor watch loops (plan-mode bookkeeping). */
-export const INERT_TASK_TYPES: ReadonlySet<string> = new Set(["plan", "dream"])
+export const INERT_TASK_TYPES: ReadonlySet<string> = new Set(["plan", "dream"]);
 
 /**
  * Agent-vs-background classification, stamped by ingestion as `agentKind` so
  * persisted rows are self-describing. A deliberate denylist: the SDK's
- * agent-flavored type names drift (subagent, local_agent, local_workflow, ...)
+ * agent-flavored type names drift (subagent, local_agent, local_workflow, …)
  * and an allowlist silently dropped real subagents when "local_agent"
  * appeared. A task launched from inside a subagent (agentId set) is
  * agent-internal background work UNLESS it is itself agent-flavored — a
  * nested agent can outlive its parent and stays in the roster.
  */
 export function classifyTaskAgentKind(input: {
-  readonly taskType?: string | undefined
-  readonly agentId?: string | undefined
+  readonly taskType?: string | undefined;
+  readonly agentId?: string | undefined;
 }): "agent" | "background" {
-  const { taskType, agentId } = input
+  const { taskType, agentId } = input;
   const nonAgentType =
-    taskType !== undefined && (MONITOR_TASK_TYPES.has(taskType) || INERT_TASK_TYPES.has(taskType))
+    taskType !== undefined && (MONITOR_TASK_TYPES.has(taskType) || INERT_TASK_TYPES.has(taskType));
   if (agentId !== undefined && agentId.trim().length > 0) {
-    return taskType === undefined || nonAgentType ? "background" : "agent"
+    return taskType === undefined || nonAgentType ? "background" : "agent";
   }
-  return nonAgentType ? "background" : "agent"
+  return nonAgentType ? "background" : "agent";
 }
 
 /**
@@ -634,7 +634,7 @@ export function classifyTaskAgentKind(input: {
  * All fields optional: old emitters and old rows decode unchanged.
  */
 const taskAgentLinkageFields = {
-  /** SDK task_type (subagent/shell/monitor/local_workflow/...), repeated on
+  /** SDK task_type (subagent/shell/monitor/local_workflow/…), repeated on
    * every row so folds can classify without the start row. */
   taskType: Schema.optional(TrimmedNonEmptyStringSchema),
   /**
@@ -671,17 +671,17 @@ const taskAgentLinkageFields = {
    * belongs in the Agents surface, never the parent timeline.
    */
   timelineBypass: Schema.optional(Schema.Boolean),
-} as const
+} as const;
 
-export const TaskAgentLinkage = Schema.Struct(taskAgentLinkageFields)
-export type TaskAgentLinkage = typeof TaskAgentLinkage.Type
+export const TaskAgentLinkage = Schema.Struct(taskAgentLinkageFields);
+export type TaskAgentLinkage = typeof TaskAgentLinkage.Type;
 
 const TaskStartedPayload = Schema.Struct({
   taskId: RuntimeTaskId,
   description: Schema.optional(TrimmedNonEmptyStringSchema),
   ...taskAgentLinkageFields,
-})
-export type TaskStartedPayload = typeof TaskStartedPayload.Type
+});
+export type TaskStartedPayload = typeof TaskStartedPayload.Type;
 
 export const RuntimeTaskStatus = Schema.Literals([
   "pending",
@@ -692,8 +692,8 @@ export const RuntimeTaskStatus = Schema.Literals([
   "failed",
   "cancelled",
   "interrupted",
-])
-export type RuntimeTaskStatus = typeof RuntimeTaskStatus.Type
+]);
+export type RuntimeTaskStatus = typeof RuntimeTaskStatus.Type;
 
 const TaskProgressPayload = Schema.Struct({
   taskId: RuntimeTaskId,
@@ -706,8 +706,8 @@ const TaskProgressPayload = Schema.Struct({
   status: Schema.optional(RuntimeTaskStatus),
   error: Schema.optional(TrimmedNonEmptyStringSchema),
   ...taskAgentLinkageFields,
-})
-export type TaskProgressPayload = typeof TaskProgressPayload.Type
+});
+export type TaskProgressPayload = typeof TaskProgressPayload.Type;
 
 /**
  * Non-terminal status patch (from the Claude SDK's task_updated, which main
@@ -722,8 +722,8 @@ const TaskUpdatedPayload = Schema.Struct({
   endedAt: Schema.optional(IsoDateTime),
   isBackgrounded: Schema.optional(Schema.Boolean),
   ...taskAgentLinkageFields,
-})
-export type TaskUpdatedPayload = typeof TaskUpdatedPayload.Type
+});
+export type TaskUpdatedPayload = typeof TaskUpdatedPayload.Type;
 
 const TaskCompletedPayload = Schema.Struct({
   taskId: RuntimeTaskId,
@@ -732,23 +732,23 @@ const TaskCompletedPayload = Schema.Struct({
   usage: Schema.optional(Schema.Unknown),
   typedUsage: Schema.optional(RuntimeTaskUsage),
   ...taskAgentLinkageFields,
-})
-export type TaskCompletedPayload = typeof TaskCompletedPayload.Type
+});
+export type TaskCompletedPayload = typeof TaskCompletedPayload.Type;
 
 const HookStartedPayload = Schema.Struct({
   hookId: TrimmedNonEmptyStringSchema,
   hookName: TrimmedNonEmptyStringSchema,
   hookEvent: TrimmedNonEmptyStringSchema,
-})
-export type HookStartedPayload = typeof HookStartedPayload.Type
+});
+export type HookStartedPayload = typeof HookStartedPayload.Type;
 
 const HookProgressPayload = Schema.Struct({
   hookId: TrimmedNonEmptyStringSchema,
   output: Schema.optional(Schema.String),
   stdout: Schema.optional(Schema.String),
   stderr: Schema.optional(Schema.String),
-})
-export type HookProgressPayload = typeof HookProgressPayload.Type
+});
+export type HookProgressPayload = typeof HookProgressPayload.Type;
 
 const HookCompletedPayload = Schema.Struct({
   hookId: TrimmedNonEmptyStringSchema,
@@ -757,8 +757,8 @@ const HookCompletedPayload = Schema.Struct({
   stdout: Schema.optional(Schema.String),
   stderr: Schema.optional(Schema.String),
   exitCode: Schema.optional(Schema.Int),
-})
-export type HookCompletedPayload = typeof HookCompletedPayload.Type
+});
+export type HookCompletedPayload = typeof HookCompletedPayload.Type;
 
 const ToolProgressPayload = Schema.Struct({
   toolUseId: Schema.optional(TrimmedNonEmptyStringSchema),
@@ -768,26 +768,26 @@ const ToolProgressPayload = Schema.Struct({
   /** Owning task/agent when the tool ran inside a subagent. */
   taskId: Schema.optional(RuntimeTaskId),
   parentToolUseId: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type ToolProgressPayload = typeof ToolProgressPayload.Type
+});
+export type ToolProgressPayload = typeof ToolProgressPayload.Type;
 
 const ToolSummaryPayload = Schema.Struct({
   summary: TrimmedNonEmptyStringSchema,
   precedingToolUseIds: Schema.optional(Schema.Array(TrimmedNonEmptyStringSchema)),
-})
-export type ToolSummaryPayload = typeof ToolSummaryPayload.Type
+});
+export type ToolSummaryPayload = typeof ToolSummaryPayload.Type;
 
 const AuthStatusPayload = Schema.Struct({
   isAuthenticating: Schema.optional(Schema.Boolean),
   output: Schema.optional(Schema.Array(Schema.String)),
   error: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type AuthStatusPayload = typeof AuthStatusPayload.Type
+});
+export type AuthStatusPayload = typeof AuthStatusPayload.Type;
 
 const AccountUpdatedPayload = Schema.Struct({
   account: Schema.Unknown,
-})
-export type AccountUpdatedPayload = typeof AccountUpdatedPayload.Type
+});
+export type AccountUpdatedPayload = typeof AccountUpdatedPayload.Type;
 
 /**
  * Adapters normalise their native rate-limit payload at the boundary so the
@@ -795,41 +795,41 @@ export type AccountUpdatedPayload = typeof AccountUpdatedPayload.Type
  */
 const AccountRateLimitsUpdatedPayload = Schema.Struct({
   limits: ProviderUsageLimitsUpdate,
-})
-export type AccountRateLimitsUpdatedPayload = typeof AccountRateLimitsUpdatedPayload.Type
+});
+export type AccountRateLimitsUpdatedPayload = typeof AccountRateLimitsUpdatedPayload.Type;
 
 const McpStatusUpdatedPayload = Schema.Struct({
   status: Schema.Unknown,
-})
-export type McpStatusUpdatedPayload = typeof McpStatusUpdatedPayload.Type
+});
+export type McpStatusUpdatedPayload = typeof McpStatusUpdatedPayload.Type;
 
 const McpOauthCompletedPayload = Schema.Struct({
   success: Schema.Boolean,
   name: Schema.optional(TrimmedNonEmptyStringSchema),
   error: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type McpOauthCompletedPayload = typeof McpOauthCompletedPayload.Type
+});
+export type McpOauthCompletedPayload = typeof McpOauthCompletedPayload.Type;
 
 const ModelReroutedPayload = Schema.Struct({
   fromModel: TrimmedNonEmptyStringSchema,
   toModel: TrimmedNonEmptyStringSchema,
   reason: TrimmedNonEmptyStringSchema,
-})
-export type ModelReroutedPayload = typeof ModelReroutedPayload.Type
+});
+export type ModelReroutedPayload = typeof ModelReroutedPayload.Type;
 
 const ConfigWarningPayload = Schema.Struct({
   summary: TrimmedNonEmptyStringSchema,
   details: Schema.optional(TrimmedNonEmptyStringSchema),
   path: Schema.optional(TrimmedNonEmptyStringSchema),
   range: Schema.optional(Schema.Unknown),
-})
-export type ConfigWarningPayload = typeof ConfigWarningPayload.Type
+});
+export type ConfigWarningPayload = typeof ConfigWarningPayload.Type;
 
 const DeprecationNoticePayload = Schema.Struct({
   summary: TrimmedNonEmptyStringSchema,
   details: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type DeprecationNoticePayload = typeof DeprecationNoticePayload.Type
+});
+export type DeprecationNoticePayload = typeof DeprecationNoticePayload.Type;
 
 const FilesPersistedPayload = Schema.Struct({
   files: Schema.Array(
@@ -846,389 +846,389 @@ const FilesPersistedPayload = Schema.Struct({
       }),
     ),
   ),
-})
-export type FilesPersistedPayload = typeof FilesPersistedPayload.Type
+});
+export type FilesPersistedPayload = typeof FilesPersistedPayload.Type;
 
 const ToolDeniedPayload = Schema.Struct({
   toolName: TrimmedNonEmptyStringSchema,
   toolUseId: Schema.optional(TrimmedNonEmptyStringSchema),
   reason: Schema.optional(TrimmedNonEmptyStringSchema),
   agentId: Schema.optional(TrimmedNonEmptyStringSchema),
-})
-export type ToolDeniedPayload = typeof ToolDeniedPayload.Type
+});
+export type ToolDeniedPayload = typeof ToolDeniedPayload.Type;
 
 const RuntimeWarningPayload = Schema.Struct({
   message: TrimmedNonEmptyStringSchema,
   detail: Schema.optional(Schema.Unknown),
-})
-export type RuntimeWarningPayload = typeof RuntimeWarningPayload.Type
+});
+export type RuntimeWarningPayload = typeof RuntimeWarningPayload.Type;
 
 const RuntimeErrorPayload = Schema.Struct({
   message: TrimmedNonEmptyStringSchema,
   class: Schema.optional(RuntimeErrorClass),
   detail: Schema.optional(Schema.Unknown),
-})
-export type RuntimeErrorPayload = typeof RuntimeErrorPayload.Type
+});
+export type RuntimeErrorPayload = typeof RuntimeErrorPayload.Type;
 
 const ProviderRuntimeSessionStartedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: SessionStartedType,
   payload: SessionStartedPayload,
-})
-export type ProviderRuntimeSessionStartedEvent = typeof ProviderRuntimeSessionStartedEvent.Type
+});
+export type ProviderRuntimeSessionStartedEvent = typeof ProviderRuntimeSessionStartedEvent.Type;
 
 const ProviderRuntimeSessionConfiguredEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: SessionConfiguredType,
   payload: SessionConfiguredPayload,
-})
+});
 export type ProviderRuntimeSessionConfiguredEvent =
-  typeof ProviderRuntimeSessionConfiguredEvent.Type
+  typeof ProviderRuntimeSessionConfiguredEvent.Type;
 
 const ProviderRuntimeSessionStateChangedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: SessionStateChangedType,
   payload: SessionStateChangedPayload,
-})
+});
 export type ProviderRuntimeSessionStateChangedEvent =
-  typeof ProviderRuntimeSessionStateChangedEvent.Type
+  typeof ProviderRuntimeSessionStateChangedEvent.Type;
 
 const ProviderRuntimeSessionExitedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: SessionExitedType,
   payload: SessionExitedPayload,
-})
-export type ProviderRuntimeSessionExitedEvent = typeof ProviderRuntimeSessionExitedEvent.Type
+});
+export type ProviderRuntimeSessionExitedEvent = typeof ProviderRuntimeSessionExitedEvent.Type;
 
 const ProviderRuntimeThreadStartedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadStartedType,
   payload: ThreadStartedPayload,
-})
-export type ProviderRuntimeThreadStartedEvent = typeof ProviderRuntimeThreadStartedEvent.Type
+});
+export type ProviderRuntimeThreadStartedEvent = typeof ProviderRuntimeThreadStartedEvent.Type;
 
 const ProviderRuntimeThreadStateChangedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadStateChangedType,
   payload: ThreadStateChangedPayload,
-})
+});
 export type ProviderRuntimeThreadStateChangedEvent =
-  typeof ProviderRuntimeThreadStateChangedEvent.Type
+  typeof ProviderRuntimeThreadStateChangedEvent.Type;
 
 const ProviderRuntimeThreadMetadataUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadMetadataUpdatedType,
   payload: ThreadMetadataUpdatedPayload,
-})
+});
 export type ProviderRuntimeThreadMetadataUpdatedEvent =
-  typeof ProviderRuntimeThreadMetadataUpdatedEvent.Type
+  typeof ProviderRuntimeThreadMetadataUpdatedEvent.Type;
 
 const ProviderRuntimeThreadTokenUsageUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadTokenUsageUpdatedType,
   payload: ThreadTokenUsageUpdatedPayload,
-})
+});
 export type ProviderRuntimeThreadTokenUsageUpdatedEvent =
-  typeof ProviderRuntimeThreadTokenUsageUpdatedEvent.Type
+  typeof ProviderRuntimeThreadTokenUsageUpdatedEvent.Type;
 
 const ProviderRuntimeThreadRealtimeStartedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadRealtimeStartedType,
   payload: ThreadRealtimeStartedPayload,
-})
+});
 export type ProviderRuntimeThreadRealtimeStartedEvent =
-  typeof ProviderRuntimeThreadRealtimeStartedEvent.Type
+  typeof ProviderRuntimeThreadRealtimeStartedEvent.Type;
 
 const ProviderRuntimeThreadRealtimeItemAddedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadRealtimeItemAddedType,
   payload: ThreadRealtimeItemAddedPayload,
-})
+});
 export type ProviderRuntimeThreadRealtimeItemAddedEvent =
-  typeof ProviderRuntimeThreadRealtimeItemAddedEvent.Type
+  typeof ProviderRuntimeThreadRealtimeItemAddedEvent.Type;
 
 const ProviderRuntimeThreadRealtimeAudioDeltaEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadRealtimeAudioDeltaType,
   payload: ThreadRealtimeAudioDeltaPayload,
-})
+});
 export type ProviderRuntimeThreadRealtimeAudioDeltaEvent =
-  typeof ProviderRuntimeThreadRealtimeAudioDeltaEvent.Type
+  typeof ProviderRuntimeThreadRealtimeAudioDeltaEvent.Type;
 
 const ProviderRuntimeThreadRealtimeErrorEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadRealtimeErrorType,
   payload: ThreadRealtimeErrorPayload,
-})
+});
 export type ProviderRuntimeThreadRealtimeErrorEvent =
-  typeof ProviderRuntimeThreadRealtimeErrorEvent.Type
+  typeof ProviderRuntimeThreadRealtimeErrorEvent.Type;
 
 const ProviderRuntimeThreadRealtimeClosedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadRealtimeClosedType,
   payload: ThreadRealtimeClosedPayload,
-})
+});
 export type ProviderRuntimeThreadRealtimeClosedEvent =
-  typeof ProviderRuntimeThreadRealtimeClosedEvent.Type
+  typeof ProviderRuntimeThreadRealtimeClosedEvent.Type;
 
 const ProviderRuntimeTurnStartedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TurnStartedType,
   payload: TurnStartedPayload,
-})
-export type ProviderRuntimeTurnStartedEvent = typeof ProviderRuntimeTurnStartedEvent.Type
+});
+export type ProviderRuntimeTurnStartedEvent = typeof ProviderRuntimeTurnStartedEvent.Type;
 
 const ProviderRuntimeTurnCompletedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TurnCompletedType,
   payload: TurnCompletedPayload,
-})
-export type ProviderRuntimeTurnCompletedEvent = typeof ProviderRuntimeTurnCompletedEvent.Type
+});
+export type ProviderRuntimeTurnCompletedEvent = typeof ProviderRuntimeTurnCompletedEvent.Type;
 
 const ProviderRuntimeTurnAbortedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TurnAbortedType,
   payload: TurnAbortedPayload,
-})
-export type ProviderRuntimeTurnAbortedEvent = typeof ProviderRuntimeTurnAbortedEvent.Type
+});
+export type ProviderRuntimeTurnAbortedEvent = typeof ProviderRuntimeTurnAbortedEvent.Type;
 
 const ProviderRuntimeTurnPlanUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TurnPlanUpdatedType,
   payload: TurnPlanUpdatedPayload,
-})
-export type ProviderRuntimeTurnPlanUpdatedEvent = typeof ProviderRuntimeTurnPlanUpdatedEvent.Type
+});
+export type ProviderRuntimeTurnPlanUpdatedEvent = typeof ProviderRuntimeTurnPlanUpdatedEvent.Type;
 
 const ProviderRuntimeTurnProposedDeltaEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TurnProposedDeltaType,
   payload: TurnProposedDeltaPayload,
-})
+});
 export type ProviderRuntimeTurnProposedDeltaEvent =
-  typeof ProviderRuntimeTurnProposedDeltaEvent.Type
+  typeof ProviderRuntimeTurnProposedDeltaEvent.Type;
 
 const ProviderRuntimeTurnProposedCompletedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TurnProposedCompletedType,
   payload: TurnProposedCompletedPayload,
-})
+});
 export type ProviderRuntimeTurnProposedCompletedEvent =
-  typeof ProviderRuntimeTurnProposedCompletedEvent.Type
+  typeof ProviderRuntimeTurnProposedCompletedEvent.Type;
 
 const ProviderRuntimeTurnDiffUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TurnDiffUpdatedType,
   payload: TurnDiffUpdatedPayload,
-})
-export type ProviderRuntimeTurnDiffUpdatedEvent = typeof ProviderRuntimeTurnDiffUpdatedEvent.Type
+});
+export type ProviderRuntimeTurnDiffUpdatedEvent = typeof ProviderRuntimeTurnDiffUpdatedEvent.Type;
 
 const ProviderRuntimeItemStartedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ItemStartedType,
   payload: ItemLifecyclePayload,
-})
-export type ProviderRuntimeItemStartedEvent = typeof ProviderRuntimeItemStartedEvent.Type
+});
+export type ProviderRuntimeItemStartedEvent = typeof ProviderRuntimeItemStartedEvent.Type;
 
 const ProviderRuntimeItemUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ItemUpdatedType,
   payload: ItemLifecyclePayload,
-})
-export type ProviderRuntimeItemUpdatedEvent = typeof ProviderRuntimeItemUpdatedEvent.Type
+});
+export type ProviderRuntimeItemUpdatedEvent = typeof ProviderRuntimeItemUpdatedEvent.Type;
 
 const ProviderRuntimeItemCompletedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ItemCompletedType,
   payload: ItemLifecyclePayload,
-})
-export type ProviderRuntimeItemCompletedEvent = typeof ProviderRuntimeItemCompletedEvent.Type
+});
+export type ProviderRuntimeItemCompletedEvent = typeof ProviderRuntimeItemCompletedEvent.Type;
 
 const ProviderRuntimeContentDeltaEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ContentDeltaType,
   payload: ContentDeltaPayload,
-})
-export type ProviderRuntimeContentDeltaEvent = typeof ProviderRuntimeContentDeltaEvent.Type
+});
+export type ProviderRuntimeContentDeltaEvent = typeof ProviderRuntimeContentDeltaEvent.Type;
 
 const ProviderRuntimeRequestOpenedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: RequestOpenedType,
   payload: RequestOpenedPayload,
-})
-export type ProviderRuntimeRequestOpenedEvent = typeof ProviderRuntimeRequestOpenedEvent.Type
+});
+export type ProviderRuntimeRequestOpenedEvent = typeof ProviderRuntimeRequestOpenedEvent.Type;
 
 const ProviderRuntimeRequestResolvedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: RequestResolvedType,
   payload: RequestResolvedPayload,
-})
-export type ProviderRuntimeRequestResolvedEvent = typeof ProviderRuntimeRequestResolvedEvent.Type
+});
+export type ProviderRuntimeRequestResolvedEvent = typeof ProviderRuntimeRequestResolvedEvent.Type;
 
 const ProviderRuntimeUserInputRequestedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: UserInputRequestedType,
   payload: UserInputRequestedPayload,
-})
+});
 export type ProviderRuntimeUserInputRequestedEvent =
-  typeof ProviderRuntimeUserInputRequestedEvent.Type
+  typeof ProviderRuntimeUserInputRequestedEvent.Type;
 
 const ProviderRuntimeUserInputResolvedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: UserInputResolvedType,
   payload: UserInputResolvedPayload,
-})
+});
 export type ProviderRuntimeUserInputResolvedEvent =
-  typeof ProviderRuntimeUserInputResolvedEvent.Type
+  typeof ProviderRuntimeUserInputResolvedEvent.Type;
 
 const ProviderRuntimeTaskStartedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TaskStartedType,
   payload: TaskStartedPayload,
-})
-export type ProviderRuntimeTaskStartedEvent = typeof ProviderRuntimeTaskStartedEvent.Type
+});
+export type ProviderRuntimeTaskStartedEvent = typeof ProviderRuntimeTaskStartedEvent.Type;
 
 const ProviderRuntimeTaskProgressEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TaskProgressType,
   payload: TaskProgressPayload,
-})
-export type ProviderRuntimeTaskProgressEvent = typeof ProviderRuntimeTaskProgressEvent.Type
+});
+export type ProviderRuntimeTaskProgressEvent = typeof ProviderRuntimeTaskProgressEvent.Type;
 
 const ProviderRuntimeTaskUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TaskUpdatedType,
   payload: TaskUpdatedPayload,
-})
-export type ProviderRuntimeTaskUpdatedEvent = typeof ProviderRuntimeTaskUpdatedEvent.Type
+});
+export type ProviderRuntimeTaskUpdatedEvent = typeof ProviderRuntimeTaskUpdatedEvent.Type;
 
 const ProviderRuntimeTaskCompletedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: TaskCompletedType,
   payload: TaskCompletedPayload,
-})
-export type ProviderRuntimeTaskCompletedEvent = typeof ProviderRuntimeTaskCompletedEvent.Type
+});
+export type ProviderRuntimeTaskCompletedEvent = typeof ProviderRuntimeTaskCompletedEvent.Type;
 
 const ProviderRuntimeHookStartedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: HookStartedType,
   payload: HookStartedPayload,
-})
-export type ProviderRuntimeHookStartedEvent = typeof ProviderRuntimeHookStartedEvent.Type
+});
+export type ProviderRuntimeHookStartedEvent = typeof ProviderRuntimeHookStartedEvent.Type;
 
 const ProviderRuntimeHookProgressEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: HookProgressType,
   payload: HookProgressPayload,
-})
-export type ProviderRuntimeHookProgressEvent = typeof ProviderRuntimeHookProgressEvent.Type
+});
+export type ProviderRuntimeHookProgressEvent = typeof ProviderRuntimeHookProgressEvent.Type;
 
 const ProviderRuntimeHookCompletedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: HookCompletedType,
   payload: HookCompletedPayload,
-})
-export type ProviderRuntimeHookCompletedEvent = typeof ProviderRuntimeHookCompletedEvent.Type
+});
+export type ProviderRuntimeHookCompletedEvent = typeof ProviderRuntimeHookCompletedEvent.Type;
 
 const ProviderRuntimeToolProgressEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ToolProgressType,
   payload: ToolProgressPayload,
-})
-export type ProviderRuntimeToolProgressEvent = typeof ProviderRuntimeToolProgressEvent.Type
+});
+export type ProviderRuntimeToolProgressEvent = typeof ProviderRuntimeToolProgressEvent.Type;
 
 const ProviderRuntimeToolSummaryEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ToolSummaryType,
   payload: ToolSummaryPayload,
-})
-export type ProviderRuntimeToolSummaryEvent = typeof ProviderRuntimeToolSummaryEvent.Type
+});
+export type ProviderRuntimeToolSummaryEvent = typeof ProviderRuntimeToolSummaryEvent.Type;
 
 const ProviderRuntimeAuthStatusEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: AuthStatusType,
   payload: AuthStatusPayload,
-})
-export type ProviderRuntimeAuthStatusEvent = typeof ProviderRuntimeAuthStatusEvent.Type
+});
+export type ProviderRuntimeAuthStatusEvent = typeof ProviderRuntimeAuthStatusEvent.Type;
 
 const ProviderRuntimeAccountUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: AccountUpdatedType,
   payload: AccountUpdatedPayload,
-})
-export type ProviderRuntimeAccountUpdatedEvent = typeof ProviderRuntimeAccountUpdatedEvent.Type
+});
+export type ProviderRuntimeAccountUpdatedEvent = typeof ProviderRuntimeAccountUpdatedEvent.Type;
 
 const ProviderRuntimeAccountRateLimitsUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: AccountRateLimitsUpdatedType,
   payload: AccountRateLimitsUpdatedPayload,
-})
+});
 export type ProviderRuntimeAccountRateLimitsUpdatedEvent =
-  typeof ProviderRuntimeAccountRateLimitsUpdatedEvent.Type
+  typeof ProviderRuntimeAccountRateLimitsUpdatedEvent.Type;
 
 const ProviderRuntimeMcpStatusUpdatedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: McpStatusUpdatedType,
   payload: McpStatusUpdatedPayload,
-})
-export type ProviderRuntimeMcpStatusUpdatedEvent = typeof ProviderRuntimeMcpStatusUpdatedEvent.Type
+});
+export type ProviderRuntimeMcpStatusUpdatedEvent = typeof ProviderRuntimeMcpStatusUpdatedEvent.Type;
 
 const ProviderRuntimeMcpOauthCompletedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: McpOauthCompletedType,
   payload: McpOauthCompletedPayload,
-})
+});
 export type ProviderRuntimeMcpOauthCompletedEvent =
-  typeof ProviderRuntimeMcpOauthCompletedEvent.Type
+  typeof ProviderRuntimeMcpOauthCompletedEvent.Type;
 
 const ProviderRuntimeModelReroutedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ModelReroutedType,
   payload: ModelReroutedPayload,
-})
-export type ProviderRuntimeModelReroutedEvent = typeof ProviderRuntimeModelReroutedEvent.Type
+});
+export type ProviderRuntimeModelReroutedEvent = typeof ProviderRuntimeModelReroutedEvent.Type;
 
 const ProviderRuntimeConfigWarningEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ConfigWarningType,
   payload: ConfigWarningPayload,
-})
-export type ProviderRuntimeConfigWarningEvent = typeof ProviderRuntimeConfigWarningEvent.Type
+});
+export type ProviderRuntimeConfigWarningEvent = typeof ProviderRuntimeConfigWarningEvent.Type;
 
 const ProviderRuntimeDeprecationNoticeEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: DeprecationNoticeType,
   payload: DeprecationNoticePayload,
-})
+});
 export type ProviderRuntimeDeprecationNoticeEvent =
-  typeof ProviderRuntimeDeprecationNoticeEvent.Type
+  typeof ProviderRuntimeDeprecationNoticeEvent.Type;
 
 const ProviderRuntimeFilesPersistedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: FilesPersistedType,
   payload: FilesPersistedPayload,
-})
-export type ProviderRuntimeFilesPersistedEvent = typeof ProviderRuntimeFilesPersistedEvent.Type
+});
+export type ProviderRuntimeFilesPersistedEvent = typeof ProviderRuntimeFilesPersistedEvent.Type;
 
 const ProviderRuntimeToolDeniedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ToolDeniedType,
   payload: ToolDeniedPayload,
-})
-export type ProviderRuntimeToolDeniedEvent = typeof ProviderRuntimeToolDeniedEvent.Type
+});
+export type ProviderRuntimeToolDeniedEvent = typeof ProviderRuntimeToolDeniedEvent.Type;
 
 const ProviderRuntimeWarningEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: RuntimeWarningType,
   payload: RuntimeWarningPayload,
-})
-export type ProviderRuntimeWarningEvent = typeof ProviderRuntimeWarningEvent.Type
+});
+export type ProviderRuntimeWarningEvent = typeof ProviderRuntimeWarningEvent.Type;
 
 const ProviderRuntimeErrorEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: RuntimeErrorType,
   payload: RuntimeErrorPayload,
-})
-export type ProviderRuntimeErrorEvent = typeof ProviderRuntimeErrorEvent.Type
+});
+export type ProviderRuntimeErrorEvent = typeof ProviderRuntimeErrorEvent.Type;
 
 export const ProviderRuntimeEventV2 = Schema.Union([
   ProviderRuntimeSessionStartedEvent,
@@ -1280,11 +1280,11 @@ export const ProviderRuntimeEventV2 = Schema.Union([
   ProviderRuntimeToolDeniedEvent,
   ProviderRuntimeWarningEvent,
   ProviderRuntimeErrorEvent,
-])
-export type ProviderRuntimeEventV2 = typeof ProviderRuntimeEventV2.Type
+]);
+export type ProviderRuntimeEventV2 = typeof ProviderRuntimeEventV2.Type;
 
-export const ProviderRuntimeEvent = ProviderRuntimeEventV2
-export type ProviderRuntimeEvent = ProviderRuntimeEventV2
+export const ProviderRuntimeEvent = ProviderRuntimeEventV2;
+export type ProviderRuntimeEvent = ProviderRuntimeEventV2;
 
-export const ProviderRuntimeTurnStatus = RuntimeTurnState
-export type ProviderRuntimeTurnStatus = RuntimeTurnState
+export const ProviderRuntimeTurnStatus = RuntimeTurnState;
+export type ProviderRuntimeTurnStatus = RuntimeTurnState;

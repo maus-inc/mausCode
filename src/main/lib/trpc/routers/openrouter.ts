@@ -2,22 +2,21 @@
  * Transplanted from erenbertr/1code (Apache-2.0, (c) the 1Code contributors)
  * — file-level port, not a merge. See .dump/ci/research/fork-network-harvest-catalog.md.
  */
-
-import { randomUUID } from "node:crypto"
-import * as fs from "node:fs/promises"
-import * as path from "node:path"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { observable } from "@trpc/server/observable"
 import { streamText } from "ai"
 import { eq } from "drizzle-orm"
+import { randomUUID } from "node:crypto"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
 import { z } from "zod"
 import { getDatabase, subChats } from "../../db"
 import {
   clearOpenRouterApiKey,
   getOpenRouterAuthStatus,
   loadOpenRouterApiKey,
-  type OpenRouterAuthStatus,
   saveOpenRouterApiKey,
+  type OpenRouterAuthStatus,
 } from "../../openrouter-auth-store"
 import { appendOpenRouterUsage } from "../../openrouter-usage"
 import { publicProcedure, router } from "../index"
@@ -52,7 +51,7 @@ let catalogCache: { fetchedAt: number; models: CatalogEntry[] } | null = null
 
 function maskKeyForLog(key: string): string {
   if (key.length <= 8) return "****"
-  return `${key.slice(0, 4)}...${key.slice(-4)}`
+  return `${key.slice(0, 4)}…${key.slice(-4)}`
 }
 
 function parseCatalog(body: unknown): CatalogEntry[] {
@@ -67,7 +66,8 @@ function parseCatalog(body: unknown): CatalogEntry[] {
     if (!id) continue
     const name = typeof r.name === "string" ? r.name : id
     const description = typeof r.description === "string" ? r.description : null
-    const contextLength = typeof r.context_length === "number" ? r.context_length : null
+    const contextLength =
+      typeof r.context_length === "number" ? r.context_length : null
     const pricing =
       typeof r.pricing === "object" && r.pricing !== null
         ? (r.pricing as Record<string, unknown>)
@@ -75,7 +75,9 @@ function parseCatalog(body: unknown): CatalogEntry[] {
     const promptStr = pricing?.prompt
     const completionStr = pricing?.completion
     const promptUsdPerToken =
-      typeof promptStr === "string" && Number.isFinite(Number(promptStr)) ? Number(promptStr) : null
+      typeof promptStr === "string" && Number.isFinite(Number(promptStr))
+        ? Number(promptStr)
+        : null
     const completionUsdPerToken =
       typeof completionStr === "string" && Number.isFinite(Number(completionStr))
         ? Number(completionStr)
@@ -84,7 +86,8 @@ function parseCatalog(body: unknown): CatalogEntry[] {
       typeof r.architecture === "object" && r.architecture !== null
         ? (r.architecture as Record<string, unknown>)
         : null
-    const modality = typeof arch?.modality === "string" ? (arch.modality as string) : null
+    const modality =
+      typeof arch?.modality === "string" ? (arch.modality as string) : null
     out.push({
       id,
       name,
@@ -135,7 +138,8 @@ function extractPromptFromStoredMessage(message: any): string {
     if (part?.type === "text" && typeof part.text === "string") {
       textParts.push(part.text)
     } else if (part?.type === "file-content") {
-      const filePath = typeof part.filePath === "string" ? part.filePath : undefined
+      const filePath =
+        typeof part.filePath === "string" ? part.filePath : undefined
       const fileName = filePath?.split("/").pop() || filePath || "file"
       const content = typeof part.content === "string" ? part.content : ""
       fileContents.push(`\n--- ${fileName} ---\n${content}`)
@@ -146,7 +150,9 @@ function extractPromptFromStoredMessage(message: any): string {
 
 function buildUserParts(
   prompt: string,
-  images: Array<{ base64Data?: string; mediaType?: string; filename?: string }> | undefined,
+  images:
+    | Array<{ base64Data?: string; mediaType?: string; filename?: string }>
+    | undefined,
 ): any[] {
   const parts: any[] = [{ type: "text", text: prompt }]
   if (images && images.length > 0) {
@@ -167,7 +173,9 @@ function buildUserParts(
 
 function buildModelMessageContent(
   prompt: string,
-  images: Array<{ base64Data?: string; mediaType?: string; filename?: string }> | undefined,
+  images:
+    | Array<{ base64Data?: string; mediaType?: string; filename?: string }>
+    | undefined,
 ): any[] {
   const content: any[] = [{ type: "text", text: prompt }]
   if (images && images.length > 0) {
@@ -225,7 +233,9 @@ async function buildSystemPrompt(
   if (instructions) {
     lines.push("")
     lines.push(`# ${instructions.filename}`)
-    lines.push(`The following are the project's ${instructions.filename} instructions:`)
+    lines.push(
+      `The following are the project's ${instructions.filename} instructions:`,
+    )
     lines.push("")
     lines.push(instructions.content)
   }
@@ -246,20 +256,25 @@ function convertStoredMessagesToModelMessages(
         if (part?.type === "text" && typeof part.text === "string") {
           textChunks.push(part.text)
         } else if (part?.type === "file-content") {
-          const filePath = typeof part.filePath === "string" ? part.filePath : undefined
+          const filePath =
+            typeof part.filePath === "string" ? part.filePath : undefined
           const fileName = filePath?.split("/").pop() || filePath || "file"
           const content = typeof part.content === "string" ? part.content : ""
           fileSnippets.push(`\n--- ${fileName} ---\n${content}`)
         } else if (part?.type === "data-image" && part.data) {
           const data = part.data as Record<string, unknown>
-          const base64Data = typeof data.base64Data === "string" ? data.base64Data : null
-          const mediaType = typeof data.mediaType === "string" ? data.mediaType : null
+          const base64Data =
+            typeof data.base64Data === "string" ? data.base64Data : null
+          const mediaType =
+            typeof data.mediaType === "string" ? data.mediaType : null
           if (base64Data && mediaType) {
             imageParts.push({
               type: "file",
               mediaType,
               data: base64Data,
-              ...(typeof data.filename === "string" ? { filename: data.filename } : {}),
+              ...(typeof data.filename === "string"
+                ? { filename: data.filename }
+                : {}),
             })
           }
         }
@@ -432,7 +447,8 @@ export const openrouterRouter = router({
             if (!apiKey) {
               safeEmit({
                 type: "error",
-                errorText: "No OpenRouter API key configured. Add one in Settings → Models.",
+                errorText:
+                  "No OpenRouter API key configured. Add one in Settings → Models.",
               })
               safeEmit({ type: "finish" })
               safeComplete()
@@ -500,7 +516,9 @@ export const openrouterRouter = router({
               input.modelId,
             )
 
-            const priorMessages = convertStoredMessagesToModelMessages(existingMessages)
+            const priorMessages = convertStoredMessagesToModelMessages(
+              existingMessages,
+            )
             const modelMessages: Array<{
               role: "user" | "assistant"
               content: any
@@ -540,20 +558,24 @@ export const openrouterRouter = router({
                     model: input.modelId,
                     sessionId,
                     durationMs: Date.now() - startedAt,
-                    resultSubtype: part.finishReason === "error" ? "error" : "success",
+                    resultSubtype:
+                      part.finishReason === "error" ? "error" : "success",
                   }
                 }
                 return { model: input.modelId, sessionId }
               },
               onFinish: async ({ responseMessage, isContinuation }) => {
                 try {
-                  const cleaned = cleanAssistantMessageForPersistence(responseMessage)
+                  const cleaned =
+                    cleanAssistantMessageForPersistence(responseMessage)
                   if (!cleaned) {
                     persistSubChatMessages(messagesForStream)
                     return
                   }
                   const messagesToPersist = [
-                    ...(isContinuation ? messagesForStream.slice(0, -1) : messagesForStream),
+                    ...(isContinuation
+                      ? messagesForStream.slice(0, -1)
+                      : messagesForStream),
                     cleaned,
                   ]
                   persistSubChatMessages(messagesToPersist)
@@ -597,7 +619,8 @@ export const openrouterRouter = router({
               const usage = await result.usage
               const inputTokens = usage?.inputTokens ?? 0
               const outputTokens = usage?.outputTokens ?? 0
-              const totalTokens = usage?.totalTokens ?? inputTokens + outputTokens
+              const totalTokens =
+                usage?.totalTokens ?? inputTokens + outputTokens
               const providerMetadata = await result.providerMetadata
               const orMeta =
                 providerMetadata && typeof providerMetadata === "object"
@@ -609,7 +632,8 @@ export const openrouterRouter = router({
                       | Record<string, unknown>
                       | undefined)
                   : undefined
-              const costUsd = typeof orUsage?.cost === "number" ? orUsage.cost : 0
+              const costUsd =
+                typeof orUsage?.cost === "number" ? orUsage.cost : 0
 
               if (inputTokens || outputTokens || costUsd) {
                 try {
@@ -651,7 +675,10 @@ export const openrouterRouter = router({
 
             safeComplete()
           } catch (error) {
-            const rawMessage = error instanceof Error ? error.message : String(error ?? "")
+            const rawMessage =
+              error instanceof Error
+                ? error.message
+                : String(error ?? "")
             console.error(
               "[openrouter] chat stream error:",
               error,
@@ -696,12 +723,14 @@ export const openrouterRouter = router({
       return { cancelled: true, ignoredStale: false }
     }),
 
-  cleanup: publicProcedure.input(z.object({ subChatId: z.string() })).mutation(({ input }) => {
-    const activeStream = activeStreams.get(input.subChatId)
-    if (activeStream) {
-      activeStream.controller.abort()
-      activeStreams.delete(input.subChatId)
-    }
-    return { success: true }
-  }),
+  cleanup: publicProcedure
+    .input(z.object({ subChatId: z.string() }))
+    .mutation(({ input }) => {
+      const activeStream = activeStreams.get(input.subChatId)
+      if (activeStream) {
+        activeStream.controller.abort()
+        activeStreams.delete(input.subChatId)
+      }
+      return { success: true }
+    }),
 })

@@ -2,17 +2,17 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
+import * as Schema from "effect/Schema";
 
-import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts"
-import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts"
+import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 
 export const ProviderSetupInput = Schema.Struct({
   instanceId: ProviderInstanceId,
-})
-export type ProviderSetupInput = typeof ProviderSetupInput.Type
+});
+export type ProviderSetupInput = typeof ProviderSetupInput.Type;
 
-const SetupOperationId = TrimmedNonEmptyString.check(Schema.isMaxLength(128))
+const SetupOperationId = TrimmedNonEmptyString.check(Schema.isMaxLength(128));
 
 export const ProviderAuthState = Schema.Struct({
   instanceId: ProviderInstanceId,
@@ -29,23 +29,23 @@ export const ProviderAuthState = Schema.Struct({
   authorizationUrl: Schema.NullOr(Schema.String),
   expiresAt: Schema.NullOr(IsoDateTime),
   message: Schema.NullOr(Schema.String),
-})
-export type ProviderAuthState = typeof ProviderAuthState.Type
+});
+export type ProviderAuthState = typeof ProviderAuthState.Type;
 
 export const ProviderAuthCompleteInput = Schema.Struct({
   instanceId: ProviderInstanceId,
   flowId: SetupOperationId,
   callbackUrl: TrimmedNonEmptyString.check(Schema.isMaxLength(16_384)),
-})
-export type ProviderAuthCompleteInput = typeof ProviderAuthCompleteInput.Type
+});
+export type ProviderAuthCompleteInput = typeof ProviderAuthCompleteInput.Type;
 
 export const ProviderAuthCancelInput = Schema.Struct({
   instanceId: ProviderInstanceId,
   flowId: SetupOperationId,
-})
-export type ProviderAuthCancelInput = typeof ProviderAuthCancelInput.Type
+});
+export type ProviderAuthCancelInput = typeof ProviderAuthCancelInput.Type;
 
-const ByteCount = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+const ByteCount = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 export const ProviderInstallState = Schema.Struct({
   driver: ProviderDriverKind,
@@ -65,14 +65,14 @@ export const ProviderInstallState = Schema.Struct({
   installedVersion: Schema.NullOr(TrimmedNonEmptyString),
   canRemove: Schema.Boolean,
   message: Schema.NullOr(Schema.String),
-})
-export type ProviderInstallState = typeof ProviderInstallState.Type
+});
+export type ProviderInstallState = typeof ProviderInstallState.Type;
 
 export const ProviderInstallCancelInput = Schema.Struct({
   instanceId: ProviderInstanceId,
   operationId: SetupOperationId,
-})
-export type ProviderInstallCancelInput = typeof ProviderInstallCancelInput.Type
+});
+export type ProviderInstallCancelInput = typeof ProviderInstallCancelInput.Type;
 
 /** Safe setup failure text. Never include OAuth codes, URLs, or native token data. */
 export class ProviderSetupError extends Schema.TaggedError<ProviderSetupError>()(
@@ -85,6 +85,6 @@ export class ProviderSetupError extends Schema.TaggedError<ProviderSetupError>()
   },
 ) {
   override get message(): string {
-    return this.detail
+    return this.detail;
   }
 }

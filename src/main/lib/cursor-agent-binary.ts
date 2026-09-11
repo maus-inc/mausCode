@@ -41,11 +41,14 @@ function parseCursorAgentVersion(versionString: string): number {
   const datePart = versionString.split("-")[0] ?? versionString
   const [year, month, day] = datePart.split(".")
   if (!year || !month || !day) return 0
-  return Number(`${year}${month.padStart(2, "0")}${day.padStart(2, "0")}`)
+  return Number(
+    `${year}${month.padStart(2, "0")}${day.padStart(2, "0")}`,
+  )
 }
 
 function getCursorAgentRoot(): string {
-  const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local")
+  const localAppData =
+    process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local")
   return join(localAppData, "cursor-agent")
 }
 
@@ -80,13 +83,26 @@ function resolveWindowsPowerShellLaunch(agentRoot: string): CursorAgentLaunch | 
   if (!existsSync(agentScript)) return null
 
   const systemRoot = process.env.SystemRoot || "C:\\Windows"
-  const powershellPath = join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+  const powershellPath = join(
+    systemRoot,
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  )
 
   if (!existsSync(powershellPath)) return null
 
   return {
     command: powershellPath,
-    args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", agentScript, "acp"],
+    args: [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      agentScript,
+      "acp",
+    ],
   }
 }
 
@@ -105,7 +121,8 @@ function resolveUnixCursorAgentLaunch(): CursorAgentLaunch {
       const command = resolveCliBinaryPath({
         bundledPath: getBundledAgentPath(binaryName),
         commandName: binaryName,
-        downloadHint: "Install Cursor CLI from https://cursor.com/docs/cli/installation",
+        downloadHint:
+          "Install Cursor CLI from https://cursor.com/docs/cli/installation",
       })
       return { command, args: ["acp"] }
     } catch {

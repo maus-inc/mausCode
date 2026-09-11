@@ -1,4 +1,3 @@
-import { parseWorktreeRelativePath } from "../../../../shared/worktree-paths"
 export interface GitCommitInfo {
   type: "commit"
   message: string
@@ -25,7 +24,10 @@ export interface ChangedFileInfo {
 /**
  * Extract commit message from a git commit command and its output.
  */
-function extractCommitInfo(command: string, stdout: string): GitCommitInfo | null {
+function extractCommitInfo(
+  command: string,
+  stdout: string,
+): GitCommitInfo | null {
   if (!/git\s+commit/.test(command)) return null
 
   // Verify commit actually succeeded by checking stdout for git's commit output
@@ -38,7 +40,9 @@ function extractCommitInfo(command: string, stdout: string): GitCommitInfo | nul
 
   // If stdout message is truncated, try to get full message from command
   // Pattern 1: HEREDOC pattern (Claude's preferred format)
-  const heredocMatch = command.match(/<<'?EOF'?\s*\n([\s\S]*?)\n\s*EOF/)
+  const heredocMatch = command.match(
+    /<<'?EOF'?\s*\n([\s\S]*?)\n\s*EOF/,
+  )
   if (heredocMatch) {
     const heredocFirstLine = heredocMatch[1]!.split("\n")[0]!.trim()
     if (heredocFirstLine) {
@@ -64,7 +68,9 @@ function extractPrInfo(command: string, stdout: string): GitPrInfo | null {
   if (!/gh\s+pr\s+create/.test(command)) return null
 
   // Extract URL from stdout
-  const urlMatch = stdout.match(/(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/)
+  const urlMatch = stdout.match(
+    /(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/,
+  )
   if (!urlMatch) return null
 
   const url = urlMatch[1]!
@@ -91,11 +97,7 @@ export function extractGitActivity(parts: any[]): GitActivity | null {
 
   for (const part of parts) {
     const toolName = part.input?.toolName || part.type?.replace("tool-", "")
-    const isBash =
-      part.type === "tool-Bash" ||
-      toolName === "run_shell_command" ||
-      toolName === "Bash" ||
-      toolName === "Run"
+    const isBash = part.type === "tool-Bash" || toolName === "run_shell_command" || toolName === "Bash" || toolName === "Run"
 
     if (!isBash) continue
     if (!part.output) continue
@@ -164,11 +166,10 @@ function toRelativePath(filePath: string, projectPath?: string): string {
     const relative = filePath.slice(projectPath.length)
     return relative.startsWith("/") ? relative.slice(1) : relative
   }
-  // Handle worktree paths: /Users/.../.mauscode/worktrees/{project}/{folder}/relativePath
-  // (legacy 1Code .21st/worktrees paths are matched too — see shared/worktree-paths)
-  const worktreeRelative = parseWorktreeRelativePath(filePath)
-  if (worktreeRelative) {
-    return worktreeRelative
+  // Handle worktree paths: /Users/.../.21st/worktrees/{chatId}/{subChatId}/relativePath
+  const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
+  if (worktreeMatch) {
+    return worktreeMatch[1]!
   }
   return filePath.split("/").pop() || filePath
 }

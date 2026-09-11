@@ -65,7 +65,10 @@ function getParsedCmdEntriesFromPayload(payload: unknown): AnyRecord[] {
   return payload.parsed_cmd.filter(isRecord)
 }
 
-function getFirstParsedCmdValue(entries: AnyRecord[], key: string): string | undefined {
+function getFirstParsedCmdValue(
+  entries: AnyRecord[],
+  key: string,
+): string | undefined {
   const match = entries.find(
     (entry) => typeof entry[key] === "string" && entry[key].trim().length > 0,
   )
@@ -73,10 +76,14 @@ function getFirstParsedCmdValue(entries: AnyRecord[], key: string): string | und
   return match[key].trim()
 }
 
-function normalizeReadInputFromPayload(input: unknown, payload: unknown): unknown {
+function normalizeReadInputFromPayload(
+  input: unknown,
+  payload: unknown,
+): unknown {
   const normalizedInput = isRecord(input) ? { ...input } : {}
   const existingPath =
-    typeof normalizedInput.file_path === "string" && normalizedInput.file_path.trim().length > 0
+    typeof normalizedInput.file_path === "string" &&
+    normalizedInput.file_path.trim().length > 0
       ? normalizedInput.file_path.trim()
       : ""
   if (existingPath) {
@@ -97,7 +104,8 @@ function normalizeReadInputFromPayload(input: unknown, payload: unknown): unknow
       ? payload.file_path.trim()
       : ""
 
-  const resolvedPath = directPayloadFilePath || directPayloadPath || payloadPath || payloadName
+  const resolvedPath =
+    directPayloadFilePath || directPayloadPath || payloadPath || payloadName
 
   if (!resolvedPath) {
     return input
@@ -128,10 +136,7 @@ function parseCodexToolDescriptor(rawToolName: string): CodexToolDescriptor | nu
     if (separatorIndex === -1) return null
 
     const serverName = payload.slice(0, separatorIndex).trim()
-    const toolName = payload
-      .slice(separatorIndex + 1)
-      .trim()
-      .replaceAll("/", "__")
+    const toolName = payload.slice(separatorIndex + 1).trim().replaceAll("/", "__")
     if (!serverName || !toolName) return null
 
     return {
@@ -168,7 +173,10 @@ function stripExecutionBookkeeping(input: AnyRecord): AnyRecord {
   return cleaned
 }
 
-function normalizeCodexToolInput(rawInput: unknown, descriptor: CodexToolDescriptor): unknown {
+function normalizeCodexToolInput(
+  rawInput: unknown,
+  descriptor: CodexToolDescriptor,
+): unknown {
   if (!isRecord(rawInput)) {
     if (typeof rawInput === "string") {
       const trimmedInput = rawInput.trim()
@@ -217,10 +225,16 @@ function normalizeCodexToolInput(rawInput: unknown, descriptor: CodexToolDescrip
   const parsedTargetDirectory =
     getFirstParsedCmdValue(parsedCmdEntries, "target_directory") || parsedPath
 
-  if (!Array.isArray(normalizedInput.parsed_cmd) && Array.isArray(rawInput.parsed_cmd)) {
+  if (
+    !Array.isArray(normalizedInput.parsed_cmd) &&
+    Array.isArray(rawInput.parsed_cmd)
+  ) {
     normalizedInput.parsed_cmd = rawInput.parsed_cmd
   }
-  if (normalizedInput.command === undefined && rawInput.command !== undefined) {
+  if (
+    normalizedInput.command === undefined &&
+    rawInput.command !== undefined
+  ) {
     normalizedInput.command = rawInput.command
   }
 
@@ -228,7 +242,8 @@ function normalizeCodexToolInput(rawInput: unknown, descriptor: CodexToolDescrip
   // text under varying keys across CLI versions; fall back gracefully.
   if (descriptor.canonicalToolName === "Thinking") {
     if (!normalizedInput.text) {
-      normalizedInput.text = normalizedInput.summary || normalizedInput.title || descriptor.detail
+      normalizedInput.text =
+        normalizedInput.summary || normalizedInput.title || descriptor.detail
     }
   }
 
@@ -313,7 +328,8 @@ export function normalizeCodexToolPart(
     (part.state === "input-available" || part.state === "output-available")
 
   const hasCodexArgsWrapper =
-    isRecord(part.input) && (isRecord(part.input.args) || typeof part.input.toolName === "string")
+    isRecord(part.input) &&
+    (isRecord(part.input.args) || typeof part.input.toolName === "string")
 
   if (!descriptor && !hasCodexArgsWrapper && !shouldNormalizeState) {
     return part
@@ -327,14 +343,16 @@ export function normalizeCodexToolPart(
     detail: "",
     isMcp: normalizedType.startsWith("tool-mcp__"),
   }
-  const normalizedInput = descriptor
-    ? normalizeCodexToolInput(part.input, descriptor)
-    : hasCodexArgsWrapper
-      ? normalizeCodexToolInput(part.input, fallbackDescriptor)
-      : part.input
+  const normalizedInput =
+    descriptor
+      ? normalizeCodexToolInput(part.input, descriptor)
+      : hasCodexArgsWrapper
+        ? normalizeCodexToolInput(part.input, fallbackDescriptor)
+        : part.input
   const normalizedOutput = part.output !== undefined ? part.output : part.result
   const normalizedResult = part.result !== undefined ? part.result : part.output
-  const outputPayload = normalizedOutput !== undefined ? normalizedOutput : normalizedResult
+  const outputPayload =
+    normalizedOutput !== undefined ? normalizedOutput : normalizedResult
   const outputEnrichedInput =
     fallbackDescriptor.canonicalToolName === "Read"
       ? normalizeReadInputFromPayload(normalizedInput, outputPayload)
@@ -344,7 +362,9 @@ export function normalizeCodexToolPart(
       ? part.input
       : outputEnrichedInput
 
-  const normalizedState = shouldNormalizeState ? toCanonicalToolState(part.state) : part.state
+  const normalizedState = shouldNormalizeState
+    ? toCanonicalToolState(part.state)
+    : part.state
 
   const typeChanged = normalizedType !== part.type
   const inputChanged = finalInput !== part.input
@@ -429,7 +449,8 @@ export function normalizeCodexStreamChunk(chunk: unknown): unknown {
 
   const toolNameChanged = canonicalToolName !== chunk.toolName
   const titleChanged = normalizedTitle !== undefined && normalizedTitle !== chunk.title
-  const inputChanged = chunk.type === "tool-input-available" && finalInput !== chunk.input
+  const inputChanged =
+    chunk.type === "tool-input-available" && finalInput !== chunk.input
 
   if (!toolNameChanged && !inputChanged && !titleChanged) {
     return chunk

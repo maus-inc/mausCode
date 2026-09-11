@@ -2,9 +2,9 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
+import * as Schema from "effect/Schema";
 
-import { PortSchema, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts"
+import { PortSchema, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 export const DesktopBackendBootstrap = Schema.Struct({
   mode: Schema.Literal("desktop"),
@@ -23,6 +23,6 @@ export const DesktopBackendBootstrap = Schema.Struct({
   desktopTelemetryFd: Schema.optionalKey(PositiveInt),
   desktopTelemetryControlFd: Schema.optionalKey(PositiveInt),
   resourceMonitorPath: Schema.optionalKey(TrimmedNonEmptyString),
-})
+});
 
-export type DesktopBackendBootstrap = typeof DesktopBackendBootstrap.Type
+export type DesktopBackendBootstrap = typeof DesktopBackendBootstrap.Type;

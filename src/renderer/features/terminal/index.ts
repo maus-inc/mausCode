@@ -1,12 +1,12 @@
+export { Terminal } from "./terminal"
+export { TerminalSidebar } from "./terminal-sidebar"
+export { TerminalSearch } from "./TerminalSearch"
+export { DevServerButton } from "./dev-server-button"
 export {
-  terminalCwdAtom,
-  terminalSearchOpenAtom,
   terminalSidebarOpenAtom,
   terminalSidebarOpenAtomFamily,
   terminalSidebarWidthAtom,
+  terminalCwdAtom,
+  terminalSearchOpenAtom,
 } from "./atoms"
-export { DevServerButton } from "./dev-server-button"
-export { TerminalSearch } from "./TerminalSearch"
-export { Terminal } from "./terminal"
-export { TerminalSidebar } from "./terminal-sidebar"
 export type { TerminalProps, TerminalStreamEvent } from "./types"

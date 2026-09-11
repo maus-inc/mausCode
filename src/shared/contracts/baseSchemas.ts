@@ -2,10 +2,10 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Effect from "effect/Effect"
-import * as Option from "effect/Option"
-import * as Schema from "effect/Schema"
-import * as SchemaTransformation from "effect/SchemaTransformation"
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 
 export const TrimmedString = Schema.String.pipe(
   Schema.decodeTo(
@@ -15,12 +15,12 @@ export const TrimmedString = Schema.String.pipe(
       encode: (value) => Effect.succeed(value.trim()),
     }),
   ),
-)
-export const TrimmedNonEmptyString = TrimmedString.check(Schema.isNonEmpty())
+);
+export const TrimmedNonEmptyString = TrimmedString.check(Schema.isNonEmpty());
 
-export const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
-export const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
-export const PortSchema = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))
+export const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+export const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
+export const PortSchema = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }));
 
 /**
  * Safe categories for a failed DPoP proof. These describe the class of failure
@@ -33,11 +33,11 @@ export const DpopFailureReason = Schema.Literals([
   "token_mismatch",
   "replay",
   "invalid_proof",
-])
-export type DpopFailureReason = typeof DpopFailureReason.Type
+]);
+export type DpopFailureReason = typeof DpopFailureReason.Type;
 
-export const IsoDateTime = Schema.String
-export type IsoDateTime = typeof IsoDateTime.Type
+export const IsoDateTime = Schema.String;
+export type IsoDateTime = typeof IsoDateTime.Type;
 
 /**
  * Wire codec for server→client arrays whose element unions grow over time
@@ -53,7 +53,7 @@ export type IsoDateTime = typeof IsoDateTime.Type
  * enclosing struct. Encoding is the plain encoding.
  */
 export const ForwardCompatibleOptional = <Value extends Schema.Top>(value: Value) => {
-  const decodeValue = Schema.decodeUnknownOption(value as never)
+  const decodeValue = Schema.decodeUnknownOption(value as never);
   return Schema.optionalKey(
     Schema.Unknown.pipe(
       Schema.decodeTo(
@@ -65,8 +65,8 @@ export const ForwardCompatibleOptional = <Value extends Schema.Top>(value: Value
         }),
       ),
     ),
-  )
-}
+  );
+};
 
 /**
  * The nullable form, for a persisted setting whose literal set grows over
@@ -74,7 +74,7 @@ export const ForwardCompatibleOptional = <Value extends Schema.Top>(value: Value
  * rather than failing the enclosing struct. Encoding is the plain encoding.
  */
 export const ForwardCompatibleNullable = <Value extends Schema.Top>(value: Value) => {
-  const decodeValue = Schema.decodeUnknownOption(value as never)
+  const decodeValue = Schema.decodeUnknownOption(value as never);
   return Schema.Unknown.pipe(
     Schema.decodeTo(
       Schema.NullOr(value),
@@ -83,11 +83,11 @@ export const ForwardCompatibleNullable = <Value extends Schema.Top>(value: Value
         encode: (raw) => raw,
       }),
     ),
-  )
-}
+  );
+};
 
 export const ForwardCompatibleArray = <Element extends Schema.Top>(element: Element) => {
-  const decodeElement = Schema.decodeUnknownOption(element as never)
+  const decodeElement = Schema.decodeUnknownOption(element as never);
   return Schema.Array(Schema.Unknown).pipe(
     Schema.decodeTo(
       Schema.Array(element),
@@ -99,34 +99,34 @@ export const ForwardCompatibleArray = <Element extends Schema.Top>(element: Elem
         encode: (values) => values,
       }),
     ),
-  )
-}
+  );
+};
 
 /**
  * Construct a branded identifier. Enforces non-empty trimmed strings
  */
 const makeEntityId = <Brand extends string>(brand: Brand) => {
-  return TrimmedNonEmptyString.pipe(Schema.brand(brand))
-}
+  return TrimmedNonEmptyString.pipe(Schema.brand(brand));
+};
 
-export const ThreadId = makeEntityId("ThreadId")
-export type ThreadId = typeof ThreadId.Type
-export const ProjectId = makeEntityId("ProjectId")
-export type ProjectId = typeof ProjectId.Type
-export const EnvironmentId = makeEntityId("EnvironmentId")
-export type EnvironmentId = typeof EnvironmentId.Type
-export const CommandId = makeEntityId("CommandId")
-export type CommandId = typeof CommandId.Type
-export const EventId = makeEntityId("EventId")
-export type EventId = typeof EventId.Type
-export const MessageId = makeEntityId("MessageId")
-export type MessageId = typeof MessageId.Type
-export const TurnId = makeEntityId("TurnId")
-export type TurnId = typeof TurnId.Type
-export const AuthSessionId = makeEntityId("AuthSessionId")
-export type AuthSessionId = typeof AuthSessionId.Type
-export const RpcClientId = NonNegativeInt.pipe(Schema.brand("RpcClientId"))
-export type RpcClientId = typeof RpcClientId.Type
+export const ThreadId = makeEntityId("ThreadId");
+export type ThreadId = typeof ThreadId.Type;
+export const ProjectId = makeEntityId("ProjectId");
+export type ProjectId = typeof ProjectId.Type;
+export const EnvironmentId = makeEntityId("EnvironmentId");
+export type EnvironmentId = typeof EnvironmentId.Type;
+export const CommandId = makeEntityId("CommandId");
+export type CommandId = typeof CommandId.Type;
+export const EventId = makeEntityId("EventId");
+export type EventId = typeof EventId.Type;
+export const MessageId = makeEntityId("MessageId");
+export type MessageId = typeof MessageId.Type;
+export const TurnId = makeEntityId("TurnId");
+export type TurnId = typeof TurnId.Type;
+export const AuthSessionId = makeEntityId("AuthSessionId");
+export type AuthSessionId = typeof AuthSessionId.Type;
+export const RpcClientId = NonNegativeInt.pipe(Schema.brand("RpcClientId"));
+export type RpcClientId = typeof RpcClientId.Type;
 
 /**
  * Which client surface a connection or command comes from. Unlike
@@ -134,8 +134,8 @@ export type RpcClientId = typeof RpcClientId.Type
  * desktop are both "desktop"), this names the actual product surface.
  * Optional everywhere it appears: old clients never send it.
  */
-export const ClientSurface = Schema.Literals(["web", "desktop", "mobile", "cli"])
-export type ClientSurface = typeof ClientSurface.Type
+export const ClientSurface = Schema.Literals(["web", "desktop", "mobile", "cli"]);
+export type ClientSurface = typeof ClientSurface.Type;
 
 export const ClientOs = Schema.Literals([
   "macOS",
@@ -146,29 +146,29 @@ export const ClientOs = Schema.Literals([
   "ChromeOS",
   "other",
   "unknown",
-])
-export type ClientOs = typeof ClientOs.Type
+]);
+export type ClientOs = typeof ClientOs.Type;
 
-export const ClientDeviceType = Schema.Literals(["desktop", "phone", "tablet", "unknown"])
-export type ClientDeviceType = typeof ClientDeviceType.Type
+export const ClientDeviceType = Schema.Literals(["desktop", "phone", "tablet", "unknown"]);
+export type ClientDeviceType = typeof ClientDeviceType.Type;
 
-export const ClientWebDeployment = Schema.Literals(["hosted", "server"])
-export type ClientWebDeployment = typeof ClientWebDeployment.Type
+export const ClientWebDeployment = Schema.Literals(["hosted", "server"]);
+export type ClientWebDeployment = typeof ClientWebDeployment.Type;
 
-export const ClientConnectionMethod = Schema.Literals(["direct", "ssh", "relay", "unknown"])
-export type ClientConnectionMethod = typeof ClientConnectionMethod.Type
+export const ClientConnectionMethod = Schema.Literals(["direct", "ssh", "relay", "unknown"]);
+export type ClientConnectionMethod = typeof ClientConnectionMethod.Type;
 
-export const ProviderItemId = makeEntityId("ProviderItemId")
-export type ProviderItemId = typeof ProviderItemId.Type
-export const RuntimeSessionId = makeEntityId("RuntimeSessionId")
-export type RuntimeSessionId = typeof RuntimeSessionId.Type
-export const RuntimeItemId = makeEntityId("RuntimeItemId")
-export type RuntimeItemId = typeof RuntimeItemId.Type
-export const RuntimeRequestId = makeEntityId("RuntimeRequestId")
-export type RuntimeRequestId = typeof RuntimeRequestId.Type
-export const RuntimeTaskId = makeEntityId("RuntimeTaskId")
-export type RuntimeTaskId = typeof RuntimeTaskId.Type
-export const ApprovalRequestId = makeEntityId("ApprovalRequestId")
-export type ApprovalRequestId = typeof ApprovalRequestId.Type
-export const CheckpointRef = makeEntityId("CheckpointRef")
-export type CheckpointRef = typeof CheckpointRef.Type
+export const ProviderItemId = makeEntityId("ProviderItemId");
+export type ProviderItemId = typeof ProviderItemId.Type;
+export const RuntimeSessionId = makeEntityId("RuntimeSessionId");
+export type RuntimeSessionId = typeof RuntimeSessionId.Type;
+export const RuntimeItemId = makeEntityId("RuntimeItemId");
+export type RuntimeItemId = typeof RuntimeItemId.Type;
+export const RuntimeRequestId = makeEntityId("RuntimeRequestId");
+export type RuntimeRequestId = typeof RuntimeRequestId.Type;
+export const RuntimeTaskId = makeEntityId("RuntimeTaskId");
+export type RuntimeTaskId = typeof RuntimeTaskId.Type;
+export const ApprovalRequestId = makeEntityId("ApprovalRequestId");
+export type ApprovalRequestId = typeof ApprovalRequestId.Type;
+export const CheckpointRef = makeEntityId("CheckpointRef");
+export type CheckpointRef = typeof CheckpointRef.Type;

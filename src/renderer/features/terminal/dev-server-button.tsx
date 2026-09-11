@@ -2,12 +2,15 @@
  * NOTE (transplant): DevServerButton: play/stop control with detection-state tooltips (EN).
  * Source: sylvaindiv/1code (Apache-2.0). UI strings translated FR->EN on port.
  */
-
+import * as React from "react"
 import { Play, Square } from "lucide-react"
-import type * as React from "react"
 import { Button } from "../../components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "../../components/ui/tooltip"
 import { IconSpinner } from "../../components/ui/icons"
-import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip"
 import { useDevServer } from "./use-dev-server"
 
 interface DevServerButtonProps {
@@ -48,7 +51,9 @@ export function DevServerButton({ chatId, scopeKey, cwd }: DevServerButtonProps)
             <IconSpinner className="h-3.5 w-3.5 animate-spin" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Detecting dev server...</TooltipContent>
+        <TooltipContent side="bottom">
+          Detecting dev server…
+        </TooltipContent>
       </Tooltip>
     )
   }
@@ -61,8 +66,7 @@ export function DevServerButton({ chatId, scopeKey, cwd }: DevServerButtonProps)
           No <code>package.json</code> found
           {searchedPath && (
             <>
-              {" "}
-              at <code className="text-[10px]">{searchedPath}</code>
+              {" "}at <code className="text-[10px]">{searchedPath}</code>
             </>
           )}
         </>
@@ -73,8 +77,7 @@ export function DevServerButton({ chatId, scopeKey, cwd }: DevServerButtonProps)
           Invalid <code>package.json</code>
           {searchedPath && (
             <>
-              {" "}
-              (<code className="text-[10px]">{searchedPath}</code>)
+              {" "}(<code className="text-[10px]">{searchedPath}</code>)
             </>
           )}
         </>
@@ -93,7 +96,9 @@ export function DevServerButton({ chatId, scopeKey, cwd }: DevServerButtonProps)
               Available scripts: {availableScripts.join(", ")}
             </div>
           ) : (
-            <div className="mt-1 text-[10px] opacity-70">Available scripts: (none)</div>
+            <div className="mt-1 text-[10px] opacity-70">
+              Available scripts: (none)
+            </div>
           )}
         </>
       )
@@ -140,7 +145,9 @@ export function DevServerButton({ chatId, scopeKey, cwd }: DevServerButtonProps)
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Stop the dev server</TooltipContent>
+        <TooltipContent side="bottom">
+          Stop the dev server
+        </TooltipContent>
       </Tooltip>
     )
   }

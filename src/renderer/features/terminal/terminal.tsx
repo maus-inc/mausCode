@@ -10,7 +10,7 @@ import { fullThemeDataAtom } from "@/lib/atoms"
 import { trpc } from "@/lib/trpc"
 import { terminalCwdAtom, terminalFontSizeAtom } from "./atoms"
 import { sanitizeForTitle } from "./commandBuffer"
-import { getTerminalLineHeight, getTerminalTheme, getTerminalThemeFromVSCode } from "./config"
+import { getTerminalLineHeight, getTerminalThemeFromVSCode } from "./config"
 import {
   createTerminalInstance,
   getDefaultTerminalBg,

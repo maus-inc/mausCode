@@ -5,7 +5,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod"
-import { publicProcedure, router } from "../index"
+import { router, publicProcedure } from "../index"
 
 type PackageManager = "bun" | "pnpm" | "yarn" | "npm"
 
@@ -95,7 +95,15 @@ async function searchUpward(
   return null
 }
 
-const MONOREPO_CONVENTIONAL_DIRS = ["apps", "packages", "web", "frontend", "client", "app", "src"]
+const MONOREPO_CONVENTIONAL_DIRS = [
+  "apps",
+  "packages",
+  "web",
+  "frontend",
+  "client",
+  "app",
+  "src",
+]
 
 /**
  * Shallow downward search (depth 2) for a package.json with scripts.dev.
@@ -167,115 +175,121 @@ export const devServerRouter = router({
    * Walks up parent directories (up to 4 levels) to handle the case where the
    * chat's cwd is a sub-folder of the actual JS project.
    */
-  detect: publicProcedure.input(z.object({ cwd: z.string().min(1) })).query(async ({ input }) => {
-    const { cwd } = input
-    console.log(`[devServer.detect] cwd=${cwd}`)
-    const pkgPath = path.join(cwd, "package.json")
+  detect: publicProcedure
+    .input(z.object({ cwd: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const { cwd } = input
+      console.log(`[devServer.detect] cwd=${cwd}`)
+      const pkgPath = path.join(cwd, "package.json")
 
-    // First pass: read the package.json directly at cwd to give precise
-    // diagnostics (no-package-json vs invalid-package-json vs no-dev-script).
-    let raw: string | null = null
-    try {
-      raw = await fs.readFile(pkgPath, "utf8")
-    } catch (err) {
-      console.warn(
-        `[devServer.detect] No package.json at ${pkgPath}: ${(err as Error)?.message ?? err}`,
-      )
-    }
-
-    let pkgAtCwd: PackageJsonShape | null = null
-    if (raw !== null) {
+      // First pass: read the package.json directly at cwd to give precise
+      // diagnostics (no-package-json vs invalid-package-json vs no-dev-script).
+      let raw: string | null = null
       try {
-        pkgAtCwd = JSON.parse(raw) as PackageJsonShape
+        raw = await fs.readFile(pkgPath, "utf8")
       } catch (err) {
         console.warn(
-          `[devServer.detect] Invalid JSON at ${pkgPath}: ${(err as Error)?.message ?? err}`,
+          `[devServer.detect] No package.json at ${pkgPath}: ${
+            (err as Error)?.message ?? err
+          }`,
         )
+      }
+
+      let pkgAtCwd: PackageJsonShape | null = null
+      if (raw !== null) {
+        try {
+          pkgAtCwd = JSON.parse(raw) as PackageJsonShape
+        } catch (err) {
+          console.warn(
+            `[devServer.detect] Invalid JSON at ${pkgPath}: ${
+              (err as Error)?.message ?? err
+            }`,
+          )
+          return {
+            hasDevScript: false as const,
+            packageManager: null,
+            command: null,
+            reason: "invalid-package-json" as const,
+            searchedPath: pkgPath,
+            availableScripts: [] as string[],
+            resolvedDir: null,
+          }
+        }
+      }
+
+      if (pkgAtCwd?.scripts?.dev) {
+        const packageManager = await detectPackageManager(cwd, pkgAtCwd)
+        return {
+          hasDevScript: true as const,
+          packageManager,
+          command: PM_COMMANDS[packageManager],
+          reason: "ok" as const,
+          searchedPath: pkgPath,
+          availableScripts: Object.keys(pkgAtCwd.scripts),
+          resolvedDir: cwd,
+        }
+      }
+
+      // Fallback 1: walk up looking for a package.json with a dev script
+      // (handles cases where chat cwd is a sub-folder of the JS project).
+      const upward = await searchUpward(cwd)
+      if (upward) {
+        console.log(
+          `[devServer.detect] resolved upward at ${upward.pkgPath} (dev=${upward.pkg.scripts?.dev})`,
+        )
+        const packageManager = await detectPackageManager(upward.dir, upward.pkg)
+        return {
+          hasDevScript: true as const,
+          packageManager,
+          command: PM_COMMANDS[packageManager],
+          reason: "ok" as const,
+          searchedPath: upward.pkgPath,
+          availableScripts: Object.keys(upward.pkg.scripts ?? {}),
+          resolvedDir: upward.dir,
+        }
+      }
+
+      // Fallback 2: shallow downward search (depth 2) for monorepos where
+      // chat cwd is the repo root but the dev script lives in apps/web/,
+      // packages/frontend/, etc.
+      const downward = await searchDownward(cwd)
+      if (downward) {
+        console.log(
+          `[devServer.detect] resolved downward at ${downward.pkgPath} (dev=${downward.pkg.scripts?.dev})`,
+        )
+        const packageManager = await detectPackageManager(downward.dir, downward.pkg)
+        return {
+          hasDevScript: true as const,
+          packageManager,
+          command: PM_COMMANDS[packageManager],
+          reason: "ok" as const,
+          searchedPath: downward.pkgPath,
+          availableScripts: Object.keys(downward.pkg.scripts ?? {}),
+          resolvedDir: downward.dir,
+        }
+      }
+
+      // Nothing found. Be specific about why.
+      if (pkgAtCwd === null) {
         return {
           hasDevScript: false as const,
           packageManager: null,
           command: null,
-          reason: "invalid-package-json" as const,
+          reason: "no-package-json" as const,
           searchedPath: pkgPath,
           availableScripts: [] as string[],
           resolvedDir: null,
         }
       }
-    }
 
-    if (pkgAtCwd?.scripts?.dev) {
-      const packageManager = await detectPackageManager(cwd, pkgAtCwd)
-      return {
-        hasDevScript: true as const,
-        packageManager,
-        command: PM_COMMANDS[packageManager],
-        reason: "ok" as const,
-        searchedPath: pkgPath,
-        availableScripts: Object.keys(pkgAtCwd.scripts),
-        resolvedDir: cwd,
-      }
-    }
-
-    // Fallback 1: walk up looking for a package.json with a dev script
-    // (handles cases where chat cwd is a sub-folder of the JS project).
-    const upward = await searchUpward(cwd)
-    if (upward) {
-      console.log(
-        `[devServer.detect] resolved upward at ${upward.pkgPath} (dev=${upward.pkg.scripts?.dev})`,
-      )
-      const packageManager = await detectPackageManager(upward.dir, upward.pkg)
-      return {
-        hasDevScript: true as const,
-        packageManager,
-        command: PM_COMMANDS[packageManager],
-        reason: "ok" as const,
-        searchedPath: upward.pkgPath,
-        availableScripts: Object.keys(upward.pkg.scripts ?? {}),
-        resolvedDir: upward.dir,
-      }
-    }
-
-    // Fallback 2: shallow downward search (depth 2) for monorepos where
-    // chat cwd is the repo root but the dev script lives in apps/web/,
-    // packages/frontend/, etc.
-    const downward = await searchDownward(cwd)
-    if (downward) {
-      console.log(
-        `[devServer.detect] resolved downward at ${downward.pkgPath} (dev=${downward.pkg.scripts?.dev})`,
-      )
-      const packageManager = await detectPackageManager(downward.dir, downward.pkg)
-      return {
-        hasDevScript: true as const,
-        packageManager,
-        command: PM_COMMANDS[packageManager],
-        reason: "ok" as const,
-        searchedPath: downward.pkgPath,
-        availableScripts: Object.keys(downward.pkg.scripts ?? {}),
-        resolvedDir: downward.dir,
-      }
-    }
-
-    // Nothing found. Be specific about why.
-    if (pkgAtCwd === null) {
       return {
         hasDevScript: false as const,
         packageManager: null,
         command: null,
-        reason: "no-package-json" as const,
+        reason: "no-dev-script" as const,
         searchedPath: pkgPath,
-        availableScripts: [] as string[],
-        resolvedDir: null,
+        availableScripts: Object.keys(pkgAtCwd.scripts ?? {}),
+        resolvedDir: cwd,
       }
-    }
-
-    return {
-      hasDevScript: false as const,
-      packageManager: null,
-      command: null,
-      reason: "no-dev-script" as const,
-      searchedPath: pkgPath,
-      availableScripts: Object.keys(pkgAtCwd.scripts ?? {}),
-      resolvedDir: cwd,
-    }
-  }),
+    }),
 })

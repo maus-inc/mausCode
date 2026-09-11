@@ -39,10 +39,12 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
   return (
     <div className="rounded-lg border border-border p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold text-foreground">{capability.displayName}</h3>
+        <h3 className="text-base font-semibold text-foreground">
+          {capability.displayName}
+        </h3>
         <Pill tone="mute">{capability.kind}</Pill>
         {probeQuery.isLoading ? (
-          <Pill tone="mute">probing...</Pill>
+          <Pill tone="mute">probing…</Pill>
         ) : probe?.available ? (
           <Pill tone="ok">
             available{probe.version ? ` · ${probe.version}` : ""}
@@ -64,7 +66,7 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
 
       <div className="grid grid-cols-1 gap-x-6 md:grid-cols-2">
         <div>
-          <div className="mt-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-muted-foreground">
+          <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Security
           </div>
           <Row label="Auth">{capability.security.auth.join(", ") || "—"}</Row>
@@ -74,7 +76,7 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
           <Row label="Retention">{capability.security.retention}</Row>
         </div>
         <div>
-          <div className="mt-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-muted-foreground">
+          <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Performance
           </div>
           <Row label="Streaming">
@@ -84,7 +86,9 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
                 : "yes"
               : "no"}
           </Row>
-          <Row label="Parallel tools">{capability.performance.parallelTools ? "yes" : "no"}</Row>
+          <Row label="Parallel tools">
+            {capability.performance.parallelTools ? "yes" : "no"}
+          </Row>
           <Row label="Context">
             {capability.performance.contextWindow
               ? `${capability.performance.contextWindow.toLocaleString()} tokens`
@@ -123,8 +127,9 @@ export function AgentsBackendsTab() {
       <div>
         <h2 className="text-lg font-semibold text-foreground">Backends</h2>
         <p className="text-sm text-muted-foreground">
-          Every backend self-reports its security posture and performance capabilities. Only policy
-          violations surface in chat; everything else lives here.
+          Every backend self-reports its security posture and performance
+          capabilities. Only policy violations surface in chat; everything
+          else lives here.
         </p>
       </div>
 
@@ -142,7 +147,7 @@ export function AgentsBackendsTab() {
       )}
 
       {listQuery.isLoading && (
-        <div className="text-sm text-muted-foreground">Loading backends...</div>
+        <div className="text-sm text-muted-foreground">Loading backends…</div>
       )}
       {listQuery.isError && (
         <div className="text-sm text-red-500">

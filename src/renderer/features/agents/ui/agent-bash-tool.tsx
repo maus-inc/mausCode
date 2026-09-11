@@ -1,15 +1,19 @@
 "use client"
 
-import { useAtomValue } from "jotai"
+import { memo, useState, useMemo } from "react"
 import { Check, X } from "lucide-react"
-import { memo, useMemo, useState } from "react"
-import { CollapseIcon, ExpandIcon, IconSpinner } from "../../../components/ui/icons"
+import { useAtomValue } from "jotai"
+import {
+  IconSpinner,
+  ExpandIcon,
+  CollapseIcon,
+} from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { getToolStatus } from "./agent-tool-registry"
+import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom } from "../atoms"
-import { AgentToolInterrupted } from "./agent-tool-interrupted"
-import { getToolStatus } from "./agent-tool-registry"
-import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface AgentBashToolProps {
   part: any
@@ -82,10 +86,16 @@ export const AgentBashTool = memo(function AgentBashTool({
   const hasMoreOutput = stdoutLimited.truncated || stderrLimited.truncated
 
   // Shorten paths in the displayed command
-  const displayCommand = useMemo(() => shortenPaths(command, projectPath), [command, projectPath])
+  const displayCommand = useMemo(
+    () => shortenPaths(command, projectPath),
+    [command, projectPath],
+  )
 
   // Memoize command summary to avoid recalculation on every render
-  const commandSummary = useMemo(() => extractCommandSummary(displayCommand), [displayCommand])
+  const commandSummary = useMemo(
+    () => extractCommandSummary(displayCommand),
+    [displayCommand],
+  )
 
   // If command is still being generated (input-streaming state), show loading state
   if (isInputStreaming) {
@@ -125,9 +135,7 @@ export const AgentBashTool = memo(function AgentBashTool({
         onClick={() => hasMoreOutput && !isPending && setIsOutputExpanded(!isOutputExpanded)}
         className={cn(
           "flex items-center justify-between pl-2.5 pr-0.5 h-7",
-          hasMoreOutput &&
-            !isPending &&
-            "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          hasMoreOutput && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
         <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
@@ -179,7 +187,9 @@ export const AgentBashTool = memo(function AgentBashTool({
 
       {/* Content - always visible, clickable to expand (only when collapsed and has more output) */}
       <div
-        onClick={() => hasMoreOutput && !isOutputExpanded && setIsOutputExpanded(true)}
+        onClick={() =>
+          hasMoreOutput && !isOutputExpanded && setIsOutputExpanded(true)
+        }
         className={cn(
           "border-t border-border px-2.5 py-1.5 transition-colors duration-150",
           hasMoreOutput && !isOutputExpanded && "cursor-pointer hover:bg-muted/50",
@@ -188,7 +198,9 @@ export const AgentBashTool = memo(function AgentBashTool({
         {/* Command - always show full command */}
         <div className="font-mono text-xs">
           <span className="text-amber-600 dark:text-amber-400">$ </span>
-          <span className="text-foreground whitespace-pre-wrap break-all">{displayCommand}</span>
+          <span className="text-foreground whitespace-pre-wrap break-all">
+            {displayCommand}
+          </span>
         </div>
 
         {/* Stdout - show limited lines when collapsed, full when expanded */}
@@ -213,6 +225,7 @@ export const AgentBashTool = memo(function AgentBashTool({
             {isOutputExpanded ? stderr : stderrLimited.text}
           </div>
         )}
+
       </div>
     </div>
   )

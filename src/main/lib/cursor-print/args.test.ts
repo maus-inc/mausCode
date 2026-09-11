@@ -14,8 +14,16 @@ import {
 } from "./args"
 
 it("maps plan/ask to --mode and edit/agent/turbo to force/yolo", () => {
-  assert.ok(buildCursorPrintArgs({ mode: "plan", prompt: "hi" }).args.includes("--mode=plan"))
-  assert.ok(buildCursorPrintArgs({ mode: "ask", prompt: "hi" }).args.includes("--mode=ask"))
+  assert.ok(
+    buildCursorPrintArgs({ mode: "plan", prompt: "hi" }).args.includes(
+      "--mode=plan",
+    ),
+  )
+  assert.ok(
+    buildCursorPrintArgs({ mode: "ask", prompt: "hi" }).args.includes(
+      "--mode=ask",
+    ),
+  )
   for (const mode of ["edit", "agent"] as const) {
     const { args } = buildCursorPrintArgs({ mode, prompt: "hi" })
     assert.ok(args.includes("--force"))
@@ -35,14 +43,14 @@ it("always passes --trust and threads model/resume through", () => {
     prompt: "hi",
   })
   assert.ok(args.includes("--trust"))
-  assert.deepEqual(args.slice(args.indexOf("--model"), args.indexOf("--model") + 2), [
-    "--model",
-    "gpt-5",
-  ])
-  assert.deepEqual(args.slice(args.indexOf("--resume"), args.indexOf("--resume") + 2), [
-    "--resume",
-    "chat-1",
-  ])
+  assert.deepEqual(
+    args.slice(args.indexOf("--model"), args.indexOf("--model") + 2),
+    ["--model", "gpt-5"],
+  )
+  assert.deepEqual(
+    args.slice(args.indexOf("--resume"), args.indexOf("--resume") + 2),
+    ["--resume", "chat-1"],
+  )
   assert.equal(args[args.length - 1], "hi")
 })
 
@@ -83,7 +91,12 @@ it("strips newer flags but keeps model/mode/resume on fallback", () => {
     prompt: "hi",
   })
   const fallback = buildCursorPrintFallbackArgs(invocation)
-  for (const dropped of ["--stream-partial-output", "--trust", "--force", "--yolo"]) {
+  for (const dropped of [
+    "--stream-partial-output",
+    "--trust",
+    "--force",
+    "--yolo",
+  ]) {
     assert.ok(!fallback.includes(dropped))
   }
   for (const kept of ["--model", "--mode=plan", "--resume", "hi"]) {

@@ -12,19 +12,23 @@
  * MCP elicitations decline, client tool calls fail (we expose none), and
  * token-refresh/attestation fail (codex owns that auth, not us).
  */
-
-import * as NodeServices from "@effect/platform-node/NodeServices"
 import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
 import * as Exit from "effect/Exit"
 import * as Layer from "effect/Layer"
 import * as Scope from "effect/Scope"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
+import {
+  ChildProcess,
+  ChildProcessSpawner,
+} from "effect/unstable/process"
+import * as NodeServices from "@effect/platform-node/NodeServices"
 import * as CodexClient from "./src/client.ts"
 
 export type CodexSessionChunk = any
 
-export type CodexTurnInput = { type: "text"; text: string } | { type: "localImage"; path: string }
+export type CodexTurnInput =
+  | { type: "text"; text: string }
+  | { type: "localImage"; path: string }
 
 export type CodexTurnResult =
   | { status: "completed" }
@@ -62,7 +66,9 @@ function firstOptionAnswers(payload: {
         question.id,
         {
           answers:
-            question.options && question.options.length > 0 ? [question.options[0]!.label] : ["ok"],
+            question.options && question.options.length > 0
+              ? [question.options[0]!.label]
+              : ["ok"],
         },
       ]),
     ),
@@ -95,7 +101,9 @@ export async function createCodexAppServerSession(opts: {
   )
   const runContext = Context.add(nodeContext, Scope.Scope, scope)
   const run = <A, E>(eff: Effect.Effect<A, E, any>): Promise<A> =>
-    Effect.runPromise(Effect.provide(eff, runContext) as Effect.Effect<A, E, never>)
+    Effect.runPromise(
+      Effect.provide(eff, runContext) as Effect.Effect<A, E, never>,
+    )
 
   let emit = opts.onChunk
 
@@ -114,7 +122,12 @@ export async function createCodexAppServerSession(opts: {
     textStarted.clear()
   }
 
-  const emitToolTrio = (toolCallId: string, toolName: string, input: unknown, output: unknown) => {
+  const emitToolTrio = (
+    toolCallId: string,
+    toolName: string,
+    input: unknown,
+    output: unknown,
+  ) => {
     emit({ type: "tool-input-start", toolCallId, toolName })
     emit({ type: "tool-input-available", toolCallId, toolName, input })
     emit({ type: "tool-output-available", toolCallId, output })
@@ -156,7 +169,9 @@ export async function createCodexAppServerSession(opts: {
           item.id,
           `mcp__${item.server}__${item.tool}`,
           item.arguments ?? {},
-          item.error != null ? { error: item.error } : (item.result ?? {}),
+          item.error != null
+            ? { error: item.error }
+            : (item.result ?? {}),
         )
         break
       }
@@ -219,7 +234,10 @@ export async function createCodexAppServerSession(opts: {
 
   const client: Client = await run(
     Effect.gen(function* () {
-      const ctx = yield* Layer.buildWithScope(CodexClient.layerChildProcess(handle), scope)
+      const ctx = yield* Layer.buildWithScope(
+        CodexClient.layerChildProcess(handle),
+        scope,
+      )
       return Context.get(ctx, CodexClient.CodexAppServerClient)
     }),
   )
@@ -231,22 +249,27 @@ export async function createCodexAppServerSession(opts: {
         Effect.succeed({ decision: "approved_for_session" as const })
       // NOTE: v2 item approvals use accept/acceptForSession, while the legacy
       // exec/applyPatch approvals use approved/approved_for_session.
-      yield* client.handleServerRequest("item/commandExecution/requestApproval", () =>
-        Effect.succeed({ decision: "acceptForSession" as const }),
+      yield* client.handleServerRequest(
+        "item/commandExecution/requestApproval",
+        () => Effect.succeed({ decision: "acceptForSession" as const }),
       )
-      yield* client.handleServerRequest("item/permissions/requestApproval", (payload) =>
-        Effect.succeed({
-          permissions: payload.permissions,
-          scope: "session" as const,
-        }),
+      yield* client.handleServerRequest(
+        "item/permissions/requestApproval",
+        (payload) =>
+          Effect.succeed({
+            permissions: payload.permissions,
+            scope: "session" as const,
+          }),
       )
-      yield* client.handleServerRequest("item/fileChange/requestApproval", () =>
-        Effect.succeed({ decision: "acceptForSession" as const }),
+      yield* client.handleServerRequest(
+        "item/fileChange/requestApproval",
+        () => Effect.succeed({ decision: "acceptForSession" as const }),
       )
       yield* client.handleServerRequest("applyPatchApproval", approveSession)
       yield* client.handleServerRequest("execCommandApproval", approveSession)
-      yield* client.handleServerRequest("item/tool/requestUserInput", (payload) =>
-        Effect.succeed(firstOptionAnswers(payload)),
+      yield* client.handleServerRequest(
+        "item/tool/requestUserInput",
+        (payload) => Effect.succeed(firstOptionAnswers(payload)),
       )
       yield* client.handleServerRequest("mcpServer/elicitation/request", () =>
         Effect.succeed({ action: "decline" as const }),
@@ -254,11 +277,13 @@ export async function createCodexAppServerSession(opts: {
       yield* client.handleServerRequest("item/tool/call", () =>
         Effect.succeed({ contentItems: [], success: false }),
       )
-      yield* client.handleServerRequest("account/chatgptAuthTokens/refresh", () =>
-        Effect.fail({
-          _tag: "CodexAppServerRequestError",
-          message: "mausCode does not hold ChatGPT tokens",
-        } as never),
+      yield* client.handleServerRequest(
+        "account/chatgptAuthTokens/refresh",
+        () =>
+          Effect.fail({
+            _tag: "CodexAppServerRequestError",
+            message: "mausCode does not hold ChatGPT tokens",
+          } as never),
       )
       yield* client.handleServerRequest("attestation/generate", () =>
         Effect.fail({
@@ -279,18 +304,20 @@ export async function createCodexAppServerSession(opts: {
   // Notifications -> chunks.
   await run(
     Effect.gen(function* () {
-      yield* client.handleServerNotification("item/agentMessage/delta", (payload) =>
-        Effect.sync(() => {
-          if (!textStarted.has(payload.itemId)) {
-            textStarted.add(payload.itemId)
-            emit({ type: "text-start", id: payload.itemId })
-          }
-          emit({
-            type: "text-delta",
-            id: payload.itemId,
-            delta: payload.delta,
-          })
-        }),
+      yield* client.handleServerNotification(
+        "item/agentMessage/delta",
+        (payload) =>
+          Effect.sync(() => {
+            if (!textStarted.has(payload.itemId)) {
+              textStarted.add(payload.itemId)
+              emit({ type: "text-start", id: payload.itemId })
+            }
+            emit({
+              type: "text-delta",
+              id: payload.itemId,
+              delta: payload.delta,
+            })
+          }),
       )
       yield* client.handleServerNotification("item/completed", (payload) =>
         Effect.sync(() => handleCompletedItem(payload.item)),
@@ -299,7 +326,10 @@ export async function createCodexAppServerSession(opts: {
         Effect.sync(() => {
           const turn = payload.turn as { error?: unknown } | undefined
           if (turn?.error != null) {
-            const message = typeof turn.error === "string" ? turn.error : JSON.stringify(turn.error)
+            const message =
+              typeof turn.error === "string"
+                ? turn.error
+                : JSON.stringify(turn.error)
             emit({ type: "error", errorText: message })
             settleTurn({ status: "error", errorMessage: message })
           } else {
@@ -310,7 +340,9 @@ export async function createCodexAppServerSession(opts: {
       yield* client.handleServerNotification("error", (payload) =>
         Effect.sync(() => {
           const message =
-            typeof payload.error === "string" ? payload.error : JSON.stringify(payload.error)
+            typeof payload.error === "string"
+              ? payload.error
+              : JSON.stringify(payload.error)
           // willRetry errors are transient (codex retries the turn itself):
           // log and wait for the terminal outcome instead of failing the UI.
           if (payload.willRetry) {
@@ -378,15 +410,21 @@ export async function createCodexAppServerSession(opts: {
   } else if (opts.legacySessionId) {
     let resumedThreadId: string | null = null
     try {
-      const listed = await run(client.request("thread/list", { useStateDbOnly: false }))
+      const listed = await run(
+        client.request("thread/list", { useStateDbOnly: false }),
+      )
       resumedThreadId =
-        listed.data.find((thread) => thread.sessionId === opts.legacySessionId)?.id ?? null
+        listed.data.find(
+          (thread) => thread.sessionId === opts.legacySessionId,
+        )?.id ?? null
     } catch (error) {
       console.warn("[codex-app-server] thread/list failed:", error)
     }
     if (resumedThreadId) {
       try {
-        const resumed = await run(client.request("thread/resume", { threadId: resumedThreadId }))
+        const resumed = await run(
+          client.request("thread/resume", { threadId: resumedThreadId }),
+        )
         threadId = resumed.thread.id
         sessionId = resumed.thread.sessionId
       } catch (error) {

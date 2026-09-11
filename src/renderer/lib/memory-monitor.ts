@@ -20,8 +20,11 @@
 //
 // Disable with VITE_MEMORY_MONITOR=0.
 
-import { DEFAULT_MAX_MOUNTED_TABS, maxMountedTabsAtom } from "../features/agents/atoms"
 import { appStore } from "./jotai-store"
+import {
+  DEFAULT_MAX_MOUNTED_TABS,
+  maxMountedTabsAtom,
+} from "../features/agents/atoms"
 
 type PerformanceWithMemory = Performance & {
   memory?: {

@@ -19,7 +19,6 @@ import {
   Terminal,
   XCircle,
 } from "lucide-react"
-import { parseWorktreeRelativePath } from "../../../../shared/worktree-paths"
 import {
   CustomTerminalIcon,
   EyeIcon,
@@ -30,16 +29,18 @@ import {
   SparklesIcon,
   WriteFileIcon,
 } from "../../../components/ui/icons"
-import { getToolLifecycleState, getToolStatus } from "./agent-tool-state"
+import {
+  getToolLifecycleState,
+} from "./agent-tool-state"
 
-export { getToolStatus }
+export { getToolStatus } from "./agent-tool-state"
 
 export type ToolVariant = "simple" | "collapsible"
 
 export interface ToolMeta {
   icon: React.ComponentType<{ className?: string }>
   title: (part: any) => string
-  subtitle?: (part: any) => string | React.ReactNode
+  subtitle?: (part: any) => string
   tooltipContent?: (part: any, projectPath?: string) => string
   variant: ToolVariant
 }
@@ -63,17 +64,21 @@ export function getDisplayPath(filePath: string, projectPath?: string): string {
     return relative || filePath.split("/").pop() || filePath
   }
 
-  const prefixes = ["/project/sandbox/repo/", "/project/sandbox/", "/project/", "/workspace/"]
+  const prefixes = [
+    "/project/sandbox/repo/",
+    "/project/sandbox/",
+    "/project/",
+    "/workspace/",
+  ]
   for (const prefix of prefixes) {
     if (filePath.startsWith(prefix)) {
       return filePath.slice(prefix.length)
     }
   }
-  // Handle worktree paths: /.mauscode/worktrees/{project}/{folder}/relativePath
-  // (legacy 1Code .21st/worktrees paths are matched too — see shared/worktree-paths)
-  const worktreeRelative = parseWorktreeRelativePath(filePath)
-  if (worktreeRelative) {
-    return worktreeRelative
+  // Handle worktree paths: /.21st/worktrees/{chatId}/{subChatId}/relativePath
+  const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
+  if (worktreeMatch) {
+    return worktreeMatch[1]
   }
   // Handle claude-sessions paths: .../claude-sessions/{sessionId}/{folder}/{file}
   const sessionMatch = filePath.match(/claude-sessions\/[^/]+\/(.+)$/)
@@ -83,7 +88,9 @@ export function getDisplayPath(filePath: string, projectPath?: string): string {
   if (filePath.startsWith("/")) {
     const parts = filePath.split("/")
     const rootIndicators = ["apps", "packages", "src", "lib", "components"]
-    const rootIndex = parts.findIndex((p: string) => rootIndicators.includes(p))
+    const rootIndex = parts.findIndex((p: string) =>
+      rootIndicators.includes(p),
+    )
     if (rootIndex > 0) {
       return parts.slice(rootIndex).join("/")
     }
@@ -132,7 +139,9 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       // Don't show subtitle while input is still streaming
       if (isInputStreaming(part)) return ""
       const description = part.input?.description || ""
-      return description.length > 50 ? description.slice(0, 47) + "..." : description
+      return description.length > 50
+        ? description.slice(0, 47) + "..."
+        : description
     },
     variant: "simple",
   },
@@ -245,13 +254,11 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
 
       // Always show actual line counts if there are any changes (copied from canvas)
       if (oldString !== newString) {
-        const { addedLines, removedLines } = calculateDiffStats(oldString, newString)
-        return (
-          <>
-            <span className="text-[11px] text-green-600 dark:text-green-400">+{addedLines}</span>{" "}
-            <span className="text-[11px] text-red-600 dark:text-red-400">-{removedLines}</span>
-          </>
+        const { addedLines, removedLines } = calculateDiffStats(
+          oldString,
+          newString,
         )
+        return `<span style="font-size: 11px; color: light-dark(#587C0B, #A3BE8C)">+${addedLines}</span> <span style="font-size: 11px; color: light-dark(#AD0807, #AE5A62)">-${removedLines}</span>`
       }
 
       return ""
@@ -467,9 +474,13 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       const steps = plan.steps || []
       const completed = steps.filter((s: any) => s.status === "completed").length
       if (plan.title) {
-        return steps.length > 0 ? `${plan.title} (${completed}/${steps.length})` : plan.title
+        return steps.length > 0 
+          ? `${plan.title} (${completed}/${steps.length})`
+          : plan.title
       }
-      return steps.length > 0 ? `${completed}/${steps.length} steps` : ""
+      return steps.length > 0 
+        ? `${completed}/${steps.length} steps`
+        : ""
     },
     variant: "simple",
   },
@@ -477,8 +488,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-ExitPlanMode": {
     icon: LogOut,
     title: (part) => {
-      const { isPending } = getToolStatus(part)
-      return isPending ? "Finishing plan" : "Plan complete"
+      return isPendingState(part) ? "Finishing plan" : "Plan complete"
     },
     subtitle: () => "",
     variant: "simple",
@@ -576,30 +586,10 @@ export interface McpToolInfo {
 
 // Built-in MCP tools (not prefixed with mcp__<server>__)
 const BUILTIN_MCP_TOOLS: Record<string, McpToolInfo> = {
-  "tool-ListMcpResources": {
-    serverName: "mcp",
-    toolName: "list_resources",
-    displayName: "List Resources",
-    category: "list",
-  },
-  "tool-ListMcpResourcesTool": {
-    serverName: "mcp",
-    toolName: "list_resources",
-    displayName: "List Resources",
-    category: "list",
-  },
-  "tool-ReadMcpResource": {
-    serverName: "mcp",
-    toolName: "read_resource",
-    displayName: "Read Resource",
-    category: "get",
-  },
-  "tool-ReadMcpResourceTool": {
-    serverName: "mcp",
-    toolName: "read_resource",
-    displayName: "Read Resource",
-    category: "get",
-  },
+  "tool-ListMcpResources": { serverName: "mcp", toolName: "list_resources", displayName: "List Resources", category: "list" },
+  "tool-ListMcpResourcesTool": { serverName: "mcp", toolName: "list_resources", displayName: "List Resources", category: "list" },
+  "tool-ReadMcpResource": { serverName: "mcp", toolName: "read_resource", displayName: "Read Resource", category: "get" },
+  "tool-ReadMcpResourceTool": { serverName: "mcp", toolName: "read_resource", displayName: "Read Resource", category: "get" },
 }
 
 export function parseMcpToolType(partType: string): McpToolInfo | null {
@@ -636,12 +626,9 @@ function categorizeMcpTool(toolName: string): McpToolCategory {
   const lower = toolName.toLowerCase()
   if (lower.startsWith("search_") || lower.startsWith("query_")) return "search"
   if (lower.startsWith("list_")) return "list"
-  if (lower.startsWith("get_") || lower.startsWith("fetch_") || lower.startsWith("retrieve_"))
-    return "get"
-  if (lower.startsWith("create_") || lower.startsWith("add_") || lower.startsWith("draft_"))
-    return "create"
-  if (lower.startsWith("update_") || lower.startsWith("modify_") || lower.startsWith("manage_"))
-    return "update"
+  if (lower.startsWith("get_") || lower.startsWith("fetch_") || lower.startsWith("retrieve_")) return "get"
+  if (lower.startsWith("create_") || lower.startsWith("add_") || lower.startsWith("draft_")) return "create"
+  if (lower.startsWith("update_") || lower.startsWith("modify_") || lower.startsWith("manage_")) return "update"
   if (lower.startsWith("delete_") || lower.startsWith("remove_")) return "delete"
   if (lower.startsWith("send_")) return "send"
   if (lower.startsWith("generate_")) return "generate"

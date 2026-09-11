@@ -2,10 +2,9 @@
  * Translator unit tests. Runnable without Electron or app dependencies:
  *   node --test --experimental-strip-types src/main/lib/runtime/translate.test.ts
  */
-
-import assert from "node:assert/strict"
 import { test } from "node:test"
-import { NATIVE_QUESTION_PREFIX, NativeTranslator } from "./translate.ts"
+import assert from "node:assert/strict"
+import { NativeTranslator, NATIVE_QUESTION_PREFIX } from "./translate.ts"
 
 function events(t: NativeTranslator, evs: Array<Record<string, unknown>>) {
   return evs.flatMap((ev) => t.translate(ev as never))

@@ -6,20 +6,20 @@
  * prefers `resourcesPath/bin/jcode[.exe]` when the release pipeline bundles it
  * and falls back to the npm-bundled platform runtime otherwise.
  */
-
+import { app } from "electron"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { app } from "electron"
 import { buildDaemonEndpointEnv, readEndpointSettings } from "./endpoints"
 import { RuntimeManager } from "./manager"
 
+export { RuntimeManager } from "./manager"
+export type { ManagerPaths, RuntimeStatus } from "./manager"
+export { NativeTranslator, NATIVE_ERROR_PREFIX, NATIVE_QUESTION_PREFIX } from "./translate"
+export { ensureNativeSession, getMappedNativeSession } from "./sessions"
+export { applyNativeCredentials, getActiveAnthropicToken, NativeCredentialError } from "./credentials"
 export type { NativeCredentialRequest, NativeCredentialResult } from "./credentials"
-export {
-  applyNativeCredentials,
-  getActiveAnthropicToken,
-  NativeCredentialError,
-} from "./credentials"
-export type { NativeEndpoints } from "./endpoints"
+export { resolveNativeMcpSnapshot } from "./mcp-config"
+export type { NativeMcpSnapshot, NativeMcpServerView, NativeMcpConfigError } from "./mcp-config"
 export {
   buildDaemonEndpointEnv,
   endpointMatches,
@@ -29,12 +29,7 @@ export {
   readEndpointSettings,
   writeEndpointSettings,
 } from "./endpoints"
-export type { ManagerPaths, RuntimeStatus } from "./manager"
-export { RuntimeManager } from "./manager"
-export type { NativeMcpConfigError, NativeMcpServerView, NativeMcpSnapshot } from "./mcp-config"
-export { resolveNativeMcpSnapshot } from "./mcp-config"
-export { ensureNativeSession, getMappedNativeSession } from "./sessions"
-export { NATIVE_ERROR_PREFIX, NATIVE_QUESTION_PREFIX, NativeTranslator } from "./translate"
+export type { NativeEndpoints } from "./endpoints"
 
 let manager: RuntimeManager | null = null
 

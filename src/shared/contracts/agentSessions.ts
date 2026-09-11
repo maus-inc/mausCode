@@ -2,13 +2,13 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
-import { IsoDateTime, NonNegativeInt, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts"
-import { ProviderInstanceId } from "./providerInstance.ts"
+import * as Schema from "effect/Schema";
+import { IsoDateTime, NonNegativeInt, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ProviderInstanceId } from "./providerInstance.ts";
 
 /** Coding agent home directories the scanner knows how to read. */
-export const AgentSessionSource = Schema.Literals(["claudeAgent", "codex"])
-export type AgentSessionSource = typeof AgentSessionSource.Type
+export const AgentSessionSource = Schema.Literals(["claudeAgent", "codex"]);
+export type AgentSessionSource = typeof AgentSessionSource.Type;
 
 /** File identity saved with an imported session so bounded retries can skip unchanged history. */
 export const AgentSessionImportSource = Schema.Struct({
@@ -21,20 +21,20 @@ export const AgentSessionImportSource = Schema.Struct({
   device: Schema.Number,
   inode: Schema.NullOr(Schema.Number),
   birthtimeMs: Schema.NullOr(Schema.Number),
-})
-export type AgentSessionImportSource = typeof AgentSessionImportSource.Type
+});
+export type AgentSessionImportSource = typeof AgentSessionImportSource.Type;
 
 /** Imported message ids retain their origin after event metadata is projected into SQLite. */
 export function isImportedAgentSessionMessageId(messageId: string): boolean {
-  return messageId.startsWith("import:")
+  return messageId.startsWith("import:");
 }
 
 /**
  * Empty for now. Kept as a struct so future scan options (source filters,
  * explicit roots) can be added without a new method.
  */
-export const AgentSessionScanInput = Schema.Struct({})
-export type AgentSessionScanInput = typeof AgentSessionScanInput.Type
+export const AgentSessionScanInput = Schema.Struct({});
+export type AgentSessionScanInput = typeof AgentSessionScanInput.Type;
 
 /**
  * A directory that at least one agent CLI has run in, suitable for import as a
@@ -50,8 +50,8 @@ export type AgentSessionScanInput = typeof AgentSessionScanInput.Type
 export const AgentSessionProjectGit = Schema.Struct({
   remoteKey: Schema.NullOr(Schema.String),
   repository: Schema.NullOr(Schema.String),
-})
-export type AgentSessionProjectGit = typeof AgentSessionProjectGit.Type
+});
+export type AgentSessionProjectGit = typeof AgentSessionProjectGit.Type;
 
 export const AgentSessionProjectCandidate = Schema.Struct({
   path: TrimmedNonEmptyString,
@@ -67,28 +67,28 @@ export const AgentSessionProjectCandidate = Schema.Struct({
    * from plain folders and should treat every candidate as a standalone project.
    */
   git: Schema.optionalKey(Schema.NullOr(AgentSessionProjectGit)),
-})
-export type AgentSessionProjectCandidate = typeof AgentSessionProjectCandidate.Type
+});
+export type AgentSessionProjectCandidate = typeof AgentSessionProjectCandidate.Type;
 
 export const AgentSessionScanResult = Schema.Struct({
   candidates: Schema.Array(AgentSessionProjectCandidate),
   scannedAt: IsoDateTime,
   truncated: Schema.optional(Schema.Boolean),
-})
-export type AgentSessionScanResult = typeof AgentSessionScanResult.Type
+});
+export type AgentSessionScanResult = typeof AgentSessionScanResult.Type;
 
 export const AgentSessionImportInput = Schema.Struct({
   projectId: ProjectId,
   expectedWorkspaceRoot: Schema.optional(TrimmedNonEmptyString),
-})
-export type AgentSessionImportInput = typeof AgentSessionImportInput.Type
+});
+export type AgentSessionImportInput = typeof AgentSessionImportInput.Type;
 
 export class AgentSessionImportProjectNotFoundError extends Schema.TaggedError<AgentSessionImportProjectNotFoundError>()(
   "AgentSessionImportProjectNotFoundError",
   { projectId: ProjectId },
 ) {
   override get message(): string {
-    return `Project '${this.projectId}' does not exist.`
+    return `Project '${this.projectId}' does not exist.`;
   }
 }
 
@@ -97,15 +97,15 @@ export class AgentSessionImportProjectChangedError extends Schema.TaggedError<Ag
   { projectId: ProjectId },
 ) {
   override get message(): string {
-    return `Project '${this.projectId}' changed directories. Scan for projects again before importing history.`
+    return `Project '${this.projectId}' changed directories. Scan for projects again before importing history.`;
   }
 }
 
 export const AgentSessionImportResult = Schema.Struct({
   importedCount: NonNegativeInt,
   skippedCount: NonNegativeInt,
-})
-export type AgentSessionImportResult = typeof AgentSessionImportResult.Type
+});
+export type AgentSessionImportResult = typeof AgentSessionImportResult.Type;
 
 export class AgentSessionScanError extends Schema.TaggedError<AgentSessionScanError>()(
   "AgentSessionScanError",
@@ -115,6 +115,6 @@ export class AgentSessionScanError extends Schema.TaggedError<AgentSessionScanEr
   },
 ) {
   override get message(): string {
-    return `Failed to scan agent sessions during ${this.operation}.`
+    return `Failed to scan agent sessions during ${this.operation}.`;
   }
 }

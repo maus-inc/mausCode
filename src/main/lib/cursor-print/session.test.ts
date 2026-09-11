@@ -5,10 +5,9 @@
  * session-id capture, rejected results, missing call_id correlation,
  * trailing-line flush, and stdin prompts.
  */
-
+import { assert, it } from "@effect/vitest"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { assert, it } from "@effect/vitest"
 import { runCursorPrintTurn } from "./session"
 
 const MOCK_PATH = join(
@@ -77,7 +76,9 @@ it("dedups snapshot-mode complete messages by suffix", async () => {
   const { chunks, done } = runTurn("snapshot")
   const result = await done
   assert.equal(result.status, "completed")
-  const deltas = chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta)
+  const deltas = chunks
+    .filter((chunk) => chunk.type === "text-delta")
+    .map((chunk) => chunk.delta)
   assert.deepEqual(deltas, ["first segment ", "second segment"])
 })
 
@@ -114,7 +115,9 @@ it("maps rejected tool results to error outputs", async () => {
   const { chunks, done } = runTurn("rejected")
   const result = await done
   assert.equal(result.status, "completed")
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const output = chunks.find(
+    (chunk) => chunk.type === "tool-output-available",
+  )
   assert.deepEqual(output.output, { error: "rejected: needs approval" })
 })
 
@@ -122,8 +125,12 @@ it("correlates tools without call_id oldest-open-first", async () => {
   const { chunks, done } = runTurn("no-call-id")
   const result = await done
   assert.equal(result.status, "completed")
-  const input = chunks.find((chunk) => chunk.type === "tool-input-available")
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const input = chunks.find(
+    (chunk) => chunk.type === "tool-input-available",
+  )
+  const output = chunks.find(
+    (chunk) => chunk.type === "tool-output-available",
+  )
   assert.equal(input.toolName, "Grep")
   assert.equal(output.toolCallId, input.toolCallId)
   assert.deepEqual(output.output, { matches: 1 })
@@ -133,7 +140,9 @@ it("flushes a final line without a trailing newline", async () => {
   const { chunks, done } = runTurn("no-trailing-newline")
   const result = await done
   assert.equal(result.status, "completed")
-  const deltas = chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta)
+  const deltas = chunks
+    .filter((chunk) => chunk.type === "text-delta")
+    .map((chunk) => chunk.delta)
   assert.deepEqual(deltas, ["tail"])
 })
 
@@ -141,7 +150,9 @@ it("delivers stdinText to the child on stdin", async () => {
   const { chunks, done } = runTurn("echo-stdin", "hello-prompt")
   const result = await done
   assert.equal(result.status, "completed")
-  const deltas = chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta)
+  const deltas = chunks
+    .filter((chunk) => chunk.type === "text-delta")
+    .map((chunk) => chunk.delta)
   assert.deepEqual(deltas, ["stdin:hello-prompt"])
 })
 
@@ -149,7 +160,9 @@ it("emits fresh snapshots after a tool call instead of dropping them", async () 
   const { chunks, done } = runTurn("snapshot-fresh")
   const result = await done
   assert.equal(result.status, "completed")
-  const deltas = chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta)
+  const deltas = chunks
+    .filter((chunk) => chunk.type === "text-delta")
+    .map((chunk) => chunk.delta)
   assert.deepEqual(deltas, ["first part ", "second part."])
 })
 
@@ -157,8 +170,13 @@ it("treats non-started tool subtypes as completion, not input", async () => {
   const { chunks, done } = runTurn("failed-tool")
   const result = await done
   assert.equal(result.status, "completed")
-  assert.equal(chunks.filter((chunk) => chunk.type === "tool-input-available").length, 0)
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  assert.equal(
+    chunks.filter((chunk) => chunk.type === "tool-input-available").length,
+    0,
+  )
+  const output = chunks.find(
+    (chunk) => chunk.type === "tool-output-available",
+  )
   assert.equal(output.toolCallId, "call-f")
   assert.deepEqual(output.output, { error: "command failed" })
 })

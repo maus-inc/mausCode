@@ -107,7 +107,8 @@ export function evaluateViolations(
     violations.push({
       backendId: capability.id,
       code: "local-only-blocked",
-      message: `${capability.displayName} requires mausCode hosted services and is disabled while local-only mode is on.`,
+      message:
+        `${capability.displayName} requires mausCode hosted services and is disabled while local-only mode is on.`,
       severity: "block",
     })
   }
@@ -116,7 +117,8 @@ export function evaluateViolations(
     violations.push({
       backendId: capability.id,
       code: "no-approval-gate",
-      message: `${capability.displayName} runs without an approval gate; every action is auto-approved.`,
+      message:
+        `${capability.displayName} runs without an approval gate; every action is auto-approved.`,
       severity: "warn",
     })
   }
@@ -125,7 +127,8 @@ export function evaluateViolations(
     violations.push({
       backendId: capability.id,
       code: "stores-credentials",
-      message: `${capability.displayName} stores credentials outside mausCode-managed state.`,
+      message:
+        `${capability.displayName} stores credentials outside mausCode-managed state.`,
       severity: "warn",
     })
   }

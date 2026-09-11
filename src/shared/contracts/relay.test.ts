@@ -2,14 +2,13 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
+import { describe, expect, it } from "vitest";
+import * as OpenApi from "effect/unstable/httpapi/OpenApi";
+import * as Schema from "effect/Schema";
 
-import * as Schema from "effect/Schema"
-import * as OpenApi from "effect/unstable/httpapi/OpenApi"
-import { describe, expect, it } from "vitest"
+import { RelayApi, RelayDeviceRegistrationRequest } from "./relay.ts";
 
-import { RelayApi, RelayDeviceRegistrationRequest } from "./relay.ts"
-
-const decodeDevice = Schema.decodeUnknownExit(RelayDeviceRegistrationRequest)
+const decodeDevice = Schema.decodeUnknownExit(RelayDeviceRegistrationRequest);
 const device = {
   deviceId: "device",
   label: "Phone",
@@ -22,7 +21,7 @@ const device = {
     notifyOnCompletion: true,
     notifyOnFailure: true,
   },
-}
+};
 
 describe("mobile device platforms", () => {
   it.each([
@@ -30,18 +29,18 @@ describe("mobile device platforms", () => {
     [24, "Success"],
     [37, "Success"],
   ])("enforces the Android minimum without an upper bound (API %i)", (androidApiLevel, result) => {
-    expect(decodeDevice({ ...device, platform: "android", androidApiLevel })._tag).toBe(result)
-  })
+    expect(decodeDevice({ ...device, platform: "android", androidApiLevel })._tag).toBe(result);
+  });
 
   it("accepts Android tokens without Apple routing and preserves older iOS registrations", () => {
     expect(decodeDevice({ ...device, platform: "android", androidApiLevel: 36 })._tag).toBe(
       "Success",
-    )
-    expect(decodeDevice({ ...device, platform: "ios", iosMajorVersion: 18 })._tag).toBe("Success")
-  })
+    );
+    expect(decodeDevice({ ...device, platform: "ios", iosMajorVersion: 18 })._tag).toBe("Success");
+  });
   it("rejects missing platform versions and Apple activity tokens on Android", () => {
-    expect(decodeDevice({ ...device, platform: "ios" })._tag).toBe("Failure")
-    expect(decodeDevice({ ...device, platform: "android" })._tag).toBe("Failure")
+    expect(decodeDevice({ ...device, platform: "ios" })._tag).toBe("Failure");
+    expect(decodeDevice({ ...device, platform: "android" })._tag).toBe("Failure");
     expect(
       decodeDevice({
         ...device,
@@ -49,18 +48,18 @@ describe("mobile device platforms", () => {
         androidApiLevel: 36,
         pushToStartToken: "apple-token",
       })._tag,
-    ).toBe("Failure")
-  })
-})
+    ).toBe("Failure");
+  });
+});
 
 describe("RelayApi security", () => {
   it("describes DPoP access tokens using the HTTP DPoP authorization scheme", () => {
-    const document = OpenApi.fromApi(RelayApi)
+    const document = OpenApi.fromApi(RelayApi);
 
     expect(document.components.securitySchemes?.relayDpop).toEqual({
       type: "http",
       scheme: "DPoP",
       description: "DPoP-bound access token. Requests must also include the DPoP proof JWT header.",
-    })
-  })
-})
+    });
+  });
+});

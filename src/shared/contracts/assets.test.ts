@@ -2,31 +2,31 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
-import { describe, expect, it } from "vitest"
+import * as Schema from "effect/Schema";
+import { describe, expect, it } from "vitest";
 
-import { AttachmentCreateUploadUrlInput } from "./assets.ts"
+import { AttachmentCreateUploadUrlInput } from "./assets.ts";
 import {
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-} from "./orchestration.ts"
+} from "./orchestration.ts";
 
-const isUploadInput = Schema.is(AttachmentCreateUploadUrlInput)
+const isUploadInput = Schema.is(AttachmentCreateUploadUrlInput);
 
 const uploadInput = {
   name: "screenshot.png",
   mimeType: "image/png",
   sizeBytes: 3,
-} as const
+} as const;
 
 describe("AttachmentCreateUploadUrlInput", () => {
   it("accepts supported image attachments", () => {
-    expect(isUploadInput(uploadInput)).toBe(true)
-  })
+    expect(isUploadInput(uploadInput)).toBe(true);
+  });
 
   it("rejects image types that providers do not support", () => {
-    expect(isUploadInput({ ...uploadInput, mimeType: "image/svg+xml" })).toBe(false)
-  })
+    expect(isUploadInput({ ...uploadInput, mimeType: "image/svg+xml" })).toBe(false);
+  });
 
   it("accepts generic files without treating them as provider images", () => {
     expect(
@@ -36,7 +36,7 @@ describe("AttachmentCreateUploadUrlInput", () => {
         mimeType: "application/pdf",
         sizeBytes: PROVIDER_SEND_TURN_MAX_IMAGE_BYTES + 1,
       }),
-    ).toBe(true)
+    ).toBe(true);
     expect(
       isUploadInput({
         type: "file",
@@ -44,14 +44,14 @@ describe("AttachmentCreateUploadUrlInput", () => {
         mimeType: "image/svg+xml",
         sizeBytes: 3,
       }),
-    ).toBe(true)
-  })
+    ).toBe(true);
+  });
 
   it("rejects empty and oversized uploads", () => {
-    expect(isUploadInput({ ...uploadInput, sizeBytes: 0 })).toBe(false)
+    expect(isUploadInput({ ...uploadInput, sizeBytes: 0 })).toBe(false);
     expect(
       isUploadInput({ ...uploadInput, sizeBytes: PROVIDER_SEND_TURN_MAX_IMAGE_BYTES + 1 }),
-    ).toBe(false)
+    ).toBe(false);
     expect(
       isUploadInput({
         type: "file",
@@ -59,6 +59,6 @@ describe("AttachmentCreateUploadUrlInput", () => {
         mimeType: "application/zip",
         sizeBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES + 1,
       }),
-    ).toBe(false)
-  })
-})
+    ).toBe(false);
+  });
+});

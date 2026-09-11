@@ -16,16 +16,16 @@
  *
  * @module usage
  */
-import * as Schema from "effect/Schema"
+import * as Schema from "effect/Schema";
 
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts"
+import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 /**
  * Bumped whenever the shape of {@link UsageSummary} changes incompatibly. The
  * client renders partial coverage when an environment reports an older version
  * rather than failing the whole page.
  */
-export const USAGE_CONTRACT_VERSION = 5 as const
+export const USAGE_CONTRACT_VERSION = 5 as const;
 
 /**
  * Oldest {@link UsageSummary} version a current client will still merge.
@@ -34,10 +34,10 @@ export const USAGE_CONTRACT_VERSION = 5 as const
  * remain valid, so mixed-version environments keep those totals instead of
  * treating every older server as stale.
  */
-export const USAGE_MERGE_COMPATIBLE_SINCE = 4 as const
+export const USAGE_MERGE_COMPATIBLE_SINCE = 4 as const;
 
-export const UsageProviderKind = Schema.Literals(["claude", "codex", "grok"])
-export type UsageProviderKind = typeof UsageProviderKind.Type
+export const UsageProviderKind = Schema.Literals(["claude", "codex", "grok"]);
+export type UsageProviderKind = typeof UsageProviderKind.Type;
 
 /**
  * A calendar day in the reporting time zone, formatted `YYYY-MM-DD`.
@@ -45,15 +45,15 @@ export type UsageProviderKind = typeof UsageProviderKind.Type
  * Days are bucketed server-side so that a turn always lands on the day the user
  * experienced it, not the UTC day.
  */
-const USAGE_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const USAGE_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export const UsageDay = TrimmedNonEmptyString.check(Schema.isPattern(USAGE_DAY_PATTERN)).pipe(
   Schema.brand("UsageDay"),
-)
-export type UsageDay = typeof UsageDay.Type
+);
+export type UsageDay = typeof UsageDay.Type;
 
-export const UsageResolution = Schema.Literals(["day", "hour"])
-export type UsageResolution = typeof UsageResolution.Type
+export const UsageResolution = Schema.Literals(["day", "hour"]);
+export type UsageResolution = typeof UsageResolution.Type;
 
 /**
  * Why a bucket's cost is what it is.
@@ -63,8 +63,8 @@ export type UsageResolution = typeof UsageResolution.Type
  * - `unpriced` - tokens are known, rates are not. Counted in totals, excluded
  *   from cost.
  */
-export const UsageCostSource = Schema.Literals(["providerReported", "modelPriced", "unpriced"])
-export type UsageCostSource = typeof UsageCostSource.Type
+export const UsageCostSource = Schema.Literals(["providerReported", "modelPriced", "unpriced"]);
+export type UsageCostSource = typeof UsageCostSource.Type;
 
 /**
  * Token counts for a bucket.
@@ -80,8 +80,8 @@ export const UsageTokenTotals = Schema.Struct({
   cacheCreationTokens: NonNegativeInt,
   outputTokens: NonNegativeInt,
   reasoningTokens: NonNegativeInt,
-})
-export type UsageTokenTotals = typeof UsageTokenTotals.Type
+});
+export type UsageTokenTotals = typeof UsageTokenTotals.Type;
 
 /**
  * One `(day, hourStart?, provider, model)` cell. `hourStart` is the UTC start
@@ -111,8 +111,8 @@ export const UsageBucket = Schema.Struct({
   unpricedRecords: NonNegativeInt,
   /** Distinct transcript sessions that contributed to this cell. */
   sessions: NonNegativeInt,
-})
-export type UsageBucket = typeof UsageBucket.Type
+});
+export type UsageBucket = typeof UsageBucket.Type;
 
 /**
  * Identifies the physical transcript directory a source read from.
@@ -135,11 +135,11 @@ export const UsageSourceFingerprint = Schema.Struct({
    * effectively never collides across machines. Empty when it cannot be read.
    */
   volumeId: Schema.String,
-})
-export type UsageSourceFingerprint = typeof UsageSourceFingerprint.Type
+});
+export type UsageSourceFingerprint = typeof UsageSourceFingerprint.Type;
 
-export const UsageSourceStatus = Schema.Literals(["ok", "missing", "partial", "failed"])
-export type UsageSourceStatus = typeof UsageSourceStatus.Type
+export const UsageSourceStatus = Schema.Literals(["ok", "missing", "partial", "failed"]);
+export type UsageSourceStatus = typeof UsageSourceStatus.Type;
 
 export const UsageSource = Schema.Struct({
   fingerprint: UsageSourceFingerprint,
@@ -155,11 +155,11 @@ export const UsageSource = Schema.Struct({
    */
   distinctSessions: NonNegativeInt,
   message: Schema.NullOr(TrimmedNonEmptyString),
-})
-export type UsageSource = typeof UsageSource.Type
+});
+export type UsageSource = typeof UsageSource.Type;
 
-export const UsagePricingStatus = Schema.Literals(["fresh", "cached", "unavailable"])
-export type UsagePricingStatus = typeof UsagePricingStatus.Type
+export const UsagePricingStatus = Schema.Literals(["fresh", "cached", "unavailable"]);
+export type UsagePricingStatus = typeof UsagePricingStatus.Type;
 
 /**
  * Provenance for the rate table, so the UI can be honest about how good the
@@ -170,8 +170,8 @@ export const UsagePricing = Schema.Struct({
   source: TrimmedNonEmptyString,
   fetchedAt: Schema.NullOr(Schema.String),
   knownModels: NonNegativeInt,
-})
-export type UsagePricing = typeof UsagePricing.Type
+});
+export type UsagePricing = typeof UsagePricing.Type;
 
 export const UsageSummaryInput = Schema.Struct({
   /** Inclusive first day of the window, in `timeZone`. */
@@ -189,8 +189,8 @@ export const UsageSummaryInput = Schema.Struct({
   sinceTime: Schema.optional(TrimmedNonEmptyString),
   /** Exclusive UTC instant for an hourly rolling window. */
   untilTime: Schema.optional(TrimmedNonEmptyString),
-})
-export type UsageSummaryInput = typeof UsageSummaryInput.Type
+});
+export type UsageSummaryInput = typeof UsageSummaryInput.Type;
 
 export const UsageSummary = Schema.Struct({
   contractVersion: Schema.Number,
@@ -203,8 +203,8 @@ export const UsageSummary = Schema.Struct({
   pricing: UsagePricing,
   /** Wall-clock cost of the scan, surfaced in diagnostics. */
   scanDurationMs: NonNegativeInt,
-})
-export type UsageSummary = typeof UsageSummary.Type
+});
+export type UsageSummary = typeof UsageSummary.Type;
 
 export class UsageReadError extends Schema.TaggedError<UsageReadError>()("UsageReadError", {
   reason: Schema.Literals(["scanFailed", "invalidWindow"]),
@@ -213,6 +213,6 @@ export class UsageReadError extends Schema.TaggedError<UsageReadError>()("UsageR
   cause: Schema.optional(Schema.Defect()),
 }) {
   override get message(): string {
-    return `Usage read failed (${this.reason}): ${this.detail}`
+    return `Usage read failed (${this.reason}): ${this.detail}`;
   }
 }

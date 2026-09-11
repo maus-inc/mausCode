@@ -566,7 +566,7 @@ if (gotTheLock) {
 
     // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
     if (process.platform === "win32") {
-      app.setAppUserModelId(IS_DEV ? "dev.mausinc.mauscode.dev" : "dev.mausinc.mauscode")
+      app.setAppUserModelId(IS_DEV ? "com.maus-inc.mauscode.dev" : "com.maus-inc.mauscode")
     }
 
     console.log(`[App] Starting mausCode${IS_DEV ? " (DEV)" : ""}...`)

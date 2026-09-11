@@ -5,13 +5,12 @@
  * translator chunk output. Needs the pinned platform binary:
  *   node --test --experimental-strip-types src/main/lib/runtime/stub-turn.test.ts
  */
-
+import { test } from "node:test"
 import assert from "node:assert/strict"
-import fs from "node:fs"
 import http from "node:http"
 import os from "node:os"
 import path from "node:path"
-import { test } from "node:test"
+import fs from "node:fs"
 import { RuntimeManager } from "./manager.ts"
 import { NativeTranslator } from "./translate.ts"
 
@@ -83,14 +82,8 @@ test("stubbed turn streams text_delta through the translator", async () => {
       }
     }
     assert.equal(sawDone, true, "turn should complete")
-    assert.ok(
-      sawText.includes("Hello from stub"),
-      `stub text should stream (got ${JSON.stringify(sawText)})`,
-    )
-    assert.ok(
-      hits.some((h) => h === "POST /responses"),
-      `daemon should POST to the stub (hits: ${hits})`,
-    )
+    assert.ok(sawText.includes("Hello from stub"), `stub text should stream (got ${JSON.stringify(sawText)})`)
+    assert.ok(hits.some((h) => h === "POST /responses"), `daemon should POST to the stub (hits: ${hits})`)
     assert.ok(chunks.includes("text-delta"), `translator should emit text-delta (got ${chunks})`)
     assert.ok(chunks.includes("finish"), `translator should emit finish (got ${chunks})`)
   } finally {

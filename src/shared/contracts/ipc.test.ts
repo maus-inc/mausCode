@@ -2,13 +2,13 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
-import { describe, expect, it } from "vitest"
+import * as Schema from "effect/Schema";
+import { describe, expect, it } from "vitest";
 
-import { DesktopEnvironmentBootstrapSchema } from "./ipc.ts"
+import { DesktopEnvironmentBootstrapSchema } from "./ipc.ts";
 
 describe("DesktopEnvironmentBootstrapSchema", () => {
-  const decode = Schema.decodeUnknownSync(DesktopEnvironmentBootstrapSchema)
+  const decode = Schema.decodeUnknownSync(DesktopEnvironmentBootstrapSchema);
 
   it("preserves the concrete running distro separately from the backend id", () => {
     expect(
@@ -25,8 +25,8 @@ describe("DesktopEnvironmentBootstrapSchema", () => {
       runningDistro: "Ubuntu",
       httpBaseUrl: "http://127.0.0.1:3774/",
       wsBaseUrl: "ws://127.0.0.1:3774/",
-    })
-  })
+    });
+  });
 
   it("allows non-running and non-WSL bootstraps to report no running distro", () => {
     expect(
@@ -37,6 +37,6 @@ describe("DesktopEnvironmentBootstrapSchema", () => {
         httpBaseUrl: null,
         wsBaseUrl: null,
       }).runningDistro,
-    ).toBeNull()
-  })
-})
+    ).toBeNull();
+  });
+});

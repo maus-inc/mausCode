@@ -2,31 +2,31 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
-import * as SchemaTransformation from "effect/SchemaTransformation"
+import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 
-import { ThreadEnvMode } from "./environment.ts"
-import { ProjectScriptIcon } from "./orchestration.ts"
+import { ThreadEnvMode } from "./environment.ts";
+import { ProjectScriptIcon } from "./orchestration.ts";
 
 /** File name of the checked-in T3 project file, resolved at the workspace root. */
-export const T3_PROJECT_FILE_NAME = "t3.json"
+export const T3_PROJECT_FILE_NAME = "t3.json";
 
 /** Public URL of the published JSON Schema for {@link T3ProjectFile}. */
-export const T3_PROJECT_FILE_SCHEMA_URL = "https://t3.codes/schema/t3.json"
+export const T3_PROJECT_FILE_SCHEMA_URL = "https://t3.codes/schema/t3.json";
 
-const T3_PROJECT_FILE_PATH_MAX_LENGTH = 512
-const T3_PROJECT_FILE_MAX_SCRIPTS = 50
+const T3_PROJECT_FILE_PATH_MAX_LENGTH = 512;
+const T3_PROJECT_FILE_MAX_SCRIPTS = 50;
 
 // Annotations go on the encoded (string) side so they survive into the
 // published JSON Schema; decoding still trims and re-validates non-emptiness.
 const trimmedNonEmpty = (annotations: { readonly description: string }, maxLength?: number) => {
-  const annotated = Schema.String.annotate(annotations)
+  const annotated = Schema.String.annotate(annotations);
   const encoded =
     maxLength === undefined
       ? annotated.check(Schema.isNonEmpty())
-      : annotated.check(Schema.isNonEmpty(), Schema.isMaxLength(maxLength))
-  return encoded.pipe(Schema.decodeTo(encoded, SchemaTransformation.trim()))
-}
+      : annotated.check(Schema.isNonEmpty(), Schema.isMaxLength(maxLength));
+  return encoded.pipe(Schema.decodeTo(encoded, SchemaTransformation.trim()));
+};
 
 export const T3ProjectFileScript = Schema.Struct({
   name: trimmedNonEmpty({
@@ -60,8 +60,8 @@ export const T3ProjectFileScript = Schema.Struct({
   ),
 }).annotate({
   description: "A project script that team members can import into T3 Code.",
-})
-export type T3ProjectFileScript = typeof T3ProjectFileScript.Type
+});
+export type T3ProjectFileScript = typeof T3ProjectFileScript.Type;
 
 export const T3ProjectFile = Schema.Struct({
   $schema: Schema.optionalKey(
@@ -95,5 +95,5 @@ export const T3ProjectFile = Schema.Struct({
   title: "T3 project file",
   description:
     "Checked-in project configuration for T3 Code (t3.json at the repository root). See https://t3.codes for documentation.",
-})
-export type T3ProjectFile = typeof T3ProjectFile.Type
+});
+export type T3ProjectFile = typeof T3ProjectFile.Type;

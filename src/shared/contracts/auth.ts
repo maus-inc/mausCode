@@ -2,15 +2,15 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
-import * as HttpApiSchema from "effect/unstable/httpapi/HttpApiSchema"
+import * as Schema from "effect/Schema";
+import * as HttpApiSchema from "effect/unstable/httpapi/HttpApiSchema";
 
 import {
   AuthSessionId,
   ClientSurface,
   ClientWebDeployment,
   TrimmedNonEmptyString,
-} from "./baseSchemas.ts"
+} from "./baseSchemas.ts";
 
 /**
  * Declares the server's overall authentication posture.
@@ -40,8 +40,8 @@ export const ServerAuthPolicy = Schema.Literals([
   "loopback-browser",
   "remote-reachable",
   "unsafe-no-auth",
-])
-export type ServerAuthPolicy = typeof ServerAuthPolicy.Type
+]);
+export type ServerAuthPolicy = typeof ServerAuthPolicy.Type;
 
 /**
  * A credential type that can be exchanged for a real authenticated session.
@@ -56,8 +56,8 @@ export type ServerAuthPolicy = typeof ServerAuthPolicy.Type
  * - `one-time-token`: a short-lived pairing token, suitable for manual pairing
  *   flows such as `/pair?token=...`
  */
-export const ServerAuthBootstrapMethod = Schema.Literals(["desktop-bootstrap", "one-time-token"])
-export type ServerAuthBootstrapMethod = typeof ServerAuthBootstrapMethod.Type
+export const ServerAuthBootstrapMethod = Schema.Literals(["desktop-bootstrap", "one-time-token"]);
+export type ServerAuthBootstrapMethod = typeof ServerAuthBootstrapMethod.Type;
 
 /**
  * A credential type accepted for steady-state authenticated requests after a
@@ -79,17 +79,17 @@ export const ServerAuthSessionMethod = Schema.Literals([
   "browser-session-cookie",
   "bearer-access-token",
   "dpop-access-token",
-])
-export type ServerAuthSessionMethod = typeof ServerAuthSessionMethod.Type
+]);
+export type ServerAuthSessionMethod = typeof ServerAuthSessionMethod.Type;
 
-export const AuthOrchestrationReadScope = "orchestration:read" as const
-export const AuthOrchestrationOperateScope = "orchestration:operate" as const
-export const AuthTerminalOperateScope = "terminal:operate" as const
-export const AuthReviewWriteScope = "review:write" as const
-export const AuthAccessReadScope = "access:read" as const
-export const AuthAccessWriteScope = "access:write" as const
-export const AuthRelayReadScope = "relay:read" as const
-export const AuthRelayWriteScope = "relay:write" as const
+export const AuthOrchestrationReadScope = "orchestration:read" as const;
+export const AuthOrchestrationOperateScope = "orchestration:operate" as const;
+export const AuthTerminalOperateScope = "terminal:operate" as const;
+export const AuthReviewWriteScope = "review:write" as const;
+export const AuthAccessReadScope = "access:read" as const;
+export const AuthAccessWriteScope = "access:write" as const;
+export const AuthRelayReadScope = "relay:read" as const;
+export const AuthRelayWriteScope = "relay:write" as const;
 export const AuthEnvironmentScope = Schema.Literals([
   AuthOrchestrationReadScope,
   AuthOrchestrationOperateScope,
@@ -99,10 +99,10 @@ export const AuthEnvironmentScope = Schema.Literals([
   AuthAccessWriteScope,
   AuthRelayReadScope,
   AuthRelayWriteScope,
-])
-export type AuthEnvironmentScope = typeof AuthEnvironmentScope.Type
-export const AuthEnvironmentScopes = Schema.Array(AuthEnvironmentScope)
-export type AuthEnvironmentScopes = typeof AuthEnvironmentScopes.Type
+]);
+export type AuthEnvironmentScope = typeof AuthEnvironmentScope.Type;
+export const AuthEnvironmentScopes = Schema.Array(AuthEnvironmentScope);
+export type AuthEnvironmentScopes = typeof AuthEnvironmentScopes.Type;
 
 export const AuthStandardClientScopes = [
   AuthOrchestrationReadScope,
@@ -110,18 +110,19 @@ export const AuthStandardClientScopes = [
   AuthTerminalOperateScope,
   AuthReviewWriteScope,
   AuthRelayReadScope,
-] as const
+] as const;
 export const AuthAdministrativeScopes = [
   ...AuthStandardClientScopes,
   AuthAccessReadScope,
   AuthAccessWriteScope,
   AuthRelayWriteScope,
-] as const
+] as const;
 
-export const AuthTokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange" as const
-export const AuthAccessTokenType = "urn:ietf:params:oauth:token-type:access_token" as const
+export const AuthTokenExchangeGrantType =
+  "urn:ietf:params:oauth:grant-type:token-exchange" as const;
+export const AuthAccessTokenType = "urn:ietf:params:oauth:token-type:access_token" as const;
 export const AuthEnvironmentBootstrapTokenType =
-  "urn:t3:params:oauth:token-type:environment-bootstrap" as const
+  "urn:t3:params:oauth:token-type:environment-bootstrap" as const;
 
 /**
  * Server-advertised auth capabilities for a specific execution environment.
@@ -148,21 +149,21 @@ export const ServerAuthDescriptor = Schema.Struct({
   bootstrapMethods: Schema.Array(ServerAuthBootstrapMethod),
   sessionMethods: Schema.Array(ServerAuthSessionMethod),
   sessionCookieName: TrimmedNonEmptyString,
-})
-export type ServerAuthDescriptor = typeof ServerAuthDescriptor.Type
+});
+export type ServerAuthDescriptor = typeof ServerAuthDescriptor.Type;
 
 export const AuthBrowserSessionRequest = Schema.Struct({
   credential: TrimmedNonEmptyString,
-})
-export type AuthBrowserSessionRequest = typeof AuthBrowserSessionRequest.Type
+});
+export type AuthBrowserSessionRequest = typeof AuthBrowserSessionRequest.Type;
 
 export const AuthBrowserSessionResult = Schema.Struct({
   authenticated: Schema.Literal(true),
   scopes: AuthEnvironmentScopes,
   sessionMethod: ServerAuthSessionMethod,
   expiresAt: Schema.DateTimeUtc,
-})
-export type AuthBrowserSessionResult = typeof AuthBrowserSessionResult.Type
+});
+export type AuthBrowserSessionResult = typeof AuthBrowserSessionResult.Type;
 
 export const AuthClientMetadataDeviceType = Schema.Literals([
   "desktop",
@@ -170,8 +171,8 @@ export const AuthClientMetadataDeviceType = Schema.Literals([
   "tablet",
   "bot",
   "unknown",
-])
-export type AuthClientMetadataDeviceType = typeof AuthClientMetadataDeviceType.Type
+]);
+export type AuthClientMetadataDeviceType = typeof AuthClientMetadataDeviceType.Type;
 
 export const AuthClientPresentationMetadata = Schema.Struct({
   label: Schema.optionalKey(TrimmedNonEmptyString),
@@ -183,8 +184,8 @@ export const AuthClientPresentationMetadata = Schema.Struct({
   webDeployment: Schema.optionalKey(ClientWebDeployment),
   browser: Schema.optionalKey(TrimmedNonEmptyString),
   appVersion: Schema.optionalKey(TrimmedNonEmptyString),
-})
-export type AuthClientPresentationMetadata = typeof AuthClientPresentationMetadata.Type
+});
+export type AuthClientPresentationMetadata = typeof AuthClientPresentationMetadata.Type;
 
 export const AuthTokenExchangeRequest = Schema.Struct({
   grant_type: Schema.Literal(AuthTokenExchangeGrantType),
@@ -195,8 +196,8 @@ export const AuthTokenExchangeRequest = Schema.Struct({
   client_label: Schema.optionalKey(TrimmedNonEmptyString),
   client_device_type: Schema.optionalKey(AuthClientMetadataDeviceType),
   client_os: Schema.optionalKey(TrimmedNonEmptyString),
-}).pipe(HttpApiSchema.asFormUrlEncoded())
-export type AuthTokenExchangeRequest = typeof AuthTokenExchangeRequest.Type
+}).pipe(HttpApiSchema.asFormUrlEncoded());
+export type AuthTokenExchangeRequest = typeof AuthTokenExchangeRequest.Type;
 
 export const AuthAccessTokenResult = Schema.Struct({
   access_token: TrimmedNonEmptyString,
@@ -204,22 +205,22 @@ export const AuthAccessTokenResult = Schema.Struct({
   token_type: Schema.Literals(["Bearer", "DPoP"]),
   expires_in: Schema.Number,
   scope: TrimmedNonEmptyString,
-})
-export type AuthAccessTokenResult = typeof AuthAccessTokenResult.Type
+});
+export type AuthAccessTokenResult = typeof AuthAccessTokenResult.Type;
 
 export const AuthWebSocketTicketResult = Schema.Struct({
   ticket: TrimmedNonEmptyString,
   expiresAt: Schema.DateTimeUtc,
-})
-export type AuthWebSocketTicketResult = typeof AuthWebSocketTicketResult.Type
+});
+export type AuthWebSocketTicketResult = typeof AuthWebSocketTicketResult.Type;
 
 export const AuthPairingCredentialResult = Schema.Struct({
   id: TrimmedNonEmptyString,
   credential: TrimmedNonEmptyString,
   label: Schema.optionalKey(TrimmedNonEmptyString),
   expiresAt: Schema.DateTimeUtc,
-})
-export type AuthPairingCredentialResult = typeof AuthPairingCredentialResult.Type
+});
+export type AuthPairingCredentialResult = typeof AuthPairingCredentialResult.Type;
 
 // Read models contain metadata only. Credentials are returned by creation alone.
 export const AuthPairingLink = Schema.Struct({
@@ -229,8 +230,8 @@ export const AuthPairingLink = Schema.Struct({
   label: Schema.optionalKey(TrimmedNonEmptyString),
   createdAt: Schema.DateTimeUtc,
   expiresAt: Schema.DateTimeUtc,
-})
-export type AuthPairingLink = typeof AuthPairingLink.Type
+});
+export type AuthPairingLink = typeof AuthPairingLink.Type;
 
 export const AuthClientMetadata = Schema.Struct({
   label: Schema.optionalKey(TrimmedNonEmptyString),
@@ -239,8 +240,8 @@ export const AuthClientMetadata = Schema.Struct({
   deviceType: AuthClientMetadataDeviceType,
   os: Schema.optionalKey(TrimmedNonEmptyString),
   browser: Schema.optionalKey(TrimmedNonEmptyString),
-})
-export type AuthClientMetadata = typeof AuthClientMetadata.Type
+});
+export type AuthClientMetadata = typeof AuthClientMetadata.Type;
 
 export const AuthClientSession = Schema.Struct({
   sessionId: AuthSessionId,
@@ -253,31 +254,31 @@ export const AuthClientSession = Schema.Struct({
   lastConnectedAt: Schema.NullOr(Schema.DateTimeUtc),
   connected: Schema.Boolean,
   current: Schema.Boolean,
-})
-export type AuthClientSession = typeof AuthClientSession.Type
+});
+export type AuthClientSession = typeof AuthClientSession.Type;
 
 export const AuthAccessSnapshot = Schema.Struct({
   pairingLinks: Schema.Array(AuthPairingLink),
   clientSessions: Schema.Array(AuthClientSession),
-})
-export type AuthAccessSnapshot = typeof AuthAccessSnapshot.Type
+});
+export type AuthAccessSnapshot = typeof AuthAccessSnapshot.Type;
 
 export const AuthAccessStreamSnapshotEvent = Schema.Struct({
   version: Schema.Literal(1),
   revision: Schema.Number,
   type: Schema.Literal("snapshot"),
   payload: AuthAccessSnapshot,
-})
-export type AuthAccessStreamSnapshotEvent = typeof AuthAccessStreamSnapshotEvent.Type
+});
+export type AuthAccessStreamSnapshotEvent = typeof AuthAccessStreamSnapshotEvent.Type;
 
 export const AuthAccessStreamPairingLinkUpsertedEvent = Schema.Struct({
   version: Schema.Literal(1),
   revision: Schema.Number,
   type: Schema.Literal("pairingLinkUpserted"),
   payload: AuthPairingLink,
-})
+});
 export type AuthAccessStreamPairingLinkUpsertedEvent =
-  typeof AuthAccessStreamPairingLinkUpsertedEvent.Type
+  typeof AuthAccessStreamPairingLinkUpsertedEvent.Type;
 
 export const AuthAccessStreamPairingLinkRemovedEvent = Schema.Struct({
   version: Schema.Literal(1),
@@ -286,9 +287,9 @@ export const AuthAccessStreamPairingLinkRemovedEvent = Schema.Struct({
   payload: Schema.Struct({
     id: TrimmedNonEmptyString,
   }),
-})
+});
 export type AuthAccessStreamPairingLinkRemovedEvent =
-  typeof AuthAccessStreamPairingLinkRemovedEvent.Type
+  typeof AuthAccessStreamPairingLinkRemovedEvent.Type;
 
 export class AuthAccessStreamError extends Schema.TaggedError<AuthAccessStreamError>()(
   "AuthAccessStreamError",
@@ -310,8 +311,8 @@ export const AuthAccessStreamClientUpsertedEvent = Schema.Struct({
   revision: Schema.Number,
   type: Schema.Literal("clientUpserted"),
   payload: AuthClientSession,
-})
-export type AuthAccessStreamClientUpsertedEvent = typeof AuthAccessStreamClientUpsertedEvent.Type
+});
+export type AuthAccessStreamClientUpsertedEvent = typeof AuthAccessStreamClientUpsertedEvent.Type;
 
 export const AuthAccessStreamClientRemovedEvent = Schema.Struct({
   version: Schema.Literal(1),
@@ -320,8 +321,8 @@ export const AuthAccessStreamClientRemovedEvent = Schema.Struct({
   payload: Schema.Struct({
     sessionId: AuthSessionId,
   }),
-})
-export type AuthAccessStreamClientRemovedEvent = typeof AuthAccessStreamClientRemovedEvent.Type
+});
+export type AuthAccessStreamClientRemovedEvent = typeof AuthAccessStreamClientRemovedEvent.Type;
 
 export const AuthAccessStreamEvent = Schema.Union([
   AuthAccessStreamSnapshotEvent,
@@ -329,24 +330,24 @@ export const AuthAccessStreamEvent = Schema.Union([
   AuthAccessStreamPairingLinkRemovedEvent,
   AuthAccessStreamClientUpsertedEvent,
   AuthAccessStreamClientRemovedEvent,
-])
-export type AuthAccessStreamEvent = typeof AuthAccessStreamEvent.Type
+]);
+export type AuthAccessStreamEvent = typeof AuthAccessStreamEvent.Type;
 
 export const AuthRevokePairingLinkInput = Schema.Struct({
   id: TrimmedNonEmptyString,
-})
-export type AuthRevokePairingLinkInput = typeof AuthRevokePairingLinkInput.Type
+});
+export type AuthRevokePairingLinkInput = typeof AuthRevokePairingLinkInput.Type;
 
 export const AuthRevokeClientSessionInput = Schema.Struct({
   sessionId: AuthSessionId,
-})
-export type AuthRevokeClientSessionInput = typeof AuthRevokeClientSessionInput.Type
+});
+export type AuthRevokeClientSessionInput = typeof AuthRevokeClientSessionInput.Type;
 
 export const AuthCreatePairingCredentialInput = Schema.Struct({
   label: Schema.optionalKey(TrimmedNonEmptyString),
   scopes: Schema.optionalKey(AuthEnvironmentScopes),
-})
-export type AuthCreatePairingCredentialInput = typeof AuthCreatePairingCredentialInput.Type
+});
+export type AuthCreatePairingCredentialInput = typeof AuthCreatePairingCredentialInput.Type;
 
 export const AuthSessionState = Schema.Struct({
   authenticated: Schema.Boolean,
@@ -354,5 +355,5 @@ export const AuthSessionState = Schema.Struct({
   scopes: Schema.optionalKey(AuthEnvironmentScopes),
   sessionMethod: Schema.optionalKey(ServerAuthSessionMethod),
   expiresAt: Schema.optionalKey(Schema.DateTimeUtc),
-})
-export type AuthSessionState = typeof AuthSessionState.Type
+});
+export type AuthSessionState = typeof AuthSessionState.Type;

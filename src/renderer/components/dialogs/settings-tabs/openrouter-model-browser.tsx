@@ -32,11 +32,14 @@ export function OpenRouterModelBrowser() {
   const [search, setSearch] = useState("")
   const trpcUtils = trpc.useUtils()
 
-  const { data, isLoading, isFetching } = trpc.openrouter.listModels.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    retry: 1,
-  })
+  const { data, isLoading, isFetching } = trpc.openrouter.listModels.useQuery(
+    undefined,
+    {
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  )
 
   const models = data?.available ? data.models : []
   const errorMessage = data && !data.available ? data.error : null
@@ -64,7 +67,9 @@ export function OpenRouterModelBrowser() {
   }, [filtered, pinned])
 
   const togglePin = (id: string) => {
-    setPinned((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+    setPinned((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
   }
 
   const handleRefresh = () => {
@@ -75,7 +80,9 @@ export function OpenRouterModelBrowser() {
     <div className="space-y-2">
       <div className="pb-2 flex items-center justify-between">
         <div>
-          <h4 className="text-sm font-medium text-foreground">OpenRouter Models</h4>
+          <h4 className="text-sm font-medium text-foreground">
+            OpenRouter Models
+          </h4>
           <p className="text-xs text-muted-foreground">
             {data?.available
               ? `${pinned.length} pinned · ${models.length} available`
@@ -89,19 +96,21 @@ export function OpenRouterModelBrowser() {
           disabled={isFetching}
           aria-label="Refresh OpenRouter catalog"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`}
+          />
         </Button>
       </div>
 
       <div className="bg-background rounded-lg border border-border overflow-hidden">
         <div className="px-1.5 pt-1.5 pb-0.5">
-          <div className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-sm bg-muted border border-input">
+          <div className="flex items-center gap-1.5 h-7 px-1.5 rounded-md bg-muted/50">
             <SearchIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search OpenRouter catalog..."
-              className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
+              placeholder="Search OpenRouter catalog…"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
         </div>
@@ -109,7 +118,7 @@ export function OpenRouterModelBrowser() {
         <div className="divide-y divide-border max-h-[420px] overflow-y-auto">
           {isLoading && (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-              Loading catalog...
+              Loading catalog…
             </div>
           )}
           {errorMessage && (
@@ -125,18 +134,28 @@ export function OpenRouterModelBrowser() {
           {sorted.map((m) => {
             const isPinned = pinned.includes(m.id)
             return (
-              <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div
+                key={m.id}
+                className="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{m.name}</span>
+                    <span className="text-sm font-medium truncate">
+                      {m.name}
+                    </span>
                     <span className="text-[10px] text-muted-foreground/70 font-mono truncate">
                       {m.id}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
                     <span>ctx {formatContextLength(m.contextLength)}</span>
-                    <span>in {formatPricePerMillion(m.pricing.promptUsdPerToken)}/M</span>
-                    <span>out {formatPricePerMillion(m.pricing.completionUsdPerToken)}/M</span>
+                    <span>
+                      in {formatPricePerMillion(m.pricing.promptUsdPerToken)}/M
+                    </span>
+                    <span>
+                      out{" "}
+                      {formatPricePerMillion(m.pricing.completionUsdPerToken)}/M
+                    </span>
                   </div>
                 </div>
                 <Switch

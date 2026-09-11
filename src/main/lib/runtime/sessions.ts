@@ -6,9 +6,8 @@
  * now holding JCode session ids for native sub-chats). Stale mappings
  * (daemon state wiped) self-heal by creating a fresh session.
  */
-
-import type { JcodeClient } from "@maus-inc/runtime-client"
 import { eq } from "drizzle-orm"
+import type { JcodeClient } from "@maus-inc/runtime-client"
 import { getDatabase, subChats } from "../db"
 
 function readMapping(subChatId: string): string | null {

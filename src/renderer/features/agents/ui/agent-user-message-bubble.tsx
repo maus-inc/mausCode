@@ -3,6 +3,7 @@
 import { useAtomValue } from "jotai"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../../components/ui/dialog"
+import { Copy, Check } from "lucide-react"
 import { useOverflowDetection } from "../../../hooks/use-overflow-detection"
 import { cn } from "../../../lib/utils"
 import { chatFontSizeAtom } from "../atoms"
@@ -119,7 +120,14 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
   skipTextMentionBlocks = false,
 }: AgentUserMessageBubbleProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(textContent)
+    setIsCopied(true)
+    setTimeout(() => setIsCopied(false), 2000)
+  }, [textContent])
 
   // Extract quote/diff mentions to display above the bubble
   const { textMentions, cleanedText } = useMemo(
@@ -191,10 +199,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
 
   return (
     <>
-      <div
-        className="flex justify-start drop-shadow-[0_10px_20px_hsl(var(--background))]"
-        data-user-bubble
-      >
+      <div className="group/usermsg flex justify-start drop-shadow-[0_10px_20px_hsl(var(--background))]" data-user-bubble>
         <div className="space-y-2 w-full relative">
           {/* Show attached images from stored message */}
           {imageParts.length > 0 && (
@@ -256,6 +261,21 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
                   <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none bg-gradient-to-t from-[hsl(var(--input-background))] to-transparent rounded-b-xl" />
                 )}
               </div>
+              <button
+                onClick={handleCopy}
+                className={cn(
+                  "absolute -bottom-6 right-0 p-1 rounded transition-all duration-150",
+                  "text-muted-foreground hover:text-foreground",
+                  "opacity-0 group-hover/usermsg:opacity-100",
+                )}
+                title="Copy message"
+              >
+                {isCopied ? (
+                  <Check className="w-3.5 h-3.5 text-green-500" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
             </div>
           ) : (imageParts.length > 0 || textMentions.length > 0) && !skipTextMentionBlocks ? (
             // Show "Using X" summary when no text but have attachments rendered inline

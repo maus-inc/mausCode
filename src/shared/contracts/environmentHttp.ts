@@ -2,15 +2,15 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Context from "effect/Context"
-import type * as DateTime from "effect/DateTime"
-import * as Schema from "effect/Schema"
-import * as HttpServerRespondable from "effect/unstable/http/HttpServerRespondable"
-import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse"
-import * as HttpApi from "effect/unstable/httpapi/HttpApi"
-import * as HttpApiEndpoint from "effect/unstable/httpapi/HttpApiEndpoint"
-import * as HttpApiGroup from "effect/unstable/httpapi/HttpApiGroup"
-import * as HttpApiMiddleware from "effect/unstable/httpapi/HttpApiMiddleware"
+import * as Context from "effect/Context";
+import type * as DateTime from "effect/DateTime";
+import * as Schema from "effect/Schema";
+import * as HttpApi from "effect/unstable/httpapi/HttpApi";
+import * as HttpApiEndpoint from "effect/unstable/httpapi/HttpApiEndpoint";
+import * as HttpApiGroup from "effect/unstable/httpapi/HttpApiGroup";
+import * as HttpApiMiddleware from "effect/unstable/httpapi/HttpApiMiddleware";
+import * as HttpServerRespondable from "effect/unstable/http/HttpServerRespondable";
+import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 
 import {
   AuthAccessTokenResult,
@@ -18,36 +18,36 @@ import {
   AuthBrowserSessionResult,
   AuthClientSession,
   AuthCreatePairingCredentialInput,
-  AuthEnvironmentScope,
   AuthPairingCredentialResult,
   AuthPairingLink,
   AuthRevokeClientSessionInput,
   AuthRevokePairingLinkInput,
-  AuthSessionState,
+  AuthEnvironmentScope,
   AuthTokenExchangeRequest,
+  AuthSessionState,
   AuthWebSocketTicketResult,
-  type ServerAuthSessionMethod,
-} from "./auth.ts"
+  ServerAuthSessionMethod,
+} from "./auth.ts";
 import {
-  type AuthSessionId,
   DpopFailureReason,
+  AuthSessionId,
   ThreadId,
   TrimmedNonEmptyString,
-} from "./baseSchemas.ts"
-import { ExecutionEnvironmentDescriptor } from "./environment.ts"
+} from "./baseSchemas.ts";
+import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import {
   ClientOrchestrationCommand,
   DispatchResult,
   OrchestrationReadModel,
   OrchestrationShellSnapshot,
   OrchestrationThreadDetailSnapshot,
-} from "./orchestration.ts"
+} from "./orchestration.ts";
 import {
   PullRequestDiffInput,
   PullRequestDiffResult,
   PullRequestOperationError,
   PullRequestUnavailableError,
-} from "./pullRequest.ts"
+} from "./pullRequest.ts";
 import {
   RelayCloudEnvironmentHealthRequest,
   RelayCloudMintCredentialRequest,
@@ -56,34 +56,34 @@ import {
   RelayEnvironmentLinkProof,
   RelayEnvironmentMintResponse,
   RelayLinkProofRequest,
-} from "./relay.ts"
+} from "./relay.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
   dpop: Schema.optionalKey(Schema.String),
-})
+});
 
 const OptionalDpopProofHeaders = Schema.Struct({
   dpop: Schema.optionalKey(Schema.String),
-})
+});
 
 export const EnvironmentRequestInvalidReason = Schema.Literals([
   "invalid_scope",
   "scope_not_granted",
   "invalid_command",
-])
-export type EnvironmentRequestInvalidReason = typeof EnvironmentRequestInvalidReason.Type
+]);
+export type EnvironmentRequestInvalidReason = typeof EnvironmentRequestInvalidReason.Type;
 
 export const EnvironmentAuthInvalidReason = Schema.Literals([
   "missing_credential",
   "invalid_credential",
-])
-export type EnvironmentAuthInvalidReason = typeof EnvironmentAuthInvalidReason.Type
+]);
+export type EnvironmentAuthInvalidReason = typeof EnvironmentAuthInvalidReason.Type;
 
 export const EnvironmentOperationForbiddenReason = Schema.Literals([
   "current_session_revoke_not_allowed",
-])
-export type EnvironmentOperationForbiddenReason = typeof EnvironmentOperationForbiddenReason.Type
+]);
+export type EnvironmentOperationForbiddenReason = typeof EnvironmentOperationForbiddenReason.Type;
 
 export const EnvironmentInternalErrorReason = Schema.Literals([
   "bootstrap_validation_failed",
@@ -100,8 +100,8 @@ export const EnvironmentInternalErrorReason = Schema.Literals([
   "orchestration_thread_snapshot_failed",
   "orchestration_dispatch_failed",
   "internal_error",
-])
-export type EnvironmentInternalErrorReason = typeof EnvironmentInternalErrorReason.Type
+]);
+export type EnvironmentInternalErrorReason = typeof EnvironmentInternalErrorReason.Type;
 
 export class EnvironmentRequestInvalidError extends Schema.TaggedError<EnvironmentRequestInvalidError>()(
   "EnvironmentRequestInvalidError",
@@ -113,11 +113,11 @@ export class EnvironmentRequestInvalidError extends Schema.TaggedError<Environme
   { httpApiStatus: 400 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentRequestInvalidError)(this, { status: 400 })
+    return HttpServerResponse.schemaJson(EnvironmentRequestInvalidError)(this, { status: 400 });
   }
 
   override get message(): string {
-    return `The environment rejected the request (${this.reason}).`
+    return `The environment rejected the request (${this.reason}).`;
   }
 }
 
@@ -133,11 +133,11 @@ export class EnvironmentAuthInvalidError extends Schema.TaggedError<EnvironmentA
   { httpApiStatus: 401 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentAuthInvalidError)(this, { status: 401 })
+    return HttpServerResponse.schemaJson(EnvironmentAuthInvalidError)(this, { status: 401 });
   }
 
   override get message(): string {
-    return `The environment rejected this client's credentials (${this.reason}).`
+    return `The environment rejected this client's credentials (${this.reason}).`;
   }
 }
 
@@ -151,11 +151,11 @@ export class EnvironmentScopeRequiredError extends Schema.TaggedError<Environmen
   { httpApiStatus: 403 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentScopeRequiredError)(this, { status: 403 })
+    return HttpServerResponse.schemaJson(EnvironmentScopeRequiredError)(this, { status: 403 });
   }
 
   override get message(): string {
-    return `This request needs the ${this.requiredScope} scope, which this client does not have.`
+    return `This request needs the ${this.requiredScope} scope, which this client does not have.`;
   }
 }
 
@@ -169,11 +169,11 @@ export class EnvironmentOperationForbiddenError extends Schema.TaggedError<Envir
   { httpApiStatus: 403 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentOperationForbiddenError)(this, { status: 403 })
+    return HttpServerResponse.schemaJson(EnvironmentOperationForbiddenError)(this, { status: 403 });
   }
 
   override get message(): string {
-    return `The environment refused this operation (${this.reason}).`
+    return `The environment refused this operation (${this.reason}).`;
   }
 }
 
@@ -187,16 +187,16 @@ export class EnvironmentInternalError extends Schema.TaggedError<EnvironmentInte
   { httpApiStatus: 500 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentInternalError)(this, { status: 500 })
+    return HttpServerResponse.schemaJson(EnvironmentInternalError)(this, { status: 500 });
   }
 
   override get message(): string {
-    return `The environment failed to answer this request (${this.reason}).`
+    return `The environment failed to answer this request (${this.reason}).`;
   }
 }
 
-export const EnvironmentResourceNotFoundReason = Schema.Literals(["thread_not_found"])
-export type EnvironmentResourceNotFoundReason = typeof EnvironmentResourceNotFoundReason.Type
+export const EnvironmentResourceNotFoundReason = Schema.Literals(["thread_not_found"]);
+export type EnvironmentResourceNotFoundReason = typeof EnvironmentResourceNotFoundReason.Type;
 
 export class EnvironmentResourceNotFoundError extends Schema.TaggedError<EnvironmentResourceNotFoundError>()(
   "EnvironmentResourceNotFoundError",
@@ -208,11 +208,11 @@ export class EnvironmentResourceNotFoundError extends Schema.TaggedError<Environ
   { httpApiStatus: 404 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentResourceNotFoundError)(this, { status: 404 })
+    return HttpServerResponse.schemaJson(EnvironmentResourceNotFoundError)(this, { status: 404 });
   }
 
   override get message(): string {
-    return `The environment could not find what this request named (${this.reason}).`
+    return `The environment could not find what this request named (${this.reason}).`;
   }
 }
 
@@ -223,13 +223,13 @@ export const EnvironmentHttpCommonError = Schema.Union([
   EnvironmentOperationForbiddenError,
   EnvironmentResourceNotFoundError,
   EnvironmentInternalError,
-])
-export type EnvironmentHttpCommonError = typeof EnvironmentHttpCommonError.Type
+]);
+export type EnvironmentHttpCommonError = typeof EnvironmentHttpCommonError.Type;
 
 const EnvironmentAuthenticationErrors = [
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
-] as const
+] as const;
 
 export class EnvironmentHttpBadRequestError extends Schema.TaggedError<EnvironmentHttpBadRequestError>()(
   "EnvironmentHttpBadRequestError",
@@ -239,7 +239,7 @@ export class EnvironmentHttpBadRequestError extends Schema.TaggedError<Environme
   { httpApiStatus: 400 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentHttpBadRequestError)(this, { status: 400 })
+    return HttpServerResponse.schemaJson(EnvironmentHttpBadRequestError)(this, { status: 400 });
   }
 }
 
@@ -251,7 +251,7 @@ export class EnvironmentHttpUnauthorizedError extends Schema.TaggedError<Environ
   { httpApiStatus: 401 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentHttpUnauthorizedError)(this, { status: 401 })
+    return HttpServerResponse.schemaJson(EnvironmentHttpUnauthorizedError)(this, { status: 401 });
   }
 }
 
@@ -263,7 +263,7 @@ export class EnvironmentHttpForbiddenError extends Schema.TaggedError<Environmen
   { httpApiStatus: 403 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentHttpForbiddenError)(this, { status: 403 })
+    return HttpServerResponse.schemaJson(EnvironmentHttpForbiddenError)(this, { status: 403 });
   }
 }
 
@@ -275,7 +275,7 @@ export class EnvironmentHttpInternalServerError extends Schema.TaggedError<Envir
   { httpApiStatus: 500 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentHttpInternalServerError)(this, { status: 500 })
+    return HttpServerResponse.schemaJson(EnvironmentHttpInternalServerError)(this, { status: 500 });
   }
 }
 
@@ -287,7 +287,7 @@ export class EnvironmentHttpConflictError extends Schema.TaggedError<Environment
   { httpApiStatus: 409 },
 ) {
   [HttpServerRespondable.symbol]() {
-    return HttpServerResponse.schemaJson(EnvironmentHttpConflictError)(this, { status: 409 })
+    return HttpServerResponse.schemaJson(EnvironmentHttpConflictError)(this, { status: 409 });
   }
 }
 
@@ -302,53 +302,53 @@ export class EnvironmentCloudEndpointUnavailableError extends Schema.TaggedError
   [HttpServerRespondable.symbol]() {
     return HttpServerResponse.schemaJson(EnvironmentCloudEndpointUnavailableError)(this, {
       status: 503,
-    })
+    });
   }
 }
 const EnvironmentSessionCreationErrors = [
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
-] as const
+] as const;
 const EnvironmentTokenExchangeErrors = [
   EnvironmentRequestInvalidError,
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
-] as const
+] as const;
 const EnvironmentScopedOperationErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentInternalError,
-] as const
+] as const;
 const EnvironmentPairingCredentialErrors = [
   EnvironmentRequestInvalidError,
   ...EnvironmentScopedOperationErrors,
-] as const
+] as const;
 const EnvironmentSessionRevokeErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentOperationForbiddenError,
   EnvironmentInternalError,
-] as const
+] as const;
 const EnvironmentOrchestrationSnapshotErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentInternalError,
-] as const
+] as const;
 const EnvironmentOrchestrationThreadSnapshotErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentResourceNotFoundError,
   EnvironmentInternalError,
-] as const
+] as const;
 const EnvironmentOrchestrationDispatchErrors = [
   EnvironmentRequestInvalidError,
   EnvironmentScopeRequiredError,
   EnvironmentInternalError,
-] as const
+] as const;
 
 export interface EnvironmentSessionPrincipalShape {
-  readonly sessionId: AuthSessionId
-  readonly subject: string
-  readonly method: ServerAuthSessionMethod
-  readonly scopes: ReadonlySet<AuthEnvironmentScope>
-  readonly proofKeyThumbprint?: string
-  readonly expiresAt?: DateTime.DateTime
+  readonly sessionId: AuthSessionId;
+  readonly subject: string;
+  readonly method: ServerAuthSessionMethod;
+  readonly scopes: ReadonlySet<AuthEnvironmentScope>;
+  readonly proofKeyThumbprint?: string;
+  readonly expiresAt?: DateTime.DateTime;
 }
 
 export class EnvironmentAuthenticatedPrincipal extends Context.Service<
@@ -370,13 +370,13 @@ const EnvironmentHttpCloudErrors = [
   EnvironmentHttpConflictError,
   EnvironmentHttpInternalServerError,
   EnvironmentScopeRequiredError,
-] as const
+] as const;
 
 export const EnvironmentCloudRelayConfigResult = Schema.Struct({
   ok: Schema.Boolean,
   endpointRuntimeStatus: Schema.Unknown,
-})
-export type EnvironmentCloudRelayConfigResult = typeof EnvironmentCloudRelayConfigResult.Type
+});
+export type EnvironmentCloudRelayConfigResult = typeof EnvironmentCloudRelayConfigResult.Type;
 
 export const EnvironmentCloudLinkStateResult = Schema.Struct({
   linked: Schema.Boolean,
@@ -389,28 +389,28 @@ export const EnvironmentCloudLinkStateResult = Schema.Struct({
   // Optional so newer clients tolerate older environment servers.
   managedTunnelActive: Schema.optional(Schema.Boolean),
   publishAgentActivity: Schema.Boolean,
-})
-export type EnvironmentCloudLinkStateResult = typeof EnvironmentCloudLinkStateResult.Type
+});
+export type EnvironmentCloudLinkStateResult = typeof EnvironmentCloudLinkStateResult.Type;
 
 export const EnvironmentCloudPreferencesRequest = Schema.Struct({
   publishAgentActivity: Schema.Boolean,
-})
-export type EnvironmentCloudPreferencesRequest = typeof EnvironmentCloudPreferencesRequest.Type
+});
+export type EnvironmentCloudPreferencesRequest = typeof EnvironmentCloudPreferencesRequest.Type;
 
 export const AuthPairingLinkRevokeResult = Schema.Struct({
   revoked: Schema.Boolean,
-})
-export type AuthPairingLinkRevokeResult = typeof AuthPairingLinkRevokeResult.Type
+});
+export type AuthPairingLinkRevokeResult = typeof AuthPairingLinkRevokeResult.Type;
 
 export const AuthClientSessionRevokeResult = Schema.Struct({
   revoked: Schema.Boolean,
-})
-export type AuthClientSessionRevokeResult = typeof AuthClientSessionRevokeResult.Type
+});
+export type AuthClientSessionRevokeResult = typeof AuthClientSessionRevokeResult.Type;
 
 export const AuthOtherClientSessionsRevokeResult = Schema.Struct({
   revokedCount: Schema.Number,
-})
-export type AuthOtherClientSessionsRevokeResult = typeof AuthOtherClientSessionsRevokeResult.Type
+});
+export type AuthOtherClientSessionsRevokeResult = typeof AuthOtherClientSessionsRevokeResult.Type;
 
 class EnvironmentMetadataHttpApi extends HttpApiGroup.make("metadata").add(
   HttpApiEndpoint.get("descriptor", "/.well-known/t3/environment", {
@@ -496,7 +496,7 @@ class EnvironmentAuthHttpApi extends HttpApiGroup.make("auth")
 
 const EnvironmentOrchestrationThreadSnapshotParams = Schema.Struct({
   threadId: ThreadId,
-})
+});
 
 // Query-string window for windowed thread snapshots (GET payloads must encode
 // to strings). Both fields optional: omitting them keeps the full-snapshot
@@ -506,7 +506,7 @@ const EnvironmentOrchestrationThreadSnapshotQuery = {
     Schema.FiniteFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
   ),
   beforeCursor: Schema.optional(TrimmedNonEmptyString),
-}
+};
 
 export class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
   .add(

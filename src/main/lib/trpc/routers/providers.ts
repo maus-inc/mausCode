@@ -14,26 +14,32 @@ import { publicProcedure, router } from "../index"
 
 export const providersRouter = router({
   list: publicProcedure.query(() =>
-    listBackends().map((backend) => providerCapabilitySchema.parse(backend.getCapability())),
+    listBackends().map((backend) =>
+      providerCapabilitySchema.parse(backend.getCapability()),
+    ),
   ),
 
-  get: publicProcedure.input(z.object({ id: z.string() })).query(({ input }) => {
-    const capability = getBackend(input.id)?.getCapability()
-    return capability ? providerCapabilitySchema.parse(capability) : null
-  }),
+  get: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(({ input }) => {
+      const capability = getBackend(input.id)?.getCapability()
+      return capability ? providerCapabilitySchema.parse(capability) : null
+    }),
 
-  probe: publicProcedure.input(z.object({ id: z.string() })).query(async ({ input }) => {
-    const backend = getBackend(input.id)
-    if (!backend) return null
-    try {
-      return await backend.probe()
-    } catch (error) {
-      return {
-        available: false,
-        detail: error instanceof Error ? error.message : String(error),
+  probe: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const backend = getBackend(input.id)
+      if (!backend) return null
+      try {
+        return await backend.probe()
+      } catch (error) {
+        return {
+          available: false,
+          detail: error instanceof Error ? error.message : String(error),
+        }
       }
-    }
-  }),
+    }),
 
   violations: publicProcedure
     .input(z.object({ ids: z.array(z.string()).optional() }).optional())
@@ -46,7 +52,10 @@ export const providersRouter = router({
           })
         : listBackends()
       return backends.flatMap((backend) =>
-        evaluateViolations(providerCapabilitySchema.parse(backend.getCapability()), policy),
+        evaluateViolations(
+          providerCapabilitySchema.parse(backend.getCapability()),
+          policy,
+        ),
       )
     }),
 })

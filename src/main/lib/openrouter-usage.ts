@@ -34,7 +34,9 @@ export interface OpenRouterUsageEvent {
   timestamp: string
 }
 
-export async function appendOpenRouterUsage(event: OpenRouterUsageEvent): Promise<void> {
+export async function appendOpenRouterUsage(
+  event: OpenRouterUsageEvent,
+): Promise<void> {
   const { year, month, day } = todayParts()
   const dayDir = join(OPENROUTER_USAGE_DIR, year, month, day)
   ensureDir(dayDir)

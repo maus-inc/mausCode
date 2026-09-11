@@ -2,18 +2,18 @@
  * Ported from pingdotgg/t3code packages/effect-codex-app-server (MIT, (c) 2026 T3 Tools Inc.).
  * Verbatim except this header. Upstream schema ref 678157ac (2026-07-19); see README.md.
  */
-import { assert, it } from "@effect/vitest"
-import * as Schema from "effect/Schema"
+import { assert, it } from "@effect/vitest";
+import * as Schema from "effect/Schema";
 
-import * as CodexSchema from "./schema.ts"
+import * as CodexSchema from "./schema.ts";
 
-const isGetAccountResponse = Schema.is(CodexSchema.V2GetAccountResponse)
-const isThreadReadResponse = Schema.is(CodexSchema.V2ThreadReadResponse)
-const isThreadResumeResponse = Schema.is(CodexSchema.V2ThreadResumeResponse)
-const isThreadRollbackResponse = Schema.is(CodexSchema.V2ThreadRollbackResponse)
-const isThreadForkResponse = Schema.is(CodexSchema.V2ThreadForkResponse)
-const isTurnCompletedNotification = Schema.is(CodexSchema.V2TurnCompletedNotification)
-const decodeThreadResumeResponse = Schema.decodeUnknownSync(CodexSchema.V2ThreadResumeResponse)
+const isGetAccountResponse = Schema.is(CodexSchema.V2GetAccountResponse);
+const isThreadReadResponse = Schema.is(CodexSchema.V2ThreadReadResponse);
+const isThreadResumeResponse = Schema.is(CodexSchema.V2ThreadResumeResponse);
+const isThreadRollbackResponse = Schema.is(CodexSchema.V2ThreadRollbackResponse);
+const isThreadForkResponse = Schema.is(CodexSchema.V2ThreadForkResponse);
+const isTurnCompletedNotification = Schema.is(CodexSchema.V2TurnCompletedNotification);
+const decodeThreadResumeResponse = Schema.decodeUnknownSync(CodexSchema.V2ThreadResumeResponse);
 
 it("keeps async questions in live notifications and thread history", () => {
   const item = {
@@ -26,7 +26,7 @@ it("keeps async questions in live notifications and thread history", () => {
       { title: "Which package manager?", options: ["pnpm", "npm"] },
       { title: "What should it be named?" },
     ],
-  } as const
+  } as const;
   for (const schema of [
     CodexSchema.ServerNotification__ThreadItem,
     CodexSchema.V2ItemStartedNotification__ThreadItem,
@@ -34,9 +34,9 @@ it("keeps async questions in live notifications and thread history", () => {
     CodexSchema.V2ThreadReadResponse__ThreadItem,
     CodexSchema.V2ThreadResumeResponse__ThreadItem,
   ]) {
-    assert.deepEqual(Schema.decodeUnknownSync(schema)(item), item)
+    assert.deepEqual(Schema.decodeUnknownSync(schema)(item), item);
   }
-})
+});
 
 it("accepts Codex 0.150 multi-agent values", () => {
   const schemas = [
@@ -45,25 +45,25 @@ it("accepts Codex 0.150 multi-agent values", () => {
     CodexSchema.V2ItemCompletedNotification__SubAgentActivityKind,
     CodexSchema.V2ThreadReadResponse__SubAgentActivityKind,
     CodexSchema.V2ThreadResumeResponse__SubAgentActivityKind,
-  ]
+  ];
 
   for (const schema of schemas) {
-    assert.equal(Schema.is(schema)("completed"), true)
+    assert.equal(Schema.is(schema)("completed"), true);
   }
 
   for (const tool of ["sendMessage", "followupTask", "interruptAgent", "listAgents"]) {
-    assert.equal(Schema.is(CodexSchema.ServerNotification__CollabAgentTool)(tool), true)
-    assert.equal(Schema.is(CodexSchema.V2ThreadResumeResponse__CollabAgentTool)(tool), true)
+    assert.equal(Schema.is(CodexSchema.ServerNotification__CollabAgentTool)(tool), true);
+    assert.equal(Schema.is(CodexSchema.V2ThreadResumeResponse__CollabAgentTool)(tool), true);
   }
 
   assert.equal(
     Schema.is(CodexSchema.ServerNotification__CollabAgentToolCallStatus)("interrupted"),
     true,
-  )
+  );
   assert.equal(
     Schema.is(CodexSchema.V2ThreadResumeResponse__CollabAgentToolCallStatus)("interrupted"),
     true,
-  )
+  );
 
   const resumeResponse = {
     approvalPolicy: "never",
@@ -102,10 +102,10 @@ it("accepts Codex 0.150 multi-agent values", () => {
       ],
       updatedAt: 0,
     },
-  }
+  };
 
-  assert.equal(Schema.is(CodexSchema.V2ThreadResumeResponse)(resumeResponse), true)
-})
+  assert.equal(Schema.is(CodexSchema.V2ThreadResumeResponse)(resumeResponse), true);
+});
 
 it("accepts Codex rate limit errors for thread responses", () => {
   const failedThread = {
@@ -131,8 +131,8 @@ it("accepts Codex rate limit errors for thread responses", () => {
       },
     ],
     updatedAt: 0,
-  }
-  assert.equal(isThreadReadResponse({ thread: failedThread }), true)
+  };
+  assert.equal(isThreadReadResponse({ thread: failedThread }), true);
   assert.equal(
     isThreadResumeResponse({
       approvalPolicy: "never",
@@ -144,9 +144,9 @@ it("accepts Codex rate limit errors for thread responses", () => {
       thread: failedThread,
     }),
     true,
-  )
-  assert.equal(isThreadRollbackResponse({ thread: failedThread }), true)
-})
+  );
+  assert.equal(isThreadRollbackResponse({ thread: failedThread }), true);
+});
 
 it("accepts Codex misalignment policy errors for thread responses", () => {
   const failedThread = {
@@ -172,7 +172,7 @@ it("accepts Codex misalignment policy errors for thread responses", () => {
       },
     ],
     updatedAt: 0,
-  }
+  };
   const resumeLikeResponse = {
     approvalPolicy: "never",
     approvalsReviewer: "user",
@@ -181,13 +181,13 @@ it("accepts Codex misalignment policy errors for thread responses", () => {
     modelProvider: "openai",
     sandbox: { type: "dangerFullAccess" },
     thread: failedThread,
-  }
-  assert.equal(isThreadReadResponse({ thread: failedThread }), true)
-  assert.equal(isThreadResumeResponse(resumeLikeResponse), true)
-  assert.equal(isThreadRollbackResponse({ thread: failedThread }), true)
-  assert.equal(isThreadForkResponse(resumeLikeResponse), true)
-  const decodedResume = decodeThreadResumeResponse(resumeLikeResponse)
-  assert.equal(decodedResume.thread.turns[0]?.error?.codexErrorInfo, "misalignmentPolicyViolation")
+  };
+  assert.equal(isThreadReadResponse({ thread: failedThread }), true);
+  assert.equal(isThreadResumeResponse(resumeLikeResponse), true);
+  assert.equal(isThreadRollbackResponse({ thread: failedThread }), true);
+  assert.equal(isThreadForkResponse(resumeLikeResponse), true);
+  const decodedResume = decodeThreadResumeResponse(resumeLikeResponse);
+  assert.equal(decodedResume.thread.turns[0]?.error?.codexErrorInfo, "misalignmentPolicyViolation");
   assert.equal(
     isTurnCompletedNotification({
       threadId: "thread-1",
@@ -202,8 +202,8 @@ it("accepts Codex misalignment policy errors for thread responses", () => {
       },
     }),
     true,
-  )
-})
+  );
+});
 
 it("accepts Codex 0.150 account plan values", () => {
   const planTypes = [
@@ -212,7 +212,7 @@ it("accepts Codex 0.150 account plan values", () => {
     "enterprise_cbp_automation",
     "edu_plus",
     "edu_pro",
-  ]
+  ];
 
   for (const planType of planTypes) {
     const accountResponse = {
@@ -222,8 +222,8 @@ it("accepts Codex 0.150 account plan values", () => {
         type: "chatgpt",
       },
       requiresOpenaiAuth: true,
-    }
+    };
 
-    assert.equal(isGetAccountResponse(accountResponse), true)
+    assert.equal(isGetAccountResponse(accountResponse), true);
   }
-})
+});

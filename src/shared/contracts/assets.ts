@@ -2,18 +2,18 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
+import * as Schema from "effect/Schema";
 
-import { NonNegativeInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts"
+import { NonNegativeInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
   ProjectFaviconPath,
-} from "./orchestration.ts"
-import { ToolActivityNativeAppReference } from "./providerRuntime.ts"
+} from "./orchestration.ts";
+import { ToolActivityNativeAppReference } from "./providerRuntime.ts";
 
-const ASSET_PATH_MAX_LENGTH = 1024
+const ASSET_PATH_MAX_LENGTH = 1024;
 
 export const AssetResource = Schema.Union([
   Schema.TaggedStruct("workspace-file", {
@@ -48,19 +48,19 @@ export const AssetResource = Schema.Union([
   Schema.TaggedStruct("native-app-icon", {
     app: ToolActivityNativeAppReference,
   }),
-])
-export type AssetResource = typeof AssetResource.Type
+]);
+export type AssetResource = typeof AssetResource.Type;
 
 export const AssetCreateUrlInput = Schema.Struct({
   resource: AssetResource,
-})
-export type AssetCreateUrlInput = typeof AssetCreateUrlInput.Type
+});
+export type AssetCreateUrlInput = typeof AssetCreateUrlInput.Type;
 
 export const AssetImageDimensions = Schema.Struct({
   width: NonNegativeInt.check(Schema.isGreaterThanOrEqualTo(1)),
   height: NonNegativeInt.check(Schema.isGreaterThanOrEqualTo(1)),
-})
-export type AssetImageDimensions = typeof AssetImageDimensions.Type
+});
+export type AssetImageDimensions = typeof AssetImageDimensions.Type;
 
 export const AssetCreateUrlResult = Schema.Struct({
   relativeUrl: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
@@ -70,10 +70,10 @@ export const AssetCreateUrlResult = Schema.Struct({
   ),
   /** Pixel size read from the image header, so a client can reserve the exact box before the bytes arrive. */
   imageDimensions: Schema.optional(AssetImageDimensions),
-})
-export type AssetCreateUrlResult = typeof AssetCreateUrlResult.Type
+});
+export type AssetCreateUrlResult = typeof AssetCreateUrlResult.Type;
 
-export const ATTACHMENT_UPLOAD_URL_TTL_MS = 10 * 60_000
+export const ATTACHMENT_UPLOAD_URL_TTL_MS = 10 * 60_000;
 
 const ImageAttachmentCreateUploadUrlInput = Schema.Struct({
   type: Schema.optionalKey(Schema.Literal("image")),
@@ -83,7 +83,7 @@ const ImageAttachmentCreateUploadUrlInput = Schema.Struct({
     Schema.isGreaterThanOrEqualTo(1),
     Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES),
   ),
-})
+});
 
 const FileAttachmentCreateUploadUrlInput = Schema.Struct({
   type: Schema.Literal("file"),
@@ -93,25 +93,25 @@ const FileAttachmentCreateUploadUrlInput = Schema.Struct({
     Schema.isGreaterThanOrEqualTo(1),
     Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_FILE_BYTES),
   ),
-})
+});
 
 export const AttachmentCreateUploadUrlInput = Schema.Union([
   ImageAttachmentCreateUploadUrlInput,
   FileAttachmentCreateUploadUrlInput,
-])
-export type AttachmentCreateUploadUrlInput = typeof AttachmentCreateUploadUrlInput.Type
+]);
+export type AttachmentCreateUploadUrlInput = typeof AttachmentCreateUploadUrlInput.Type;
 
 export const AttachmentCreateUploadUrlResult = Schema.Struct({
   attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
   relativeUrl: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
   expiresAt: Schema.Number,
-})
-export type AttachmentCreateUploadUrlResult = typeof AttachmentCreateUploadUrlResult.Type
+});
+export type AttachmentCreateUploadUrlResult = typeof AttachmentCreateUploadUrlResult.Type;
 
 export const AttachmentDeleteInput = Schema.Struct({
   attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
-})
-export type AttachmentDeleteInput = typeof AttachmentDeleteInput.Type
+});
+export type AttachmentDeleteInput = typeof AttachmentDeleteInput.Type;
 
 export class AttachmentUploadSigningKeyError extends Schema.TaggedError<AttachmentUploadSigningKeyError>()(
   "AttachmentUploadSigningKeyError",
@@ -120,7 +120,7 @@ export class AttachmentUploadSigningKeyError extends Schema.TaggedError<Attachme
   },
 ) {
   override get message(): string {
-    return "Failed to load the attachment upload signing key."
+    return "Failed to load the attachment upload signing key.";
   }
 }
 
@@ -131,7 +131,7 @@ export class AssetWorkspaceContextNotFoundError extends Schema.TaggedError<Asset
   },
 ) {
   override get message(): string {
-    return "Workspace context was not found."
+    return "Workspace context was not found.";
   }
 }
 
@@ -143,7 +143,7 @@ export class AssetWorkspaceContextResolutionError extends Schema.TaggedError<Ass
   },
 ) {
   override get message(): string {
-    return "Failed to resolve workspace context."
+    return "Failed to resolve workspace context.";
   }
 }
 
@@ -155,7 +155,7 @@ export class AssetWorkspaceRootNormalizationError extends Schema.TaggedError<Ass
   },
 ) {
   override get message(): string {
-    return "Failed to normalize the workspace root."
+    return "Failed to normalize the workspace root.";
   }
 }
 
@@ -167,7 +167,7 @@ export class AssetWorkspacePathValidationError extends Schema.TaggedError<AssetW
   },
 ) {
   override get message(): string {
-    return "Workspace file path must be relative to the project root."
+    return "Workspace file path must be relative to the project root.";
   }
 }
 
@@ -180,7 +180,7 @@ export class AssetPreviewTypeValidationError extends Schema.TaggedError<AssetPre
   override get message(): string {
     return this.resource._tag === "media-file"
       ? "Only images, videos, HTML, and PDF files can be previewed."
-      : "Only browser documents and images can be previewed."
+      : "Only browser documents and images can be previewed.";
   }
 }
 
@@ -194,7 +194,7 @@ export class AssetWorkspaceAssetInspectionError extends Schema.TaggedError<Asset
   override get message(): string {
     return this.resource._tag === "media-file"
       ? "Failed to inspect the media file."
-      : "Failed to inspect the workspace asset."
+      : "Failed to inspect the workspace asset.";
   }
 }
 
@@ -207,7 +207,7 @@ export class AssetWorkspaceAssetNotFoundError extends Schema.TaggedError<AssetWo
   override get message(): string {
     return this.resource._tag === "media-file"
       ? "Media file was not found."
-      : "Workspace asset was not found."
+      : "Workspace asset was not found.";
   }
 }
 
@@ -219,7 +219,7 @@ export class AssetWorkspaceResolutionError extends Schema.TaggedError<AssetWorks
   },
 ) {
   override get message(): string {
-    return "Failed to resolve workspace."
+    return "Failed to resolve workspace.";
   }
 }
 
@@ -230,7 +230,7 @@ export class AssetAttachmentNotFoundError extends Schema.TaggedError<AssetAttach
   },
 ) {
   override get message(): string {
-    return "Attachment was not found."
+    return "Attachment was not found.";
   }
 }
 
@@ -242,7 +242,7 @@ export class AssetProjectFaviconResolutionError extends Schema.TaggedError<Asset
   },
 ) {
   override get message(): string {
-    return "Failed to resolve project favicon."
+    return "Failed to resolve project favicon.";
   }
 }
 
@@ -254,7 +254,7 @@ export class AssetProjectFaviconInspectionError extends Schema.TaggedError<Asset
   },
 ) {
   override get message(): string {
-    return "Failed to inspect the project favicon."
+    return "Failed to inspect the project favicon.";
   }
 }
 
@@ -265,7 +265,7 @@ export class AssetProjectFaviconNotFoundError extends Schema.TaggedError<AssetPr
   },
 ) {
   override get message(): string {
-    return "Project favicon was not found."
+    return "Project favicon was not found.";
   }
 }
 
@@ -277,7 +277,7 @@ export class AssetSigningKeyLoadError extends Schema.TaggedError<AssetSigningKey
   },
 ) {
   override get message(): string {
-    return "Failed to load the asset signing key."
+    return "Failed to load the asset signing key.";
   }
 }
 
@@ -295,5 +295,5 @@ export const AssetAccessError = Schema.Union([
   AssetProjectFaviconInspectionError,
   AssetProjectFaviconNotFoundError,
   AssetSigningKeyLoadError,
-])
-export type AssetAccessError = typeof AssetAccessError.Type
+]);
+export type AssetAccessError = typeof AssetAccessError.Type;

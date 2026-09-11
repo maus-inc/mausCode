@@ -2,14 +2,14 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
+import * as Schema from "effect/Schema";
 
-import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts"
+import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
-export const DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION = 1 as const
+export const DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION = 1 as const;
 
-export const DesktopAppActivationPlatform = Schema.Literals(["darwin", "linux", "win32"])
-export type DesktopAppActivationPlatform = typeof DesktopAppActivationPlatform.Type
+export const DesktopAppActivationPlatform = Schema.Literals(["darwin", "linux", "win32"]);
+export type DesktopAppActivationPlatform = typeof DesktopAppActivationPlatform.Type;
 
 export const DesktopAppActivationRequest = Schema.Struct({
   version: Schema.Literal(DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION),
@@ -17,8 +17,8 @@ export const DesktopAppActivationRequest = Schema.Struct({
   type: Schema.Literal("open-workspace"),
   workspaceRoot: TrimmedNonEmptyString,
   platform: DesktopAppActivationPlatform,
-})
-export type DesktopAppActivationRequest = typeof DesktopAppActivationRequest.Type
+});
+export type DesktopAppActivationRequest = typeof DesktopAppActivationRequest.Type;
 
 export const DesktopAppActivationErrorCode = Schema.Literals([
   "invalid-request",
@@ -29,8 +29,8 @@ export const DesktopAppActivationErrorCode = Schema.Literals([
   "thread-open-failed",
   "request-timeout",
   "internal-error",
-])
-export type DesktopAppActivationErrorCode = typeof DesktopAppActivationErrorCode.Type
+]);
+export type DesktopAppActivationErrorCode = typeof DesktopAppActivationErrorCode.Type;
 
 export const DesktopAppActivationSuccess = Schema.Struct({
   version: Schema.Literal(DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION),
@@ -38,8 +38,8 @@ export const DesktopAppActivationSuccess = Schema.Struct({
   ok: Schema.Literal(true),
   projectId: ProjectId,
   threadId: ThreadId,
-})
-export type DesktopAppActivationSuccess = typeof DesktopAppActivationSuccess.Type
+});
+export type DesktopAppActivationSuccess = typeof DesktopAppActivationSuccess.Type;
 
 export const DesktopAppActivationFailure = Schema.Struct({
   version: Schema.Literal(DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION),
@@ -47,11 +47,11 @@ export const DesktopAppActivationFailure = Schema.Struct({
   ok: Schema.Literal(false),
   code: DesktopAppActivationErrorCode,
   message: TrimmedNonEmptyString,
-})
-export type DesktopAppActivationFailure = typeof DesktopAppActivationFailure.Type
+});
+export type DesktopAppActivationFailure = typeof DesktopAppActivationFailure.Type;
 
 export const DesktopAppActivationResponse = Schema.Union([
   DesktopAppActivationSuccess,
   DesktopAppActivationFailure,
-])
-export type DesktopAppActivationResponse = typeof DesktopAppActivationResponse.Type
+]);
+export type DesktopAppActivationResponse = typeof DesktopAppActivationResponse.Type;

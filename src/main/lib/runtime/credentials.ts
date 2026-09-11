@@ -12,9 +12,8 @@
  * a clear error: per-chat endpoint overrides need daemon-level config, which
  * arrives with the BYOK change.
  */
-
-import type { JcodeClient } from "@maus-inc/runtime-client"
 import { eq } from "drizzle-orm"
+import type { JcodeClient } from "@maus-inc/runtime-client"
 import { anthropicAccounts, anthropicSettings, getDatabase } from "../db"
 import { decryptToken } from "../token-crypto"
 import { isHonoredEndpoint, readEndpointSettings } from "./endpoints"

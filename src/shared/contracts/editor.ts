@@ -2,26 +2,26 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
-import { TrimmedNonEmptyString } from "./baseSchemas.ts"
+import * as Schema from "effect/Schema";
+import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
-export const EditorLaunchStyle = Schema.Literals(["direct-path", "goto", "line-column"])
-export type EditorLaunchStyle = typeof EditorLaunchStyle.Type
+export const EditorLaunchStyle = Schema.Literals(["direct-path", "goto", "line-column"]);
+export type EditorLaunchStyle = typeof EditorLaunchStyle.Type;
 
 type EditorDefinition = {
-  readonly id: string
-  readonly label: string
-  readonly commands: readonly [string, ...string[]] | null
-  readonly baseArgs?: readonly string[]
-  readonly launchStyle: EditorLaunchStyle
+  readonly id: string;
+  readonly label: string;
+  readonly commands: readonly [string, ...string[]] | null;
+  readonly baseArgs?: readonly string[];
+  readonly launchStyle: EditorLaunchStyle;
   /**
    * URL scheme for editors that support VS Code's remote deep links
    * (`<scheme>://vscode-remote/ssh-remote+<host><path>`). Only set for VS Code
    * and forks that ship the Remote-SSH machinery, plus Zed, which uses its own
    * `zed://ssh/<host><path>` shape.
    */
-  readonly remoteScheme?: string
-}
+  readonly remoteScheme?: string;
+};
 
 export const EDITORS = [
   {
@@ -75,13 +75,13 @@ export const EDITORS = [
   { id: "rustrover", label: "RustRover", commands: ["rustrover"], launchStyle: "line-column" },
   { id: "webstorm", label: "WebStorm", commands: ["webstorm"], launchStyle: "line-column" },
   { id: "file-manager", label: "File Manager", commands: null, launchStyle: "direct-path" },
-] as const satisfies ReadonlyArray<EditorDefinition>
+] as const satisfies ReadonlyArray<EditorDefinition>;
 
-export const EditorId = Schema.Literals(EDITORS.map((e) => e.id))
-export type EditorId = typeof EditorId.Type
+export const EditorId = Schema.Literals(EDITORS.map((e) => e.id));
+export type EditorId = typeof EditorId.Type;
 
-export const FileManagerRevealKind = Schema.Literals(["finder", "file-explorer", "files"])
-export type FileManagerRevealKind = typeof FileManagerRevealKind.Type
+export const FileManagerRevealKind = Schema.Literals(["finder", "file-explorer", "files"]);
+export type FileManagerRevealKind = typeof FileManagerRevealKind.Type;
 
 export const LaunchEditorInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
@@ -90,20 +90,20 @@ export const LaunchEditorInput = Schema.Struct({
       honored by the "file-manager" editor; clients must check the server's
       `shellRevealInFileManager` config flag before sending this. */
   reveal: Schema.optional(Schema.Boolean),
-})
-export type LaunchEditorInput = typeof LaunchEditorInput.Type
+});
+export type LaunchEditorInput = typeof LaunchEditorInput.Type;
 
-const remoteSchemeOf = (editor: EditorDefinition): string | undefined => editor.remoteScheme
+const remoteSchemeOf = (editor: EditorDefinition): string | undefined => editor.remoteScheme;
 
 /** Editors that can open a remote workspace via an SSH deep link. */
 export const REMOTE_CAPABLE_EDITOR_IDS: ReadonlyArray<EditorId> = EDITORS.flatMap((editor) =>
   remoteSchemeOf(editor) !== undefined ? [editor.id] : [],
-)
+);
 
 export const remoteSchemeForEditor = (id: EditorId): string | undefined => {
-  const editor = EDITORS.find((candidate) => candidate.id === id)
-  return editor === undefined ? undefined : remoteSchemeOf(editor)
-}
+  const editor = EDITORS.find((candidate) => candidate.id === id);
+  return editor === undefined ? undefined : remoteSchemeOf(editor);
+};
 
 /**
  * Builds a `<scheme>://vscode-remote/ssh-remote+<host><path>` deep link (Zed
@@ -112,30 +112,30 @@ export const remoteSchemeForEditor = (id: EditorId): string | undefined => {
  * deep-link support.
  */
 export const buildRemoteOpenUrl = (input: {
-  readonly editor: EditorId
-  readonly host: string
-  readonly absolutePath: string
+  readonly editor: EditorId;
+  readonly host: string;
+  readonly absolutePath: string;
 }): string | undefined => {
-  const scheme = remoteSchemeForEditor(input.editor)
+  const scheme = remoteSchemeForEditor(input.editor);
   if (scheme === undefined) {
-    return undefined
+    return undefined;
   }
   // Windows server paths (`C:\...`) appear as `/C:/...` in vscode-remote URIs.
-  const posixPath = input.absolutePath.replaceAll("\\", "/")
-  const rootedPath = posixPath.startsWith("/") ? posixPath : `/${posixPath}`
-  const encodedHost = encodeURIComponent(input.host)
+  const posixPath = input.absolutePath.replaceAll("\\", "/");
+  const rootedPath = posixPath.startsWith("/") ? posixPath : `/${posixPath}`;
+  const encodedHost = encodeURIComponent(input.host);
   if (input.editor === "zed") {
     // Zed's remote server resolves a rooted path on the system drive, so a
     // Windows `C:\Users\x` must become `/Users/x` (verified in #8938). Other
     // drives are untested and kept as is rather than silently remapped, and a
     // POSIX path that happens to start with `/C:` is left alone.
-    const zedPath = /^[Cc]:[\\/]/.test(input.absolutePath) ? rootedPath.slice(3) : rootedPath
-    const encodedZedPath = zedPath.split("/").map(encodeURIComponent).join("/")
-    return `${scheme}://ssh/${encodedHost}${encodedZedPath}`
+    const zedPath = /^[Cc]:[\\/]/.test(input.absolutePath) ? rootedPath.slice(3) : rootedPath;
+    const encodedZedPath = zedPath.split("/").map(encodeURIComponent).join("/");
+    return `${scheme}://ssh/${encodedHost}${encodedZedPath}`;
   }
-  const encodedPath = rootedPath.split("/").map(encodeURIComponent).join("/")
-  return `${scheme}://vscode-remote/ssh-remote+${encodedHost}${encodedPath}`
-}
+  const encodedPath = rootedPath.split("/").map(encodeURIComponent).join("/");
+  return `${scheme}://vscode-remote/ssh-remote+${encodedHost}${encodedPath}`;
+};
 
 /**
  * SSH hostnames an environment advertises for remote open links. Reachability
@@ -143,14 +143,14 @@ export const buildRemoteOpenUrl = (input: {
  * gates them on a local sshd listen check. Ordered most-reachable first
  * (tailnet MagicDNS name, then mDNS `<hostname>.local`).
  */
-export const RemoteOpenTargetKind = Schema.Literals(["tailscale", "mdns"])
-export type RemoteOpenTargetKind = typeof RemoteOpenTargetKind.Type
+export const RemoteOpenTargetKind = Schema.Literals(["tailscale", "mdns"]);
+export type RemoteOpenTargetKind = typeof RemoteOpenTargetKind.Type;
 
 export const RemoteOpenTarget = Schema.Struct({
   kind: RemoteOpenTargetKind,
   host: TrimmedNonEmptyString,
-})
-export type RemoteOpenTarget = typeof RemoteOpenTarget.Type
+});
+export type RemoteOpenTarget = typeof RemoteOpenTarget.Type;
 
 export class ExternalLauncherUnknownEditorError extends Schema.TaggedError<ExternalLauncherUnknownEditorError>()(
   "ExternalLauncherUnknownEditorError",
@@ -159,7 +159,7 @@ export class ExternalLauncherUnknownEditorError extends Schema.TaggedError<Exter
   },
 ) {
   override get message(): string {
-    return `Unknown editor: ${this.editor}`
+    return `Unknown editor: ${this.editor}`;
   }
 }
 
@@ -170,7 +170,7 @@ export class ExternalLauncherUnsupportedEditorError extends Schema.TaggedError<E
   },
 ) {
   override get message(): string {
-    return `Unsupported editor: ${this.editor}`
+    return `Unsupported editor: ${this.editor}`;
   }
 }
 
@@ -182,7 +182,7 @@ export class ExternalLauncherCommandNotFoundError extends Schema.TaggedError<Ext
   },
 ) {
   override get message(): string {
-    return `Editor command not found: ${this.command}`
+    return `Editor command not found: ${this.command}`;
   }
 }
 
@@ -190,7 +190,7 @@ const ExternalLauncherSpawnFields = {
   command: Schema.String,
   args: Schema.Array(Schema.String),
   cause: Schema.Defect(),
-}
+};
 
 export class ExternalLauncherBrowserSpawnError extends Schema.TaggedError<ExternalLauncherBrowserSpawnError>()(
   "ExternalLauncherBrowserSpawnError",
@@ -200,7 +200,7 @@ export class ExternalLauncherBrowserSpawnError extends Schema.TaggedError<Extern
   },
 ) {
   override get message(): string {
-    return `Failed to launch browser target '${this.target}' with '${[this.command, ...this.args].join(" ")}'`
+    return `Failed to launch browser target '${this.target}' with '${[this.command, ...this.args].join(" ")}'`;
   }
 }
 
@@ -213,7 +213,7 @@ export class ExternalLauncherEditorSpawnError extends Schema.TaggedError<Externa
   },
 ) {
   override get message(): string {
-    return `Failed to launch '${this.target}' in ${this.editor} with '${[this.command, ...this.args].join(" ")}'`
+    return `Failed to launch '${this.target}' in ${this.editor} with '${[this.command, ...this.args].join(" ")}'`;
   }
 }
 
@@ -223,5 +223,5 @@ export const ExternalLauncherError = Schema.Union([
   ExternalLauncherCommandNotFoundError,
   ExternalLauncherBrowserSpawnError,
   ExternalLauncherEditorSpawnError,
-])
-export type ExternalLauncherError = typeof ExternalLauncherError.Type
+]);
+export type ExternalLauncherError = typeof ExternalLauncherError.Type;

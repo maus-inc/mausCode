@@ -1,44 +1,51 @@
 "use client"
 
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ArrowUpRight, Box, ListTodo, RefreshCw, TerminalSquare } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { ArrowUpRight, TerminalSquare, Box, ListTodo, RefreshCw } from "lucide-react"
+import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
 import {
-  CollapseIcon,
-  DiffIcon,
-  ExpandIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   IconDoubleChevronRight,
-  OriginalMCPIcon,
   PlanIcon,
+  DiffIcon,
+  OriginalMCPIcon,
   SearchIcon,
+  ExpandIcon,
+  CollapseIcon,
 } from "@/components/ui/icons"
 import { Kbd } from "@/components/ui/kbd"
-import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { agentsSettingsDialogActiveTabAtom, agentsSettingsDialogOpenAtom } from "@/lib/atoms"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { cn } from "@/lib/utils"
-import { type AgentMode, fileViewerOpenAtomFamily } from "../agents/atoms"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import {
-  type DetailsSidebarTab,
   detailsSidebarOpenAtom,
-  detailsSidebarTabAtom,
   detailsSidebarWidthAtom,
+  detailsSidebarTabAtom,
+  widgetVisibilityAtomFamily,
+  widgetOrderAtomFamily,
   WIDGET_REGISTRY,
   type WidgetId,
-  widgetOrderAtomFamily,
-  widgetVisibilityAtomFamily,
+  type DetailsSidebarTab,
 } from "./atoms"
-import { ChangesWidget } from "./sections/changes-widget"
-import { FilesTab, type FilesTabHandle } from "./sections/files-tab"
+import { WidgetSettingsPopup } from "./widget-settings-popup"
 import { InfoSection } from "./sections/info-section"
-import { McpWidget } from "./sections/mcp-widget"
+import { TodoWidget } from "./sections/todo-widget"
 import { PlanWidget } from "./sections/plan-widget"
 import { TerminalWidget } from "./sections/terminal-widget"
-import { TodoWidget } from "./sections/todo-widget"
+import { ChangesWidget } from "./sections/changes-widget"
+import { McpWidget } from "./sections/mcp-widget"
+import { FilesTab, type FilesTabHandle } from "./sections/files-tab"
 import type { ParsedDiffFile } from "./types"
-import { WidgetSettingsPopup } from "./widget-settings-popup"
+import { fileViewerOpenAtomFamily, type AgentMode } from "../agents/atoms"
+import {
+  agentsSettingsDialogOpenAtom,
+  agentsSettingsDialogActiveTabAtom,
+} from "@/lib/atoms"
 
 // ============================================================================
 // WidgetCard — extracted as a real component to avoid remounts
@@ -97,11 +104,15 @@ function WidgetCard({
           style={headerBg ? { backgroundColor: headerBg } : undefined}
         >
           {customHeader ? (
-            <div className="flex-1 min-w-0 flex items-center gap-1">{customHeader}</div>
+            <div className="flex-1 min-w-0 flex items-center gap-1">
+              {customHeader}
+            </div>
           ) : (
             <>
               <Icon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-              <span className="text-xs font-medium text-foreground flex-1">{title}</span>
+              <span className="text-xs font-medium text-foreground flex-1">
+                {title}
+              </span>
               {badge}
             </>
           )}
@@ -244,11 +255,17 @@ export function DetailsSidebar({
   }, [setSettingsTab, setSettingsOpen])
 
   // Per-workspace widget visibility
-  const widgetVisibilityAtom = useMemo(() => widgetVisibilityAtomFamily(chatId), [chatId])
+  const widgetVisibilityAtom = useMemo(
+    () => widgetVisibilityAtomFamily(chatId),
+    [chatId],
+  )
   const visibleWidgets = useAtomValue(widgetVisibilityAtom)
 
   // Per-workspace widget order
-  const widgetOrderAtom = useMemo(() => widgetOrderAtomFamily(chatId), [chatId])
+  const widgetOrderAtom = useMemo(
+    () => widgetOrderAtomFamily(chatId),
+    [chatId],
+  )
   const widgetOrder = useAtomValue(widgetOrderAtom)
 
   // Close sidebar callback
@@ -269,7 +286,13 @@ export function DetailsSidebar({
   // Keyboard shortcut: Cmd+Shift+\ to toggle details sidebar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.code === "Backslash") {
+      if (
+        e.metaKey &&
+        e.shiftKey &&
+        !e.altKey &&
+        !e.ctrlKey &&
+        e.code === "Backslash"
+      ) {
         e.preventDefault()
         e.stopPropagation()
         setIsOpen(!isOpen)
@@ -363,7 +386,9 @@ export function DetailsSidebar({
                     disabled={filesRefreshing}
                     className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                   >
-                    <RefreshCw className={cn("size-3.5", filesRefreshing && "animate-spin")} />
+                    <RefreshCw
+                      className={cn("size-3.5", filesRefreshing && "animate-spin")}
+                    />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Refresh files</TooltipContent>
@@ -426,7 +451,9 @@ export function DetailsSidebar({
                 )
 
               case "todo":
-                return <TodoWidget key="todo" subChatId={activeSubChatId || null} />
+                return (
+                  <TodoWidget key="todo" subChatId={activeSubChatId || null} />
+                )
 
               case "plan":
                 // Hidden when Plan sidebar is open
@@ -457,15 +484,12 @@ export function DetailsSidebar({
                   />
                 )
 
-              case "diff": {
+              case "diff":
                 // Show widget if we have diff stats (local or remote)
                 // Hide only when Diff sidebar is open in side-peek mode
-                const hasDiffStats =
-                  !!diffStats &&
-                  (diffStats.fileCount > 0 || diffStats.additions > 0 || diffStats.deletions > 0)
+                const hasDiffStats = !!diffStats && (diffStats.fileCount > 0 || diffStats.additions > 0 || diffStats.deletions > 0)
                 const canShowDiffWidget = canOpenDiff || (isRemoteChat && hasDiffStats)
-                if (!canShowDiffWidget || (isDiffSidebarOpen && diffDisplayMode === "side-peek"))
-                  return null
+                if (!canShowDiffWidget || (isDiffSidebarOpen && diffDisplayMode === "side-peek")) return null
                 return (
                   <ChangesWidget
                     key="diff"
@@ -487,7 +511,6 @@ export function DetailsSidebar({
                     diffDisplayMode={diffDisplayMode}
                   />
                 )
-              }
 
               case "mcp":
                 return (

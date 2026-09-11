@@ -4,8 +4,8 @@ import { useEffect } from "react"
 import { Toaster } from "sonner"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
-import { getInitialWindowParams, WindowProvider } from "./contexts/WindowContext"
-import { selectedAgentChatIdAtom, selectedProjectAtom } from "./features/agents/atoms"
+import { WindowProvider, getInitialWindowParams } from "./contexts/WindowContext"
+import { selectedProjectAtom, selectedAgentChatIdAtom } from "./features/agents/atoms"
 import { useAgentSubChatStore } from "./features/agents/stores/sub-chat-store"
 import { AgentsLayout } from "./features/layout/agents-layout"
 import {
@@ -47,7 +47,9 @@ function ThemedToaster() {
 function AppContent() {
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
-  const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
+  const anthropicOnboardingCompleted = useAtomValue(
+    anthropicOnboardingCompletedAtom
+  )
   const setAnthropicOnboardingCompleted = useSetAtom(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
@@ -130,7 +132,8 @@ function AppContent() {
   ])
 
   // Fetch projects to validate selectedProject exists
-  const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
+  const { data: projects, isLoading: isLoadingProjects } =
+    trpc.projects.list.useQuery()
 
   // Clear a stale selection if it points to a project that no longer exists.
   useEffect(() => {
@@ -162,7 +165,8 @@ function AppContent() {
   }
 
   if (
-    (billingMethod === "codex-subscription" || billingMethod === "codex-api-key") &&
+    (billingMethod === "codex-subscription" ||
+      billingMethod === "codex-api-key") &&
     !codexOnboardingCompleted
   ) {
     return <CodexOnboardingPage />
@@ -194,7 +198,8 @@ export function App() {
     // Sync analytics opt-out status to main process
     const syncOptOutStatus = async () => {
       try {
-        const optOut = localStorage.getItem("preferences:analytics-opt-out") === "true"
+        const optOut =
+          localStorage.getItem("preferences:analytics-opt-out") === "true"
         await window.desktopApi?.setAnalyticsOptOut(optOut)
       } catch (error) {
         console.warn("[Analytics] Failed to sync opt-out status:", error)
@@ -205,7 +210,8 @@ export function App() {
     // Sync local-only mode to main process
     const syncLocalOnlyStatus = async () => {
       try {
-        const enabled = localStorage.getItem("preferences:local-only-mode") === "true"
+        const enabled =
+          localStorage.getItem("preferences:local-only-mode") === "true"
         await window.desktopApi?.setLocalOnlyMode(enabled)
       } catch (error) {
         console.warn("[LocalOnly] Failed to sync status:", error)

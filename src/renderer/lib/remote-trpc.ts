@@ -2,13 +2,10 @@
  * tRPC client for the mausCode control-plane web backend
  * Uses signedFetch via IPC for authentication (no CORS issues)
  */
-
 import { createTRPCClient, httpLink } from "@trpc/client"
-
 // TODO: Import proper AppRouter type when web package is available locally
 // The web backend types aren't available in this repo, so we use `any` as a fallback
 type AppRouter = any
-
 import SuperJSON from "superjson"
 import { DEFAULT_API_BASE_URL } from "../../shared/app-identity"
 

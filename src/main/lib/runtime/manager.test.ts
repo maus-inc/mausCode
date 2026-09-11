@@ -3,12 +3,11 @@
  * Needs the pinned platform binary (`npm install` in packages/runtime-client):
  *   node --test --experimental-strip-types src/main/lib/runtime/manager.test.ts
  */
-
+import { test } from "node:test"
 import assert from "node:assert/strict"
-import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { test } from "node:test"
+import fs from "node:fs"
 import { RuntimeManager } from "./manager.ts"
 
 function tempHome(): string {

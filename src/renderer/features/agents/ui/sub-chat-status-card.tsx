@@ -13,8 +13,8 @@ import {
   diffSidebarOpenAtomFamily,
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
-  type SubChatFileChange,
   selectedDiffFilePathAtom,
+  type SubChatFileChange,
 } from "../atoms"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 
@@ -63,7 +63,10 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   const isBusy = isStreaming || isCompacting
   const [isExpanded, setIsExpanded] = useState(false)
   // Use per-chat atom family instead of legacy global atom
-  const diffSidebarAtom = useMemo(() => diffSidebarOpenAtomFamily(chatId), [chatId])
+  const diffSidebarAtom = useMemo(
+    () => diffSidebarOpenAtomFamily(chatId),
+    [chatId],
+  )
   const [, setDiffSidebarOpen] = useAtom(diffSidebarAtom)
   const setFilteredDiffFiles = useSetAtom(filteredDiffFilesAtom)
   const setFilteredSubChatId = useSetAtom(filteredSubChatIdAtom)
@@ -148,11 +151,10 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
       className={cn(
         "border border-border bg-muted/30 overflow-hidden flex flex-col border-b-0 pb-6",
         // If queue card above - no top radius
-        hasQueueCardAbove ? "rounded-none" : "rounded-t-xl",
+        hasQueueCardAbove ? "rounded-none" : "rounded-t-xl"
       )}
     >
       {/* Header - at top */}
-      {/* biome-ignore lint/a11y/useSemanticElements: header wraps layout divs (invalid inside <button>); keyboard + role already handled */}
       <div
         role="button"
         tabIndex={0}
@@ -167,7 +169,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
         aria-label={`${isExpanded ? "Collapse" : "Expand"} status details`}
         className={cn(
           "flex items-center justify-between pr-1 pl-3 h-8 transition-colors duration-150 focus:outline-none rounded-sm",
-          hasExpandableContent ? "cursor-pointer hover:bg-muted/50" : "cursor-default",
+          hasExpandableContent ? "cursor-pointer hover:bg-muted/50" : "cursor-default"
         )}
       >
         <div className="flex items-center gap-2 text-xs flex-1 min-w-0">
@@ -184,8 +186,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
           {/* Streaming indicator */}
           {isBusy && (
             <span className="text-xs text-muted-foreground">
-              {isCompacting ? "Compacting" : "Generating"}
-              <AnimatedDots />
+              {isCompacting ? "Compacting" : "Generating"}<AnimatedDots />
             </span>
           )}
 
@@ -196,8 +197,12 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
               {(totals.additions > 0 || totals.deletions > 0) && (
                 <>
                   {" "}
-                  <span className="text-green-600 dark:text-green-400">+{totals.additions}</span>{" "}
-                  <span className="text-red-600 dark:text-red-400">-{totals.deletions}</span>
+                  <span className="text-green-600 dark:text-green-400">
+                    +{totals.additions}
+                  </span>{" "}
+                  <span className="text-red-600 dark:text-red-400">
+                    -{totals.deletions}
+                  </span>
                 </>
               )}
             </span>
@@ -250,7 +255,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
               }}
               className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"
             >
-              {isCommittingAndPushing ? "Committing..." : "Commit + Push"}
+              {isCommittingAndPushing ? "Committing…" : "Commit + Push"}
             </Button>
           )}
         </div>
@@ -280,25 +285,36 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
                   setDiffSidebarOpen(true)
                 }
 
+                const handleKeyDown = (e: React.KeyboardEvent) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    handleFileClick()
+                  }
+                }
+
                 return (
-                  <button
+                  <div
                     key={file.filePath}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={handleFileClick}
+                    onKeyDown={handleKeyDown}
                     aria-label={`View diff for ${file.displayPath}`}
-                    className="flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted/50 focus:outline-none"
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors cursor-pointer focus:outline-none rounded-sm"
                   >
                     {FileIcon && (
                       <FileIcon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
                     )}
-                    <span className="truncate flex-1 text-foreground">{file.displayPath}</span>
+                    <span className="truncate flex-1 text-foreground">
+                      {file.displayPath}
+                    </span>
                     <span className="flex-shrink-0 text-green-600 dark:text-green-400">
                       +{file.additions}
                     </span>
                     <span className="flex-shrink-0 text-red-600 dark:text-red-400">
                       -{file.deletions}
                     </span>
-                  </button>
+                  </div>
                 )
               })}
             </div>

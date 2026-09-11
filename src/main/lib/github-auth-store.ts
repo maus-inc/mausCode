@@ -2,7 +2,13 @@
  * Transplanted from erenbertr/1code (Apache-2.0, (c) the 1Code contributors)
  * — file-level port, not a merge. See .dump/ci/research/fork-network-harvest-catalog.md.
  */
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { dirname, join } from "node:path"
 import { app, safeStorage } from "electron"
 
@@ -33,7 +39,7 @@ export type GithubAuthStatus =
 
 function maskToken(token: string): string {
   if (token.length <= 8) return "****"
-  return `${token.slice(0, 4)}...${token.slice(-4)}`
+  return `${token.slice(0, 4)}…${token.slice(-4)}`
 }
 
 export function saveGithubToken(token: string): void {

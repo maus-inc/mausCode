@@ -62,7 +62,10 @@ type QuotaBucket = {
   tokenType?: string
 }
 
-async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
@@ -288,7 +291,10 @@ function decodeJwtClaims(idToken: string | null): {
   }
 }
 
-async function refreshAccessToken(refreshToken: string, home: string): Promise<string> {
+async function refreshAccessToken(
+  refreshToken: string,
+  home: string,
+): Promise<string> {
   const clientCreds = extractOAuthClientCreds()
   if (!clientCreds) {
     throw new Error("Could not find Gemini CLI OAuth client credentials")
@@ -398,7 +404,11 @@ async function loadCodeAssistStatus(accessToken: string): Promise<CodeAssistStat
   const currentTier = o.currentTier
   if (typeof currentTier === "object" && currentTier !== null) {
     const tierId = (currentTier as Record<string, unknown>).id
-    if (tierId === "free-tier" || tierId === "legacy-tier" || tierId === "standard-tier") {
+    if (
+      tierId === "free-tier" ||
+      tierId === "legacy-tier" ||
+      tierId === "standard-tier"
+    ) {
       tier = tierId
     }
   }
@@ -406,7 +416,9 @@ async function loadCodeAssistStatus(accessToken: string): Promise<CodeAssistStat
   return { tier, projectId }
 }
 
-async function discoverGeminiProjectId(accessToken: string): Promise<string | null> {
+async function discoverGeminiProjectId(
+  accessToken: string,
+): Promise<string | null> {
   let response: Response
   try {
     response = await fetchWithTimeout(PROJECTS_ENDPOINT, {
@@ -490,10 +502,15 @@ async function callRetrieveUserQuota(
   const json = (await response.json()) as Record<string, unknown>
   const buckets = json.buckets
   if (!Array.isArray(buckets)) return []
-  return buckets.filter((b): b is QuotaBucket => typeof b === "object" && b !== null)
+  return buckets.filter(
+    (b): b is QuotaBucket => typeof b === "object" && b !== null,
+  )
 }
 
-function tierToPlan(tier: CodeAssistStatus["tier"], hostedDomain: string | null): string | null {
+function tierToPlan(
+  tier: CodeAssistStatus["tier"],
+  hostedDomain: string | null,
+): string | null {
   if (tier === "standard-tier") return "Paid"
   if (tier === "free-tier" && hostedDomain) return "Workspace"
   if (tier === "free-tier") return "Free"
@@ -567,13 +584,18 @@ export async function fetchGeminiPlanUsage(
   }
 
   for (const bucket of buckets) {
-    if (typeof bucket.modelId !== "string" || typeof bucket.remainingFraction !== "number") {
+    if (
+      typeof bucket.modelId !== "string" ||
+      typeof bucket.remainingFraction !== "number"
+    ) {
       continue
     }
     const tier = classifyModel(bucket.modelId)
     if (!tier) continue
     const reset =
-      typeof bucket.resetTime === "string" && bucket.resetTime.length > 0 ? bucket.resetTime : null
+      typeof bucket.resetTime === "string" && bucket.resetTime.length > 0
+        ? bucket.resetTime
+        : null
     groups[tier].push({ fraction: bucket.remainingFraction, resetTime: reset })
   }
 

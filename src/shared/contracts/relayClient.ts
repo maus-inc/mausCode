@@ -2,7 +2,7 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema"
+import * as Schema from "effect/Schema";
 
 export const RelayClientStatusSchema = Schema.Union([
   Schema.Struct({
@@ -21,8 +21,8 @@ export const RelayClientStatusSchema = Schema.Union([
     arch: Schema.String,
     version: Schema.String,
   }),
-])
-export type RelayClientStatus = typeof RelayClientStatusSchema.Type
+]);
+export type RelayClientStatus = typeof RelayClientStatusSchema.Type;
 
 export const RelayClientInstallProgressStageSchema = Schema.Literals([
   "checking",
@@ -32,8 +32,8 @@ export const RelayClientInstallProgressStageSchema = Schema.Literals([
   "installing",
   "validating",
   "activating",
-])
-export type RelayClientInstallProgressStage = typeof RelayClientInstallProgressStageSchema.Type
+]);
+export type RelayClientInstallProgressStage = typeof RelayClientInstallProgressStageSchema.Type;
 
 export const RelayClientInstallProgressEventSchema = Schema.Union([
   Schema.Struct({
@@ -44,8 +44,8 @@ export const RelayClientInstallProgressEventSchema = Schema.Union([
     type: Schema.Literal("complete"),
     status: RelayClientStatusSchema,
   }),
-])
-export type RelayClientInstallProgressEvent = typeof RelayClientInstallProgressEventSchema.Type
+]);
+export type RelayClientInstallProgressEvent = typeof RelayClientInstallProgressEventSchema.Type;
 
 export const RelayClientInstallFailureReasonSchema = Schema.Literals([
   "download_failed",
@@ -55,8 +55,8 @@ export const RelayClientInstallFailureReasonSchema = Schema.Literals([
   "unsupported_platform",
   "validation_failed",
   "write_failed",
-])
-export type RelayClientInstallFailureReason = typeof RelayClientInstallFailureReasonSchema.Type
+]);
+export type RelayClientInstallFailureReason = typeof RelayClientInstallFailureReasonSchema.Type;
 
 export class RelayClientInstallFailedError extends Schema.TaggedError<RelayClientInstallFailedError>()(
   "RelayClientInstallFailedError",

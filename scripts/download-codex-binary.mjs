@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 /**
  * Downloads Codex CLI native binaries for bundling with the Electron app.
  *
@@ -9,11 +8,11 @@
  *   node scripts/download-codex-binary.mjs --version=0.98.0
  */
 
-import { spawnSync } from "node:child_process"
-import crypto from "node:crypto"
 import fs from "node:fs"
-import https from "node:https"
 import path from "node:path"
+import https from "node:https"
+import crypto from "node:crypto"
+import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -22,7 +21,7 @@ const BIN_DIR = path.join(ROOT_DIR, "resources", "bin")
 
 const RELEASE_REPO = "openai/codex"
 const RELEASE_TAG_PREFIX = "rust-v"
-const USER_AGENT = "mauscode-desktop-codex-downloader"
+const USER_AGENT = "mauscode-codex-downloader"
 
 const PLATFORMS = {
   "darwin-arm64": {
@@ -221,7 +220,9 @@ function getVersionArg(args) {
 }
 
 async function getLatestVersion() {
-  const release = await fetchJson(`https://api.github.com/repos/${RELEASE_REPO}/releases/latest`)
+  const release = await fetchJson(
+    `https://api.github.com/repos/${RELEASE_REPO}/releases/latest`,
+  )
 
   const tagName = typeof release?.tag_name === "string" ? release.tag_name : ""
   if (tagName.startsWith(RELEASE_TAG_PREFIX)) {
@@ -242,7 +243,7 @@ function findAsset(release, assetName) {
   return assets.find((asset) => asset?.name === assetName)
 }
 
-async function downloadPlatform(_version, platformKey, release) {
+async function downloadPlatform(version, platformKey, release) {
   const platform = PLATFORMS[platformKey]
   if (!platform) {
     console.error(`Unknown platform: ${platformKey}`)

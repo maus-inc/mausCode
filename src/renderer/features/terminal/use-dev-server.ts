@@ -2,9 +2,8 @@
  * NOTE (transplant): useDevServer: start/stop/reconcile a project dev server in a terminal pane.
  * Source: sylvaindiv/1code (Apache-2.0). UI strings translated FR->EN on port.
  */
-
-import { useAtom } from "jotai"
 import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useAtom } from "jotai"
 import { toast } from "sonner"
 import { trpc } from "../../lib/trpc"
 import {
@@ -31,16 +30,25 @@ const STOP_GRACE_PERIOD_MS = 1500
 export function useDevServer({ chatId, scopeKey, cwd }: UseDevServerArgs) {
   const paneId = useMemo(() => getDevServerPaneId(scopeKey), [scopeKey])
 
-  const runningAtom = useMemo(() => devServerRunningAtomFamily(scopeKey), [scopeKey])
+  const runningAtom = useMemo(
+    () => devServerRunningAtomFamily(scopeKey),
+    [scopeKey],
+  )
   const [isRunning, setIsRunning] = useAtom(runningAtom)
 
-  const sidebarAtom = useMemo(() => terminalSidebarOpenAtomFamily(chatId), [chatId])
+  const sidebarAtom = useMemo(
+    () => terminalSidebarOpenAtomFamily(chatId),
+    [chatId],
+  )
   const [, setSidebarOpen] = useAtom(sidebarAtom)
 
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
 
-  const detectQuery = trpc.devServer.detect.useQuery({ cwd }, { enabled: !!cwd, staleTime: 30_000 })
+  const detectQuery = trpc.devServer.detect.useQuery(
+    { cwd },
+    { enabled: !!cwd, staleTime: 30_000 },
+  )
 
   const createOrAttachMutation = trpc.terminal.createOrAttach.useMutation()
   const signalMutation = trpc.terminal.signal.useMutation()
@@ -73,7 +81,9 @@ export function useDevServer({ chatId, scopeKey, cwd }: UseDevServerArgs) {
           setAllTerminals((prev) => {
             const list = prev[scopeKey]
             if (!list) return prev
-            const filtered = list.filter((t) => t.id !== DEV_SERVER_TERMINAL_ID)
+            const filtered = list.filter(
+              (t) => t.id !== DEV_SERVER_TERMINAL_ID,
+            )
             if (filtered.length === list.length) return prev
             return { ...prev, [scopeKey]: filtered }
           })
@@ -130,7 +140,9 @@ export function useDevServer({ chatId, scopeKey, cwd }: UseDevServerArgs) {
     },
   })
 
-  const command = detectQuery.data?.hasDevScript ? detectQuery.data.command : null
+  const command = detectQuery.data?.hasDevScript
+    ? detectQuery.data.command
+    : null
   const resolvedDir = detectQuery.data?.resolvedDir ?? cwd
   const canRun = !!detectQuery.data?.hasDevScript
   const isLoadingDetection = detectQuery.isLoading
@@ -258,7 +270,14 @@ export function useDevServer({ chatId, scopeKey, cwd }: UseDevServerArgs) {
           : "Failed to stop dev server",
       )
     }
-  }, [isRunning, paneId, signalMutation, killMutation, trpcUtils, setIsRunning])
+  }, [
+    isRunning,
+    paneId,
+    signalMutation,
+    killMutation,
+    trpcUtils,
+    setIsRunning,
+  ])
 
   return {
     canRun,

@@ -10,7 +10,11 @@ function runLaunch(
   return new Promise((resolve) => {
     execFile(command, args, { timeout: 15000 }, (error, stdout, stderr) => {
       // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
+      const exitCode = error
+        ? typeof error.code === "number"
+          ? error.code
+          : null
+        : 0
       resolve({
         stdout: String(stdout ?? ""),
         stderr: String(stderr ?? ""),
@@ -102,7 +106,8 @@ export async function probeCursor(): Promise<BackendProbe> {
   return {
     available: true,
     version: `${version.stdout} ${version.stderr}`.trim(),
-    authenticated: status.exitCode === 0 && loggedIn && !loggedOut,
+    authenticated:
+      status.exitCode === 0 && loggedIn && !loggedOut,
     detail: `binary: ${launch.command}`,
   }
 }

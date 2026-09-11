@@ -1,7 +1,7 @@
-import assert from "node:assert/strict"
-import { createHash } from "node:crypto"
-import path from "node:path"
-import { test } from "node:test"
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import path from "node:path";
+import { createHash } from "node:crypto";
 
 /**
  * The SDK derives the Windows pipe name independently of `jcode-transport`,
@@ -16,10 +16,10 @@ import { test } from "node:test"
 /** The derivation under test, with the platform's path parser injected. */
 function derivePipeName(socketPath: string, parser: path.PlatformPath): string {
   const stem =
-    (parser.parse(socketPath).name.match(/[A-Za-z0-9\-_]/g) ?? []).join("").slice(0, 32) || "jcode"
-  const normalized = socketPath.replace(/\\/g, "/").toLowerCase()
-  const hash = createHash("sha256").update(normalized).digest("hex").slice(0, 16)
-  return `\\\\.\\pipe\\${stem}-${hash}`
+    (parser.parse(socketPath).name.match(/[A-Za-z0-9\-_]/g) ?? []).join("").slice(0, 32) || "jcode";
+  const normalized = socketPath.replace(/\\/g, "/").toLowerCase();
+  const hash = createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+  return `\\\\.\\pipe\\${stem}-${hash}`;
 }
 
 test("the Windows pipe name matches jcode-transport exactly", () => {
@@ -36,19 +36,19 @@ test("the Windows pipe name matches jcode-transport exactly", () => {
       derivePipeName(socketPath, path.win32),
       expected,
       `pipe name for ${socketPath} drifted from jcode-transport`,
-    )
+    );
   }
-})
+});
 
 test("case and separators normalize the same way", () => {
   assert.equal(
     derivePipeName("C:\\Temp\\Jcode\\server.sock", path.win32),
     derivePipeName("c:/temp/jcode/server.sock", path.win32),
     "the pipe name must not depend on case or separator style",
-  )
-})
+  );
+});
 
 test("a path with no usable characters still yields a name", () => {
-  const derived = derivePipeName("/tmp/!!!.sock", path.posix)
-  assert.match(derived, /^\\\\\.\\pipe\\jcode-[0-9a-f]{16}$/)
-})
+  const derived = derivePipeName("/tmp/!!!.sock", path.posix);
+  assert.match(derived, /^\\\\\.\\pipe\\jcode-[0-9a-f]{16}$/);
+});

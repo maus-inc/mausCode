@@ -228,7 +228,9 @@ it("handles snapshot-only text and duplicate deliveries", async () => {
     assert.equal(deltas.length, 1)
     assert.equal(deltas[0].delta, "snapshot-only text")
 
-    const outputs = chunks.filter((chunk) => chunk.type === "tool-output-available")
+    const outputs = chunks.filter(
+      (chunk) => chunk.type === "tool-output-available",
+    )
     assert.equal(outputs.length, 1)
 
     await session.dispose()

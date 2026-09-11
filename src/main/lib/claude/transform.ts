@@ -110,6 +110,7 @@ export function createChunkCoalescer<TChunk = UIMessageChunk>(
   return { push, flush, dispose }
 }
 
+
 export function createTransformer(options?: { isUsingOllama?: boolean }) {
   const isUsingOllama = options?.isUsingOllama === true
   let textId: string | null = null

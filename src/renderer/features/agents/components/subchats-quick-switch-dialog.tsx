@@ -1,17 +1,17 @@
 "use client"
 
-import { useAtomValue } from "jotai"
-import { AnimatePresence } from "motion/react"
 import { useMemo } from "react"
+import { AnimatePresence } from "motion/react"
 import { createPortal } from "react-dom"
-import { IconSpinner } from "../../../components/ui/icons"
+import { useAtomValue } from "jotai"
 import { cn } from "../../../lib/utils"
 import {
-  agentsSubChatUnseenChangesAtom,
   loadingSubChatsAtom,
-  type SubChatFileChange,
+  agentsSubChatUnseenChangesAtom,
   subChatFilesAtom,
+  type SubChatFileChange,
 } from "../atoms"
+import { IconSpinner } from "../../../components/ui/icons"
 import { getModeIcon } from "../lib/mode-display"
 import type { SubChatMeta } from "../stores/sub-chat-store"
 import { formatTimeAgo } from "../utils/format-time-ago"
@@ -69,7 +69,9 @@ function SubChatCard({
           <ModeIcon
             className={cn(
               "w-4 h-4",
-              isSelected ? "text-primary-foreground" : "text-muted-foreground",
+              isSelected
+                ? "text-primary-foreground"
+                : "text-muted-foreground",
             )}
           />
           {/* Badge in bottom-right corner */}
@@ -84,7 +86,9 @@ function SubChatCard({
                 <IconSpinner
                   className={cn(
                     "w-2.5 h-2.5",
-                    isSelected ? "text-primary-foreground" : "text-muted-foreground",
+                    isSelected
+                      ? "text-primary-foreground"
+                      : "text-muted-foreground",
                   )}
                 />
               ) : (
@@ -106,7 +110,11 @@ function SubChatCard({
           {/* Time and stats */}
           <div className="flex items-center gap-1.5 text-[11px]">
             <span
-              className={cn(isSelected ? "text-primary-foreground/60" : "text-muted-foreground/60")}
+              className={cn(
+                isSelected
+                  ? "text-primary-foreground/60"
+                  : "text-muted-foreground/60",
+              )}
             >
               {timeAgo}
             </span>
@@ -114,14 +122,18 @@ function SubChatCard({
               <>
                 <span
                   className={cn(
-                    isSelected ? "text-primary-foreground/40" : "text-muted-foreground/40",
+                    isSelected
+                      ? "text-primary-foreground/40"
+                      : "text-muted-foreground/40",
                   )}
                 >
                   ·
                 </span>
                 <span
                   className={cn(
-                    isSelected ? "text-primary-foreground/60" : "text-muted-foreground/60",
+                    isSelected
+                      ? "text-primary-foreground/60"
+                      : "text-muted-foreground/60",
                   )}
                 >
                   {stats.fileCount} {stats.fileCount === 1 ? "file" : "files"}
@@ -167,7 +179,10 @@ export function SubChatsQuickSwitchDialog({
 
   // Derive loading sub-chat IDs
   const loadingSubChats = useAtomValue(loadingSubChatsAtom)
-  const loadingSubChatIds = useMemo(() => new Set([...loadingSubChats.keys()]), [loadingSubChats])
+  const loadingSubChatIds = useMemo(
+    () => new Set([...loadingSubChats.keys()]),
+    [loadingSubChats],
+  )
 
   // Unseen changes
   const unseenChanges = useAtomValue(agentsSubChatUnseenChangesAtom)
@@ -189,7 +204,9 @@ export function SubChatsQuickSwitchDialog({
                 {/* Sub-chat List or Empty State */}
                 {subChats.length === 0 ? (
                   <div className="px-4 py-12 text-center bg-background rounded-xl border-[0.5px]">
-                    <p className="text-sm text-muted-foreground">No chats in this agent</p>
+                    <p className="text-sm text-muted-foreground">
+                      No chats in this agent
+                    </p>
                   </div>
                 ) : (
                   <div

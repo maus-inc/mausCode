@@ -15,7 +15,7 @@
  * codex adapter). `opencode.json` can tighten per-tool policy; the capability
  * manifest reports the effective posture.
  */
-import { type ChildProcess, spawn } from "node:child_process"
+import { spawn, type ChildProcess } from "node:child_process"
 import { createServer } from "node:net"
 import { pathToFileURL } from "node:url"
 import {
@@ -55,7 +55,10 @@ export type OpencodeSession = {
    * one run is in flight at a time).
    */
   setOnChunk: (onChunk: (chunk: OpencodeSessionChunk) => void) => void
-  startTurn: (input: OpencodeTurnInput[], opts?: { model?: string }) => Promise<OpencodeTurnResult>
+  startTurn: (
+    input: OpencodeTurnInput[],
+    opts?: { model?: string },
+  ) => Promise<OpencodeTurnResult>
   interrupt: () => Promise<void>
   dispose: () => Promise<void>
 }
@@ -86,7 +89,9 @@ async function waitForHealth(
   })
   for (;;) {
     if (exited) {
-      throw new Error(`opencode server exited before becoming healthy (code ${exitCode})`)
+      throw new Error(
+        `opencode server exited before becoming healthy (code ${exitCode})`,
+      )
     }
     try {
       const response = await fetch(`${baseUrl}/global/health`)
@@ -171,15 +176,11 @@ export async function createOpencodeSession(opts: {
     for (let attempt = 0; attempt < 3; attempt++) {
       const port = await pickFreePort()
       baseUrl = `http://127.0.0.1:${port}`
-      const spawned = spawn(
-        opts.binaryPath,
-        ["serve", "--port", String(port), "--hostname", "127.0.0.1"],
-        {
-          cwd: opts.cwd,
-          env: opts.env,
-          stdio: ["ignore", "pipe", "pipe"],
-        },
-      )
+      const spawned = spawn(opts.binaryPath, ["serve", "--port", String(port), "--hostname", "127.0.0.1"], {
+        cwd: opts.cwd,
+        env: opts.env,
+        stdio: ["ignore", "pipe", "pipe"],
+      })
       // Drain both pipes; an unread pipe buffer (>64KB) would block the child.
       spawned.stdout?.on("data", () => {})
       spawned.stderr?.on("data", () => {
@@ -200,7 +201,9 @@ export async function createOpencodeSession(opts: {
       }
     }
     if (!child) {
-      throw lastError instanceof Error ? lastError : new Error("opencode: failed to start server")
+      throw lastError instanceof Error
+        ? lastError
+        : new Error("opencode: failed to start server")
     }
   }
 
@@ -285,7 +288,8 @@ export async function createOpencodeSession(opts: {
       case "reasoning": {
         const reasoning = part as ReasoningPart
         if (delta !== undefined && delta.length > 0) {
-          reasoningText[reasoning.id] = (reasoningText[reasoning.id] ?? "") + delta
+          reasoningText[reasoning.id] =
+            (reasoningText[reasoning.id] ?? "") + delta
         } else {
           const snapshot = reasoning.text ?? ""
           // Snapshots are authoritative full text; deltas only append when
@@ -311,14 +315,20 @@ export async function createOpencodeSession(opts: {
           })
         }
         // Terminal states emit once; duplicate bus deliveries are ignored.
-        if (tool.state.status === "completed" && !finishedToolCalls.has(tool.callID)) {
+        if (
+          tool.state.status === "completed" &&
+          !finishedToolCalls.has(tool.callID)
+        ) {
           finishedToolCalls.add(tool.callID)
           emit({
             type: "tool-output-available",
             toolCallId: tool.callID,
             output: tool.state.output ?? "",
           })
-        } else if (tool.state.status === "error" && !finishedToolCalls.has(tool.callID)) {
+        } else if (
+          tool.state.status === "error" &&
+          !finishedToolCalls.has(tool.callID)
+        ) {
           // Per-tool failure: the turn continues; report as tool output.
           finishedToolCalls.add(tool.callID)
           emit({
@@ -336,7 +346,8 @@ export async function createOpencodeSession(opts: {
           outputTokens: turnUsage.outputTokens + (tokens?.output ?? 0),
           reasoningTokens: turnUsage.reasoningTokens + (tokens?.reasoning ?? 0),
           cacheReadTokens: turnUsage.cacheReadTokens + (tokens?.cache?.read ?? 0),
-          cacheWriteTokens: turnUsage.cacheWriteTokens + (tokens?.cache?.write ?? 0),
+          cacheWriteTokens:
+            turnUsage.cacheWriteTokens + (tokens?.cache?.write ?? 0),
           costUsd: turnUsage.costUsd + (part.cost ?? 0),
         }
         emitUsage({ ...turnUsage })
@@ -389,7 +400,8 @@ export async function createOpencodeSession(opts: {
           closeAllText()
           settleTurn({ status: "interrupted", usage: { ...turnUsage } })
         } else {
-          const message = error?.data?.message ?? error?.name ?? "opencode session error"
+          const message =
+            error?.data?.message ?? error?.name ?? "opencode session error"
           closeAllText()
           emit({ type: "error", errorText: message })
           settleTurn({
@@ -404,7 +416,9 @@ export async function createOpencodeSession(opts: {
         // Transient retry state: log and wait for the terminal outcome.
         if (event.properties.sessionID !== sessionId) break
         if (event.properties.status.type === "retry") {
-          console.warn(`[opencode] session retry: ${event.properties.status.message}`)
+          console.warn(
+            `[opencode] session retry: ${event.properties.status.message}`,
+          )
         }
         break
       }
@@ -431,7 +445,8 @@ export async function createOpencodeSession(opts: {
     } catch (error) {
       sseDead = true
       if (!turnSettled && turnDone) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message =
+          error instanceof Error ? error.message : String(error)
         closeAllText()
         emit({ type: "error", errorText: message })
         settleTurn({

@@ -13,13 +13,12 @@
  * affects the session fingerprint. Model ids pass through to the ACP
  * session; when unset the server default applies.
  */
-
-import { spawn } from "node:child_process"
-import { createHash } from "node:crypto"
-import { type ACPProvider, createACPProvider } from "@mcpc-tech/acp-ai-provider"
+import { createACPProvider, type ACPProvider } from "@mcpc-tech/acp-ai-provider"
 import { observable } from "@trpc/server/observable"
 import { streamText } from "ai"
 import { eq } from "drizzle-orm"
+import { spawn } from "node:child_process"
+import { createHash } from "node:crypto"
 import { z } from "zod"
 import {
   normalizeCodexAssistantMessage,
@@ -27,8 +26,15 @@ import {
 } from "../../../../shared/codex-tool-normalizer"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { getDatabase, subChats } from "../../db"
-import { extractHermesError, isHermesAuthError, isHermesReadonlyCommand } from "../../hermes/policy"
-import { resolveHermesAcpLaunch, resolveHermesCliLaunch } from "../../hermes-binary"
+import {
+  extractHermesError,
+  isHermesAuthError,
+  isHermesReadonlyCommand,
+} from "../../hermes/policy"
+import {
+  resolveHermesAcpLaunch,
+  resolveHermesCliLaunch,
+} from "../../hermes-binary"
 import { publicProcedure, router } from "../index"
 import {
   buildUserParts,
@@ -109,7 +115,9 @@ async function runHermesCli(
 
     child.once("error", (error) => {
       rejectPromise(
-        new Error(`[hermes] Failed to execute \`hermes ${args.join(" ")}\`: ${error.message}`),
+        new Error(
+          `[hermes] Failed to execute \`hermes ${args.join(" ")}\`: ${error.message}`,
+        ),
       )
     })
 
@@ -190,7 +198,11 @@ function getOrCreateProvider(params: {
   const authFingerprint = getAuthFingerprint(params.authConfig)
   const existing = providerSessions.get(params.subChatId)
 
-  if (existing && existing.cwd === params.cwd && existing.authFingerprint === authFingerprint) {
+  if (
+    existing &&
+    existing.cwd === params.cwd &&
+    existing.authFingerprint === authFingerprint
+  ) {
     return existing.provider
   }
 
@@ -209,7 +221,9 @@ function getOrCreateProvider(params: {
       cwd: params.cwd,
       mcpServers: [],
     },
-    ...(params.existingSessionId ? { existingSessionId: params.existingSessionId } : {}),
+    ...(params.existingSessionId
+      ? { existingSessionId: params.existingSessionId }
+      : {}),
     persistSession: true,
   })
 
@@ -272,7 +286,9 @@ export const hermesRouter = router({
     )
     .query(async ({ input }) => {
       if (!isHermesReadonlyCommand(input.command)) {
-        throw new Error(`hermes subcommand "${input.command}" is not in the read-only allowlist`)
+        throw new Error(
+          `hermes subcommand "${input.command}" is not in the read-only allowlist`,
+        )
       }
       return runHermesCli([input.command.trim(), ...input.args], {
         cwd: input.cwd,
@@ -439,13 +455,15 @@ export const hermesRouter = router({
             let acpModelId = uiModelId
             try {
               const sessionInfo = await provider.initSession()
-              const available = sessionInfo?.models?.availableModels?.map((m) => m.modelId) ?? []
+              const available =
+                sessionInfo?.models?.availableModels?.map((m) => m.modelId) ?? []
               if (uiModelId && available.length > 0) {
                 acpModelId = uiModelId
                 try {
                   await provider.setModel(acpModelId)
                 } catch (setModelError) {
-                  const fallback = sessionInfo?.models?.currentModelId ?? available[0]!
+                  const fallback =
+                    sessionInfo?.models?.currentModelId ?? available[0]!
                   console.warn(
                     `[hermes] setModel("${acpModelId}") failed, using "${fallback}"`,
                     setModelError,
@@ -517,7 +535,9 @@ export const hermesRouter = router({
                   }
 
                   const messagesToPersist = [
-                    ...(isContinuation ? messagesForStream.slice(0, -1) : messagesForStream),
+                    ...(isContinuation
+                      ? messagesForStream.slice(0, -1)
+                      : messagesForStream),
                     cleanedResponseMessage,
                   ]
 
@@ -620,15 +640,17 @@ export const hermesRouter = router({
       return { cancelled: true, ignoredStale: false }
     }),
 
-  cleanup: publicProcedure.input(z.object({ subChatId: z.string() })).mutation(({ input }) => {
-    cleanupProvider(input.subChatId)
+  cleanup: publicProcedure
+    .input(z.object({ subChatId: z.string() }))
+    .mutation(({ input }) => {
+      cleanupProvider(input.subChatId)
 
-    const activeStream = activeStreams.get(input.subChatId)
-    if (activeStream) {
-      activeStream.controller.abort()
-      activeStreams.delete(input.subChatId)
-    }
+      const activeStream = activeStreams.get(input.subChatId)
+      if (activeStream) {
+        activeStream.controller.abort()
+        activeStreams.delete(input.subChatId)
+      }
 
-    return { success: true }
-  }),
+      return { success: true }
+    }),
 })

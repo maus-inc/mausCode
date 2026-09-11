@@ -6,13 +6,25 @@ import { existsSync } from "node:fs"
 import { readdir, readFile, stat } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { type ClaudeOAuthUsage, fetchClaudeOAuthUsage } from "../../claude-oauth-usage"
+import {
+  fetchClaudeOAuthUsage,
+  type ClaudeOAuthUsage,
+} from "../../claude-oauth-usage"
+import { readGeminiToday, type GeminiTodayUsage } from "../../gemini-usage"
 import { loadGeminiApiKey } from "../../gemini-auth-store"
-import { fetchGeminiPlanUsage, type GeminiPlanUsage } from "../../gemini-plan-usage"
-import { type GeminiTodayUsage, readGeminiToday } from "../../gemini-usage"
+import {
+  fetchGeminiPlanUsage,
+  type GeminiPlanUsage,
+} from "../../gemini-plan-usage"
+import {
+  readOpenRouterToday,
+  type OpenRouterTodayUsage,
+} from "../../openrouter-usage"
 import { loadOpenRouterApiKey } from "../../openrouter-auth-store"
-import { fetchOpenRouterPlanUsage, type OpenRouterPlanUsage } from "../../openrouter-plan-usage"
-import { type OpenRouterTodayUsage, readOpenRouterToday } from "../../openrouter-usage"
+import {
+  fetchOpenRouterPlanUsage,
+  type OpenRouterPlanUsage,
+} from "../../openrouter-plan-usage"
 import { publicProcedure, router } from "../index"
 
 export type ClaudeTodayUsage = {
@@ -61,7 +73,9 @@ type ClaudeSessionTotals = {
 }
 
 function pickNonNegativeNumber(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : 0
 }
 
 function localDayBounds(): { start: Date; end: Date } {
@@ -213,7 +227,9 @@ type CodexLastTokenUsage = {
 }
 
 function pickNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : null
 }
 
 async function readLatestCodexUsage(filePath: string): Promise<CodexLastTokenUsage | null> {
@@ -384,7 +400,9 @@ function parseCodexWindow(value: unknown): CodexUsageWindow | null {
   return { utilization, resetsAt, windowMinutes }
 }
 
-async function readLatestCodexRateLimits(filePath: string): Promise<RawCodexRateLimits | null> {
+async function readLatestCodexRateLimits(
+  filePath: string,
+): Promise<RawCodexRateLimits | null> {
   let content: string
   try {
     content = await readFile(filePath, "utf8")
@@ -433,12 +451,17 @@ async function readLatestCodexRateLimits(filePath: string): Promise<RawCodexRate
       typeof r.credits === "object" && r.credits !== null
         ? (r.credits as Record<string, unknown>)
         : null
-    const hasCredits = typeof credits?.has_credits === "boolean" ? credits.has_credits : null
+    const hasCredits =
+      typeof credits?.has_credits === "boolean" ? credits.has_credits : null
 
-    const planType = typeof r.plan_type === "string" && r.plan_type.length > 0 ? r.plan_type : null
+    const planType =
+      typeof r.plan_type === "string" && r.plan_type.length > 0
+        ? r.plan_type
+        : null
 
     const tsRaw = (event as { timestamp?: unknown }).timestamp
-    const observedAt = typeof tsRaw === "string" ? tsRaw : new Date().toISOString()
+    const observedAt =
+      typeof tsRaw === "string" ? tsRaw : new Date().toISOString()
 
     return { primary, secondary, planType, hasCredits, observedAt }
   }
@@ -497,7 +520,9 @@ async function findMostRecentCodexSession(): Promise<string | null> {
               bestMtime = mtime
               bestPath = filePath
             }
-          } catch {}
+          } catch {
+            continue
+          }
         }
       }
     }
@@ -631,7 +656,9 @@ export const usageRouter = router({
       fetchedAt,
     }
   }),
-  codexPlan: publicProcedure.query(async (): Promise<CodexPlanUsageResult> => readCodexPlanUsage()),
+  codexPlan: publicProcedure.query(
+    async (): Promise<CodexPlanUsageResult> => readCodexPlanUsage(),
+  ),
   geminiPlan: publicProcedure.query(
     async (): Promise<GeminiPlanUsageResult> => readGeminiPlanUsage(),
   ),

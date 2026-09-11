@@ -4,23 +4,25 @@
  * UPGRADED (mausCode 2026-09-11): chat transport replaced ACP with native
  * `agent -p --output-format stream-json` print turns; login + MCP kept.
  */
-
-import { type ChildProcess, spawn } from "node:child_process"
-import { createHash } from "node:crypto"
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
+import { spawn, type ChildProcess } from "node:child_process"
+import { createHash } from "node:crypto"
 import { z } from "zod"
 import {
   normalizeCodexAssistantMessage,
   normalizeCodexStreamChunk,
 } from "../../../../shared/codex-tool-normalizer"
 import { getClaudeShellEnvironment } from "../../claude/env"
-import { resolveCursorAgentCliLaunch, resolveCursorAgentLaunch } from "../../cursor-agent-binary"
 import {
   clearCursorMcpCache,
   getAllCursorMcpConfigHandler,
   getCursorMcpConfigForProject,
 } from "../../cursor-mcp"
+import {
+  resolveCursorAgentCliLaunch,
+  resolveCursorAgentLaunch,
+} from "../../cursor-agent-binary"
 import {
   buildCursorPrintArgs,
   buildCursorPrintFallbackArgs,
@@ -55,7 +57,11 @@ type ActiveCursorStream = {
 const providerSessions = new Map<string, CursorPrintState>()
 const activeStreams = new Map<string, ActiveCursorStream>()
 
-type CursorLoginSessionState = "running" | "success" | "error" | "cancelled"
+type CursorLoginSessionState =
+  | "running"
+  | "success"
+  | "error"
+  | "cancelled"
 
 type CursorLoginSession = {
   id: string
@@ -120,7 +126,10 @@ function extractCursorError(error: unknown): { message: string; code?: string } 
   }
 }
 
-function isCursorAuthError(params: { message?: string | null; code?: string | null }): boolean {
+function isCursorAuthError(params: {
+  message?: string | null
+  code?: string | null
+}): boolean {
   const searchableText = `${params.code || ""} ${params.message || ""}`.toLowerCase()
   return AUTH_HINTS.some((hint) => searchableText.includes(hint))
 }
@@ -152,7 +161,11 @@ async function runCursorCli(
       } catch {
         // Already gone.
       }
-      rejectPromise(new Error(`[cursor] Timed out executing \`agent ${args.join(" ")}\` after 15s`))
+      rejectPromise(
+        new Error(
+          `[cursor] Timed out executing \`agent ${args.join(" ")}\` after 15s`,
+        ),
+      )
     }, 15000)
     timer.unref?.()
 
@@ -172,7 +185,9 @@ async function runCursorCli(
       settled = true
       clearTimeout(timer)
       rejectPromise(
-        new Error(`[cursor] Failed to execute \`agent ${args.join(" ")}\`: ${error.message}`),
+        new Error(
+          `[cursor] Failed to execute \`agent ${args.join(" ")}\`: ${error.message}`,
+        ),
       )
     })
 
@@ -226,7 +241,9 @@ function getAuthFingerprint(authConfig?: { apiKey: string }): string | null {
   return createHash("sha256").update(apiKey).digest("hex")
 }
 
-function buildCursorProviderEnv(authConfig?: { apiKey: string }): Record<string, string> {
+function buildCursorProviderEnv(authConfig?: {
+  apiKey: string
+}): Record<string, string> {
   const env: Record<string, string> = {}
 
   for (const [key, value] of Object.entries(process.env)) {
@@ -468,7 +485,8 @@ export const cursorRouter = router({
         session.error = null
       } else {
         session.state = "error"
-        session.error = session.error || `Cursor login exited with code ${exitCode ?? "unknown"}`
+        session.error =
+          session.error || `Cursor login exited with code ${exitCode ?? "unknown"}`
       }
     })
 
@@ -695,7 +713,9 @@ export const cursorRouter = router({
               authConfig: input.authConfig,
             })
             let latestSessionId =
-              input.sessionId ?? getLastSessionId(existingMessages) ?? printState.threadId
+              input.sessionId ??
+              getLastSessionId(existingMessages) ??
+              printState.threadId
 
             const startedAt = Date.now()
             const accumulatedParts: any[] = []
@@ -736,8 +756,12 @@ export const cursorRouter = router({
                 typeof chunk.id === "string" &&
                 typeof chunk.delta === "string"
               ) {
-                accumulatedText[chunk.id] = (accumulatedText[chunk.id] ?? "") + chunk.delta
-              } else if (chunk?.type === "text-end" && typeof chunk.id === "string") {
+                accumulatedText[chunk.id] =
+                  (accumulatedText[chunk.id] ?? "") + chunk.delta
+              } else if (
+                chunk?.type === "text-end" &&
+                typeof chunk.id === "string"
+              ) {
                 accumulatedParts.push({
                   type: "text",
                   text: accumulatedText[chunk.id] ?? "",
@@ -771,10 +795,8 @@ export const cursorRouter = router({
 
             // Images travel as prompt path references (the agent reads them
             // via tools); stage base64 attachments to temp files per turn.
-            const { paths: imagePaths, cleanup: cleanupImageFiles } = await writeImageTempFiles(
-              input.images,
-              `cursor-${input.runId}`,
-            )
+            const { paths: imagePaths, cleanup: cleanupImageFiles } =
+              await writeImageTempFiles(input.images, `cursor-${input.runId}`)
             const promptWithImages =
               imagePaths.length > 0
                 ? `${input.prompt}\n\nReferenced files:\n${imagePaths.join("\n")}`
@@ -803,7 +825,9 @@ export const cursorRouter = router({
             let resumeDropped = false
             let modelDropped = false
             let flagsDowngraded = false
-            let turnResult!: Awaited<ReturnType<typeof runCursorPrintTurn>["done"]>
+            let turnResult!: Awaited<
+              ReturnType<typeof runCursorPrintTurn>["done"]
+            >
             let activeTurn: ReturnType<typeof runCursorPrintTurn> | null = null
             abortController.signal.addEventListener(
               "abort",
@@ -829,7 +853,10 @@ export const cursorRouter = router({
                 })
                 turnResult = await activeTurn.done
                 activeTurn = null
-                if (turnResult.status !== "error" || abortController.signal.aborted) {
+                if (
+                  turnResult.status !== "error" ||
+                  abortController.signal.aborted
+                ) {
                   break
                 }
                 if (
@@ -866,7 +893,10 @@ export const cursorRouter = router({
                   }).args
                   continue
                 }
-                if (!flagsDowngraded && isCursorUnknownFlagError(turnResult.errorMessage)) {
+                if (
+                  !flagsDowngraded &&
+                  isCursorUnknownFlagError(turnResult.errorMessage)
+                ) {
                   flagsDowngraded = true
                   heldErrorChunk = null
                   attemptArgs = buildCursorPrintFallbackArgs({
@@ -901,12 +931,16 @@ export const cursorRouter = router({
                 parts: accumulatedParts,
                 metadata: finishMetadata,
               }
-              const cleanedResponseMessage = cleanAssistantMessageForPersistence(responseMessage)
+              const cleanedResponseMessage =
+                cleanAssistantMessageForPersistence(responseMessage)
 
               if (!cleanedResponseMessage) {
                 persistSubChatMessages(messagesForStream)
               } else {
-                persistSubChatMessages([...messagesForStream, cleanedResponseMessage])
+                persistSubChatMessages([
+                  ...messagesForStream,
+                  cleanedResponseMessage,
+                ])
               }
             } catch (error) {
               console.error("[cursor] Failed to persist messages:", error)
@@ -972,17 +1006,19 @@ export const cursorRouter = router({
       return { cancelled: true, ignoredStale: false }
     }),
 
-  cleanup: publicProcedure.input(z.object({ subChatId: z.string() })).mutation(({ input }) => {
-    cleanupProvider(input.subChatId)
+  cleanup: publicProcedure
+    .input(z.object({ subChatId: z.string() }))
+    .mutation(({ input }) => {
+      cleanupProvider(input.subChatId)
 
-    const activeStream = activeStreams.get(input.subChatId)
-    if (activeStream) {
-      activeStream.controller.abort()
-      activeStreams.delete(input.subChatId)
-    }
+      const activeStream = activeStreams.get(input.subChatId)
+      if (activeStream) {
+        activeStream.controller.abort()
+        activeStreams.delete(input.subChatId)
+      }
 
-    return { success: true }
-  }),
+      return { success: true }
+    }),
 
   getAllMcpConfig: publicProcedure.query(async () => {
     try {
