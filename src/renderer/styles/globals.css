@@ -1,3 +1,4 @@
+@import "./fonts.css";
 @import "./agents-styles.css";
 
 @source "../../../node_modules/streamdown/dist/*.js";
@@ -38,6 +39,12 @@
     --plan-mode-foreground: 0 0% 8%;
     /* Timeline/Content background */
     --tl-background: 0 0% 98%;
+    /* Dot-matrix loader "solid-theme" preset fill — follows the theme foreground */
+    --color-dot-on: hsl(var(--foreground));
+    /* Button letter-spacing. Direction says -3px; at 13–14px button text that
+       overlaps glyphs, so the shipping value is the equivalent tight tracking
+       (-0.03em ≈ -0.4px). Set to -3px here to take it literally. */
+    --button-tracking: -0.03em;
   }
 
   .dark {
@@ -84,6 +91,21 @@
     font-feature-settings:
       "rlig" 1,
       "calt" 1;
+  }
+  /* Display face for headers + brand text (Geist Pixel Circle). */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Geist Pixel Circle", "Neue Haas Grotesk Display", system-ui, sans-serif;
+  }
+  /* All buttons render in Pathway Extreme Thin with tight tracking. */
+  button {
+    font-family: "Pathway Extreme", "Neue Haas Grotesk Display", system-ui, sans-serif;
+    font-weight: 100;
+    letter-spacing: var(--button-tracking);
   }
 }
 

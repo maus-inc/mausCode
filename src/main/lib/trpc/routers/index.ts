@@ -1,25 +1,42 @@
+import type { BrowserWindow } from "electron"
+import { createGitRouter } from "../../git"
 import { router } from "../index"
-import { projectsRouter } from "./projects"
+import { agentsRouter } from "./agents"
+import { anthropicAccountsRouter } from "./anthropic-accounts"
 import { chatsRouter } from "./chats"
 import { claudeRouter } from "./claude"
 import { claudeCodeRouter } from "./claude-code"
 import { claudeSettingsRouter } from "./claude-settings"
-import { anthropicAccountsRouter } from "./anthropic-accounts"
-import { ollamaRouter } from "./ollama"
+import { claudeUsageRouter } from "./claude-usage"
+import { clineRouter } from "./cline"
 import { codexRouter } from "./codex"
-import { terminalRouter } from "./terminal"
+import { commandsRouter } from "./commands"
+import { cursorRouter } from "./cursor"
+import { debugRouter } from "./debug"
+import { devServerRouter } from "./dev-server"
 import { externalRouter } from "./external"
 import { filesRouter } from "./files"
-import { debugRouter } from "./debug"
-import { skillsRouter } from "./skills"
-import { agentsRouter } from "./agents"
-import { worktreeConfigRouter } from "./worktree-config"
-import { sandboxImportRouter } from "./sandbox-import"
-import { commandsRouter } from "./commands"
-import { voiceRouter } from "./voice"
+// Transplanted from erenbertr/1code (Apache-2.0): provider + usage routers
+import { geminiRouter } from "./gemini"
+import { githubRouter } from "./github"
+import { grokRouter } from "./grok"
+import { hermesRouter } from "./hermes"
+import { ollamaRouter } from "./ollama"
+import { openclawRouter } from "./openclaw"
+import { opencodeRouter } from "./opencode"
+import { openrouterRouter } from "./openrouter"
 import { pluginsRouter } from "./plugins"
-import { createGitRouter } from "../../git"
-import { BrowserWindow } from "electron"
+import { projectsRouter } from "./projects"
+import { providersRouter } from "./providers"
+import { qwenRouter } from "./qwen"
+import { rooRouter } from "./roo"
+import { runtimeRouter } from "./runtime"
+import { sandboxImportRouter } from "./sandbox-import"
+import { skillsRouter } from "./skills"
+import { terminalRouter } from "./terminal"
+import { usageRouter } from "./usage"
+import { voiceRouter } from "./voice"
+import { worktreeConfigRouter } from "./worktree-config"
 
 /**
  * Create the main app router
@@ -32,9 +49,20 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     claude: claudeRouter,
     claudeCode: claudeCodeRouter,
     claudeSettings: claudeSettingsRouter,
+    claudeUsage: claudeUsageRouter,
     anthropicAccounts: anthropicAccountsRouter,
     ollama: ollamaRouter,
     codex: codexRouter,
+    cursor: cursorRouter,
+    grok: grokRouter,
+    qwen: qwenRouter,
+    cline: clineRouter,
+    openclaw: openclawRouter,
+    roo: rooRouter,
+    devServer: devServerRouter,
+    gemini: geminiRouter,
+    openrouter: openrouterRouter,
+    github: githubRouter,
     terminal: terminalRouter,
     external: externalRouter,
     files: filesRouter,
@@ -46,6 +74,11 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     commands: commandsRouter,
     voice: voiceRouter,
     plugins: pluginsRouter,
+    runtime: runtimeRouter,
+    usage: usageRouter,
+    providers: providersRouter,
+    opencode: opencodeRouter,
+    hermes: hermesRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

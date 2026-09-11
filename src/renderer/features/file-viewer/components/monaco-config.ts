@@ -31,7 +31,7 @@ export const defaultEditorOptions: editor.IStandaloneEditorConstructionOptions =
   wordWrap: "off",
   automaticLayout: true,
   fontSize: 13,
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  fontFamily: '"Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
   folding: true,
   foldingStrategy: "indentation",
   showFoldingControls: "mouseover",

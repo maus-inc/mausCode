@@ -1,14 +1,14 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect } from "react"
 import { ChevronRight } from "lucide-react"
+import { memo, useEffect, useMemo, useState } from "react"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
-import { getToolStatus, type McpToolInfo } from "./agent-tool-registry"
-import { AgentToolInterrupted } from "./agent-tool-interrupted"
-import { areToolPropsEqual } from "./agent-tool-utils"
-import { cn } from "../../../lib/utils"
-import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
+import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
+import { cn } from "../../../lib/utils"
+import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { getToolStatus, type McpToolInfo } from "./agent-tool-registry"
+import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface AgentMcpToolCallProps {
   part: any
@@ -17,22 +17,64 @@ interface AgentMcpToolCallProps {
 }
 
 // Priority arg keys to show in subtitle
-const PRIORITY_ARGS = ["query", "question", "email", "name", "id", "customer", "url", "issue", "body", "summary", "title"]
+const PRIORITY_ARGS = [
+  "query",
+  "question",
+  "email",
+  "name",
+  "id",
+  "customer",
+  "url",
+  "issue",
+  "body",
+  "summary",
+  "title",
+]
 
 const ACTIVE_VERBS: Record<string, string> = {
-  List: "Listing", Get: "Getting", Create: "Creating", Update: "Updating",
-  Delete: "Deleting", Search: "Searching", Fetch: "Fetching", Retrieve: "Retrieving",
-  Send: "Sending", Generate: "Generating", Add: "Adding", Remove: "Removing",
-  Modify: "Modifying", Draft: "Drafting", Manage: "Managing", Query: "Querying",
-  Start: "Starting", Set: "Setting", Check: "Checking", Find: "Finding",
+  List: "Listing",
+  Get: "Getting",
+  Create: "Creating",
+  Update: "Updating",
+  Delete: "Deleting",
+  Search: "Searching",
+  Fetch: "Fetching",
+  Retrieve: "Retrieving",
+  Send: "Sending",
+  Generate: "Generating",
+  Add: "Adding",
+  Remove: "Removing",
+  Modify: "Modifying",
+  Draft: "Drafting",
+  Manage: "Managing",
+  Query: "Querying",
+  Start: "Starting",
+  Set: "Setting",
+  Check: "Checking",
+  Find: "Finding",
 }
 
 const COMPLETED_VERBS: Record<string, string> = {
-  List: "Listed", Get: "Got", Create: "Created", Update: "Updated",
-  Delete: "Deleted", Search: "Searched", Fetch: "Fetched", Retrieve: "Retrieved",
-  Send: "Sent", Generate: "Generated", Add: "Added", Remove: "Removed",
-  Modify: "Modified", Draft: "Drafted", Manage: "Managed", Query: "Queried",
-  Start: "Started", Set: "Set", Check: "Checked", Find: "Found",
+  List: "Listed",
+  Get: "Got",
+  Create: "Created",
+  Update: "Updated",
+  Delete: "Deleted",
+  Search: "Searched",
+  Fetch: "Fetched",
+  Retrieve: "Retrieved",
+  Send: "Sent",
+  Generate: "Generated",
+  Add: "Added",
+  Remove: "Removed",
+  Modify: "Modified",
+  Draft: "Drafted",
+  Manage: "Managed",
+  Query: "Queried",
+  Start: "Started",
+  Set: "Set",
+  Check: "Checked",
+  Find: "Found",
 }
 
 function getActiveTitle(info: McpToolInfo): string {
@@ -78,9 +120,7 @@ function getResultCount(output: any): string | null {
 
 function formatMcpArgs(input: any): string {
   if (!input || typeof input !== "object") return ""
-  const entries = Object.entries(input).filter(
-    ([, v]) => v !== undefined && v !== null && v !== "",
-  )
+  const entries = Object.entries(input).filter(([, v]) => v !== undefined && v !== null && v !== "")
   if (entries.length === 0) return ""
 
   // Show up to 2 key: value pairs, prioritizing important keys
@@ -180,13 +220,16 @@ function HighlightedJson({ code }: { code: string }) {
         if (!cancelled) setHtml(result)
       })
       .catch(() => {})
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [code, themeId])
 
   if (html) {
     return (
       <pre
         className="text-[10px] font-mono leading-relaxed whitespace-pre-wrap break-words [&>pre]:!bg-transparent"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: shiki codeToHtml escapes source HTML
         dangerouslySetInnerHTML={{ __html: html }}
       />
     )
@@ -205,15 +248,15 @@ export const AgentMcpToolCall = memo(function AgentMcpToolCall({
   chatStatus,
 }: AgentMcpToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
+  const { isPending, isInterrupted, isInputStreaming } = getToolStatus(part, chatStatus)
 
   const unwrappedOutput = useMemo(() => unwrapMcpOutput(part.output), [part.output])
 
   const title = useMemo(() => {
-    if (part.state === "input-streaming") return `Preparing ${mcpInfo.displayName}`
+    if (isInputStreaming) return `Preparing ${mcpInfo.displayName}`
     if (isPending) return getActiveTitle(mcpInfo)
     return getCompletedTitle(mcpInfo)
-  }, [part.state, isPending, mcpInfo])
+  }, [isInputStreaming, isPending, mcpInfo])
 
   const resultCount = useMemo(() => {
     if (isPending) return null
@@ -221,26 +264,21 @@ export const AgentMcpToolCall = memo(function AgentMcpToolCall({
   }, [isPending, unwrappedOutput])
 
   const subtitle = useMemo(() => {
-    if (part.state === "input-streaming") return ""
+    if (isInputStreaming) return ""
     return formatMcpArgs(part.input)
-  }, [part.input, part.state])
+  }, [isInputStreaming, part.input])
 
   const displayOutput = useMemo(() => {
     if (!part.output) return null
     return formatOutputForDisplay(part.output)
   }, [part.output])
 
-  const hasExpandableContent = (
-    (part.input && Object.keys(part.input).length > 0) ||
-    !!part.output
-  ) && !isPending
+  const hasExpandableContent =
+    ((part.input && Object.keys(part.input).length > 0) || !!part.output) && !isPending
 
   if (isInterrupted && !part.output) {
     return (
-      <AgentToolInterrupted
-        toolName={mcpInfo.displayName}
-        subtitle={`via ${mcpInfo.serverName}`}
-      />
+      <AgentToolInterrupted toolName={mcpInfo.displayName} subtitle={`via ${mcpInfo.serverName}`} />
     )
   }
 
@@ -308,12 +346,12 @@ export const AgentMcpToolCall = memo(function AgentMcpToolCall({
                 .filter(([, v]) => v !== undefined && v !== null && v !== "")
                 .map(([key, value]) => (
                   <div key={key} className="flex items-baseline gap-1.5 text-[10px]">
-                    <span className="text-muted-foreground/50 font-mono flex-shrink-0">
-                      {key}:
-                    </span>
+                    <span className="text-muted-foreground/50 font-mono flex-shrink-0">{key}:</span>
                     <span className="text-muted-foreground/70 font-mono truncate">
                       {typeof value === "string"
-                        ? value.length > 120 ? value.slice(0, 117) + "..." : value
+                        ? value.length > 120
+                          ? value.slice(0, 117) + "..."
+                          : value
                         : JSON.stringify(value)}
                     </span>
                   </div>
@@ -323,10 +361,12 @@ export const AgentMcpToolCall = memo(function AgentMcpToolCall({
 
           {/* Result */}
           {displayOutput && (
-            <div className={cn(
-              "px-2.5 py-1.5 max-h-[200px] overflow-y-auto",
-              part.input && Object.keys(part.input).length > 0 && "border-t border-border",
-            )}>
+            <div
+              className={cn(
+                "px-2.5 py-1.5 max-h-[200px] overflow-y-auto",
+                part.input && Object.keys(part.input).length > 0 && "border-t border-border",
+              )}
+            >
               <HighlightedJson code={displayOutput} />
             </div>
           )}

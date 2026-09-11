@@ -1,13 +1,9 @@
 "use client"
 
-import { useState } from "react"
 import { GitBranch } from "lucide-react"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../../components/ui/popover"
-import { IconChevronDown, CheckIcon, LaptopIcon, CloudIcon } from "../../../components/ui/icons"
+import { useState } from "react"
+import { CheckIcon, CloudIcon, IconChevronDown, LaptopIcon } from "../../../components/ui/icons"
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
 import type { WorkMode } from "../atoms"
 
@@ -37,11 +33,7 @@ const workModeOptions = [
   },
 ]
 
-export function WorkModeSelector({
-  value,
-  onChange,
-  disabled,
-}: WorkModeSelectorProps) {
+export function WorkModeSelector({ value, onChange, disabled }: WorkModeSelectorProps) {
   const [open, setOpen] = useState(false)
   const selectedOption = workModeOptions.find((opt) => opt.id === value) || workModeOptions[1]
   const Icon = selectedOption.icon
@@ -73,7 +65,7 @@ export function WorkModeSelector({
               key={option.id}
               onClick={() => {
                 if (isDisabled) return
-                onChange(option.id)
+                onChange(option.id as WorkMode)
                 setOpen(false)
               }}
               disabled={isDisabled}
@@ -83,7 +75,7 @@ export function WorkModeSelector({
                   ? "opacity-50 cursor-not-allowed"
                   : isSelected
                     ? "dark:bg-neutral-800 text-foreground"
-                    : "dark:hover:bg-neutral-800 hover:text-foreground"
+                    : "dark:hover:bg-neutral-800 hover:text-foreground",
               )}
             >
               <OptionIcon className="h-4 w-4 text-muted-foreground shrink-0" />

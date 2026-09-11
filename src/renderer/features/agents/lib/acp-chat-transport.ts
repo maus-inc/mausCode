@@ -16,9 +16,9 @@ import {
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
 } from "../atoms"
-import { CODEX_MODELS, type CodexThinkingLevel } from "./models"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
+import { CODEX_MODELS, type CodexThinkingLevel } from "./models"
 
 type UIMessageChunk = any
 
@@ -27,7 +27,7 @@ type ACPChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
   provider: "codex"
 }
 
@@ -39,7 +39,7 @@ type ImageAttachment = {
 
 // When a sub-chat hits auth-error, force one fresh Codex ACP session on next send.
 const forceFreshSessionSubChats = new Set<string>()
-const DEFAULT_CODEX_MODEL = "gpt-5.3-codex/high"
+const DEFAULT_CODEX_MODEL = "gpt-5.5/high"
 function getStoredCodexCredentials(): {
   hasApiKey: boolean
   hasSubscription: boolean
@@ -83,9 +83,7 @@ function getSelectedCodexModel(subChatId: string): string {
   const selectedModelId = appStore.get(subChatCodexModelIdAtomFamily(subChatId))
   const selectedThinking = appStore.get(subChatCodexThinkingAtomFamily(subChatId))
   const selectedModel =
-    CODEX_MODELS.find((model) => model.id === selectedModelId) ||
-    CODEX_MODELS.find((model) => model.id === "gpt-5.3-codex") ||
-    CODEX_MODELS[0]
+    CODEX_MODELS.find((model) => model.id === selectedModelId) || CODEX_MODELS[0]
 
   if (!selectedModel) {
     return DEFAULT_CODEX_MODEL
@@ -113,9 +111,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     messages: UIMessage[]
     abortSignal?: AbortSignal
   }): Promise<ReadableStream<UIMessageChunk>> {
-    const lastUser = [...options.messages]
-      .reverse()
-      .find((message) => message.role === "user")
+    const lastUser = [...options.messages].reverse().find((message) => message.role === "user")
 
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
@@ -129,8 +125,8 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     const currentMode =
       useAgentSubChatStore
         .getState()
-        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
-        ?.mode || this.config.mode
+        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)?.mode ||
+      this.config.mode
     const forceNewSession = forceFreshSessionSubChats.has(this.config.subChatId)
     if (forceNewSession) {
       forceFreshSessionSubChats.delete(this.config.subChatId)
@@ -165,9 +161,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
             runId,
             prompt,
             cwd: this.config.cwd,
-            ...(this.config.projectPath
-              ? { projectPath: this.config.projectPath }
-              : {}),
+            ...(this.config.projectPath ? { projectPath: this.config.projectPath } : {}),
             model: selectedModel,
             mode: currentMode,
             ...(sessionId ? { sessionId } : {}),
@@ -306,11 +300,9 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   }
 
   cleanup(): void {
-    void trpcClient.codex.cleanup
-      .mutate({ subChatId: this.config.subChatId })
-      .catch(() => {
-        // No-op
-      })
+    void trpcClient.codex.cleanup.mutate({ subChatId: this.config.subChatId }).catch(() => {
+      // No-op
+    })
   }
 
   private extractText(message: UIMessage | undefined): string {
@@ -326,8 +318,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
         textParts.push((part as any).text)
       } else if ((part as any).type === "file-content") {
         const filePart = part as any
-        const fileName =
-          filePart.filePath?.split("/").pop() || filePart.filePath || "file"
+        const fileName = filePart.filePath?.split("/").pop() || filePart.filePath || "file"
         fileContents.push(`\n--- ${fileName} ---\n${filePart.content}`)
       }
     }

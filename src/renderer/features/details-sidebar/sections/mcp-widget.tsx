@@ -4,7 +4,7 @@ import { useAtomValue, useSetAtom } from "jotai"
 import { ChevronDown } from "lucide-react"
 import { memo, useMemo, useState } from "react"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
-import { sessionInfoAtom, type MCPServer } from "../../../lib/atoms"
+import { type MCPServer, sessionInfoAtom } from "../../../lib/atoms"
 import { cn } from "../../../lib/utils"
 import { pendingMentionAtom } from "../../agents/atoms"
 
@@ -88,10 +88,19 @@ export const McpWidget = memo(function McpWidget() {
 
   if (!sessionInfo?.mcpServers || sessionInfo.mcpServers.length === 0) {
     return (
-      <div className="px-2 py-2">
-        <div className="text-xs text-muted-foreground">
-          No MCP servers configured
-        </div>
+      <div className="px-2 py-2 flex flex-col gap-1">
+        <div className="text-xs text-muted-foreground">No MCP servers configured</div>
+        {sessionInfo?.toolsUnknown === true && (
+          <div className="text-[11px] text-muted-foreground/70">
+            Native engine: servers resolve from local MCP config files; the full tool list is
+            unavailable until the runtime reports it.
+          </div>
+        )}
+        {(sessionInfo?.mcpConfigErrors ?? []).map((err) => (
+          <div key={err.file} className="text-[11px] text-amber-600 dark:text-amber-500">
+            Ignored {err.file}: {err.error}
+          </div>
+        ))}
       </div>
     )
   }
@@ -119,6 +128,17 @@ export const McpWidget = memo(function McpWidget() {
 
   return (
     <div className="px-2 py-1.5 flex flex-col gap-0.5">
+      {sessionInfo.toolsUnknown === true && (
+        <div className="text-[11px] text-muted-foreground/70 px-1.5 pb-1">
+          Native engine: servers resolve from local MCP config files; the full tool list is
+          unavailable until the runtime reports it.
+        </div>
+      )}
+      {(sessionInfo.mcpConfigErrors ?? []).map((err) => (
+        <div key={err.file} className="text-[11px] text-amber-600 dark:text-amber-500 px-1.5 pb-1">
+          Ignored {err.file}: {err.error}
+        </div>
+      ))}
       {sessionInfo.mcpServers.map((server) => {
         const tools = toolsByServer.get(server.name) || []
         const isExpanded = expandedServers.has(server.name)
@@ -131,9 +151,7 @@ export const McpWidget = memo(function McpWidget() {
               onClick={() => hasTools && toggleServer(server.name)}
               className={cn(
                 "w-full flex items-center gap-1.5 min-h-[28px] rounded px-1.5 py-0.5 -ml-0.5 transition-colors",
-                hasTools
-                  ? "hover:bg-accent cursor-pointer"
-                  : "cursor-default",
+                hasTools ? "hover:bg-accent cursor-pointer" : "cursor-default",
               )}
             >
               <ServerIcon server={server} />

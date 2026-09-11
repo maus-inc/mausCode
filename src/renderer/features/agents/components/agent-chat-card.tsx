@@ -1,15 +1,11 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { cn } from "../../../lib/utils"
-import {
-  GitHubLogo,
-  IconSpinner,
-  PlanIcon,
-  AgentIcon,
-} from "../../../components/ui/canvas-icons"
 import { useAtomValue } from "jotai"
+import { useCallback, useState } from "react"
+import { GitHubLogo, IconSpinner } from "../../../components/ui/canvas-icons"
+import { cn } from "../../../lib/utils"
 import { agentsUnseenChangesAtom, lastChatModesAtom } from "../atoms"
+import { getModeIcon } from "../lib/mode-display"
 
 // GitHub avatar with loading placeholder
 function GitHubAvatar({
@@ -32,13 +28,15 @@ function GitHubAvatar({
   return (
     <div className={cn(className, "relative flex-shrink-0")}>
       {/* Placeholder background while loading */}
-      {!isLoaded && (
-        <div className="absolute inset-0 rounded-sm bg-muted" />
-      )}
+      {!isLoaded && <div className="absolute inset-0 rounded-sm bg-muted" />}
       <img
         src={`https://github.com/${gitOwner}.png?size=64`}
         alt={gitOwner}
-        className={cn(className, "rounded-sm flex-shrink-0", isLoaded ? 'opacity-100' : 'opacity-0')}
+        className={cn(
+          className,
+          "rounded-sm flex-shrink-0",
+          isLoaded ? "opacity-100" : "opacity-0",
+        )}
         onLoad={handleLoad}
         onError={handleError}
       />
@@ -49,9 +47,9 @@ function GitHubAvatar({
 interface AgentChatCardProps {
   chat: {
     id: string
-    name: string
-    meta: any
-    sandbox_id: string | null
+    name: string | null
+    meta?: any
+    sandbox_id?: string | null
     branch?: string | null
   }
   isSelected: boolean
@@ -76,20 +74,19 @@ function ChatIconWithBadge({
 }: {
   isLoading: boolean
   hasUnseenChanges: boolean
-  lastMode: "plan" | "agent"
+  lastMode: "plan" | "ask" | "edit" | "agent" | "turbo"
   isSelected?: boolean
   gitOwner?: string | null
   gitProvider?: string | null
 }) {
+  const ModeIcon = getModeIcon(lastMode)
   // Show GitHub avatar if available, otherwise blank project icon
   const renderMainIcon = () => {
     if (gitOwner && gitProvider === "github") {
       return <GitHubAvatar gitOwner={gitOwner} />
     }
 
-    return (
-      <GitHubLogo className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-    )
+    return <GitHubLogo className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
   }
 
   return (
@@ -111,15 +108,8 @@ function ChatIconWithBadge({
           />
         ) : hasUnseenChanges ? (
           <div className="w-2 h-2 rounded-full bg-[#307BD0]" />
-        ) : lastMode === "plan" ? (
-          <PlanIcon
-            className={cn(
-              "w-2.5 h-2.5",
-              isSelected ? "text-primary-foreground" : "text-muted-foreground",
-            )}
-          />
         ) : (
-          <AgentIcon
+          <ModeIcon
             className={cn(
               "w-2.5 h-2.5",
               isSelected ? "text-primary-foreground" : "text-muted-foreground",
@@ -155,9 +145,7 @@ export function AgentChatCard({
     // Desktop: use branch from chat and repo name from project
     const branch = chat.branch
     const displayRepoName = repoName || "Local project"
-    const displayText = branch
-      ? `${displayRepoName} • ${branch}`
-      : displayRepoName
+    const displayText = branch ? `${displayRepoName} • ${branch}` : displayRepoName
 
     return (
       <div
@@ -193,9 +181,7 @@ export function AgentChatCard({
             <span
               className={cn(
                 "text-[11px] truncate",
-                isSelected
-                  ? "text-primary-foreground/60"
-                  : "text-muted-foreground/60",
+                isSelected ? "text-primary-foreground/60" : "text-muted-foreground/60",
               )}
             >
               {displayText}

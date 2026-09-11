@@ -31,13 +31,7 @@ export function NextjsIcon({ className }: FrameworkIconProps) {
           d="M149.508 157.52L69.142 54H54V125.97H66.1136V69.3836L139.999 164.845C143.333 162.614 146.509 160.165 149.508 157.52Z"
           fill="url(#nextjs_paint0)"
         />
-        <rect
-          fill="url(#nextjs_paint1)"
-          height="72"
-          width="12"
-          x="115"
-          y="54"
-        />
+        <rect fill="url(#nextjs_paint1)" height="72" width="12" x="115" y="54" />
       </g>
       <defs>
         <linearGradient
@@ -70,29 +64,13 @@ export function NextjsIcon({ className }: FrameworkIconProps) {
 // Vite - Cyan to purple gradient with yellow lightning
 export function ViteIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 256 257"
-      className={cn("w-4 h-4", className)}
-      preserveAspectRatio="xMidYMid"
-    >
+    <svg viewBox="0 0 256 257" className={cn("w-4 h-4", className)} preserveAspectRatio="xMidYMid">
       <defs>
-        <linearGradient
-          x1="-.828%"
-          y1="7.652%"
-          x2="57.636%"
-          y2="78.411%"
-          id="vite_gradient_a"
-        >
+        <linearGradient x1="-.828%" y1="7.652%" x2="57.636%" y2="78.411%" id="vite_gradient_a">
           <stop stopColor="#41D1FF" offset="0%" />
           <stop stopColor="#BD34FE" offset="100%" />
         </linearGradient>
-        <linearGradient
-          x1="43.376%"
-          y1="2.242%"
-          x2="50.316%"
-          y2="89.03%"
-          id="vite_gradient_b"
-        >
+        <linearGradient x1="43.376%" y1="2.242%" x2="50.316%" y2="89.03%" id="vite_gradient_b">
           <stop stopColor="#FFEA83" offset="0%" />
           <stop stopColor="#FFDD35" offset="8.333%" />
           <stop stopColor="#FFA800" offset="100%" />
@@ -113,12 +91,7 @@ export function ViteIcon({ className }: FrameworkIconProps) {
 // React - Blue #087EA4
 export function ReactIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 569 512"
-      className={cn("w-4 h-4", className)}
-      fill="none"
-      fillRule="evenodd"
-    >
+    <svg viewBox="0 0 569 512" className={cn("w-4 h-4", className)} fill="none" fillRule="evenodd">
       <g fill="#087EA4" fillRule="nonzero">
         <path
           d="M285.5,201 C255.400481,201 231,225.400481 231,255.5 C231,285.599519 255.400481,310 285.5,310 C315.599519,310 340,285.599519 340,255.5 C340,225.400481 315.599519,201 285.5,201"
@@ -136,23 +109,10 @@ export function ReactIcon({ className }: FrameworkIconProps) {
 // Vue - Green with dark inner
 export function VueIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 256 221"
-      className={cn("w-4 h-4", className)}
-      preserveAspectRatio="xMidYMid"
-    >
-      <path
-        d="M204.8 0H256L128 220.8 0 0h97.92L128 51.2 157.44 0h47.36Z"
-        fill="#41B883"
-      />
-      <path
-        d="m0 0 128 220.8L256 0h-51.2L128 132.48 50.56 0H0Z"
-        fill="#41B883"
-      />
-      <path
-        d="M50.56 0 128 133.12 204.8 0h-47.36L128 51.2 97.92 0H50.56Z"
-        fill="#35495E"
-      />
+    <svg viewBox="0 0 256 221" className={cn("w-4 h-4", className)} preserveAspectRatio="xMidYMid">
+      <path d="M204.8 0H256L128 220.8 0 0h97.92L128 51.2 157.44 0h47.36Z" fill="#41B883" />
+      <path d="m0 0 128 220.8L256 0h-51.2L128 132.48 50.56 0H0Z" fill="#41B883" />
+      <path d="M50.56 0 128 133.12 204.8 0h-47.36L128 51.2 97.92 0H50.56Z" fill="#35495E" />
     </svg>
   )
 }
@@ -204,11 +164,7 @@ export function AngularIcon({ className }: FrameworkIconProps) {
 // Svelte - Orange with white inner
 export function SvelteIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 256 308"
-      className={cn("w-4 h-4", className)}
-      preserveAspectRatio="xMidYMid"
-    >
+    <svg viewBox="0 0 256 308" className={cn("w-4 h-4", className)} preserveAspectRatio="xMidYMid">
       <path
         d="M239.682 40.707C211.113-.182 154.69-12.301 113.895 13.69L42.247 59.356a82.198 82.198 0 0 0-37.135 55.056 86.566 86.566 0 0 0 8.536 55.576 82.425 82.425 0 0 0-12.296 30.719 87.596 87.596 0 0 0 14.964 66.244c28.574 40.893 84.997 53.007 125.787 27.016l71.648-45.664a82.182 82.182 0 0 0 37.135-55.057 86.601 86.601 0 0 0-8.53-55.577 82.409 82.409 0 0 0 12.29-30.718 87.573 87.573 0 0 0-14.963-66.244"
         fill="#FF3E00"
@@ -260,11 +216,7 @@ export function GatsbyIcon({ className }: FrameworkIconProps) {
 // Nuxt - Green #00DC82
 export function NuxtIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 256 168"
-      className={cn("w-4 h-4", className)}
-      preserveAspectRatio="xMidYMid"
-    >
+    <svg viewBox="0 0 256 168" className={cn("w-4 h-4", className)} preserveAspectRatio="xMidYMid">
       <path
         fill="#00DC82"
         d="M143.618 167.029h95.166c3.023 0 5.992-.771 8.61-2.237a16.963 16.963 0 0 0 6.302-6.115 16.324 16.324 0 0 0 2.304-8.352c0-2.932-.799-5.811-2.312-8.35L189.778 34.6a16.966 16.966 0 0 0-6.301-6.113 17.626 17.626 0 0 0-8.608-2.238c-3.023 0-5.991.772-8.609 2.238a16.964 16.964 0 0 0-6.3 6.113l-16.342 27.473-31.95-53.724a16.973 16.973 0 0 0-6.304-6.112A17.638 17.638 0 0 0 96.754 0c-3.022 0-5.992.772-8.61 2.237a16.973 16.973 0 0 0-6.303 6.112L2.31 141.975A16.302 16.302 0 0 0 0 150.325c0 2.932.793 5.813 2.304 8.352a16.964 16.964 0 0 0 6.302 6.115 17.628 17.628 0 0 0 8.61 2.237h59.737c23.669 0 41.123-10.084 53.134-29.758l29.159-48.983 15.618-26.215 46.874 78.742h-62.492l-15.628 26.214Zm-67.64-26.24-41.688-.01L96.782 35.796l31.181 52.492-20.877 35.084c-7.976 12.765-17.037 17.416-31.107 17.416Z"
@@ -324,7 +276,7 @@ export function TypeScriptIcon({ className }: FrameworkIconProps) {
 export function JavaScriptIcon({ className }: FrameworkIconProps) {
   // Generate unique ID for clipPath to avoid conflicts when multiple icons are rendered
   const clipId = useId()
-  
+
   return (
     <svg
       viewBox="0 0 800 800"
@@ -410,11 +362,7 @@ export function GoIcon({ className }: FrameworkIconProps) {
 // Markdown - Blue info circle icon (for README files)
 export function MarkdownInfoIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      className={cn("w-4 h-4", className)}
-    >
+    <svg viewBox="0 0 24 24" fill="none" className={cn("w-4 h-4", className)}>
       <g transform="scale(1.1) translate(-1.2, -1.2)">
         <path
           d="M11 11H12V16M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
@@ -663,11 +611,7 @@ export function TOMLIcon({ className }: FrameworkIconProps) {
 // Java - Blue/orange logo
 export function JavaIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 256 346"
-      className={cn("w-4 h-4", className)}
-      preserveAspectRatio="xMidYMid"
-    >
+    <svg viewBox="0 0 256 346" className={cn("w-4 h-4", className)} preserveAspectRatio="xMidYMid">
       <path
         d="M83 267s-14 8 9 11c27 3 41 2 71-3 0 0 8 5 19 9-67 29-153-2-99-17M74 230s-15 11 8 13c29 3 52 3 92-4 0 0 6 5 15 8-82 24-173 2-115-17"
         fill="#5382A1"
@@ -712,11 +656,7 @@ export function CIcon({ className }: FrameworkIconProps) {
 // C++ - Blue logo with plus signs
 export function CppIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 256 288"
-      className={cn("w-4 h-4", className)}
-      preserveAspectRatio="xMidYMid"
-    >
+    <svg viewBox="0 0 256 288" className={cn("w-4 h-4", className)} preserveAspectRatio="xMidYMid">
       <path
         fill="#649AD2"
         d="M255.987 84.59c-.002-4.837-1.037-9.112-3.13-12.781-2.054-3.608-5.133-6.632-9.261-9.023-34.08-19.651-68.195-39.242-102.264-58.913-9.185-5.303-18.09-5.11-27.208.27-13.565 8-81.48 46.91-101.719 58.632C4.071 67.6.015 74.984.013 84.58 0 124.101.013 163.62 0 203.141c0 4.73.993 8.923 2.993 12.537 2.056 3.717 5.177 6.824 9.401 9.269 20.24 11.722 88.164 50.63 101.726 58.631 9.121 5.382 18.027 5.575 27.215.27 34.07-19.672 68.186-39.262 102.272-58.913 4.224-2.444 7.345-5.553 9.401-9.267 1.997-3.614 2.992-7.806 2.992-12.539 0 0 0-79.018-.013-118.539"
@@ -795,10 +735,7 @@ export function KotlinIcon({ className }: FrameworkIconProps) {
       role="img"
     >
       <title>Kotlin icon</title>
-      <path
-        d="M1.3 24l11.3-11.5L24 24zM0 0h12L0 12.5zM13.4 0L0 14v10l12-12L24 0z"
-        fill="#E37834"
-      />
+      <path d="M1.3 24l11.3-11.5L24 24zM0 0h12L0 12.5zM13.4 0L0 14v10l12-12L24 0z" fill="#E37834" />
     </svg>
   )
 }
@@ -1174,11 +1111,7 @@ export function MintlifyIcon({ className }: FrameworkIconProps) {
 // GitHub icon
 export function GitHubIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className={cn("w-4 h-4", className)}
-      fill="currentColor"
-    >
+    <svg viewBox="0 0 24 24" className={cn("w-4 h-4", className)} fill="currentColor">
       <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
     </svg>
   )
@@ -1380,7 +1313,7 @@ export function getDetectedFrameworkIcon(
     }
   }
 
-  // Return 21st.dev logo as final fallback
+  // Return mausCode logo as final fallback
   return <CodeIcon className={className} />
 }
 
@@ -1411,10 +1344,7 @@ export function NpmIcon({ className }: FrameworkIconProps) {
       fill="none"
       className={cn("w-4 h-4", className)}
     >
-      <path
-        d="M3 21H12V7.5H16.5V21H21V3H3V21Z"
-        fill="#CB3837"
-      />
+      <path d="M3 21H12V7.5H16.5V21H21V3H3V21Z" fill="#CB3837" />
     </svg>
   )
 }
@@ -1475,7 +1405,7 @@ export function PDFIcon({ className }: FrameworkIconProps) {
   )
 }
 
-// Default/Unknown - 21st.dev logo (same as canvas sidebar placeholder)
+// Default/Unknown - mausCode logo (same as canvas sidebar placeholder)
 export function CodeIcon({ className }: FrameworkIconProps) {
   return (
     <svg
@@ -1483,7 +1413,7 @@ export function CodeIcon({ className }: FrameworkIconProps) {
       className={cn("w-4 h-4 text-muted-foreground", className)}
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="21st.dev Logo"
+      aria-label="mausCode Logo"
     >
       <path
         fillRule="evenodd"

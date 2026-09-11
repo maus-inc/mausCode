@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react"
 import { X } from "lucide-react"
-import { motion, AnimatePresence } from "motion/react"
+import { AnimatePresence, motion } from "motion/react"
+import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
@@ -13,7 +13,7 @@ interface FileAgent {
   tools?: string[]
   disallowedTools?: string[]
   model?: "sonnet" | "opus" | "haiku" | "inherit"
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
   path: string
 }
 
@@ -35,7 +35,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
   const [description, setDescription] = useState("")
   const [prompt, setPrompt] = useState("")
   const [model, setModel] = useState<"sonnet" | "opus" | "haiku" | "inherit">("inherit")
-  const [source, setSource] = useState<"user" | "project">("user")
+  const [source, setSource] = useState<"user" | "project" | "plugin">("user")
   const [toolMode, setToolMode] = useState<ToolMode>("all")
   const [selectedTools, setSelectedTools] = useState<string[]>([])
 
@@ -128,7 +128,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
         tools,
         disallowedTools,
         model,
-        source: agent.source,
+        source: agent.source as "user" | "project",
       })
     } else {
       createMutation.mutate({
@@ -138,7 +138,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
         tools,
         disallowedTools,
         model,
-        source,
+        source: source as "user" | "project",
       })
     }
   }
@@ -255,10 +255,12 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                           "px-3 py-1.5 text-sm rounded-md border transition-colors",
                           model === m
                             ? "border-foreground/30 bg-foreground/10 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:border-foreground/20"
+                            : "border-border bg-background text-muted-foreground hover:border-foreground/20",
                         )}
                       >
-                        {m === "inherit" ? "Inherit (default)" : m.charAt(0).toUpperCase() + m.slice(1)}
+                        {m === "inherit"
+                          ? "Inherit (default)"
+                          : m.charAt(0).toUpperCase() + m.slice(1)}
                       </button>
                     ))}
                   </div>
@@ -280,7 +282,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                           "px-3 py-1.5 text-sm rounded-md border transition-colors",
                           toolMode === mode
                             ? "border-foreground/30 bg-foreground/10 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:border-foreground/20"
+                            : "border-border bg-background text-muted-foreground hover:border-foreground/20",
                         )}
                       >
                         {mode === "all" && "All Tools"}
@@ -311,7 +313,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                           "px-3 py-1.5 text-sm rounded-md border transition-colors",
                           source === "user"
                             ? "border-foreground/30 bg-foreground/10 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:border-foreground/20"
+                            : "border-border bg-background text-muted-foreground hover:border-foreground/20",
                         )}
                       >
                         User (~/.claude/agents/)
@@ -323,7 +325,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                           "px-3 py-1.5 text-sm rounded-md border transition-colors",
                           source === "project"
                             ? "border-foreground/30 bg-foreground/10 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:border-foreground/20"
+                            : "border-border bg-background text-muted-foreground hover:border-foreground/20",
                         )}
                       >
                         Project (.claude/agents/)
@@ -352,7 +354,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                     "px-4 py-2 text-sm font-medium rounded-md transition-colors",
                     isValid && !isLoading
                       ? "bg-foreground text-background hover:bg-foreground/90"
-                      : "bg-foreground/50 text-background/70 cursor-not-allowed"
+                      : "bg-foreground/50 text-background/70 cursor-not-allowed",
                   )}
                 >
                   {isLoading ? "Saving..." : isEditing ? "Save Changes" : "Create Agent"}
@@ -363,6 +365,6 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
         </>
       )}
     </AnimatePresence>,
-    portalTarget
+    portalTarget,
   )
 }

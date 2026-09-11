@@ -1,16 +1,13 @@
 "use client"
 
 import { memo } from "react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
 
 // Claude model context windows
 const CONTEXT_WINDOWS = {
   opus: 200_000,
+  "opus[1m]": 1_000_000,
   sonnet: 200_000,
   haiku: 200_000,
 } as const
@@ -62,11 +59,7 @@ function CircularProgress({
   const offset = circumference - (percent / 100) * circumference
 
   return (
-    <svg
-      width={size}
-      height={size}
-      className={cn("transform -rotate-90", className)}
-    >
+    <svg width={size} height={size} className={cn("transform -rotate-90", className)}>
       {/* Background circle */}
       <circle
         cx={size / 2}
@@ -116,9 +109,7 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
           onClick={isClickable ? onCompact : undefined}
           className={cn(
             "h-4 w-4 flex items-center justify-center",
-            isClickable
-              ? "cursor-pointer hover:opacity-70 transition-opacity"
-              : "cursor-default",
+            isClickable ? "cursor-pointer hover:opacity-70 transition-opacity" : "cursor-default",
             disabled && "opacity-50",
             className,
           )}
@@ -144,8 +135,7 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
               </span>
               <span className="text-muted-foreground mx-1">·</span>
               <span className="text-muted-foreground">
-                {formatTokens(contextTokens)} /{" "}
-                {formatTokens(contextWindow)} context
+                {formatTokens(contextTokens)} / {formatTokens(contextWindow)} context
               </span>
             </>
           )}

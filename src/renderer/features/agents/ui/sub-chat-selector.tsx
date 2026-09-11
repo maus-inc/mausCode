@@ -1,57 +1,50 @@
 "use client"
 
-import { useCallback, useMemo, useEffect, useRef, useState, memo, forwardRef, useImperativeHandle } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { AlignJustify, Play, Plus, TerminalSquare, X } from "lucide-react"
 import {
-  loadingSubChatsAtom,
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import { toast } from "sonner"
+import { useShallow } from "zustand/react/shallow"
+import { Button } from "../../../components/ui/button"
+import { ContextMenu, ContextMenuTrigger } from "../../../components/ui/context-menu"
+import {
+  AgentIcon,
+  ClockIcon,
+  DiffIcon,
+  IconSpinner,
+  PinFilledIcon,
+  PlanIcon,
+  QuestionIcon,
+} from "../../../components/ui/icons"
+import { Kbd } from "../../../components/ui/kbd"
+import { PopoverTrigger } from "../../../components/ui/popover"
+import { SearchCombobox } from "../../../components/ui/search-combobox"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
+import { chatSourceModeAtom } from "../../../lib/atoms"
+import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
+import { api } from "../../../lib/mock-api"
+import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
+import { getShortcutKey } from "../../../lib/utils/platform"
+import { unifiedSidebarEnabledAtom, widgetVisibilityAtomFamily } from "../../details-sidebar/atoms"
+import {
   agentsSubChatUnseenChangesAtom,
-  agentsSubChatsSidebarModeAtom,
+  loadingSubChatsAtom,
   pendingUserQuestionsAtom,
 } from "../atoms"
-import {
-  widgetVisibilityAtomFamily,
-  unifiedSidebarEnabledAtom,
-} from "../../details-sidebar/atoms"
-import { chatSourceModeAtom } from "../../../lib/atoms"
-import { trpc } from "../../../lib/trpc"
-import { Plus, AlignJustify, Play, TerminalSquare, X } from "lucide-react"
-import {
-  IconSpinner,
-  PlanIcon,
-  AgentIcon,
-  IconOpenSidebarRight,
-  PinFilledIcon,
-  DiffIcon,
-  ClockIcon,
-  QuestionIcon,
-
-} from "../../../components/ui/icons"
-import { Button } from "../../../components/ui/button"
-import { cn } from "../../../lib/utils"
-import {
-  useAgentSubChatStore,
-  type SubChatMeta,
-} from "../stores/sub-chat-store"
-import { useShallow } from "zustand/react/shallow"
-import { PopoverTrigger } from "../../../components/ui/popover"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
-import { Kbd } from "../../../components/ui/kbd"
-import { getShortcutKey } from "../../../lib/utils/platform"
-import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
-import {
-  ContextMenu,
-  ContextMenuTrigger,
-} from "../../../components/ui/context-menu"
-import { InlineEdit } from "./inline-edit"
-import { api } from "../../../lib/mock-api"
-import { toast } from "sonner"
-import { SearchCombobox } from "../../../components/ui/search-combobox"
-import { SubChatContextMenu } from "./sub-chat-context-menu"
+import { type SubChatMeta, useAgentSubChatStore } from "../stores/sub-chat-store"
 import { formatTimeAgo } from "../utils/format-time-ago"
+import { InlineEdit } from "./inline-edit"
+import { SubChatContextMenu } from "./sub-chat-context-menu"
 
 interface DiffStats {
   fileCount: number
@@ -76,94 +69,104 @@ export interface SearchHistoryPopoverRef {
   open: () => void
 }
 
-const SearchHistoryPopover = memo(forwardRef<SearchHistoryPopoverRef, SearchHistoryPopoverProps>(function SearchHistoryPopover({
-  sortedSubChats,
-  loadingSubChats,
-  subChatUnseenChanges,
-  pendingQuestionsMap,
-  pendingPlanApprovals,
-  allSubChatsLength,
-  onSelect,
-}, ref) {
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+const SearchHistoryPopover = memo(
+  forwardRef<SearchHistoryPopoverRef, SearchHistoryPopoverProps>(function SearchHistoryPopover(
+    {
+      sortedSubChats,
+      loadingSubChats,
+      subChatUnseenChanges,
+      pendingQuestionsMap,
+      pendingPlanApprovals,
+      allSubChatsLength,
+      onSelect,
+    },
+    ref,
+  ) {
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
-  // Expose open function to parent
-  useImperativeHandle(ref, () => ({
-    open: () => setIsHistoryOpen(true)
-  }), [])
+    // Expose open function to parent
+    useImperativeHandle(
+      ref,
+      () => ({
+        open: () => setIsHistoryOpen(true),
+      }),
+      [],
+    )
 
-  const renderItem = useCallback((subChat: SubChatMeta) => {
-    const timeAgo = formatTimeAgo(subChat.updated_at || subChat.created_at)
-    const isLoading = loadingSubChats.has(subChat.id)
-    const hasUnseen = subChatUnseenChanges.has(subChat.id)
-    const mode = subChat.mode || "agent"
-    const hasPendingQuestion = pendingQuestionsMap.has(subChat.id)
-    const hasPendingPlan = pendingPlanApprovals.has(subChat.id)
+    const renderItem = useCallback(
+      (subChat: SubChatMeta) => {
+        const timeAgo = formatTimeAgo(subChat.updated_at || subChat.created_at)
+        const isLoading = loadingSubChats.has(subChat.id)
+        const hasUnseen = subChatUnseenChanges.has(subChat.id)
+        const mode = subChat.mode || "agent"
+        const hasPendingQuestion = pendingQuestionsMap.has(subChat.id)
+        const hasPendingPlan = pendingPlanApprovals.has(subChat.id)
+
+        return (
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center relative">
+              {hasPendingQuestion ? (
+                <QuestionIcon className="w-4 h-4 text-blue-500" />
+              ) : isLoading ? (
+                <IconSpinner className="w-4 h-4 text-muted-foreground" />
+              ) : mode === "plan" ? (
+                <PlanIcon className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <AgentIcon className="w-4 h-4 text-muted-foreground" />
+              )}
+              {(hasPendingPlan || hasUnseen) && !isLoading && !hasPendingQuestion && (
+                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-popover flex items-center justify-center">
+                  <div
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      hasPendingPlan ? "bg-amber-500" : "bg-[#307BD0]",
+                    )}
+                  />
+                </div>
+              )}
+            </div>
+            <span className="text-sm truncate flex-1">{subChat.name || "New Chat"}</span>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">{timeAgo}</span>
+          </div>
+        )
+      },
+      [loadingSubChats, subChatUnseenChanges, pendingQuestionsMap, pendingPlanApprovals],
+    )
 
     return (
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center relative">
-          {hasPendingQuestion ? (
-            <QuestionIcon className="w-4 h-4 text-blue-500" />
-          ) : isLoading ? (
-            <IconSpinner className="w-4 h-4 text-muted-foreground" />
-          ) : mode === "plan" ? (
-            <PlanIcon className="w-4 h-4 text-muted-foreground" />
-          ) : (
-            <AgentIcon className="w-4 h-4 text-muted-foreground" />
-          )}
-          {(hasPendingPlan || hasUnseen) && !isLoading && !hasPendingQuestion && (
-            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-popover flex items-center justify-center">
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full",
-                hasPendingPlan ? "bg-amber-500" : "bg-[#307BD0]"
-              )} />
-            </div>
-          )}
-        </div>
-        <span className="text-sm truncate flex-1">
-          {subChat.name || "New Chat"}
-        </span>
-        <span className="text-sm text-muted-foreground whitespace-nowrap">
-          {timeAgo}
-        </span>
-      </div>
+      <SearchCombobox
+        isOpen={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        items={sortedSubChats}
+        onSelect={onSelect}
+        placeholder="Search chats..."
+        emptyMessage="No results"
+        getItemValue={(subChat) => `${subChat.name || "New Chat"} ${subChat.id}`}
+        renderItem={renderItem}
+        trigger={
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center"
+                  disabled={allSubChatsLength === 0}
+                >
+                  <ClockIcon className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Search chats
+              <Kbd>/</Kbd>
+            </TooltipContent>
+          </Tooltip>
+        }
+      />
     )
-  }, [loadingSubChats, subChatUnseenChanges, pendingQuestionsMap, pendingPlanApprovals])
-
-  return (
-    <SearchCombobox
-      isOpen={isHistoryOpen}
-      onOpenChange={setIsHistoryOpen}
-      items={sortedSubChats}
-      onSelect={onSelect}
-      placeholder="Search chats..."
-      emptyMessage="No results"
-      getItemValue={(subChat) => `${subChat.name || "New Chat"} ${subChat.id}`}
-      renderItem={renderItem}
-      trigger={
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center"
-                disabled={allSubChatsLength === 0}
-              >
-                <ClockIcon className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            Search chats
-            <Kbd>/</Kbd>
-          </TooltipContent>
-        </Tooltip>
-      }
-    />
-  )
-}))
+  }),
+)
 
 interface SubChatSelectorProps {
   onCreateNew: () => void
@@ -220,30 +223,25 @@ export function SubChatSelector({
       addToSplit: state.addToSplit,
       removeFromSplit: state.removeFromSplit,
       closeSplit: state.closeSplit,
-    }))
+    })),
   )
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const subChatUnseenChanges = useAtomValue(agentsSubChatUnseenChangesAtom)
   const setSubChatUnseenChanges = useSetAtom(agentsSubChatUnseenChangesAtom)
-  const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
-    agentsSubChatsSidebarModeAtom,
-  )
   const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
 
   // Overview sidebar state - to check if widgets are visible
   const isUnifiedSidebarEnabled = useAtomValue(unifiedSidebarEnabledAtom)
   const chatSourceMode = useAtomValue(chatSourceModeAtom)
-  const widgetVisibilityAtom = useMemo(
-    () => widgetVisibilityAtomFamily(chatId || ""),
-    [chatId],
-  )
+  const widgetVisibilityAtom = useMemo(() => widgetVisibilityAtomFamily(chatId || ""), [chatId])
   const widgetVisibility = useAtomValue(widgetVisibilityAtom)
 
   // Show standalone buttons when:
   // 1. Unified sidebar is disabled (use legacy sidebars), OR
   // 2. Unified sidebar is enabled but the widget is hidden by user, OR
   // 3. Sandbox mode (DetailsSidebar doesn't render without worktreePath)
-  const showDiffButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("diff") || chatSourceMode === "sandbox"
+  const showDiffButton =
+    !isUnifiedSidebarEnabled || !widgetVisibility.includes("diff") || chatSourceMode === "sandbox"
   const showTerminalButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("terminal")
 
   // Resolved hotkeys for tooltips
@@ -255,7 +253,7 @@ export function SubChatSelector({
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds },
-    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: (prev) => prev }
+    { refetchInterval: 5000, enabled: openSubChatIds.length > 0, placeholderData: (prev) => prev },
   )
   const pendingPlanApprovals = useMemo(() => {
     const set = new Set<string>()
@@ -390,9 +388,7 @@ export function SubChatSelector({
   const renameMutation = api.agents.renameSubChat.useMutation({
     onSuccess: (_, variables) => {
       // Update local store
-      useAgentSubChatStore
-        .getState()
-        .updateSubChatName(variables.subChatId, variables.name)
+      useAgentSubChatStore.getState().updateSubChatName(variables.subChatId, variables.name)
     },
     onError: (error) => {
       // Show helpful error message (like Canvas)
@@ -444,9 +440,7 @@ export function SubChatSelector({
         })
       } catch {
         // Revert on error (like Canvas)
-        useAgentSubChatStore
-          .getState()
-          .updateSubChatName(subChat.id, oldName || "New Chat")
+        useAgentSubChatStore.getState().updateSubChatName(subChat.id, oldName || "New Chat")
       } finally {
         setEditLoading(false)
       }
@@ -466,19 +460,10 @@ export function SubChatSelector({
     [onSwitchFromHistory],
   )
 
-  // Hotkey: / to open history popover when sidebar is closed (tabs mode)
+  // Hotkey: / to open history popover
   useEffect(() => {
     const handleHistoryHotkey = (e: KeyboardEvent) => {
-      // Only in tabs mode (sidebar closed)
-      if (subChatsSidebarMode !== "tabs") return
-
-      if (
-        e.key === "/" &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !e.shiftKey
-      ) {
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         // Don't trigger if already focused on an input/textarea
         const activeEl = document.activeElement
         if (
@@ -496,9 +481,8 @@ export function SubChatSelector({
     }
 
     window.addEventListener("keydown", handleHistoryHotkey, true)
-    return () =>
-      window.removeEventListener("keydown", handleHistoryHotkey, true)
-  }, [subChatsSidebarMode])
+    return () => window.removeEventListener("keydown", handleHistoryHotkey, true)
+  }, [])
 
   // Keyboard shortcut: Cmd+Shift+T / Ctrl+Shift+T for new sub-chat
   // Scroll to active tab when it changes
@@ -517,8 +501,7 @@ export function SubChatSelector({
         const isTabRightOfView = tabRect.right > containerRect.right
 
         if (isTabLeftOfView || isTabRightOfView) {
-          const tabCenter =
-            activeTabElement.offsetLeft + activeTabElement.offsetWidth / 2
+          const tabCenter = activeTabElement.offsetLeft + activeTabElement.offsetWidth / 2
           const containerCenter = container.offsetWidth / 2
           const targetScroll = tabCenter - containerCenter
           const maxScroll = container.scrollWidth - container.offsetWidth
@@ -546,9 +529,9 @@ export function SubChatSelector({
 
       // Update gradient visibility for each tab via DOM
       tabRefs.current.forEach((tabEl, subChatId) => {
-        const gradientEl = tabEl.querySelector('[data-truncate-gradient]') as HTMLElement
+        const gradientEl = tabEl.querySelector("[data-truncate-gradient]") as HTMLElement
         if (gradientEl) {
-          gradientEl.style.display = newTruncated.has(subChatId) ? 'block' : 'none'
+          gradientEl.style.display = newTruncated.has(subChatId) ? "block" : "none"
         }
       })
     }
@@ -638,8 +621,8 @@ export function SubChatSelector({
         WebkitAppRegion: "drag",
       }}
     >
-      {/* Burger button - hidden when sub-chats sidebar is open (it moves into sidebar) */}
-      {onBackToChats && subChatsSidebarMode === "tabs" && (
+      {/* Burger button */}
+      {onBackToChats && (
         <Button
           variant="ghost"
           size="icon"
@@ -654,27 +637,6 @@ export function SubChatSelector({
           <AlignJustify className="h-4 w-4" />
           <span className="sr-only">Back to chats</span>
         </Button>
-      )}
-
-      {/* Open sidebar button - only on desktop when in tabs mode */}
-      {!isMobile && subChatsSidebarMode === "tabs" && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSubChatsSidebarMode("sidebar")}
-              className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center"
-              style={{
-                // @ts-expect-error - WebKit-specific property
-                WebkitAppRegion: "no-drag",
-              }}
-            >
-              <IconOpenSidebarRight className="h-4 w-4 scale-x-[-1]" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Open chats pane</TooltipContent>
-        </Tooltip>
       )}
 
       <div
@@ -696,8 +658,7 @@ export function SubChatSelector({
           ref={tabsContainerRef}
           className={cn(
             "flex items-center px-1 py-1 -my-1 gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-hide pr-12",
-            // Hide tabs when sidebar is open (desktop) or when only one chat exists
-            (subChatsSidebarMode === "sidebar" && !isMobile) && "hidden",
+            // Hide tabs when only one chat is open
             hasSingleChat && "invisible",
           )}
         >
@@ -707,7 +668,8 @@ export function SubChatSelector({
                 const isActive = activeSubChatId === subChat.id
                 const isInSplitPair = splitPaneIdSet.has(subChat.id)
                 const hasSplitPrev = index > 0 && splitPaneIdSet.has(openSubChats[index - 1]?.id)
-                const hasSplitNext = index < openSubChats.length - 1 && splitPaneIdSet.has(openSubChats[index + 1]?.id)
+                const hasSplitNext =
+                  index < openSubChats.length - 1 && splitPaneIdSet.has(openSubChats[index + 1]?.id)
                 const isLoading = loadingSubChats.has(subChat.id)
                 const hasUnseen = subChatUnseenChanges.has(subChat.id)
                 const hasTabsToRight = index < openSubChats.length - 1
@@ -848,40 +810,42 @@ export function SubChatSelector({
                                 ? "bg-gradient-to-l from-muted to-transparent"
                                 : "bg-gradient-to-l from-background to-transparent",
                             )}
-                            style={{ display: truncatedTabsRef.current.has(subChat.id) ? "block" : "none" }}
+                            style={{
+                              display: truncatedTabsRef.current.has(subChat.id) ? "block" : "none",
+                            }}
                           />
                         )}
 
                         {/* Close button - only show when hovered and multiple tabs and not editing */}
-                        {openSubChats.length > 1 &&
-                          editingSubChatId !== subChat.id && (
-                            <div className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                              <div
-                                className={cn(
-                                  "absolute right-0 top-0 bottom-0 w-9 flex items-center justify-center rounded-r-md",
-                                  isActive
-                                    ? "bg-[linear-gradient(to_left,hsl(var(--muted))_0%,hsl(var(--muted))_60%,transparent_100%)]"
-                                    : "bg-[linear-gradient(to_left,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_0%,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_60%,transparent_100%)]",
-                                )}
-                              />
-                              <span
-                                role="button"
-                                tabIndex={-1}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onCloseTab(subChat.id)
-                                }}
-                                className="relative z-20 hover:text-foreground rounded p-0.5 transition-[color,transform] duration-150 ease-out active:scale-[0.97] cursor-pointer"
-                                title={
-                                  isActive && archiveAgentHotkey
-                                    ? `Close tab (${archiveAgentHotkey})`
-                                    : "Close tab"
-                                }
-                              >
-                                <X className="h-3 w-3" />
-                              </span>
-                            </div>
-                          )}
+                        {openSubChats.length > 1 && editingSubChatId !== subChat.id && (
+                          <div className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                            <div
+                              className={cn(
+                                "absolute right-0 top-0 bottom-0 w-9 flex items-center justify-center rounded-r-md",
+                                isActive
+                                  ? "bg-[linear-gradient(to_left,hsl(var(--muted))_0%,hsl(var(--muted))_60%,transparent_100%)]"
+                                  : "bg-[linear-gradient(to_left,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_0%,color-mix(in_srgb,hsl(var(--muted))_80%,hsl(var(--background)))_60%,transparent_100%)]",
+                              )}
+                            />
+                            {/* biome-ignore lint/a11y/useSemanticElements: nested inside the tab <button>; button-in-button is invalid HTML */}
+                            <span
+                              role="button"
+                              tabIndex={-1}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onCloseTab(subChat.id)
+                              }}
+                              className="relative z-20 hover:text-foreground rounded p-0.5 transition-[color,transform] duration-150 ease-out active:scale-[0.97] cursor-pointer"
+                              title={
+                                isActive && archiveAgentHotkey
+                                  ? `Close tab (${archiveAgentHotkey})`
+                                  : "Close tab"
+                              }
+                            >
+                              <X className="h-3 w-3" />
+                            </span>
+                          </div>
+                        )}
                       </button>
                     </ContextMenuTrigger>
                     <SubChatContextMenu
@@ -913,7 +877,7 @@ export function SubChatSelector({
         </div>
 
         {/* Plus button - absolute positioned on right with gradient cover */}
-        {(isMobile || (!isMobile && subChatsSidebarMode === "tabs")) && (
+        {
           <div className="absolute right-0 top-0 bottom-0 flex items-center z-20">
             {/* Gradient to cover content peeking from the left */}
             <div className="w-6 h-full bg-gradient-to-r from-transparent to-background" />
@@ -936,11 +900,11 @@ export function SubChatSelector({
               </Tooltip>
             </div>
           </div>
-        )}
+        }
       </div>
 
       {/* Action buttons - always visible on mobile, on desktop only in tabs mode */}
-      {(isMobile || (!isMobile && subChatsSidebarMode === "tabs")) && (
+      {
         <div
           className="flex items-center gap-1"
           style={{
@@ -959,7 +923,7 @@ export function SubChatSelector({
             onSelect={handleSelectFromHistory}
           />
         </div>
-      )}
+      }
 
       {/* Diff button - visible on desktop when unified sidebar is disabled OR diff widget is hidden */}
       {/* Only show if onOpenDiff is provided (clickable action available) */}
@@ -1061,7 +1025,6 @@ export function SubChatSelector({
           </Button>
         </div>
       )}
-
     </div>
   )
 }

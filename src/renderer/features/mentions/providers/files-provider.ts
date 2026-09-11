@@ -5,14 +5,14 @@
  * Provides file and folder search with icons and relevance sorting.
  */
 
-import { FolderOpen as FolderOpenIcon, Files as FilesIcon } from "lucide-react"
+import { Files as FilesIcon, FolderOpen as FolderOpenIcon } from "lucide-react"
 import { trpcClient } from "../../../lib/trpc"
 import {
   createMentionProvider,
+  MENTION_PREFIXES,
   type MentionItem,
   type MentionSearchContext,
   type MentionSearchResult,
-  MENTION_PREFIXES,
 } from "../types"
 
 /**
@@ -80,7 +80,7 @@ export const filesProvider = createMentionProvider<FileData>({
       })
 
       // Map to MentionItem format
-      const items: MentionItem<FileData>[] = results.map((result) => ({
+      const items: MentionItem<FileData>[] = results.map((result: any) => ({
         id: result.id,
         label: result.label,
         description: result.path,
@@ -124,9 +124,7 @@ export const filesProvider = createMentionProvider<FileData>({
 
         // Dedupe - don't add changed files that are already in results
         const existingPaths = new Set(items.map((i) => i.data.path))
-        const uniqueChangedItems = changedItems.filter(
-          (i) => !existingPaths.has(i.data.path)
-        )
+        const uniqueChangedItems = changedItems.filter((i) => !existingPaths.has(i.data.path))
 
         items.unshift(...uniqueChangedItems)
       }

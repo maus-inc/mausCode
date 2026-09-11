@@ -271,7 +271,7 @@ body:has([data-agents-page]) .canvas-dialog,
 .agent-diff-wrapper code,
 .agent-diff-wrapper pre {
   font-size: 12px;
-  font-family: "Monaco", "Menlo", "Consolas", monospace;
+  font-family: "Source Code Pro", "Monaco", "Menlo", "Consolas", monospace;
 }
 
 /* ========================================

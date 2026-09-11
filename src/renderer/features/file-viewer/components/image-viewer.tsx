@@ -1,30 +1,27 @@
-import { useMemo, useCallback } from "react"
-import { Loader2, AlertCircle, Check, X } from "lucide-react"
 import { useAtom, useAtomValue } from "jotai"
+import { AlertCircle, Check, X } from "lucide-react"
+import { useCallback, useMemo } from "react"
+import { AppLoader } from "@/components/ui/app-loader"
 import { Button } from "@/components/ui/button"
 import {
-  IconCloseSidebarRight,
-  IconSidePeek,
-  IconCenterPeek,
-  IconFullPage,
-} from "@/components/ui/icons"
-import { Kbd } from "@/components/ui/kbd"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { trpc } from "@/lib/trpc"
-import { preferredEditorAtom } from "@/lib/atoms"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { APP_META } from "../../../../shared/external-apps"
-import { EDITOR_ICONS } from "@/lib/editor-icons"
-import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  IconCenterPeek,
+  IconCloseSidebarRight,
+  IconFullPage,
+  IconSidePeek,
+} from "@/components/ui/icons"
+import { Kbd } from "@/components/ui/kbd"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { preferredEditorAtom } from "@/lib/atoms"
+import { EDITOR_ICONS } from "@/lib/editor-icons"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { trpc } from "@/lib/trpc"
+import { APP_META } from "../../../../shared/external-apps"
 import { fileViewerDisplayModeAtom } from "../../agents/atoms"
 import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
 import { getFileName } from "../utils/file-utils"
@@ -41,11 +38,7 @@ interface ImageViewerProps {
   onClose: () => void
 }
 
-export function ImageViewer({
-  filePath,
-  projectPath,
-  onClose,
-}: ImageViewerProps) {
+export function ImageViewer({ filePath, projectPath, onClose }: ImageViewerProps) {
   const fileName = getFileName(filePath)
   const [displayMode, setDisplayMode] = useAtom(fileViewerDisplayModeAtom)
   const preferredEditor = useAtomValue(preferredEditorAtom)
@@ -95,7 +88,8 @@ export function ImageViewer({
                 className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
               >
                 {(() => {
-                  const CurrentIcon = FILE_VIEWER_MODES.find((m) => m.value === displayMode)?.Icon ?? IconSidePeek
+                  const CurrentIcon =
+                    FILE_VIEWER_MODES.find((m) => m.value === displayMode)?.Icon ?? IconSidePeek
                   return <CurrentIcon className="size-4 text-muted-foreground" />
                 })()}
               </Button>
@@ -148,7 +142,9 @@ export function ImageViewer({
             </TooltipTrigger>
             <TooltipContent side="bottom" showArrow={false}>
               Open in {editorMeta.label}
-              {openInEditorHotkey && <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>}
+              {openInEditorHotkey && (
+                <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>
+              )}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -156,12 +152,7 @@ export function ImageViewer({
 
       {/* Content */}
       <div className="flex-1 min-h-0 flex items-center justify-center bg-muted/20 p-4">
-        {isLoading && (
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="text-sm">Loading image...</span>
-          </div>
-        )}
+        {isLoading && <AppLoader label="Loading image..." />}
 
         {error && (
           <div className="flex flex-col items-center gap-3 text-center max-w-[300px]">

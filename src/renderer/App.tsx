@@ -1,11 +1,11 @@
-import { Provider as JotaiProvider, useAtomValue, useSetAtom } from "jotai"
+import { Provider as JotaiProvider, useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
-import { useEffect, useMemo } from "react"
+import { useEffect } from "react"
 import { Toaster } from "sonner"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
-import { WindowProvider, getInitialWindowParams } from "./contexts/WindowContext"
-import { selectedProjectAtom, selectedAgentChatIdAtom } from "./features/agents/atoms"
+import { getInitialWindowParams, WindowProvider } from "./contexts/WindowContext"
+import { selectedAgentChatIdAtom, selectedProjectAtom } from "./features/agents/atoms"
 import { useAgentSubChatStore } from "./features/agents/stores/sub-chat-store"
 import { AgentsLayout } from "./features/layout/agents-layout"
 import {
@@ -47,14 +47,12 @@ function ThemedToaster() {
 function AppContent() {
   const billingMethod = useAtomValue(billingMethodAtom)
   const setBillingMethod = useSetAtom(billingMethodAtom)
-  const anthropicOnboardingCompleted = useAtomValue(
-    anthropicOnboardingCompletedAtom
-  )
+  const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const selectedProject = useAtomValue(selectedProjectAtom)
+  const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const { setActiveSubChat, addToOpenSubChats, setChatId } = useAgentSubChatStore()
 
@@ -113,20 +111,33 @@ function AppContent() {
     }
   }, [cliConfig?.hasConfig, billingMethod, setBillingMethod, setApiKeyOnboardingCompleted])
 
-  // Fetch projects to validate selectedProject exists
-  const { data: projects, isLoading: isLoadingProjects } =
-    trpc.projects.list.useQuery()
+  // If user has local Claude Code credentials and selected the Claude
+  // subscription billing method, skip the OAuth onboarding.
+  // Transplanted from erenbertr/1code (Apache-2.0).
+  useEffect(() => {
+    if (
+      cliConfig?.hasConfig &&
+      billingMethod === "claude-subscription" &&
+      !anthropicOnboardingCompleted
+    ) {
+      setAnthropicOnboardingCompleted(true)
+    }
+  }, [
+    cliConfig?.hasConfig,
+    billingMethod,
+    anthropicOnboardingCompleted,
+    setAnthropicOnboardingCompleted,
+  ])
 
-  // Validated project - only valid if exists in DB
-  const validatedProject = useMemo(() => {
-    if (!selectedProject) return null
-    // While loading, trust localStorage value to prevent flicker
-    if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
-    if (!projects) return null
+  // Fetch projects to validate selectedProject exists
+  const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
+
+  // Clear a stale selection if it points to a project that no longer exists.
+  useEffect(() => {
+    if (!selectedProject || isLoadingProjects || !projects) return
     const exists = projects.some((p) => p.id === selectedProject.id)
-    return exists ? selectedProject : null
-  }, [selectedProject, projects, isLoadingProjects])
+    if (!exists) setSelectedProject(null)
+  }, [selectedProject, projects, isLoadingProjects, setSelectedProject])
 
   // Determine which page to show:
   // 1. No billing method selected -> BillingMethodPage
@@ -139,13 +150,19 @@ function AppContent() {
     return <BillingMethodPage />
   }
 
-  if (billingMethod === "claude-subscription" && !anthropicOnboardingCompleted) {
+  // While we're still checking for local Claude creds, don't flash the
+  // onboarding page — the cliConfig effect above may auto-complete onboarding.
+  if (
+    billingMethod === "claude-subscription" &&
+    !anthropicOnboardingCompleted &&
+    !isLoadingCliConfig &&
+    !cliConfig?.hasConfig
+  ) {
     return <AnthropicOnboardingPage />
   }
 
   if (
-    (billingMethod === "codex-subscription" ||
-      billingMethod === "codex-api-key") &&
+    (billingMethod === "codex-subscription" || billingMethod === "codex-api-key") &&
     !codexOnboardingCompleted
   ) {
     return <CodexOnboardingPage />
@@ -158,7 +175,11 @@ function AppContent() {
     return <ApiKeyOnboardingPage />
   }
 
-  if (!validatedProject && !isLoadingProjects) {
+  // Only show the first-launch repo picker when the user has zero projects.
+  // When they have projects but cleared the selection (e.g. clicked "All projects"
+  // in the rail), let AgentsLayout render so the All Projects page can show.
+  const hasAnyProject = (projects?.length ?? 0) > 0
+  if (!hasAnyProject && !isLoadingProjects) {
     return <SelectRepoPage />
   }
 
@@ -173,14 +194,24 @@ export function App() {
     // Sync analytics opt-out status to main process
     const syncOptOutStatus = async () => {
       try {
-        const optOut =
-          localStorage.getItem("preferences:analytics-opt-out") === "true"
+        const optOut = localStorage.getItem("preferences:analytics-opt-out") === "true"
         await window.desktopApi?.setAnalyticsOptOut(optOut)
       } catch (error) {
         console.warn("[Analytics] Failed to sync opt-out status:", error)
       }
     }
     syncOptOutStatus()
+
+    // Sync local-only mode to main process
+    const syncLocalOnlyStatus = async () => {
+      try {
+        const enabled = localStorage.getItem("preferences:local-only-mode") === "true"
+        await window.desktopApi?.setLocalOnlyMode(enabled)
+      } catch (error) {
+        console.warn("[LocalOnly] Failed to sync status:", error)
+      }
+    }
+    syncLocalOnlyStatus()
 
     // Identify user if already authenticated
     const identifyUser = async () => {

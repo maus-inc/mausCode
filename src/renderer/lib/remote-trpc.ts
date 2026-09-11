@@ -1,10 +1,16 @@
 /**
- * tRPC client for remote web backend (21st.dev)
+ * tRPC client for the mausCode control-plane web backend
  * Uses signedFetch via IPC for authentication (no CORS issues)
  */
+
 import { createTRPCClient, httpLink } from "@trpc/client"
-import type { AppRouter } from "../../../../web/server/api/root"
+
+// TODO: Import proper AppRouter type when web package is available locally
+// The web backend types aren't available in this repo, so we use `any` as a fallback
+type AppRouter = any
+
 import SuperJSON from "superjson"
+import { DEFAULT_API_BASE_URL } from "../../shared/app-identity"
 
 // Placeholder URL - actual base is fetched dynamically from main process
 const TRPC_PLACEHOLDER = "/__dynamic__/api/trpc"
@@ -14,7 +20,7 @@ let cachedApiBase: string | null = null
 
 async function getApiBase(): Promise<string> {
   if (!cachedApiBase) {
-    cachedApiBase = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+    cachedApiBase = (await window.desktopApi?.getApiBaseUrl()) || DEFAULT_API_BASE_URL
   }
   return cachedApiBase
 }
@@ -56,7 +62,9 @@ const signedFetch: typeof fetch = async (input, init) => {
  * tRPC client connected to web backend
  * Fully typed, handles superjson automatically
  */
-export const remoteTrpc = createTRPCClient<AppRouter>({
+// Cast to `any` because the web backend AppRouter type isn't available in the desktop repo.
+// All remote API calls go through remote-api.ts which handles the typing.
+export const remoteTrpc: any = createTRPCClient<AppRouter>({
   links: [
     httpLink({
       url: TRPC_PLACEHOLDER,

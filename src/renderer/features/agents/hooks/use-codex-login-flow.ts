@@ -1,20 +1,12 @@
 import { useAtom } from "jotai"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import {
-  codexApiKeyAtom,
-  normalizeCodexApiKey,
-} from "../../../lib/atoms"
+import { codexApiKeyAtom, normalizeCodexApiKey } from "../../../lib/atoms"
 import { trpc, trpcClient } from "../../../lib/trpc"
 
 export type CodexAuthMethod = "chatgpt" | "api_key"
 
-export type CodexLoginFlowState =
-  | "idle"
-  | "running"
-  | "success"
-  | "error"
-  | "cancelled"
+export type CodexLoginFlowState = "idle" | "running" | "success" | "error" | "cancelled"
 
 const VERIFY_ATTEMPTS = 6
 const VERIFY_DELAY_MS = 400
@@ -128,10 +120,7 @@ export function useCodexLoginFlow() {
       }
 
       const message = lastVerifyError
-        ? toErrorMessage(
-            lastVerifyError,
-            "Failed to verify Codex login status. Please retry.",
-          )
+        ? toErrorMessage(lastVerifyError, "Failed to verify Codex login status. Please retry.")
         : "Codex login completed, but credentials were not detected. Please retry."
 
       setState("error")
@@ -173,8 +162,7 @@ export function useCodexLoginFlow() {
     activeStartRequestRef.current = requestId
     cancelledStartRequestsRef.current.delete(requestId)
 
-    const wasCancelled = () =>
-      cancelledStartRequestsRef.current.has(requestId)
+    const wasCancelled = () => cancelledStartRequestsRef.current.has(requestId)
 
     setError(null)
     setSessionId(null)
@@ -183,7 +171,7 @@ export function useCodexLoginFlow() {
     verifyingSessionRef.current = null
     lastErrorToastRef.current = null
 
-      // Skip launching `codex login` when already connected.
+    // Skip launching `codex login` when already connected.
     try {
       const integration = await trpcClient.codex.getIntegration.query()
       if (
@@ -218,11 +206,9 @@ export function useCodexLoginFlow() {
 
       if (wasCancelled()) {
         if (session.sessionId) {
-          await cancelLoginMutation
-            .mutateAsync({ sessionId: session.sessionId })
-            .catch(() => {
-              // No-op
-            })
+          await cancelLoginMutation.mutateAsync({ sessionId: session.sessionId }).catch(() => {
+            // No-op
+          })
         }
         return
       }
@@ -238,10 +224,7 @@ export function useCodexLoginFlow() {
         return
       }
 
-      const message = toErrorMessage(
-        startError,
-        "Failed to start Codex login. Please try again.",
-      )
+      const message = toErrorMessage(startError, "Failed to start Codex login. Please try again.")
       setState("error")
       setError(message)
       notifyError(message)
@@ -251,14 +234,7 @@ export function useCodexLoginFlow() {
       }
       cancelledStartRequestsRef.current.delete(requestId)
     }
-  }, [
-    cancelLoginMutation,
-    method,
-    notifyError,
-    saveApiKey,
-    startLoginMutation,
-    trpcUtils,
-  ])
+  }, [cancelLoginMutation, method, notifyError, saveApiKey, startLoginMutation, trpcUtils])
 
   const cancel = useCallback(async () => {
     if (state === "success") {
@@ -308,7 +284,11 @@ export function useCodexLoginFlow() {
     }
 
     try {
-      await openExternalMutation.mutateAsync(url)
+      const result = await openExternalMutation.mutateAsync(url)
+      if (result?.blocked) {
+        setError(result.message || "Opening external URLs is blocked (local-only mode)")
+        return false
+      }
       return true
     } catch (openError) {
       setError(toErrorMessage(openError, "Failed to open auth URL"))
@@ -339,8 +319,7 @@ export function useCodexLoginFlow() {
     setState(data.state)
     setError(data.error || null)
     if (data.state === "error") {
-      const message =
-        data.error || "Codex login failed. Please retry."
+      const message = data.error || "Codex login failed. Please retry."
       if (message) {
         notifyError(message)
       }
@@ -356,13 +335,16 @@ export function useCodexLoginFlow() {
     }
   }, [sessionId, state])
 
-  const setMethodAndResetError = useCallback((nextMethod: CodexAuthMethod) => {
-    setMethod(nextMethod)
-    setError(null)
-    if (state !== "running") {
-      setState("idle")
-    }
-  }, [state])
+  const setMethodAndResetError = useCallback(
+    (nextMethod: CodexAuthMethod) => {
+      setMethod(nextMethod)
+      setError(null)
+      if (state !== "running") {
+        setState("idle")
+      }
+    },
+    [state],
+  )
 
   return {
     sessionId,

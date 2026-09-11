@@ -1,10 +1,19 @@
 "use client"
 
+/**
+ * NOTE (transplant): Gemini/OpenRouter provider wiring (model atoms, auth
+ * queries, selector props, placeholder names) was transplanted from
+ * erenbertr/1code (Apache-2.0). Their engine-toggle removal was NOT taken —
+ * this tree keeps the native/legacy switch (locked to legacy for the new
+ * providers, which the native runtime cannot serve).
+ */
+
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, RefreshCw } from "lucide-react"
+import { ChevronDown, RefreshCw, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-
+import { toast } from "sonner"
+import { McpStatusDot } from "../../../components/dialogs/settings-tabs/agents-mcp-tab"
 import { Button } from "../../../components/ui/button"
 import {
   DropdownMenu,
@@ -13,30 +22,20 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
 import {
-  AgentIcon,
   AttachIcon,
   CheckIcon,
   IconSpinner,
   OriginalMCPIcon,
-  PlanIcon,
   SettingsIcon,
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover"
 import {
   PromptInput,
   PromptInputActions,
   PromptInputContextItems,
 } from "../../../components/ui/prompt-input"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../../components/ui/popover"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
@@ -45,40 +44,75 @@ import {
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
+  customHotkeysAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
+  pinnedOpenRouterModelsAtom,
   selectedOllamaModelAtom,
+  sessionInfoAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
+import {
+  blobToBase64,
+  getAudioFormat,
+  useVoiceRecording,
+} from "../../../lib/hooks/use-voice-recording"
+import { getResolvedHotkey } from "../../../lib/hotkeys"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import {
+  AGENT_MODES,
+  type AgentMode,
+  getNextMode,
+  isAgentMode,
+  lastSelectedClineModelIdAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedCursorModelIdAtom,
+  lastSelectedGeminiModelIdAtom,
+  lastSelectedGrokModelIdAtom,
   lastSelectedModelIdAtom,
+  lastSelectedOpenclawModelIdAtom,
+  lastSelectedOpenRouterModelIdAtom,
+  lastSelectedQwenModelIdAtom,
+  lastSelectedRooModelIdAtom,
+  type SubChatEngine,
+  type SubChatFileChange,
+  subChatClineModelIdAtomFamily,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
-  subChatModelIdAtomFamily,
+  subChatCursorModelIdAtomFamily,
+  subChatEngineAtomFamily,
+  subChatGeminiModelIdAtomFamily,
+  subChatGrokModelIdAtomFamily,
   subChatModeAtomFamily,
-  getNextMode,
-  type AgentMode,
-  type SubChatFileChange,
+  subChatModelIdAtomFamily,
+  subChatOpenclawModelIdAtomFamily,
+  subChatOpenRouterModelIdAtomFamily,
+  subChatQwenModelIdAtomFamily,
+  subChatRooModelIdAtomFamily,
 } from "../atoms"
-import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
-import { AgentModelSelector } from "../components/agent-model-selector"
+import { AgentModelSelector, type AgentProviderId } from "../components/agent-model-selector"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
-import {
-  clearSubChatDraft,
-  saveSubChatDraftWithAttachments,
-} from "../lib/drafts"
+import type { PastedTextFile } from "../hooks/use-pasted-text-files"
+import { clearSubChatDraft, saveSubChatDraftWithAttachments } from "../lib/drafts"
+import { getModeIcon, getModeLabel, getModeTooltip } from "../lib/mode-display"
 import {
   CLAUDE_MODELS,
+  CLINE_MODELS,
   CODEX_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
   type CodexThinkingLevel,
+  CURSOR_MODELS,
+  GEMINI_MODELS,
+  GROK_MODELS,
+  OPENCLAW_MODELS,
+  QWEN_MODELS,
+  ROO_MODELS,
 } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
 import {
@@ -87,6 +121,8 @@ import {
   type AgentsMentionsEditorHandle,
   type FileMentionOption,
 } from "../mentions"
+import { agentChatStore } from "../stores/agent-chat-store"
+import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { AgentContextIndicator, type MessageTokenData } from "../ui/agent-context-indicator"
 import { AgentDiffTextContextItem } from "../ui/agent-diff-text-context-item"
 import { AgentFileItem } from "../ui/agent-file-item"
@@ -94,17 +130,7 @@ import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
-import { McpStatusDot } from "../../../components/dialogs/settings-tabs/agents-mcp-tab"
 import { handlePasteEvent } from "../utils/paste-text"
-import type { PastedTextFile } from "../hooks/use-pasted-text-files"
-import {
-  useVoiceRecording,
-  blobToBase64,
-  getAudioFormat,
-} from "../../../lib/hooks/use-voice-recording"
-import { getResolvedHotkey } from "../../../lib/hotkeys"
-import { customHotkeysAtom } from "../../../lib/atoms"
-import { toast } from "sonner"
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
@@ -183,7 +209,7 @@ export interface ChatInputAreaProps {
   // Context
   subChatId: string
   parentChatId: string
-  provider?: "claude-code" | "codex"
+  provider?: AgentProviderId
   teamId?: string
   repository?: string
   sandboxId?: string
@@ -200,9 +226,9 @@ export interface ChatInputAreaProps {
   // Callback to send message with question answer (Enter sends immediately, not to queue)
   onSubmitWithQuestionAnswer?: () => void
   // Callback to switch provider for brand new (empty) sub-chats
-  onProviderChange?: (provider: "claude-code" | "codex") => void
+  onProviderChange?: (provider: AgentProviderId) => void
   // Callback to continue chat with a different provider (creates new sub-chat with history)
-  onContinueWithProvider?: (provider: "claude-code" | "codex") => void
+  onContinueWithProvider?: (provider: AgentProviderId) => void
   // Whether this sub-chat tab is the active/visible one (prevents window-level hotkeys in background tabs)
   isActive?: boolean
 }
@@ -438,7 +464,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: AgentMode
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
@@ -451,30 +477,87 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Model dropdown state
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
-  const subChatModelIdAtom = useMemo(
-    () => subChatModelIdAtomFamily(subChatId),
-    [subChatId],
-  )
-  const [selectedSubChatModelId, setSelectedSubChatModelId] = useAtom(
-    subChatModelIdAtom,
-  )
+  const subChatModelIdAtom = useMemo(() => subChatModelIdAtomFamily(subChatId), [subChatId])
+  const [selectedSubChatModelId, setSelectedSubChatModelId] = useAtom(subChatModelIdAtom)
   const subChatCodexModelIdAtom = useMemo(
     () => subChatCodexModelIdAtomFamily(subChatId),
     [subChatId],
   )
-  const [selectedSubChatCodexModelId, setSelectedSubChatCodexModelId] = useAtom(
-    subChatCodexModelIdAtom,
-  )
+  const [selectedSubChatCodexModelId, setSelectedSubChatCodexModelId] =
+    useAtom(subChatCodexModelIdAtom)
   const subChatCodexThinkingAtom = useMemo(
     () => subChatCodexThinkingAtomFamily(subChatId),
     [subChatId],
   )
-  const [selectedSubChatCodexThinking, setSelectedSubChatCodexThinking] = useAtom(
-    subChatCodexThinkingAtom,
+  const [selectedSubChatCodexThinking, setSelectedSubChatCodexThinking] =
+    useAtom(subChatCodexThinkingAtom)
+  const subChatCursorModelIdAtom = useMemo(
+    () => subChatCursorModelIdAtomFamily(subChatId),
+    [subChatId],
   )
+  const subChatGrokModelIdAtom = useMemo(() => subChatGrokModelIdAtomFamily(subChatId), [subChatId])
+  const subChatQwenModelIdAtom = useMemo(() => subChatQwenModelIdAtomFamily(subChatId), [subChatId])
+  const subChatClineModelIdAtom = useMemo(
+    () => subChatClineModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const subChatOpenclawModelIdAtom = useMemo(
+    () => subChatOpenclawModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const subChatRooModelIdAtom = useMemo(() => subChatRooModelIdAtomFamily(subChatId), [subChatId])
+  const [selectedSubChatCursorModelId, setSelectedSubChatCursorModelId] =
+    useAtom(subChatCursorModelIdAtom)
+  const [selectedSubChatGrokModelId, setSelectedSubChatGrokModelId] =
+    useAtom(subChatGrokModelIdAtom)
+  const [selectedSubChatQwenModelId, setSelectedSubChatQwenModelId] =
+    useAtom(subChatQwenModelIdAtom)
+  const [selectedSubChatClineModelId, setSelectedSubChatClineModelId] =
+    useAtom(subChatClineModelIdAtom)
+  const [selectedSubChatOpenclawModelId, setSelectedSubChatOpenclawModelId] = useAtom(
+    subChatOpenclawModelIdAtom,
+  )
+  const [selectedSubChatRooModelId, setSelectedSubChatRooModelId] = useAtom(subChatRooModelIdAtom)
   const setLastSelectedModelId = useSetAtom(lastSelectedModelIdAtom)
   const setLastSelectedCodexModelId = useSetAtom(lastSelectedCodexModelIdAtom)
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
+  const setLastSelectedCursorModelId = useSetAtom(lastSelectedCursorModelIdAtom)
+  const setLastSelectedGrokModelId = useSetAtom(lastSelectedGrokModelIdAtom)
+  const setLastSelectedQwenModelId = useSetAtom(lastSelectedQwenModelIdAtom)
+  const setLastSelectedClineModelId = useSetAtom(lastSelectedClineModelIdAtom)
+  const setLastSelectedOpenclawModelId = useSetAtom(lastSelectedOpenclawModelIdAtom)
+  const setLastSelectedRooModelId = useSetAtom(lastSelectedRooModelIdAtom)
+  const subChatGeminiModelIdAtom = useMemo(
+    () => subChatGeminiModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatGeminiModelId, setSelectedSubChatGeminiModelId] =
+    useAtom(subChatGeminiModelIdAtom)
+  const setLastSelectedGeminiModelId = useSetAtom(lastSelectedGeminiModelIdAtom)
+  const { data: geminiAuth } = trpc.gemini.getAuthStatus.useQuery()
+  const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
+  const isGeminiConnected =
+    (geminiAuth?.ok === true && geminiAuth.hasKey === true) ||
+    Boolean(geminiCliStatus?.installed && geminiCliStatus.loggedIn)
+
+  // OpenRouter
+  const subChatOpenRouterModelIdAtom = useMemo(
+    () => subChatOpenRouterModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatOpenRouterModelId, setSelectedSubChatOpenRouterModelId] = useAtom(
+    subChatOpenRouterModelIdAtom,
+  )
+  const setLastSelectedOpenRouterModelId = useSetAtom(lastSelectedOpenRouterModelIdAtom)
+  const { data: openRouterAuth } = trpc.openrouter.getAuthStatus.useQuery()
+  const isOpenRouterConnected = openRouterAuth?.ok === true && openRouterAuth.hasKey === true
+  const pinnedOpenRouterModels = useAtomValue(pinnedOpenRouterModelsAtom)
+  const { data: openRouterCatalog } = trpc.openrouter.listModels.useQuery(undefined, {
+    enabled: isOpenRouterConnected && pinnedOpenRouterModels.length > 0,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  })
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
   const availableModels = useAvailableModels()
   const [selectedModel, setSelectedModel] = useState(
@@ -499,24 +582,58 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatModelId(selectedModel.id)
   }, [provider, selectedModel?.id, setSelectedSubChatModelId])
 
-  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
-  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
   const hiddenModels = useAtomValue(hiddenModelsAtom)
 
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const { data: claudeCodeIntegration } =
-    trpc.claudeCode.getIntegration.useQuery()
-  const codexUiModels = useMemo(
-    () => {
-      let models = hasAppCodexApiKey
-        ? CODEX_MODELS.filter((model) => model.id !== "gpt-5.3-codex")
-        : CODEX_MODELS
-      return models.filter((model) => !hiddenModels.includes(model.id))
-    },
-    [hasAppCodexApiKey, hiddenModels],
+  const { data: claudeCodeIntegration } = trpc.claudeCode.getIntegration.useQuery()
+  const { data: cursorIntegration } = trpc.cursor.getIntegration.useQuery()
+  const { data: grokIntegration } = trpc.grok.getIntegration.useQuery()
+  const { data: qwenIntegration } = trpc.qwen.getIntegration.useQuery()
+  const { data: clineIntegration } = trpc.cline.getIntegration.useQuery()
+  const { data: openclawIntegration } = trpc.openclaw.getIntegration.useQuery()
+  const { data: rooIntegration } = trpc.roo.getIntegration.useQuery()
+  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
+  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
+  const codexUiModels = useMemo(() => {
+    const subscriptionOnly = new Set<string>(CODEX_SUBSCRIPTION_ONLY_MODEL_IDS)
+    const models = hasAppCodexApiKey
+      ? CODEX_MODELS.filter((model) => !subscriptionOnly.has(model.id))
+      : CODEX_MODELS
+    return models.filter((model) => !hiddenModels.includes(model.id))
+  }, [hasAppCodexApiKey, hiddenModels])
+  const geminiUiModels = useMemo(
+    () => GEMINI_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const openRouterUiModels = useMemo(() => {
+    if (!isOpenRouterConnected) return []
+    const catalogIndex = new Map(
+      openRouterCatalog?.available
+        ? openRouterCatalog.models.map((m) => [m.id, m.name] as const)
+        : [],
+    )
+    return pinnedOpenRouterModels
+      .filter((id) => !hiddenModels.includes(id))
+      .map((id) => ({ id, name: catalogIndex.get(id) ?? id }))
+  }, [isOpenRouterConnected, openRouterCatalog, pinnedOpenRouterModels, hiddenModels])
+  const selectedOpenRouterModel = useMemo(() => {
+    if (openRouterUiModels.length === 0) {
+      return { id: "", name: "" }
+    }
+    return (
+      openRouterUiModels.find((m) => m.id === selectedSubChatOpenRouterModelId) ||
+      openRouterUiModels[0] || { id: "", name: "" }
+    )
+  }, [openRouterUiModels, selectedSubChatOpenRouterModelId])
+  const selectedGeminiModel = useMemo(
+    () =>
+      geminiUiModels.find((m) => m.id === selectedSubChatGeminiModelId) ||
+      geminiUiModels[0] ||
+      GEMINI_MODELS[0]!,
+    [geminiUiModels, selectedSubChatGeminiModelId],
   )
   const selectedCodexModel = useMemo(
     () =>
@@ -525,13 +642,75 @@ export const ChatInputArea = memo(function ChatInputArea({
       CODEX_MODELS[0]!,
     [codexUiModels, selectedSubChatCodexModelId],
   )
+  const cursorUiModels = useMemo(
+    () => CURSOR_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedCursorModel = useMemo(
+    () =>
+      cursorUiModels.find((model) => model.id === selectedSubChatCursorModelId) ||
+      cursorUiModels[0] ||
+      CURSOR_MODELS[0]!,
+    [cursorUiModels, selectedSubChatCursorModelId],
+  )
+  const grokUiModels = useMemo(
+    () => GROK_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedGrokModel = useMemo(
+    () =>
+      grokUiModels.find((model) => model.id === selectedSubChatGrokModelId) ||
+      grokUiModels[0] ||
+      GROK_MODELS[0]!,
+    [grokUiModels, selectedSubChatGrokModelId],
+  )
+  const qwenUiModels = useMemo(
+    () => QWEN_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedQwenModel = useMemo(
+    () =>
+      qwenUiModels.find((model) => model.id === selectedSubChatQwenModelId) ||
+      qwenUiModels[0] ||
+      QWEN_MODELS[0]!,
+    [qwenUiModels, selectedSubChatQwenModelId],
+  )
+  const clineUiModels = useMemo(
+    () => CLINE_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedClineModel = useMemo(
+    () =>
+      clineUiModels.find((model) => model.id === selectedSubChatClineModelId) ||
+      clineUiModels[0] ||
+      CLINE_MODELS[0]!,
+    [clineUiModels, selectedSubChatClineModelId],
+  )
+  const openclawUiModels = useMemo(
+    () => OPENCLAW_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedOpenclawModel = useMemo(
+    () =>
+      openclawUiModels.find((model) => model.id === selectedSubChatOpenclawModelId) ||
+      openclawUiModels[0] ||
+      OPENCLAW_MODELS[0]!,
+    [openclawUiModels, selectedSubChatOpenclawModelId],
+  )
+  const rooUiModels = useMemo(
+    () => ROO_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedRooModel = useMemo(
+    () =>
+      rooUiModels.find((model) => model.id === selectedSubChatRooModelId) ||
+      rooUiModels[0] ||
+      ROO_MODELS[0]!,
+    [rooUiModels, selectedSubChatRooModelId],
+  )
 
   const selectedCodexThinking = useMemo<CodexThinkingLevel>(() => {
-    if (
-      selectedCodexModel.thinkings.includes(
-        selectedSubChatCodexThinking as CodexThinkingLevel,
-      )
-    ) {
+    if (selectedCodexModel.thinkings.includes(selectedSubChatCodexThinking as CodexThinkingLevel)) {
       return selectedSubChatCodexThinking as CodexThinkingLevel
     }
 
@@ -543,11 +722,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [selectedCodexModel, selectedSubChatCodexThinking])
 
   useEffect(() => {
-    if (
-      selectedCodexModel.thinkings.includes(
-        selectedSubChatCodexThinking as CodexThinkingLevel,
-      )
-    ) {
+    if (selectedCodexModel.thinkings.includes(selectedSubChatCodexThinking as CodexThinkingLevel)) {
       return
     }
 
@@ -575,25 +750,60 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatCodexThinking,
   ])
 
+  useEffect(() => {
+    if (provider !== "cursor") return
+    if (!selectedCursorModel?.id) return
+    setSelectedSubChatCursorModelId(selectedCursorModel.id)
+  }, [provider, selectedCursorModel?.id, setSelectedSubChatCursorModelId])
+
+  useEffect(() => {
+    if (provider !== "grok") return
+    if (!selectedGrokModel?.id) return
+    setSelectedSubChatGrokModelId(selectedGrokModel.id)
+  }, [provider, selectedGrokModel?.id, setSelectedSubChatGrokModelId])
+
+  useEffect(() => {
+    if (provider !== "qwen") return
+    if (!selectedQwenModel?.id) return
+    setSelectedSubChatQwenModelId(selectedQwenModel.id)
+  }, [provider, selectedQwenModel?.id, setSelectedSubChatQwenModelId])
+
+  useEffect(() => {
+    if (provider !== "cline") return
+    if (!selectedClineModel?.id) return
+    setSelectedSubChatClineModelId(selectedClineModel.id)
+  }, [provider, selectedClineModel?.id, setSelectedSubChatClineModelId])
+
+  useEffect(() => {
+    if (provider !== "openclaw") return
+    if (!selectedOpenclawModel?.id) return
+    setSelectedSubChatOpenclawModelId(selectedOpenclawModel.id)
+  }, [provider, selectedOpenclawModel?.id, setSelectedSubChatOpenclawModelId])
+
+  useEffect(() => {
+    if (provider !== "roo") return
+    if (!selectedRooModel?.id) return
+    setSelectedSubChatRooModelId(selectedRooModel.id)
+  }, [provider, selectedRooModel?.id, setSelectedSubChatRooModelId])
+
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
+  const normalizedCustomClaudeConfig = normalizeCustomClaudeConfig(customClaudeConfig)
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
   const isClaudeConnected =
     Boolean(claudeCodeIntegration?.isConnected) ||
     anthropicOnboardingCompleted ||
     apiKeyOnboardingCompleted ||
     hasCustomClaudeConfig
+  const isCursorConnected = Boolean(cursorIntegration?.isConnected)
+  const isGrokConnected = Boolean(grokIntegration?.isConnected)
+  const isQwenConnected = Boolean(qwenIntegration?.isConnected)
+  const isClineConnected = Boolean(clineIntegration?.isConnected)
+  const isOpenclawConnected = Boolean(openclawIntegration?.isConnected)
+  const isRooConnected = Boolean(rooIntegration?.isConnected)
 
   // Determine current Ollama model (selected or recommended)
-  const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
-
-  // Debug: log selected Ollama model
-  useEffect(() => {
-    if (availableModels.isOffline) {
-      console.log(`[Ollama UI] selectedOllamaModel atom value: ${selectedOllamaModel || "(null)"}, currentOllamaModel: ${currentOllamaModel}`)
-    }
-  }, [selectedOllamaModel, currentOllamaModel, availableModels.isOffline])
+  const currentOllamaModel =
+    selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
@@ -601,6 +811,36 @@ export const ChatInputArea = memo(function ChatInputArea({
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
       return selectedCodexModel.name
+    }
+
+    if (provider === "cursor") {
+      return selectedCursorModel.name
+    }
+
+    if (provider === "grok") {
+      return selectedGrokModel.name
+    }
+
+    if (provider === "qwen") {
+      return selectedQwenModel.name
+    }
+
+    if (provider === "cline") {
+      return selectedClineModel.name
+    }
+    if (provider === "openclaw") {
+      return selectedOpenclawModel.name
+    }
+    if (provider === "roo") {
+      return selectedRooModel.name
+    }
+
+    if (provider === "gemini") {
+      return selectedGeminiModel.name
+    }
+
+    if (provider === "openrouter") {
+      return selectedOpenRouterModel.name || "Select model"
     }
 
     if (availableModels.isOffline && availableModels.hasOllama) {
@@ -619,26 +859,132 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [
     provider,
     selectedCodexModel.name,
+    selectedCursorModel.name,
+    selectedGrokModel.name,
+    selectedQwenModel.name,
+    selectedClineModel.name,
+    selectedOpenclawModel.name,
+    selectedRooModel.name,
+    selectedGeminiModel.name,
+    selectedOpenRouterModel.name,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
     hasCustomClaudeConfig,
     selectedModel,
   ])
-  const canSwitchProvider =
-    messageTokenData.messageCount === 0 && !isStreaming && !sandboxId
+  const canSwitchProvider = messageTokenData.messageCount === 0 && !isStreaming && !sandboxId
 
   // MCP status - from getAllMcpConfig query (provides global/local grouping)
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
 
   const {
-    data: allMcpConfig,
-    isLoading: isMcpLoading,
-    refetch: refetchMcp,
+    data: claudeMcpConfig,
+    isLoading: isClaudeMcpLoading,
+    refetch: refetchClaudeMcp,
   } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "claude-code",
     staleTime: 5 * 60 * 1000,
   })
+
+  const {
+    data: codexMcpConfig,
+    isLoading: isCodexMcpLoading,
+    refetch: refetchCodexMcp,
+  } = trpc.codex.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "codex",
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const {
+    data: cursorMcpConfig,
+    isLoading: isCursorMcpLoading,
+    refetch: refetchCursorMcp,
+  } = trpc.cursor.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "cursor",
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const {
+    data: grokMcpConfig,
+    isLoading: isGrokMcpLoading,
+    refetch: refetchGrokMcp,
+  } = trpc.grok.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "grok",
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const {
+    data: qwenMcpConfig,
+    isLoading: isQwenMcpLoading,
+    refetch: refetchQwenMcp,
+  } = trpc.qwen.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "qwen",
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const {
+    data: clineMcpConfig,
+    isLoading: isClineMcpLoading,
+    refetch: refetchClineMcp,
+  } = trpc.cline.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "cline",
+    staleTime: 5 * 60 * 1000,
+  })
+  const {
+    data: openclawMcpConfig,
+    isLoading: isOpenclawMcpLoading,
+    refetch: refetchOpenclawMcp,
+  } = trpc.openclaw.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "openclaw",
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const allMcpConfig =
+    provider === "codex"
+      ? codexMcpConfig
+      : provider === "cursor"
+        ? cursorMcpConfig
+        : provider === "grok"
+          ? grokMcpConfig
+          : provider === "qwen"
+            ? qwenMcpConfig
+            : provider === "cline"
+              ? clineMcpConfig
+              : provider === "openclaw"
+                ? openclawMcpConfig
+                : claudeMcpConfig
+
+  const isMcpLoading =
+    provider === "codex"
+      ? isCodexMcpLoading
+      : provider === "cursor"
+        ? isCursorMcpLoading
+        : provider === "grok"
+          ? isGrokMcpLoading
+          : provider === "qwen"
+            ? isQwenMcpLoading
+            : provider === "cline"
+              ? isClineMcpLoading
+              : provider === "openclaw"
+                ? isOpenclawMcpLoading
+                : isClaudeMcpLoading
+
+  const refetchMcp =
+    provider === "codex"
+      ? refetchCodexMcp
+      : provider === "cursor"
+        ? refetchCursorMcp
+        : provider === "grok"
+          ? refetchGrokMcp
+          : provider === "qwen"
+            ? refetchQwenMcp
+            : provider === "cline"
+              ? refetchClineMcp
+              : provider === "openclaw"
+                ? refetchOpenclawMcp
+                : refetchClaudeMcp
 
   const [isMcpRefreshing, setIsMcpRefreshing] = useState(false)
   const isMcpBusy = isMcpLoading || isMcpRefreshing
@@ -656,6 +1002,16 @@ export const ChatInputArea = memo(function ChatInputArea({
   const mcpGroups = useMemo(() => {
     if (!allMcpConfig?.groups) return { global: [], local: [] }
 
+    if (provider === "cursor") {
+      const localGroup = allMcpConfig.groups.find(
+        (g) => g.projectPath && projectPath && g.projectPath === projectPath,
+      )
+      return {
+        global: [],
+        local: localGroup?.mcpServers || [],
+      }
+    }
+
     const globalGroup = allMcpConfig.groups.find((g) => g.groupName === "Global")
     const localGroup = allMcpConfig.groups.find(
       (g) => g.projectPath && projectPath && g.projectPath === projectPath,
@@ -665,7 +1021,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       global: globalGroup?.mcpServers || [],
       local: localGroup?.mcpServers || [],
     }
-  }, [allMcpConfig?.groups, projectPath])
+  }, [allMcpConfig?.groups, projectPath, provider])
 
   const totalMcps = mcpGroups.global.length + mcpGroups.local.length
   const connectedMcps =
@@ -682,21 +1038,93 @@ export const ChatInputArea = memo(function ChatInputArea({
   // The selectedOllamaModel atom is used to track which Ollama model is selected
 
   // Plan mode - per-subChat using atomFamily
-  const subChatModeAtom = useMemo(
-    () => subChatModeAtomFamily(subChatId),
-    [subChatId],
-  )
+  const subChatModeAtom = useMemo(() => subChatModeAtomFamily(subChatId), [subChatId])
   const [subChatMode, setSubChatMode] = useAtom(subChatModeAtom)
 
+  // Execution engine - per-subChat, switchable only on empty chats (mirrors canSwitchProvider)
+  const subChatEngineAtom = useMemo(() => subChatEngineAtomFamily(subChatId), [subChatId])
+  const [engine, setEngine] = useAtom(subChatEngineAtom)
+  // Native engine supports local claude-code chats only (Codex stays on the
+  // CLI adapter by WONTFIX decision; Gemini/OpenRouter use their own
+  // transports; no remote sandboxes yet)
+  const canSwitchEngine =
+    canSwitchProvider && provider !== "codex" && provider !== "gemini" && provider !== "openrouter"
+
+  const setSessionInfo = useSetAtom(sessionInfoAtom)
+  const switchEngine = useCallback(
+    (next: SubChatEngine) => {
+      if (!canSwitchEngine || next === engine) return
+      // Drop the pre-created empty Chat so the next send rebuilds with the new transport
+      agentChatStore.delete(subChatId)
+      // Drop the other engine's snapshot (tools/servers/plugins); the next
+      // send's session-init repopulates it.
+      setSessionInfo(null)
+      setEngine(next)
+    },
+    [canSwitchEngine, engine, setEngine, setSessionInfo, subChatId],
+  )
+
   // Helper to update mode (atomFamily + Zustand store sync)
-  const updateMode = useCallback((newMode: AgentMode) => {
-    if (onModeChange) {
-      onModeChange(newMode)
-      return
+  const updateMode = useCallback(
+    (newMode: AgentMode) => {
+      if (onModeChange) {
+        onModeChange(newMode)
+        return
+      }
+      setSubChatMode(newMode)
+      useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
+    },
+    [onModeChange, setSubChatMode, subChatId],
+  )
+
+  // Shared mode-dropdown item handlers (parameterized by mode)
+  const handleModeItemSelect = useCallback(
+    (mode: AgentMode) => {
+      // Clear tooltip before closing dropdown (onMouseLeave won't fire)
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current)
+        tooltipTimeoutRef.current = null
+      }
+      setModeTooltip(null)
+      updateMode(mode)
+      setModeDropdownOpen(false)
+    },
+    [updateMode],
+  )
+  const handleModeItemMouseEnter = useCallback(
+    (e: { currentTarget: HTMLElement }, mode: AgentMode) => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current)
+        tooltipTimeoutRef.current = null
+      }
+      const rect = e.currentTarget.getBoundingClientRect()
+      const showTooltip = () => {
+        setModeTooltip({
+          visible: true,
+          position: {
+            top: rect.top,
+            left: rect.right + 8,
+          },
+          mode,
+        })
+        hasShownTooltipRef.current = true
+        tooltipTimeoutRef.current = null
+      }
+      if (hasShownTooltipRef.current) {
+        showTooltip()
+      } else {
+        tooltipTimeoutRef.current = setTimeout(showTooltip, 1000)
+      }
+    },
+    [],
+  )
+  const handleModeItemMouseLeave = useCallback(() => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current)
+      tooltipTimeoutRef.current = null
     }
-    setSubChatMode(newMode)
-    useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
-  }, [onModeChange, setSubChatMode, subChatId])
+    setModeTooltip(null)
+  }, [])
 
   // Toggle mode helper
   const toggleMode = useCallback(() => {
@@ -746,8 +1174,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       if (e.metaKey && e.key === "/") {
         e.preventDefault()
         e.stopPropagation()
-        const shouldBlockForCustomClaude =
-          provider === "claude-code" && hasCustomClaudeConfig
+        const shouldBlockForCustomClaude = provider === "claude-code" && hasCustomClaudeConfig
         if (!shouldBlockForCustomClaude) {
           setIsModelDropdownOpen(true)
         }
@@ -780,7 +1207,6 @@ export const ChatInputArea = memo(function ChatInputArea({
 
       // Don't transcribe very short recordings (likely accidental clicks)
       if (blob.size < 1000) {
-        console.log("[VoiceInput] Recording too short, ignoring")
         if (voiceMountedRef.current) setIsTranscribing(false)
         return
       }
@@ -850,9 +1276,11 @@ export const ChatInputArea = memo(function ChatInputArea({
     if (!isActive) return
 
     // Parse hotkey once
-    const parts = voiceInputHotkey.split("+").map(p => p.toLowerCase())
-    const modifiers = parts.filter(p => ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
-    const mainKey = parts.find(p => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
+    const parts = voiceInputHotkey.split("+").map((p) => p.toLowerCase())
+    const modifiers = parts.filter((p) =>
+      ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p),
+    )
+    const mainKey = parts.find((p) => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
 
     const needsCmd = modifiers.includes("cmd") || modifiers.includes("meta")
     const needsShift = modifiers.includes("shift")
@@ -938,7 +1366,15 @@ export const ChatInputArea = memo(function ChatInputArea({
       window.removeEventListener("keydown", handleKeyDown, true)
       window.removeEventListener("keyup", handleKeyUp, true)
     }
-  }, [voiceInputHotkey, isVoiceRecording, isTranscribing, isStreaming, handleVoiceMouseDown, handleVoiceMouseUp, isActive])
+  }, [
+    voiceInputHotkey,
+    isVoiceRecording,
+    isTranscribing,
+    isStreaming,
+    handleVoiceMouseDown,
+    handleVoiceMouseUp,
+    isActive,
+  ])
 
   // Save draft on blur (with attachments and text contexts)
   const handleEditorBlur = useCallback(async () => {
@@ -972,20 +1408,27 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [editorRef, images, files, textContexts, diffTextContexts])
 
   // Content change handler
-  const handleContentChange = useCallback((newHasContent: boolean) => {
-    setHasContent(newHasContent)
-    onInputContentChange?.(newHasContent)
-    // Sync the draft text ref for unmount save
-    const draft = editorRef.current?.getValue() || ""
-    currentDraftTextRef.current = draft
-  }, [editorRef, onInputContentChange])
+  const handleContentChange = useCallback(
+    (newHasContent: boolean) => {
+      setHasContent(newHasContent)
+      onInputContentChange?.(newHasContent)
+      // Sync the draft text ref for unmount save
+      const draft = editorRef.current?.getValue() || ""
+      currentDraftTextRef.current = draft
+    },
+    [editorRef, onInputContentChange],
+  )
 
   // Editor submit handler - handles Enter key with queue logic
   // If input is empty and queue has items, stop stream and send first from queue
   const handleEditorSubmit = useCallback(async () => {
     const inputValue = editorRef.current?.getValue() || ""
     const hasText = inputValue.trim().length > 0
-    const hasAttachments = images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0
+    const hasAttachments =
+      images.length > 0 ||
+      files.length > 0 ||
+      textContexts.length > 0 ||
+      (diffTextContexts?.length ?? 0) > 0
 
     if (!hasText && !hasAttachments && queueLength > 0 && onSendFromQueue && firstQueueItemId) {
       // Input empty, queue has items - stop stream and send from queue
@@ -994,39 +1437,53 @@ export const ChatInputArea = memo(function ChatInputArea({
     } else {
       onSend()
     }
-  }, [editorRef, images, files, textContexts, diffTextContexts, queueLength, onSendFromQueue, firstQueueItemId, onStop, onSend])
+  }, [
+    editorRef,
+    images,
+    files,
+    textContexts,
+    diffTextContexts,
+    queueLength,
+    onSendFromQueue,
+    firstQueueItemId,
+    onStop,
+    onSend,
+  ])
 
   // Mention select handler
-  const handleMentionSelect = useCallback((mention: FileMentionOption) => {
-    // Category navigation - enter subpage instead of inserting mention
-    if (mention.type === "category") {
-      if (mention.id === "files") {
-        setShowingFilesList(true)
-        return
+  const handleMentionSelect = useCallback(
+    (mention: FileMentionOption) => {
+      // Category navigation - enter subpage instead of inserting mention
+      if (mention.type === "category") {
+        if (mention.id === "files") {
+          setShowingFilesList(true)
+          return
+        }
+        if (mention.id === "skills") {
+          setShowingSkillsList(true)
+          return
+        }
+        if (mention.id === "agents") {
+          setShowingAgentsList(true)
+          return
+        }
+        if (mention.id === "tools") {
+          setShowingToolsList(true)
+          return
+        }
       }
-      if (mention.id === "skills") {
-        setShowingSkillsList(true)
-        return
-      }
-      if (mention.id === "agents") {
-        setShowingAgentsList(true)
-        return
-      }
-      if (mention.id === "tools") {
-        setShowingToolsList(true)
-        return
-      }
-    }
 
-    // Otherwise: insert mention as normal
-    editorRef.current?.insertMention(mention)
-    setShowMentionDropdown(false)
-    // Reset subpage state
-    setShowingFilesList(false)
-    setShowingSkillsList(false)
-    setShowingAgentsList(false)
-    setShowingToolsList(false)
-  }, [editorRef])
+      // Otherwise: insert mention as normal
+      editorRef.current?.insertMention(mention)
+      setShowMentionDropdown(false)
+      // Reset subpage state
+      setShowingFilesList(false)
+      setShowingSkillsList(false)
+      setShowingAgentsList(false)
+      setShowingToolsList(false)
+    },
+    [editorRef],
+  )
 
   // Slash command handlers
   const handleSlashTrigger = useCallback(
@@ -1050,21 +1507,18 @@ export const ChatInputArea = memo(function ChatInputArea({
 
       // Handle builtin commands that change app state (no text input needed)
       if (command.category === "builtin") {
+        // Mode-switch commands (/plan /ask /edit /agent /turbo)
+        if (isAgentMode(command.name)) {
+          if (subChatMode !== command.name) {
+            updateMode(command.name)
+          }
+          return
+        }
         switch (command.name) {
           case "clear":
             // Create a new sub-chat (fresh conversation)
             if (onCreateNewSubChat) {
               onCreateNewSubChat()
-            }
-            return
-          case "plan":
-            if (subChatMode !== "plan") {
-              updateMode("plan")
-            }
-            return
-          case "agent":
-            if (subChatMode === "plan") {
-              updateMode("agent")
             }
             return
           case "compact":
@@ -1101,24 +1555,92 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Text file extensions that should have content read and attached
   const TEXT_FILE_EXTENSIONS = new Set([
     // Code
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-    ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h", ".hpp",
-    ".cs", ".php", ".lua", ".r", ".m", ".mm", ".scala", ".clj", ".ex", ".exs",
-    ".hs", ".elm", ".erl", ".fs", ".fsx", ".ml", ".v", ".vhdl", ".zig",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".py",
+    ".rb",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".swift",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".php",
+    ".lua",
+    ".r",
+    ".m",
+    ".mm",
+    ".scala",
+    ".clj",
+    ".ex",
+    ".exs",
+    ".hs",
+    ".elm",
+    ".erl",
+    ".fs",
+    ".fsx",
+    ".ml",
+    ".v",
+    ".vhdl",
+    ".zig",
     // Config/Data
-    ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".env", ".conf", ".cfg",
-    ".properties", ".plist",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".ini",
+    ".env",
+    ".conf",
+    ".cfg",
+    ".properties",
+    ".plist",
     // Web
-    ".html", ".htm", ".css", ".scss", ".sass", ".less", ".vue", ".svelte", ".astro",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".vue",
+    ".svelte",
+    ".astro",
     // Documentation
-    ".md", ".mdx", ".rst", ".txt", ".text",
+    ".md",
+    ".mdx",
+    ".rst",
+    ".txt",
+    ".text",
     // Graphics (text-based)
     ".svg",
     // Shell/Scripts
-    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".ps1",
+    ".bat",
+    ".cmd",
     // Other
-    ".sql", ".graphql", ".gql", ".prisma", ".dockerfile", ".makefile",
-    ".gitignore", ".gitattributes", ".editorconfig", ".eslintrc", ".prettierrc",
+    ".sql",
+    ".graphql",
+    ".gql",
+    ".prisma",
+    ".dockerfile",
+    ".makefile",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".eslintrc",
+    ".prettierrc",
   ])
 
   const MAX_FILE_SIZE_FOR_CONTENT = 100 * 1024 // 100KB - files larger than this only get path mention
@@ -1155,8 +1677,9 @@ export const ChatInputArea = memo(function ChatInputArea({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        // @ts-expect-error - Electron's webUtils API
-        const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
+        const filePath: string | undefined =
+          (window as any).webUtils?.getPathForFile?.(file) ||
+          (file as File & { path?: string }).path
 
         let mentionId: string
         let mentionPath: string
@@ -1254,10 +1777,7 @@ export const ChatInputArea = memo(function ChatInputArea({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <div
-            className="relative w-full cursor-text"
-            onClick={() => editorRef.current?.focus()}
-          >
+          <div className="relative w-full cursor-text" onClick={() => editorRef.current?.focus()}>
             <PromptInput
               className={cn(
                 "border bg-input-background relative z-10 p-2 rounded-xl transition-[border-color,box-shadow] duration-150",
@@ -1267,12 +1787,18 @@ export const ChatInputArea = memo(function ChatInputArea({
               maxHeight={200}
               onSubmit={onSend}
               contextItems={
-                images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0 || pastedTexts.length > 0 ? (
+                images.length > 0 ||
+                files.length > 0 ||
+                textContexts.length > 0 ||
+                (diffTextContexts?.length ?? 0) > 0 ||
+                pastedTexts.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-[6px]">
                     {(() => {
                       // Build allImages array for gallery navigation
                       const allImages = images
-                        .filter((img): img is typeof img & { url: string } => !!img.url && !img.isLoading)
+                        .filter(
+                          (img): img is typeof img & { url: string } => !!img.url && !img.isLoading,
+                        )
                         .map((img) => ({
                           id: img.id,
                           filename: img.filename,
@@ -1319,7 +1845,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                         filePath={dtc.filePath}
                         lineNumber={dtc.lineNumber}
                         lineType={dtc.lineType}
-                        onRemove={onRemoveDiffTextContext ? () => onRemoveDiffTextContext(dtc.id) : undefined}
+                        onRemove={
+                          onRemoveDiffTextContext
+                            ? () => onRemoveDiffTextContext(dtc.id)
+                            : undefined
+                        }
                       />
                     ))}
                     {pastedTexts.map((pt) => (
@@ -1363,7 +1893,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                   onSubmit={onSubmitWithQuestionAnswer || handleEditorSubmit}
                   onForceSubmit={onForceSend}
                   onShiftTab={toggleMode}
-                  placeholder={isStreaming ? "Add to the queue" : "Plan, @ for context, / for commands"}
+                  placeholder={
+                    isStreaming ? "Add to the queue" : "Plan, @ for context, / for commands"
+                  }
                   className={cn(
                     "bg-transparent max-h-[200px] overflow-y-auto p-1",
                     isMobile && "min-h-[56px]",
@@ -1392,12 +1924,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                   >
                     <DropdownMenuTrigger asChild>
                       <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                        {subChatMode === "plan" ? (
-                          <PlanIcon className="h-3.5 w-3.5 shrink-0" />
-                        ) : (
-                          <AgentIcon className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        <span className="truncate">{subChatMode === "plan" ? "Plan" : "Agent"}</span>
+                        {(() => {
+                          const TriggerIcon = getModeIcon(subChatMode)
+                          return <TriggerIcon className="h-3.5 w-3.5 shrink-0" />
+                        })()}
+                        <span className="truncate">{getModeLabel(subChatMode)}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
@@ -1407,116 +1938,26 @@ export const ChatInputArea = memo(function ChatInputArea({
                       className="!min-w-[116px] !w-[116px]"
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
-                      <DropdownMenuItem
-                        onClick={() => {
-                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                          updateMode("agent")
-                          setModeDropdownOpen(false)
-                        }}
-                        className="justify-between gap-2"
-                        onMouseEnter={(e) => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          const rect = e.currentTarget.getBoundingClientRect()
-                          const showTooltip = () => {
-                            setModeTooltip({
-                              visible: true,
-                              position: {
-                                top: rect.top,
-                                left: rect.right + 8,
-                              },
-                              mode: "agent",
-                            })
-                            hasShownTooltipRef.current = true
-                            tooltipTimeoutRef.current = null
-                          }
-                          if (hasShownTooltipRef.current) {
-                            showTooltip()
-                          } else {
-                            tooltipTimeoutRef.current = setTimeout(
-                              showTooltip,
-                              1000,
-                            )
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Agent</span>
-                        </div>
-                        {subChatMode !== "plan" && (
-                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                          updateMode("plan")
-                          setModeDropdownOpen(false)
-                        }}
-                        className="justify-between gap-2"
-                        onMouseEnter={(e) => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          const rect = e.currentTarget.getBoundingClientRect()
-                          const showTooltip = () => {
-                            setModeTooltip({
-                              visible: true,
-                              position: {
-                                top: rect.top,
-                                left: rect.right + 8,
-                              },
-                              mode: "plan",
-                            })
-                            hasShownTooltipRef.current = true
-                            tooltipTimeoutRef.current = null
-                          }
-                          if (hasShownTooltipRef.current) {
-                            showTooltip()
-                          } else {
-                            tooltipTimeoutRef.current = setTimeout(
-                              showTooltip,
-                              1000,
-                            )
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Plan</span>
-                        </div>
-                        {subChatMode === "plan" && (
-                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                        )}
-                      </DropdownMenuItem>
+                      {AGENT_MODES.map((mode) => {
+                        const ItemIcon = getModeIcon(mode)
+                        return (
+                          <DropdownMenuItem
+                            key={mode}
+                            onClick={() => handleModeItemSelect(mode)}
+                            className="justify-between gap-2"
+                            onMouseEnter={(e) => handleModeItemMouseEnter(e, mode)}
+                            onMouseLeave={handleModeItemMouseLeave}
+                          >
+                            <div className="flex items-center gap-2">
+                              <ItemIcon className="w-4 h-4 text-muted-foreground" />
+                              <span>{getModeLabel(mode)}</span>
+                            </div>
+                            {subChatMode === mode && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                        )
+                      })}
                     </DropdownMenuContent>
                     {modeTooltip?.visible &&
                       createPortal(
@@ -1532,16 +1973,30 @@ export const ChatInputArea = memo(function ChatInputArea({
                             data-tooltip="true"
                             className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
                           >
-                            <span>
-                              {modeTooltip.mode === "agent"
-                                ? "Apply changes directly without a plan"
-                                : "Create a plan before making changes"}
-                            </span>
+                            <span>{getModeTooltip(modeTooltip.mode)}</span>
                           </div>
                         </div>,
                         document.body,
                       )}
                   </DropdownMenu>
+
+                  <button
+                    onClick={() => switchEngine(engine === "native" ? "legacy" : "native")}
+                    disabled={!canSwitchEngine}
+                    title={
+                      provider === "codex"
+                        ? "Engine: Legacy — Codex chats are served by the Codex CLI adapter; the native runtime doesn't serve Codex (subscription OAuth can't be provisioned to it)."
+                        : engine === "native"
+                          ? "Engine: Native (mausCode runtime). Click to switch back to Legacy. Switchable on empty chats only."
+                          : "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
+                    }
+                    className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Zap
+                      className={`h-3.5 w-3.5 shrink-0 ${engine === "native" ? "text-amber-500" : ""}`}
+                    />
+                    <span className="truncate">{engine === "native" ? "Native" : "Legacy"}</span>
+                  </button>
 
                   <div className="group/model-controls flex items-center gap-0.5">
                     <AgentModelSelector
@@ -1554,7 +2009,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                         onProviderChange?.(nextProvider)
                       }}
                       allowProviderSwitch={canSwitchProvider}
-                      onContinueWithProvider={!canSwitchProvider ? onContinueWithProvider : undefined}
+                      onContinueWithProvider={
+                        !canSwitchProvider ? onContinueWithProvider : undefined
+                      }
                       selectedModelLabel={selectedModelLabel}
                       onOpenModelsSettings={() => {
                         setSettingsTab("models")
@@ -1592,9 +2049,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                             selectedSubChatCodexThinking as CodexThinkingLevel,
                           )
                             ? (selectedSubChatCodexThinking as CodexThinkingLevel)
-                            : (model.thinkings.includes("high")
+                            : model.thinkings.includes("high")
                               ? "high"
-                              : model.thinkings[0]!)
+                              : model.thinkings[0]!
 
                           setSelectedSubChatCodexModelId(model.id)
                           setSelectedSubChatCodexThinking(nextThinking)
@@ -1608,9 +2065,96 @@ export const ChatInputArea = memo(function ChatInputArea({
                         },
                         isConnected: codexOnboardingCompleted,
                       }}
+                      cursor={{
+                        models: cursorUiModels,
+                        selectedModelId: selectedCursorModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = cursorUiModels.find((item) => item.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatCursorModelId(model.id)
+                          setLastSelectedCursorModelId(model.id)
+                        },
+                        isConnected: isCursorConnected,
+                      }}
+                      grok={{
+                        models: grokUiModels,
+                        selectedModelId: selectedGrokModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = grokUiModels.find((item) => item.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatGrokModelId(model.id)
+                          setLastSelectedGrokModelId(model.id)
+                        },
+                        isConnected: isGrokConnected,
+                      }}
+                      qwen={{
+                        models: qwenUiModels,
+                        selectedModelId: selectedQwenModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = qwenUiModels.find((item) => item.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatQwenModelId(model.id)
+                          setLastSelectedQwenModelId(model.id)
+                        },
+                        isConnected: isQwenConnected,
+                      }}
+                      cline={{
+                        models: clineUiModels,
+                        selectedModelId: selectedClineModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = clineUiModels.find((item) => item.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatClineModelId(model.id)
+                          setLastSelectedClineModelId(model.id)
+                        },
+                        isConnected: isClineConnected,
+                      }}
+                      openclaw={{
+                        models: openclawUiModels,
+                        selectedModelId: selectedOpenclawModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = openclawUiModels.find((item) => item.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatOpenclawModelId(model.id)
+                          setLastSelectedOpenclawModelId(model.id)
+                        },
+                        isConnected: isOpenclawConnected,
+                      }}
+                      roo={{
+                        models: rooUiModels,
+                        selectedModelId: selectedRooModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = rooUiModels.find((item) => item.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatRooModelId(model.id)
+                          setLastSelectedRooModelId(model.id)
+                        },
+                        isConnected: isRooConnected,
+                      }}
+                      gemini={{
+                        models: geminiUiModels,
+                        selectedModelId: selectedGeminiModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = geminiUiModels.find((m) => m.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatGeminiModelId(model.id)
+                          setLastSelectedGeminiModelId(model.id)
+                        },
+                        isConnected: isGeminiConnected,
+                      }}
+                      openrouter={{
+                        models: openRouterUiModels,
+                        selectedModelId: selectedOpenRouterModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = openRouterUiModels.find((m) => m.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatOpenRouterModelId(model.id)
+                          setLastSelectedOpenRouterModelId(model.id)
+                        },
+                        isConnected: isOpenRouterConnected,
+                      }}
                     />
                   </div>
-
                 </div>
 
                 <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
@@ -1629,7 +2173,10 @@ export const ChatInputArea = memo(function ChatInputArea({
 
                   {/* Voice wave indicator / transcribing state / normal toolbar */}
                   {isVoiceRecording ? (
-                    <VoiceWaveIndicator isRecording={isVoiceRecording} audioLevel={voiceAudioLevel} />
+                    <VoiceWaveIndicator
+                      isRecording={isVoiceRecording}
+                      audioLevel={voiceAudioLevel}
+                    />
                   ) : isTranscribing ? (
                     <div className="flex items-center px-2 h-5">
                       <IconSpinner className="size-3.5 text-muted-foreground" />
@@ -1671,10 +2218,23 @@ export const ChatInputArea = memo(function ChatInputArea({
                           queueLength === 0) ||
                         isUploading
                       }
-                      hasContent={hasContent || images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0}
+                      hasContent={
+                        hasContent ||
+                        images.length > 0 ||
+                        files.length > 0 ||
+                        textContexts.length > 0 ||
+                        (diffTextContexts?.length ?? 0) > 0
+                      }
                       onClick={() => {
                         // If input is empty and queue has items, send first queue item
-                        if (!hasContent && images.length === 0 && files.length === 0 && queueLength > 0 && onSendFromQueue && firstQueueItemId) {
+                        if (
+                          !hasContent &&
+                          images.length === 0 &&
+                          files.length === 0 &&
+                          queueLength > 0 &&
+                          onSendFromQueue &&
+                          firstQueueItemId
+                        ) {
                           onSendFromQueue(firstQueueItemId)
                         } else {
                           onSend()
@@ -1701,10 +2261,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       {/* File mention dropdown */}
       {/* Desktop: use projectPath for local file search */}
       <AgentsFileMention
-        isOpen={
-          showMentionDropdown &&
-          (!!projectPath || !!repository || !!sandboxId)
-        }
+        isOpen={showMentionDropdown && (!!projectPath || !!repository || !!sandboxId)}
         onClose={() => {
           setShowMentionDropdown(false)
           // Reset subpage state when closing

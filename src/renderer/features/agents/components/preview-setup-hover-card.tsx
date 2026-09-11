@@ -1,17 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { atom, useSetAtom } from "jotai"
 import { useTheme } from "next-themes"
-// import Image from "next/image" // Desktop doesn't use next/image
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "../../../components/ui/hover-card"
-import { useSetAtom, atom } from "jotai"
-// import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "@/lib/atoms/agents-settings-dialog"
+import { useState } from "react"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "../../../components/ui/hover-card"
+
 const agentsSettingsDialogOpenAtom = atom(false)
 const agentsSettingsDialogActiveTabAtom = atom<string | null>(null)
+
 import { GitHubIcon } from "../../../icons"
 
 interface PreviewSetupHoverCardProps {
@@ -32,10 +28,8 @@ export function PreviewSetupHoverCard({ children }: PreviewSetupHoverCardProps) 
 
   return (
     <HoverCard openDelay={300} open={open} onOpenChange={setOpen}>
-      <HoverCardTrigger asChild>
-        {children}
-      </HoverCardTrigger>
-      <HoverCardContent 
+      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardContent
         className="w-[280px] p-0 overflow-hidden"
         align="end"
         side="bottom"
@@ -49,10 +43,7 @@ export function PreviewSetupHoverCard({ children }: PreviewSetupHoverCardProps) 
               className="relative w-full overflow-hidden rounded-t-lg border"
               style={{ aspectRatio: "16/7", maxHeight: "110px" }}
             >
-              <div
-                className="absolute inset-0"
-                style={{ height: "142.86%", top: 0 }}
-              >
+              <div className="absolute inset-0" style={{ height: "142.86%", top: 0 }}>
                 {/* Desktop: use regular img tag instead of next/image */}
                 <img
                   src={
@@ -91,4 +82,3 @@ export function PreviewSetupHoverCard({ children }: PreviewSetupHoverCardProps) 
     </HoverCard>
   )
 }
-

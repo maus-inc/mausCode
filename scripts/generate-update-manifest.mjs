@@ -10,25 +10,26 @@
  *   node scripts/generate-update-manifest.mjs
  *
  * The script expects ZIP files to exist in the release/ directory:
- *   - Agents-{version}-arm64-mac.zip
- *   - Agents-{version}-mac.zip
+ *   - {productName}-{version}-arm64-mac.zip
+ *   - {productName}-{version}-mac.zip
  *
  * Run this after `npm run dist` to generate the manifest files.
  */
 
-import { createHash } from "crypto"
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "fs"
-import { join, dirname } from "path"
-import { fileURLToPath } from "url"
+import { createHash } from "node:crypto"
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 // Parse --channel argument (default: "latest")
 const channelArgIndex = process.argv.indexOf("--channel")
-const channel = channelArgIndex !== -1 && process.argv[channelArgIndex + 1]
-  ? process.argv[channelArgIndex + 1]
-  : "latest"
+const channel =
+  channelArgIndex !== -1 && process.argv[channelArgIndex + 1]
+    ? process.argv[channelArgIndex + 1]
+    : "latest"
 
 if (channel !== "latest" && channel !== "beta") {
   console.error(`Invalid channel: "${channel}". Must be "latest" or "beta".`)
@@ -36,9 +37,7 @@ if (channel !== "latest" && channel !== "beta") {
 }
 
 // Get version from package.json
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, "../package.json"), "utf-8")
-)
+const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"))
 const version = process.env.VERSION || packageJson.version
 
 const releaseDir = join(__dirname, "../release")
@@ -77,8 +76,10 @@ function findReleaseFile(pattern, ext = ".zip") {
  */
 function generateManifest(arch) {
   // electron-builder names files differently:
-  // arm64: Agents-{version}-arm64-mac.zip
-  // x64: Agents-{version}-mac.zip
+  // electron-builder output names (productName from package.json):
+  // arm64: {productName}-{version}-arm64-mac.zip
+  // x64: {productName}-{version}-mac.zip
+  // Matched by version substring so product renames don't break this script.
   const pattern = arch === "arm64" ? `${version}-arm64-mac` : `${version}-mac`
   const zipPath = findReleaseFile(pattern, ".zip")
 
@@ -111,8 +112,7 @@ function generateManifest(arch) {
   // For stable (latest): latest-mac.yml / latest-mac-x64.yml
   // For beta: beta-mac.yml / beta-mac-x64.yml
   const prefix = channel === "beta" ? "beta" : "latest"
-  const manifestFileName =
-    arch === "arm64" ? `${prefix}-mac.yml` : `${prefix}-mac-x64.yml`
+  const manifestFileName = arch === "arm64" ? `${prefix}-mac.yml` : `${prefix}-mac-x64.yml`
   const manifestPath = join(releaseDir, manifestFileName)
 
   // Convert to YAML format (simple implementation)
@@ -147,7 +147,7 @@ function objectToYaml(obj, indent = 0) {
             .filter(Boolean)
             .map((line, i) => (i === 0 ? line : `${spaces}    ${line}`))
             .join("\n")
-          yaml += itemYaml + "\n"
+          yaml += `${itemYaml}\n`
         } else {
           yaml += `${spaces}  - ${item}\n`
         }
@@ -171,7 +171,7 @@ function formatBytes(bytes) {
   const k = 1024
   const sizes = ["B", "KB", "MB", "GB"]
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+  return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`
 }
 
 /**
@@ -245,16 +245,16 @@ console.log("Manifest generation complete!")
 console.log()
 const prefix = channel === "beta" ? "beta" : "latest"
 console.log("Next steps:")
-console.log("1. Upload the following files to cdn.21st.dev/releases/desktop/:")
+console.log("1. Attach the manifests and archives to the GitHub Release for this tag")
 if (arm64Manifest) {
   console.log(`   - ${prefix}-mac.yml`)
-  console.log(`   - Agents-${version}-arm64-mac.zip`)
-  console.log(`   - Agents-${version}-arm64.dmg (for manual download)`)
+  console.log(`   - <product>-${version}-arm64-mac.zip (electron-updater)`)
+  console.log(`   - <product>-${version}-arm64.dmg (manual download)`)
 }
 if (x64Manifest) {
   console.log(`   - ${prefix}-mac-x64.yml`)
-  console.log(`   - Agents-${version}-mac.zip`)
-  console.log(`   - Agents-${version}.dmg (for manual download)`)
+  console.log(`   - <product>-${version}-mac.zip (electron-updater)`)
+  console.log(`   - <product>-${version}.dmg (manual download)`)
 }
-console.log("2. Create a release entry in the admin dashboard")
+console.log("2. Publish the release; electron-updater reads manifests from the release assets")
 console.log("=".repeat(50))

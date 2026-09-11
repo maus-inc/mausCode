@@ -1,5 +1,10 @@
 "use client"
 
+/**
+ * NOTE (transplant): the agent-tool-state extraction (getToolStatus re-export,
+ * isInputStreaming/isPendingState helpers) was transplanted from
+ * erenbertr/1code (Apache-2.0, (c) the 1Code contributors).
+ */
 import {
   Eye,
   FileCode2,
@@ -14,6 +19,7 @@ import {
   Terminal,
   XCircle,
 } from "lucide-react"
+import { parseWorktreeRelativePath } from "../../../../shared/worktree-paths"
 import {
   CustomTerminalIcon,
   EyeIcon,
@@ -24,32 +30,26 @@ import {
   SparklesIcon,
   WriteFileIcon,
 } from "../../../components/ui/icons"
+import { getToolLifecycleState, getToolStatus } from "./agent-tool-state"
+
+export { getToolStatus }
 
 export type ToolVariant = "simple" | "collapsible"
 
 export interface ToolMeta {
   icon: React.ComponentType<{ className?: string }>
   title: (part: any) => string
-  subtitle?: (part: any) => string
+  subtitle?: (part: any) => string | React.ReactNode
   tooltipContent?: (part: any, projectPath?: string) => string
   variant: ToolVariant
 }
 
-export function getToolStatus(part: any, chatStatus?: string) {
-  const basePending =
-    part.state !== "output-available" && part.state !== "output-error" && part.state !== "result"
-  const isError =
-    part.state === "output-error" ||
-    (part.state === "output-available" && part.output?.success === false)
-  const isSuccess = part.state === "output-available" && !isError
-  // Critical: if chat stopped streaming, pending tools should show as complete
-  // Include "submitted" status - this is when request was sent but streaming hasn't started yet
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isPending = basePending && isActivelyStreaming
-  // Tool was in progress but chat stopped streaming (user interrupted)
-  const isInterrupted = basePending && !isActivelyStreaming && chatStatus !== undefined
+function isInputStreaming(part: any) {
+  return getToolLifecycleState(part).isInputStreaming
+}
 
-  return { isPending, isError, isSuccess, isInterrupted }
+function isPendingState(part: any) {
+  return getToolLifecycleState(part).isPendingState
 }
 
 // Utility to get clean display path (remove sandbox/worktree/absolute prefixes)
@@ -63,21 +63,17 @@ export function getDisplayPath(filePath: string, projectPath?: string): string {
     return relative || filePath.split("/").pop() || filePath
   }
 
-  const prefixes = [
-    "/project/sandbox/repo/",
-    "/project/sandbox/",
-    "/project/",
-    "/workspace/",
-  ]
+  const prefixes = ["/project/sandbox/repo/", "/project/sandbox/", "/project/", "/workspace/"]
   for (const prefix of prefixes) {
     if (filePath.startsWith(prefix)) {
       return filePath.slice(prefix.length)
     }
   }
-  // Handle worktree paths: /.21st/worktrees/{chatId}/{subChatId}/relativePath
-  const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
-  if (worktreeMatch) {
-    return worktreeMatch[1]
+  // Handle worktree paths: /.mauscode/worktrees/{project}/{folder}/relativePath
+  // (legacy 1Code .21st/worktrees paths are matched too — see shared/worktree-paths)
+  const worktreeRelative = parseWorktreeRelativePath(filePath)
+  if (worktreeRelative) {
+    return worktreeRelative
   }
   // Handle claude-sessions paths: .../claude-sessions/{sessionId}/{folder}/{file}
   const sessionMatch = filePath.match(/claude-sessions\/[^/]+\/(.+)$/)
@@ -87,9 +83,7 @@ export function getDisplayPath(filePath: string, projectPath?: string): string {
   if (filePath.startsWith("/")) {
     const parts = filePath.split("/")
     const rootIndicators = ["apps", "packages", "src", "lib", "components"]
-    const rootIndex = parts.findIndex((p: string) =>
-      rootIndicators.includes(p),
-    )
+    const rootIndex = parts.findIndex((p: string) => rootIndicators.includes(p))
     if (rootIndex > 0) {
       return parts.slice(rootIndex).join("/")
     }
@@ -130,20 +124,15 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Task": {
     icon: SparklesIcon,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Preparing agent"
+      if (isInputStreaming(part)) return "Preparing agent"
       const subagentType = part.input?.subagent_type || "Agent"
-      return isPending ? `Running ${subagentType}` : `${subagentType} completed`
+      return isPendingState(part) ? `Running ${subagentType}` : `${subagentType} completed`
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const description = part.input?.description || ""
-      return description.length > 50
-        ? description.slice(0, 47) + "..."
-        : description
+      return description.length > 50 ? description.slice(0, 47) + "..." : description
     },
     variant: "simple",
   },
@@ -151,11 +140,8 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Grep": {
     icon: SearchIcon,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Preparing search"
-      if (isPending) return "Grepping"
+      if (isInputStreaming(part)) return "Preparing search"
+      if (isPendingState(part)) return "Grepping"
 
       // Handle different output modes:
       // - "files_with_matches" mode: numFiles > 0, filenames is populated
@@ -173,7 +159,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const pattern = part.input?.pattern || ""
       const path = part.input?.path || ""
 
@@ -192,18 +178,15 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Glob": {
     icon: FolderSearch,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Preparing search"
-      if (isPending) return "Exploring files"
+      if (isInputStreaming(part)) return "Preparing search"
+      if (isPendingState(part)) return "Exploring files"
 
       const numFiles = part.output?.numFiles || 0
       return numFiles > 0 ? `Found ${numFiles} files` : "No files found"
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const pattern = part.input?.pattern || ""
       const targetDir = part.input?.target_directory || ""
 
@@ -222,21 +205,18 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Read": {
     icon: EyeIcon,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Preparing to read"
-      return isPending ? "Reading" : "Read"
+      if (isInputStreaming(part)) return "Preparing to read"
+      return isPendingState(part) ? "Reading" : "Read"
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const filePath = part.input?.file_path || ""
       if (!filePath) return "" // Don't show "file" placeholder during streaming
       return filePath.split("/").pop() || ""
     },
     tooltipContent: (part, projectPath) => {
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const filePath = part.input?.file_path || ""
       return getDisplayPath(filePath, projectPath)
     },
@@ -246,18 +226,15 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Edit": {
     icon: IconEditFile,
     title: (part) => {
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Preparing edit"
+      if (isInputStreaming(part)) return "Preparing edit"
       const filePath = part.input?.file_path || ""
       if (!filePath) return "Edit" // Show "Edit" if no file path yet during streaming
       return filePath.split("/").pop() || "Edit"
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      if (isPending) return ""
+      if (isInputStreaming(part)) return ""
+      if (isPendingState(part)) return ""
 
       const oldString = part.input?.old_string || ""
       const newString = part.input?.new_string || ""
@@ -268,11 +245,13 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
 
       // Always show actual line counts if there are any changes (copied from canvas)
       if (oldString !== newString) {
-        const { addedLines, removedLines } = calculateDiffStats(
-          oldString,
-          newString,
+        const { addedLines, removedLines } = calculateDiffStats(oldString, newString)
+        return (
+          <>
+            <span className="text-[11px] text-green-600 dark:text-green-400">+{addedLines}</span>{" "}
+            <span className="text-[11px] text-red-600 dark:text-red-400">-{removedLines}</span>
+          </>
         )
-        return `<span style="font-size: 11px; color: light-dark(#587C0B, #A3BE8C)">+${addedLines}</span> <span style="font-size: 11px; color: light-dark(#AD0807, #AE5A62)">-${removedLines}</span>`
       }
 
       return ""
@@ -312,13 +291,12 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Write": {
     icon: WriteFileIcon,
     title: (part) => {
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Preparing to create"
+      if (isInputStreaming(part)) return "Preparing to create"
       return "Create"
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const filePath = part.input?.file_path || ""
       if (!filePath) return "" // Don't show "file" placeholder during streaming
       return filePath.split("/").pop() || ""
@@ -329,21 +307,18 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Bash": {
     icon: CustomTerminalIcon,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Generating command"
-      return isPending ? "Running command" : "Ran command"
+      if (isInputStreaming(part)) return "Generating command"
+      return isPendingState(part) ? "Running command" : "Ran command"
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const command = part.input?.command || ""
       if (!command) return ""
       // Normalize line continuations, shorten absolute paths, and truncate
       let normalized = command.replace(/\\\s*\n\s*/g, " ").trim()
       // Replace absolute paths that look like project paths with relative versions
-      normalized = normalized.replace(/\/(?:Users|home|root)\/[^\s"']+/g, (match) => {
+      normalized = normalized.replace(/\/(?:Users|home|root)\/[^\s"']+/g, (match: string) => {
         return getDisplayPath(match)
       })
       return normalized.length > 50 ? normalized.slice(0, 47) + "..." : normalized
@@ -354,15 +329,12 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-WebFetch": {
     icon: GlobeIcon,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Preparing fetch"
-      return isPending ? "Fetching" : "Fetched"
+      if (isInputStreaming(part)) return "Preparing fetch"
+      return isPendingState(part) ? "Fetching" : "Fetched"
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const url = part.input?.url || ""
       try {
         return new URL(url).hostname.replace("www.", "")
@@ -376,15 +348,12 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-WebSearch": {
     icon: SearchIcon,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      const isInputStreaming = part.state === "input-streaming"
-      if (isInputStreaming) return "Preparing search"
-      return isPending ? "Searching web" : "Searched web"
+      if (isInputStreaming(part)) return "Preparing search"
+      return isPendingState(part) ? "Searching web" : "Searched web"
     },
     subtitle: (part) => {
       // Don't show subtitle while input is still streaming
-      if (part.state === "input-streaming") return ""
+      if (isInputStreaming(part)) return ""
       const query = part.input?.query || ""
       return query.length > 40 ? query.slice(0, 37) + "..." : query
     },
@@ -395,10 +364,8 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-TodoWrite": {
     icon: ListTodo,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
       const action = part.input?.action || "update"
-      if (isPending) {
+      if (isPendingState(part)) {
         return action === "add" ? "Adding todo" : "Updating todos"
       }
       return action === "add" ? "Added todo" : "Updated todos"
@@ -415,9 +382,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-TaskCreate": {
     icon: Plus,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      return isPending ? "Creating task" : "Created task"
+      return isPendingState(part) ? "Creating task" : "Created task"
     },
     subtitle: (part) => {
       const subject = part.input?.subject || ""
@@ -431,9 +396,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
     title: (part) => {
       // Status comes from INPUT (output is just confirmation string)
       const status = part.input?.status
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      if (isPending) {
+      if (isPendingState(part)) {
         if (status === "in_progress") return "Starting task"
         if (status === "completed") return "Completing task"
         if (status === "deleted") return "Deleting task"
@@ -458,9 +421,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-TaskGet": {
     icon: Eye,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      return isPending ? "Getting task" : "Got task"
+      return isPendingState(part) ? "Getting task" : "Got task"
     },
     subtitle: (part) => {
       const subject = part.output?.task?.subject
@@ -476,10 +437,8 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-TaskList": {
     icon: List,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
       const count = part.output?.tasks?.length
-      if (isPending) return "Listing tasks"
+      if (isPendingState(part)) return "Listing tasks"
       return count !== undefined ? `Listed ${count} tasks` : "Listed tasks"
     },
     subtitle: () => "",
@@ -489,11 +448,9 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-PlanWrite": {
     icon: PlanningIcon,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
       const action = part.input?.action || "create"
       const status = part.input?.plan?.status
-      if (isPending) {
+      if (isPendingState(part)) {
         if (action === "create") return "Creating plan"
         if (action === "approve") return "Approving plan"
         if (action === "complete") return "Completing plan"
@@ -510,13 +467,9 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       const steps = plan.steps || []
       const completed = steps.filter((s: any) => s.status === "completed").length
       if (plan.title) {
-        return steps.length > 0 
-          ? `${plan.title} (${completed}/${steps.length})`
-          : plan.title
+        return steps.length > 0 ? `${plan.title} (${completed}/${steps.length})` : plan.title
       }
-      return steps.length > 0 
-        ? `${completed}/${steps.length} steps`
-        : ""
+      return steps.length > 0 ? `${completed}/${steps.length} steps` : ""
     },
     variant: "simple",
   },
@@ -524,7 +477,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-ExitPlanMode": {
     icon: LogOut,
     title: (part) => {
-      const {isPending} = getToolStatus(part)
+      const { isPending } = getToolStatus(part)
       return isPending ? "Finishing plan" : "Plan complete"
     },
     subtitle: () => "",
@@ -535,9 +488,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-NotebookEdit": {
     icon: FileCode2,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      return isPending ? "Editing notebook" : "Edited notebook"
+      return isPendingState(part) ? "Editing notebook" : "Edited notebook"
     },
     subtitle: (part) => {
       const filePath = part.input?.file_path || ""
@@ -551,9 +502,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-BashOutput": {
     icon: Terminal,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      return isPending ? "Getting output" : "Got output"
+      return isPendingState(part) ? "Getting output" : "Got output"
     },
     subtitle: (part) => {
       const pid = part.input?.pid
@@ -565,9 +514,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-KillShell": {
     icon: XCircle,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      return isPending ? "Stopping shell" : "Stopped shell"
+      return isPendingState(part) ? "Stopping shell" : "Stopped shell"
     },
     subtitle: (part) => {
       const pid = part.input?.pid
@@ -583,11 +530,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Compact": {
     icon: Minimize2,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" &&
-        part.state !== "output-error" &&
-        part.state !== "result"
-      return isPending ? "Compacting..." : "Compacted"
+      return isPendingState(part) ? "Compacting..." : "Compacted"
     },
     variant: "simple",
   },
@@ -596,9 +539,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
   "tool-Thinking": {
     icon: SparklesIcon,
     title: (part) => {
-      const isPending =
-        part.state !== "output-available" && part.state !== "output-error"
-      return isPending ? "Thinking..." : "Thought"
+      return isPendingState(part) ? "Thinking..." : "Thought"
     },
     subtitle: (part) => {
       const text = part.input?.text || ""
@@ -635,10 +576,30 @@ export interface McpToolInfo {
 
 // Built-in MCP tools (not prefixed with mcp__<server>__)
 const BUILTIN_MCP_TOOLS: Record<string, McpToolInfo> = {
-  "tool-ListMcpResources": { serverName: "mcp", toolName: "list_resources", displayName: "List Resources", category: "list" },
-  "tool-ListMcpResourcesTool": { serverName: "mcp", toolName: "list_resources", displayName: "List Resources", category: "list" },
-  "tool-ReadMcpResource": { serverName: "mcp", toolName: "read_resource", displayName: "Read Resource", category: "get" },
-  "tool-ReadMcpResourceTool": { serverName: "mcp", toolName: "read_resource", displayName: "Read Resource", category: "get" },
+  "tool-ListMcpResources": {
+    serverName: "mcp",
+    toolName: "list_resources",
+    displayName: "List Resources",
+    category: "list",
+  },
+  "tool-ListMcpResourcesTool": {
+    serverName: "mcp",
+    toolName: "list_resources",
+    displayName: "List Resources",
+    category: "list",
+  },
+  "tool-ReadMcpResource": {
+    serverName: "mcp",
+    toolName: "read_resource",
+    displayName: "Read Resource",
+    category: "get",
+  },
+  "tool-ReadMcpResourceTool": {
+    serverName: "mcp",
+    toolName: "read_resource",
+    displayName: "Read Resource",
+    category: "get",
+  },
 }
 
 export function parseMcpToolType(partType: string): McpToolInfo | null {
@@ -675,9 +636,12 @@ function categorizeMcpTool(toolName: string): McpToolCategory {
   const lower = toolName.toLowerCase()
   if (lower.startsWith("search_") || lower.startsWith("query_")) return "search"
   if (lower.startsWith("list_")) return "list"
-  if (lower.startsWith("get_") || lower.startsWith("fetch_") || lower.startsWith("retrieve_")) return "get"
-  if (lower.startsWith("create_") || lower.startsWith("add_") || lower.startsWith("draft_")) return "create"
-  if (lower.startsWith("update_") || lower.startsWith("modify_") || lower.startsWith("manage_")) return "update"
+  if (lower.startsWith("get_") || lower.startsWith("fetch_") || lower.startsWith("retrieve_"))
+    return "get"
+  if (lower.startsWith("create_") || lower.startsWith("add_") || lower.startsWith("draft_"))
+    return "create"
+  if (lower.startsWith("update_") || lower.startsWith("modify_") || lower.startsWith("manage_"))
+    return "update"
   if (lower.startsWith("delete_") || lower.startsWith("remove_")) return "delete"
   if (lower.startsWith("send_")) return "send"
   if (lower.startsWith("generate_")) return "generate"

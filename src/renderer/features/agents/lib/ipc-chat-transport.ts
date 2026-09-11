@@ -1,11 +1,17 @@
+/**
+ * NOTE (transplant): inlined question/compact chunk handling, stale-question
+ * clearing fix, extractText/extractImages, and log removals were transplanted
+ * from erenbertr/1code (Apache-2.0). Their auth-error toast replacement was
+ * NOT taken — this tree keeps the login-modal retry flow.
+ */
 import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import {
-  claudeLoginModalConfigAtom,
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
   type CustomClaudeConfig,
+  claudeLoginModalConfigAtom,
   customClaudeConfigAtom,
   enableTasksAtom,
   extendedThinkingEnabledAtom,
@@ -48,23 +54,18 @@ const ERROR_TOAST_CONFIG: Record<
   },
   INVALID_API_KEY_SDK: {
     title: "Invalid API key",
-    description:
-      "Your Claude API key is invalid. Check your CLI configuration.",
+    description: "Your Claude API key is invalid. Check your CLI configuration.",
   },
   INVALID_API_KEY: {
     title: "Invalid API key",
-    description:
-      "Your Claude API key is invalid. Check your CLI configuration.",
+    description: "Your Claude API key is invalid. Check your CLI configuration.",
   },
   RATE_LIMIT_SDK: {
     title: "Session limit reached",
     description: "You've hit the Claude Code usage limit.",
     action: {
       label: "View usage",
-      onClick: () =>
-        trpcClient.external.openExternal.mutate(
-          "https://claude.ai/settings/usage",
-        ),
+      onClick: () => trpcClient.external.openExternal.mutate("https://claude.ai/settings/usage"),
     },
   },
   RATE_LIMIT: {
@@ -72,16 +73,12 @@ const ERROR_TOAST_CONFIG: Record<
     description: "You've hit the Claude Code usage limit.",
     action: {
       label: "View usage",
-      onClick: () =>
-        trpcClient.external.openExternal.mutate(
-          "https://claude.ai/settings/usage",
-        ),
+      onClick: () => trpcClient.external.openExternal.mutate("https://claude.ai/settings/usage"),
     },
   },
   OVERLOADED_SDK: {
     title: "Claude is busy",
-    description:
-      "The service is overloaded. Please try again in a few moments.",
+    description: "The service is overloaded. Please try again in a few moments.",
   },
   PROCESS_CRASH: {
     title: "Claude crashed",
@@ -90,19 +87,14 @@ const ERROR_TOAST_CONFIG: Record<
   },
   SESSION_EXPIRED: {
     title: "Session expired",
-    description:
-      "Your previous chat session expired. Send your message again to start fresh.",
+    description: "Your previous chat session expired. Send your message again to start fresh.",
   },
   EXECUTABLE_NOT_FOUND: {
     title: "Claude CLI not found",
-    description:
-      "Install Claude Code CLI: npm install -g @anthropic-ai/claude-code",
+    description: "Install Claude Code CLI: npm install -g @anthropic-ai/claude-code",
     action: {
       label: "Copy command",
-      onClick: () =>
-        navigator.clipboard.writeText(
-          "npm install -g @anthropic-ai/claude-code",
-        ),
+      onClick: () => navigator.clipboard.writeText("npm install -g @anthropic-ai/claude-code"),
     },
   },
   NETWORK_ERROR: {
@@ -127,7 +119,7 @@ type IPCChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string // Original project path for MCP config lookup (when using worktrees)
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
   model?: string
 }
 
@@ -146,17 +138,13 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     abortSignal?: AbortSignal
   }): Promise<ReadableStream<UIMessageChunk>> {
     // Extract prompt and images from last user message
-    const lastUser = [...options.messages]
-      .reverse()
-      .find((m) => m.role === "user")
+    const lastUser = [...options.messages].reverse().find((m) => m.role === "user")
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
 
     // Get sessionId for resume (server preserves sessionId on abort so
     // the next message can resume with full conversation context)
-    const lastAssistant = [...options.messages]
-      .reverse()
-      .find((m) => m.role === "assistant")
+    const lastAssistant = [...options.messages].reverse().find((m) => m.role === "assistant")
     const metadata = lastAssistant?.metadata as AgentMessageMetadata | undefined
     const sessionId = metadata?.sessionId
 
@@ -173,9 +161,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))
     const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
 
-    const storedCustomConfig = appStore.get(
-      customClaudeConfigAtom,
-    ) as CustomClaudeConfig
+    const storedCustomConfig = appStore.get(customClaudeConfigAtom) as CustomClaudeConfig
     const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
 
     // Get selected Ollama model for offline mode
@@ -188,14 +174,13 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const currentMode =
       useAgentSubChatStore
         .getState()
-        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
-        ?.mode || this.config.mode
+        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)?.mode ||
+      this.config.mode
 
-    // Stream debug logging
+    // Stream tracking
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
-    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"}`)
 
     return new ReadableStream({
       start: (controller) => {
@@ -281,7 +266,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 appStore.set(compactingSubChatsAtom, newCompacting)
               }
               if (
-                (chunk.type === "tool-output-available" && chunk.toolCallId?.startsWith("compact-")) ||
+                (chunk.type === "tool-output-available" &&
+                  chunk.toolCallId?.startsWith("compact-")) ||
                 (chunk.type === "tool-output-error" && chunk.toolCallId?.startsWith("compact-"))
               ) {
                 const compacting = appStore.get(compactingSubChatsAtom)
@@ -293,14 +279,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle session init - store MCP servers, plugins, tools info
               if (chunk.type === "session-init") {
-                console.log("[MCP] Received session-init:", {
-                  tools: chunk.tools?.length,
-                  mcpServers: chunk.mcpServers,
-                  plugins: chunk.plugins,
-                  skills: chunk.skills?.length,
-                  // Debug: show all tools to check for MCP tools (format: mcp__servername__toolname)
-                  allTools: chunk.tools,
-                })
                 appStore.set(sessionInfoAtom, {
                   tools: chunk.tools,
                   mcpServers: chunk.mcpServers,
@@ -334,6 +312,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
 
               // Handle authentication errors - show Claude login modal
+              // NOTE (mausCode): kept our modal+retry flow; their toast-only
+              // replacement was NOT transplanted.
               if (chunk.type === "auth-error") {
                 // Store the failed message for retry after successful auth
                 // readyToRetry=false prevents immediate retry - modal sets it to true on OAuth success
@@ -386,21 +366,18 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 console.error(`[SDK ERROR] ========================================`)
 
                 // Track error in Sentry
-                Sentry.captureException(
-                  new Error(chunk.errorText || "Claude transport error"),
-                  {
-                    tags: {
-                      errorCategory: category,
-                      mode: currentMode,
-                    },
-                    extra: {
-                      debugInfo: chunk.debugInfo,
-                      cwd: this.config.cwd,
-                      chatId: this.config.chatId,
-                      subChatId: this.config.subChatId,
-                    },
+                Sentry.captureException(new Error(chunk.errorText || "Claude transport error"), {
+                  tags: {
+                    errorCategory: category,
+                    mode: currentMode,
                   },
-                )
+                  extra: {
+                    debugInfo: chunk.debugInfo,
+                    cwd: this.config.cwd,
+                    chatId: this.config.chatId,
+                    subChatId: this.config.subChatId,
+                  },
+                })
 
                 // Build detailed error string for copying (available for ALL errors)
                 const errorDetails = [
@@ -411,8 +388,12 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   `CWD: ${this.config.cwd}`,
                   `Mode: ${currentMode}`,
                   `Timestamp: ${new Date().toISOString()}`,
-                  chunk.debugInfo ? `Debug Info: ${JSON.stringify(chunk.debugInfo, null, 2)}` : null,
-                ].filter(Boolean).join("\n")
+                  chunk.debugInfo
+                    ? `Debug Info: ${JSON.stringify(chunk.debugInfo, null, 2)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join("\n")
 
                 // Show toast based on error category
                 const config = ERROR_TOAST_CONFIG[category]
@@ -427,9 +408,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   ? chunk.errorText || config?.description || "An unexpected error occurred"
                   : config?.description || chunk.errorText || "An unexpected error occurred"
                 // Truncate long descriptions for toast (keep first 300 chars)
-                const description = rawDescription.length > 300
-                  ? rawDescription.slice(0, 300) + "..."
-                  : rawDescription
+                const description =
+                  rawDescription.length > 300
+                    ? rawDescription.slice(0, 300) + "..."
+                    : rawDescription
 
                 toast.error(title, {
                   description,
@@ -448,12 +430,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               try {
                 controller.enqueue(chunk)
               } catch (e) {
-                // CRITICAL: Log when enqueue fails - this could explain missing chunks!
-                console.log(`[SD] R:ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`)
+                // Stream already closed, ignore enqueue failure
               }
 
               if (chunk.type === "finish") {
-                console.log(`[SD] R:FINISH sub=${subId} n=${chunkCount}`)
                 try {
                   controller.close()
                 } catch {
@@ -462,7 +442,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
             },
             onError: (err: Error) => {
-              console.log(`[SD] R:ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`)
               // Track transport errors in Sentry
               Sentry.captureException(err, {
                 tags: {
@@ -479,7 +458,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               controller.error(err)
             },
             onComplete: () => {
-              console.log(`[SD] R:COMPLETE sub=${subId} n=${chunkCount} last=${lastChunkType}`)
               // Note: Don't clear pending questions here - let active-chat.tsx handle it
               // via the stream stop detection effect. Clearing here causes race conditions
               // where sync effect immediately restores from messages.
@@ -494,7 +472,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
         // Handle abort
         options.abortSignal?.addEventListener("abort", () => {
-          console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
           sub.unsubscribe()
           // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
           try {

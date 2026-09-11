@@ -1,0 +1,82 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noUnusedVariables": "warn",
+        "noUnusedImports": "warn",
+        "noUnusedFunctionParameters": "warn",
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "warn"
+      },
+      "style": {
+        "noNonNullAssertion": "warn",
+        "useTemplate": "warn",
+        "useNodejsImportProtocol": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noArrayIndexKey": "warn",
+        "useIterableCallbackReturn": "warn",
+        "noControlCharactersInRegex": "warn",
+        "noImplicitAnyLet": "warn"
+      },
+      "a11y": {
+        "useButtonType": "warn",
+        "noSvgWithoutTitle": "warn",
+        "noStaticElementInteractions": "warn",
+        "noLabelWithoutControl": "warn",
+        "useKeyWithClickEvents": "warn",
+        "noNoninteractiveTabindex": "warn"
+      },
+      "complexity": {
+        "useOptionalChain": "warn",
+        "noUselessFragments": "warn"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/_generated/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false },
+      "assist": { "enabled": false }
+    },
+    {
+      "includes": ["src/renderer/features/sidebar/agents-sidebar.tsx"],
+      "linter": { "rules": { "a11y": { "useSemanticElements": "warn" } } }
+    }
+  ],
+  "files": {
+    "includes": [
+      "**",
+      "!**/out",
+      "!**/release",
+      "!release-*",
+      "!drizzle/meta",
+      "!resources/bin",
+      "!coverage",
+      "!**/new mauscode branding"
+    ]
+  }
+}

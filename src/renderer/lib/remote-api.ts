@@ -2,6 +2,7 @@
  * Remote API - wrapper around tRPC client for web backend
  * Provides clean interface for fetching remote sandbox data
  */
+import { DEFAULT_API_BASE_URL } from "../../shared/app-identity"
 import { remoteTrpc } from "./remote-trpc"
 
 // API base URL - dynamically fetched from main process
@@ -9,7 +10,7 @@ let API_BASE: string | null = null
 
 async function getApiBase(): Promise<string> {
   if (!API_BASE) {
-    API_BASE = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+    API_BASE = (await window.desktopApi?.getApiBaseUrl()) || DEFAULT_API_BASE_URL
   }
   return API_BASE
 }
@@ -58,7 +59,7 @@ export const remoteApi = {
    */
   async getTeams(): Promise<Team[]> {
     const teams = await remoteTrpc.teams.getUserTeams.query()
-    return teams.map((t) => ({ id: t.id, name: t.name }))
+    return teams.map((t: any) => ({ id: t.id, name: t.name }))
   },
 
   /**
@@ -129,7 +130,7 @@ export const remoteApi = {
     }
     const apiBase = await getApiBase()
     const result = await window.desktopApi.signedFetch(
-      `${apiBase}/api/agents/sandbox/${sandboxId}/diff`
+      `${apiBase}/api/agents/sandbox/${sandboxId}/diff`,
     )
     if (!result.ok) {
       throw new Error(result.error || `Failed to fetch diff: ${result.status}`)
@@ -146,7 +147,7 @@ export const remoteApi = {
     }
     const apiBase = await getApiBase()
     const result = await window.desktopApi.signedFetch(
-      `${apiBase}/api/agents/sandbox/${sandboxId}/files?path=${encodeURIComponent(path)}`
+      `${apiBase}/api/agents/sandbox/${sandboxId}/files?path=${encodeURIComponent(path)}`,
     )
     if (!result.ok) {
       throw new Error(result.error || `Failed to fetch file: ${result.status}`)

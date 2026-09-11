@@ -1,11 +1,11 @@
-import { cn } from "../lib/utils"
-import { memo, useState, useCallback, useEffect, useMemo } from "react"
-import { Streamdown, parseMarkdownIntoBlocks } from "streamdown"
+import { Check, Copy } from "lucide-react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
-import { Copy, Check } from "lucide-react"
+import { parseMarkdownIntoBlocks, Streamdown } from "streamdown"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
 import { highlightCode } from "../lib/themes/shiki-theme-loader"
+import { cn } from "../lib/utils"
 import { MermaidBlock } from "./mermaid-block"
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
@@ -22,15 +22,13 @@ export function stripEmojis(text: string): string {
 
 // Escape HTML special characters for safe rendering
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 // Code block text sizes matching paragraph text sizes
+// sm uses text-[1em] so it inherits from parent fontSize (for chat font size scaling)
 const codeBlockTextSize = {
-  sm: "text-sm",
+  sm: "text-[1em]",
   md: "text-sm",
   lg: "text-sm",
 }
@@ -125,11 +123,13 @@ function CodeBlock({
           "[&_pre]:p-0 [&_code]:p-0",
         )}
         style={{
-          fontFamily: "SFMono-Regular, Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace",
+          fontFamily:
+            "'Source Code Pro', SFMono-Regular, Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace",
           lineHeight: 1.5,
           tabSize: 2,
         }}
       >
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output or escapeHtml(); never raw */}
         <code dangerouslySetInnerHTML={{ __html: htmlContent }} />
       </pre>
     </div>
@@ -148,6 +148,8 @@ interface ChatMarkdownRendererProps {
   syntaxHighlight?: boolean
   /** Whether content is being streamed */
   isStreaming?: boolean
+  /** Base font size in pixels — overrides prose-sm's rem-based size so em-based styles inherit correctly */
+  baseFontSize?: number
 }
 
 // Size-based styles inspired by Notion's spacing
@@ -175,28 +177,30 @@ const sizeStyles: Record<
     td: string
   }
 > = {
+  // sm variant uses text-[1em] (parent-relative) instead of text-sm (root-relative)
+  // so body text inherits from the parent's fontSize — enabling chat font size scaling
   sm: {
-    h1: "text-base font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
-    h2: "text-base font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
-    h3: "text-sm font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    h4: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    h5: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    h6: "text-sm font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
-    p: "text-sm text-foreground/80 my-px leading-normal py-[3px]",
-    ul: "list-disc list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    ol: "list-decimal list-inside text-sm text-foreground/80 mb-px marker:text-foreground/60",
-    li: "text-sm text-foreground/80 py-[3px]",
+    h1: "text-[1.15em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
+    h2: "text-[1.15em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
+    h3: "text-[1em] font-semibold text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
+    h4: "text-[1em] font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
+    h5: "text-[1em] font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
+    h6: "text-[1em] font-medium text-foreground mt-[1em] mb-px first:mt-0 leading-[1.3]",
+    p: "text-[1em] text-foreground/80 my-px leading-normal py-[3px]",
+    ul: "list-disc list-inside text-[1em] text-foreground/80 leading-normal mb-px marker:text-foreground/60",
+    ol: "list-decimal list-inside text-[1em] text-foreground/80 leading-normal mb-px marker:text-foreground/60",
+    li: "text-[1em] text-foreground/80 leading-normal py-[3px]",
     inlineCode:
       "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
     blockquote:
-      "border-l-2 border-foreground/20 pl-3 text-foreground/70 mb-px text-sm",
+      "border-l-2 border-foreground/20 pl-3 text-foreground/70 leading-normal mb-px text-[1em]",
     hr: "mt-8 mb-4 border-t border-border",
-    table: "w-full text-sm",
+    table: "w-full text-[1em]",
     thead: "border-b border-border",
     tbody: "",
     tr: "[&:not(:last-child)]:border-b [&:not(:last-child)]:border-border",
-    th: "text-left text-sm font-medium text-foreground px-3 py-2 bg-muted/50 border-r border-border last:border-r-0",
-    td: "text-sm text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
+    th: "text-left text-[1em] font-medium text-foreground px-3 py-2 bg-muted/50 border-r border-border last:border-r-0",
+    td: "text-[1em] text-foreground/80 px-3 py-2 border-r border-border last:border-r-0",
   },
   md: {
     h1: "text-[1.5em] font-semibold text-foreground mt-[1.4em] mb-px first:mt-0 leading-[1.3]",
@@ -211,8 +215,7 @@ const sizeStyles: Record<
     li: "text-sm text-foreground/80 py-[3px]",
     inlineCode:
       "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
-    blockquote:
-      "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
+    blockquote: "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
     hr: "mt-8 mb-4 border-t border-border",
     table: "w-full text-sm",
     thead: "border-b border-border",
@@ -234,8 +237,7 @@ const sizeStyles: Record<
     li: "text-sm text-foreground/80 py-[3px]",
     inlineCode:
       "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
-    blockquote:
-      "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
+    blockquote: "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
     hr: "mt-8 mb-4 border-t border-border",
     table: "w-full text-sm",
     thead: "border-b border-border",
@@ -247,7 +249,12 @@ const sizeStyles: Record<
 }
 
 // Custom code component that uses our theme system
-function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: typeof sizeStyles.md, isStreaming: boolean = false) {
+function createCodeComponent(
+  codeTheme: string,
+  size: MarkdownSize,
+  styles: typeof sizeStyles.md,
+  isStreaming: boolean = false,
+) {
   return function CodeComponent({ className, children, node, ...props }: any) {
     const match = /language-(\w+)/.exec(className || "")
     const language = match ? match[1] : undefined
@@ -262,15 +269,17 @@ function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: type
       if (language === "mermaid") {
         // Pass isStreaming to MermaidBlock
         // When streaming, MermaidBlock shows a placeholder instead of trying to render
-        return <MermaidBlock code={codeContent.replace(/\n$/, "")} size={size} isStreaming={isStreaming} />
+        return (
+          <MermaidBlock
+            code={codeContent.replace(/\n$/, "")}
+            size={size}
+            isStreaming={isStreaming}
+          />
+        )
       }
 
       return (
-        <CodeBlock
-          language={language}
-          themeId={codeTheme}
-          size={size}
-        >
+        <CodeBlock language={language} themeId={codeTheme} size={size}>
           {codeContent.replace(/\n$/, "")}
         </CodeBlock>
       )
@@ -286,6 +295,7 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
   size = "md",
   className,
   isStreaming = false,
+  baseFontSize,
 }: ChatMarkdownRendererProps) {
   const codeTheme = useCodeTheme()
   const styles = sizeStyles[size]
@@ -441,6 +451,8 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
         "[&_table+p]:mt-4 [&_table+ul]:mt-4 [&_table+ol]:mt-4",
         className,
       )}
+      // Override prose-sm's rem-based font-size so em-based child styles inherit correctly
+      style={baseFontSize ? { fontSize: `${baseFontSize}px` } : undefined}
     >
       <Streamdown
         mode="streaming"
@@ -464,32 +476,18 @@ export const CompactMarkdownRenderer = memo(function CompactMarkdownRenderer({
   content: string
   className?: string
 }) {
-  return (
-    <ChatMarkdownRenderer
-      content={content}
-      size="sm"
-      className={className}
-    />
-  )
+  return <ChatMarkdownRenderer content={content} size="sm" className={className} />
 })
 
-export const FullscreenMarkdownRenderer = memo(
-  function FullscreenMarkdownRenderer({
-    content,
-    className,
-  }: {
-    content: string
-    className?: string
-  }) {
-    return (
-      <ChatMarkdownRenderer
-        content={content}
-        size="lg"
-        className={className}
-      />
-    )
-  },
-)
+export const FullscreenMarkdownRenderer = memo(function FullscreenMarkdownRenderer({
+  content,
+  className,
+}: {
+  content: string
+  className?: string
+}) {
+  return <ChatMarkdownRenderer content={content} size="lg" className={className} />
+})
 
 // ============================================================================
 // MEMOIZED MARKDOWN - Block-level memoization for streaming performance
@@ -547,11 +545,13 @@ const MemoizedMarkdownBlock = memo(
     size,
     className,
     codeTheme,
+    baseFontSize,
   }: {
     content: string
     size: MarkdownSize
     className?: string
     codeTheme: string
+    baseFontSize?: number
   }) {
     // Don't render empty blocks
     if (!content.trim()) return null
@@ -697,7 +697,8 @@ const MemoizedMarkdownBlock = memo(
       prevProps.content === nextProps.content &&
       prevProps.size === nextProps.size &&
       prevProps.className === nextProps.className &&
-      prevProps.codeTheme === nextProps.codeTheme
+      prevProps.codeTheme === nextProps.codeTheme &&
+      prevProps.baseFontSize === nextProps.baseFontSize
     )
   },
 )
@@ -705,59 +706,60 @@ const MemoizedMarkdownBlock = memo(
 MemoizedMarkdownBlock.displayName = "MemoizedMarkdownBlock"
 
 // Main memoized markdown component - splits into blocks and memoizes each
-export const MemoizedMarkdown = memo(
-  function MemoizedMarkdown({
-    content,
-    id,
-    size = "sm",
-    className,
-  }: {
-    content: string
-    id: string
-    size?: MarkdownSize
-    className?: string
-  }) {
-    const codeTheme = useCodeTheme()
+export const MemoizedMarkdown = memo(function MemoizedMarkdown({
+  content,
+  id,
+  size = "sm",
+  className,
+  baseFontSize,
+}: {
+  content: string
+  id: string
+  size?: MarkdownSize
+  className?: string
+  /** Base font size in pixels — overrides prose-sm's rem-based size so em-based styles inherit correctly */
+  baseFontSize?: number
+}) {
+  const codeTheme = useCodeTheme()
 
-    // Pre-process content - strip emojis
-    const processedContent = useMemo(() => stripEmojis(content), [content])
+  // Pre-process content - strip emojis
+  const processedContent = useMemo(() => stripEmojis(content), [content])
 
-    // Split into blocks - this recalculates when content changes,
-    // but each block is individually memoized with content-based keys
-    const blocks = useMemo(
-      () => parseIntoBlocks(processedContent),
-      [processedContent],
-    )
+  // Split into blocks - this recalculates when content changes,
+  // but each block is individually memoized with content-based keys
+  const blocks = useMemo(() => parseIntoBlocks(processedContent), [processedContent])
 
-    return (
-      <div
-        className={cn(
-          "prose prose-sm max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none",
-          "prose-p:my-0 prose-ul:my-0 prose-ol:my-0 prose-li:my-0",
-          "prose-ul:pl-0 prose-ol:pl-0 prose-li:pl-0",
-          "prose-hr:my-0",
-          "prose-table:my-0",
-          "[&_li>p]:inline [&_li>p]:mb-0",
-          "overflow-hidden break-words",
-          "[&_p:has(+hr)]:mb-6 [&_ul:has(+hr)]:mb-6 [&_ol:has(+hr)]:mb-6 [&_div:has(+hr)]:mb-6 [&_table:has(+hr)]:mb-6 [&_h1:has(+hr)]:mb-6 [&_h2:has(+hr)]:mb-6 [&_h3:has(+hr)]:mb-6 [&_blockquote:has(+hr)]:mb-6",
-          "[&_hr+p]:mt-4 [&_hr+ul]:mt-4 [&_hr+ol]:mt-4",
-          "[&_div+p]:mt-2 [&_div+ul]:mt-2 [&_div+ol]:mt-2",
-          "[&_table+p]:mt-4 [&_table+ul]:mt-4 [&_table+ol]:mt-4",
-          className,
-        )}
-      >
-        {blocks.map((block) => (
-          <MemoizedMarkdownBlock
-            key={`${id}-${block.key}`}
-            content={block.content}
-            size={size}
-            className={className}
-            codeTheme={codeTheme}
-          />
-        ))}
-      </div>
-    )
-  },
-)
+  return (
+    <div
+      className={cn(
+        "prose prose-sm max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none",
+        "prose-p:my-0 prose-ul:my-0 prose-ol:my-0 prose-li:my-0",
+        "prose-ul:pl-0 prose-ol:pl-0 prose-li:pl-0",
+        "prose-hr:my-0",
+        "prose-table:my-0",
+        "[&_li>p]:inline [&_li>p]:mb-0",
+        "overflow-hidden break-words",
+        "[&_p:has(+hr)]:mb-6 [&_ul:has(+hr)]:mb-6 [&_ol:has(+hr)]:mb-6 [&_div:has(+hr)]:mb-6 [&_table:has(+hr)]:mb-6 [&_h1:has(+hr)]:mb-6 [&_h2:has(+hr)]:mb-6 [&_h3:has(+hr)]:mb-6 [&_blockquote:has(+hr)]:mb-6",
+        "[&_hr+p]:mt-4 [&_hr+ul]:mt-4 [&_hr+ol]:mt-4",
+        "[&_div+p]:mt-2 [&_div+ul]:mt-2 [&_div+ol]:mt-2",
+        "[&_table+p]:mt-4 [&_table+ul]:mt-4 [&_table+ol]:mt-4",
+        className,
+      )}
+      // Override prose-sm's rem-based font-size so em-based child styles inherit correctly
+      style={baseFontSize ? { fontSize: `${baseFontSize}px` } : undefined}
+    >
+      {blocks.map((block) => (
+        <MemoizedMarkdownBlock
+          key={`${id}-${block.key}`}
+          content={block.content}
+          size={size}
+          className={className}
+          codeTheme={codeTheme}
+          baseFontSize={baseFontSize}
+        />
+      ))}
+    </div>
+  )
+})
 
 MemoizedMarkdown.displayName = "MemoizedMarkdown"

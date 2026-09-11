@@ -1,8 +1,5 @@
-import { useState, useEffect } from "react"
-import type {
-  UploadedImage,
-  UploadedFile,
-} from "../hooks/use-agents-file-upload"
+import { useEffect, useState } from "react"
+import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import type { SelectedTextContext } from "./queue-utils"
 
 // Constants
@@ -133,11 +130,7 @@ export function getNewChatDrafts(): NewChatDraft[] {
 }
 
 // Save a new chat draft
-export function saveNewChatDraft(
-  draftId: string,
-  text: string,
-  project?: DraftProject
-): void {
+export function saveNewChatDraft(draftId: string, text: string, project?: DraftProject): void {
   const globalDrafts = loadGlobalDrafts()
   if (text.trim()) {
     globalDrafts[draftId] = {
@@ -181,11 +174,7 @@ export function getSubChatDraft(chatId: string, subChatId: string): string | nul
 }
 
 // Save sub-chat draft
-export function saveSubChatDraft(
-  chatId: string,
-  subChatId: string,
-  text: string
-): void {
+export function saveSubChatDraft(chatId: string, subChatId: string, text: string): void {
   const globalDrafts = loadGlobalDrafts()
   const key = getSubChatDraftKey(chatId, subChatId)
   if (text.trim()) {
@@ -247,12 +236,24 @@ export function useNewChatDrafts(): NewChatDraft[] {
       // Only update state if drafts actually changed (compare by content)
       setDrafts((prev) => {
         if (prev.length !== newDrafts.length) return newDrafts
-        const prevIds = prev.map((d) => d.id).sort().join(",")
-        const newIds = newDrafts.map((d) => d.id).sort().join(",")
+        const prevIds = prev
+          .map((d) => d.id)
+          .sort()
+          .join(",")
+        const newIds = newDrafts
+          .map((d) => d.id)
+          .sort()
+          .join(",")
         if (prevIds !== newIds) return newDrafts
         // Also compare text content
-        const prevTexts = prev.map((d) => `${d.id}:${d.text}`).sort().join("|")
-        const newTexts = newDrafts.map((d) => `${d.id}:${d.text}`).sort().join("|")
+        const prevTexts = prev
+          .map((d) => `${d.id}:${d.text}`)
+          .sort()
+          .join("|")
+        const newTexts = newDrafts
+          .map((d) => `${d.id}:${d.text}`)
+          .sort()
+          .join("|")
         if (prevTexts !== newTexts) return newDrafts
         return prev // No change, return previous reference
       })
@@ -305,10 +306,7 @@ export function useSubChatDraftsCache(): Record<string, string> {
 /**
  * Hook to get a specific sub-chat draft
  */
-export function useSubChatDraft(
-  parentChatId: string | null,
-  subChatId: string
-): string | null {
+export function useSubChatDraft(parentChatId: string | null, subChatId: string): string | null {
   const draftsCache = useSubChatDraftsCache()
 
   if (!parentChatId) return null
@@ -323,9 +321,7 @@ export function useSubChatDraft(
 /**
  * Estimate size of draft in bytes (for storage limit checks)
  */
-export function estimateDraftSize(
-  draft: DraftContent | NewChatDraft
-): number {
+export function estimateDraftSize(draft: DraftContent | NewChatDraft): number {
   return JSON.stringify(draft).length * 2 // UTF-16 chars = 2 bytes each
 }
 
@@ -334,11 +330,46 @@ export function estimateDraftSize(
  */
 function wouldExceedStorageLimit(
   existingDrafts: GlobalDraftsRaw,
-  newDraft: DraftContent | NewChatDraft
+  newDraft: DraftContent | NewChatDraft,
 ): boolean {
   const existingSize = JSON.stringify(existingDrafts).length * 2
   const newSize = estimateDraftSize(newDraft)
   return existingSize + newSize > MAX_DRAFT_STORAGE_BYTES
+}
+
+function draftUpdatedAt(value: DraftContent | NewChatDraft): number {
+  return typeof value.updatedAt === "number" ? value.updatedAt : 0
+}
+
+/**
+ * Evict oldest drafts (by updatedAt, excluding `keepKey`) from `drafts` until
+ * `newDraft` would fit under MAX_DRAFT_STORAGE_BYTES. Mutates `drafts`.
+ *
+ * Falls back to keeping just the new draft if everything else combined still
+ * doesn't leave room (e.g. attachments alone exceed the budget).
+ */
+function evictOldestDraftsToFit(
+  drafts: GlobalDraftsRaw,
+  newDraft: DraftContent | NewChatDraft,
+  keepKey: string,
+): void {
+  const newSize = estimateDraftSize(newDraft)
+
+  // Sort other drafts oldest-first; drop them one by one.
+  const evictable = Object.entries(drafts)
+    .filter(([k]) => k !== keepKey)
+    .sort(([, a], [, b]) => draftUpdatedAt(a) - draftUpdatedAt(b))
+
+  for (const [key] of evictable) {
+    const currentSize = JSON.stringify(drafts).length * 2
+    if (currentSize + newSize <= MAX_DRAFT_STORAGE_BYTES) return
+    delete drafts[key]
+  }
+
+  // Still doesn't fit — give the new draft a clean slate. This only happens
+  // when the new draft alone is bigger than MAX_DRAFT_STORAGE_BYTES, which is
+  // a sign the attachment is enormous; the actual write below may throw, and
+  // saveSubChatDraftWithAttachments handles that as "save_failed".
 }
 
 /**
@@ -376,9 +407,7 @@ export function toDraftImage(img: UploadedImage): DraftImage | null {
 /**
  * Convert UploadedFile to DraftFile (requires async conversion)
  */
-export async function toDraftFile(
-  file: UploadedFile
-): Promise<DraftFile | null> {
+export async function toDraftFile(file: UploadedFile): Promise<DraftFile | null> {
   if (!file.url) return null
   try {
     const base64Data = await blobUrlToBase64(file.url)
@@ -398,18 +427,13 @@ export async function toDraftFile(
 /**
  * Convert SelectedTextContext to DraftTextContext
  */
-export function toDraftTextContext(
-  ctx: SelectedTextContext
-): DraftTextContext {
+export function toDraftTextContext(ctx: SelectedTextContext): DraftTextContext {
   return {
     id: ctx.id,
     text: ctx.text,
     sourceMessageId: ctx.sourceMessageId,
     preview: ctx.preview,
-    createdAt:
-      ctx.createdAt instanceof Date
-        ? ctx.createdAt.toISOString()
-        : String(ctx.createdAt),
+    createdAt: ctx.createdAt instanceof Date ? ctx.createdAt.toISOString() : String(ctx.createdAt),
   }
 }
 
@@ -507,9 +531,7 @@ export function fromDraftFile(draft: DraftFile): UploadedFile | null {
 /**
  * Restore SelectedTextContext from DraftTextContext
  */
-export function fromDraftTextContext(
-  draft: DraftTextContext
-): SelectedTextContext {
+export function fromDraftTextContext(draft: DraftTextContext): SelectedTextContext {
   return {
     id: draft.id,
     text: draft.text,
@@ -532,10 +554,7 @@ export interface FullDraftData {
 /**
  * Get full sub-chat draft including attachments and text contexts
  */
-export function getSubChatDraftFull(
-  chatId: string,
-  subChatId: string
-): FullDraftData | null {
+export function getSubChatDraftFull(chatId: string, subChatId: string): FullDraftData | null {
   const globalDrafts = loadGlobalDrafts()
   const key = getSubChatDraftKey(chatId, subChatId)
   const draft = globalDrafts[key] as DraftContent | undefined
@@ -545,13 +564,8 @@ export function getSubChatDraftFull(
   return {
     text: draft.text || null,
     images:
-      draft.images
-        ?.map(fromDraftImage)
-        .filter((img): img is UploadedImage => img !== null) ?? [],
-    files:
-      draft.files
-        ?.map(fromDraftFile)
-        .filter((f): f is UploadedFile => f !== null) ?? [],
+      draft.images?.map(fromDraftImage).filter((img): img is UploadedImage => img !== null) ?? [],
+    files: draft.files?.map(fromDraftFile).filter((f): f is UploadedFile => f !== null) ?? [],
     textContexts: draft.textContexts?.map(fromDraftTextContext) ?? [],
   }
 }
@@ -567,7 +581,7 @@ export async function saveSubChatDraftWithAttachments(
     images?: UploadedImage[]
     files?: UploadedFile[]
     textContexts?: SelectedTextContext[]
-  }
+  },
 ): Promise<{ success: boolean; error?: string }> {
   const globalDrafts = loadGlobalDrafts()
   const key = getSubChatDraftKey(chatId, subChatId)
@@ -586,13 +600,11 @@ export async function saveSubChatDraftWithAttachments(
 
   // Convert attachments to persistable format
   const draftImages =
-    options?.images
-      ?.map(toDraftImage)
-      .filter((img): img is DraftImage => img !== null) ?? []
+    options?.images?.map(toDraftImage).filter((img): img is DraftImage => img !== null) ?? []
 
   const draftFiles = options?.files
     ? await Promise.all(options.files.map(toDraftFile)).then((results) =>
-        results.filter((f): f is DraftFile => f !== null)
+        results.filter((f): f is DraftFile => f !== null),
       )
     : []
 
@@ -606,19 +618,12 @@ export async function saveSubChatDraftWithAttachments(
     ...(draftTextContexts.length > 0 && { textContexts: draftTextContexts }),
   }
 
-  // Check storage limits before saving
+  // Make room for the new draft (text + attachments) by evicting the oldest
+  // OTHER drafts until it fits. We never drop attachments from the draft the
+  // user is currently editing — that's why the silent "skipping attachment
+  // persistence" fallback was a problem.
   if (wouldExceedStorageLimit(globalDrafts, draft)) {
-    console.warn(
-      "[drafts] Storage limit would be exceeded, skipping attachment persistence"
-    )
-    // Save without attachments as fallback
-    globalDrafts[key] = { text, updatedAt: Date.now() }
-    try {
-      saveGlobalDrafts(globalDrafts)
-      return { success: true, error: "attachments_skipped" }
-    } catch {
-      return { success: false, error: "storage_full" }
-    }
+    evictOldestDraftsToFit(globalDrafts, draft, key)
   }
 
   globalDrafts[key] = draft
@@ -631,4 +636,3 @@ export async function saveSubChatDraftWithAttachments(
     return { success: false, error: "save_failed" }
   }
 }
-

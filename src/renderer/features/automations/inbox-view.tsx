@@ -1,34 +1,17 @@
 "use client"
 
 import "./inbox-styles.css"
-import { useAtomValue, useSetAtom, useAtom } from "jotai"
-import { selectedTeamIdAtom, isDesktopAtom, isFullscreenAtom, chatSourceModeAtom } from "../../lib/atoms"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
-  inboxSelectedChatIdAtom,
-  agentsInboxSidebarWidthAtom,
-  agentsSidebarOpenAtom,
-  agentsMobileViewModeAtom,
-  inboxMobileViewModeAtom,
-} from "../agents/atoms"
-import { IconSpinner } from "../../components/ui/icons"
-import { Archive as ArchiveIcon, ListFilter, MoreHorizontal, Clock, Check, AlignJustify } from "lucide-react"
-import { Logo } from "../../components/ui/logo"
-import { cn } from "../../lib/utils"
-import { useState, useMemo, useEffect, useCallback } from "react"
-import { formatTimeAgo } from "../agents/utils/format-time-ago"
-import { GitHubIcon } from "../../icons"
-import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
-import { useIsMobile } from "../../lib/hooks/use-mobile"
-import { desktopViewAtom } from "../agents/atoms"
-import { remoteTrpc } from "../../lib/remote-trpc"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu"
+  AlignJustify,
+  Archive as ArchiveIcon,
+  Check,
+  Clock,
+  ListFilter,
+  MoreHorizontal,
+} from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -36,12 +19,41 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../../components/ui/context-menu"
-import { ChatView } from "../agents/main/active-chat"
-import { TrafficLightSpacer } from "../agents/components/traffic-light-spacer"
-import { OpenLocallyDialog } from "../agents/components/open-locally-dialog"
-import { useAutoImport } from "../agents/hooks/use-auto-import"
-import { trpc } from "../../lib/trpc"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu"
+import { IconSpinner } from "../../components/ui/icons"
+import { Logo } from "../../components/ui/logo"
+import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
+import { GitHubIcon } from "../../icons"
+import {
+  chatSourceModeAtom,
+  isDesktopAtom,
+  isFullscreenAtom,
+  selectedTeamIdAtom,
+} from "../../lib/atoms"
+import { useIsMobile } from "../../lib/hooks/use-mobile"
 import type { RemoteChat } from "../../lib/remote-api"
+import { remoteTrpc } from "../../lib/remote-trpc"
+import { trpc } from "../../lib/trpc"
+import { cn } from "../../lib/utils"
+import {
+  agentsInboxSidebarWidthAtom,
+  agentsMobileViewModeAtom,
+  agentsSidebarOpenAtom,
+  desktopViewAtom,
+  inboxMobileViewModeAtom,
+  inboxSelectedChatIdAtom,
+} from "../agents/atoms"
+import { OpenLocallyDialog } from "../agents/components/open-locally-dialog"
+import { TrafficLightSpacer } from "../agents/components/traffic-light-spacer"
+import { useAutoImport } from "../agents/hooks/use-auto-import"
+import { ChatView } from "../agents/main/active-chat"
+import { formatTimeAgo } from "../agents/utils/format-time-ago"
 
 interface InboxChat {
   id: string
@@ -90,7 +102,7 @@ function InboxIcon(props: React.SVGProps<SVGSVGElement>) {
 function UnreadMailIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" {...props}>
-      <g transform="scale(1.05)" transform-origin="12 12">
+      <g transform="scale(1.05)" style={{ transformOrigin: "12px 12px" }}>
         <path
           d="M13 5H5C3.89543 5 3 5.89543 3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V13M2.99805 9C5.50528 10.8837 8.62204 12 11.9995 12C13.3849 12 14.7264 11.8122 16 11.4606M23 6C23 7.65685 21.6569 9 20 9C18.3431 9 17 7.65685 17 6C17 4.34315 18.3431 3 20 3C21.6569 3 23 4.34315 23 6Z"
           stroke="currentColor"
@@ -114,9 +126,7 @@ function InboxGitHubAvatar({ gitOwner }: { gitOwner: string }) {
 
   return (
     <div className="h-4 w-4 relative flex-shrink-0">
-      {!isLoaded && (
-        <div className="absolute inset-0 rounded-sm bg-muted" />
-      )}
+      {!isLoaded && <div className="absolute inset-0 rounded-sm bg-muted" />}
       <img
         src={`https://github.com/${gitOwner}.png?size=64`}
         alt={gitOwner}
@@ -136,19 +146,23 @@ function InboxChatIcon({ chat, isSelected }: { chat: InboxChat; isSelected: bool
       {repoOwner ? (
         <InboxGitHubAvatar gitOwner={repoOwner} />
       ) : (
-        <AutomationsIcon className={cn(
-          "h-4 w-4 flex-shrink-0 transition-colors",
-          isSelected ? "text-foreground" : "text-muted-foreground",
-        )} />
+        <AutomationsIcon
+          className={cn(
+            "h-4 w-4 flex-shrink-0 transition-colors",
+            isSelected ? "text-foreground" : "text-muted-foreground",
+          )}
+        />
       )}
       {/* Unread badge - bottom-right, matching sidebar ChatIcon style */}
       {!chat.isRead && (
-        <div className={cn(
-          "absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center",
-          isSelected
-            ? "bg-[#E8E8E8] dark:bg-[#1B1B1B]"
-            : "bg-[#F4F4F4] group-hover:bg-[#E8E8E8] dark:bg-[#101010] dark:group-hover:bg-[#1B1B1B]",
-        )}>
+        <div
+          className={cn(
+            "absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center",
+            isSelected
+              ? "bg-[#E8E8E8] dark:bg-[#1B1B1B]"
+              : "bg-[#F4F4F4] group-hover:bg-[#E8E8E8] dark:bg-[#101010] dark:group-hover:bg-[#1B1B1B]",
+          )}
+        >
           <div className="w-1.5 h-1.5 rounded-full bg-[#307BD0]" />
         </div>
       )}
@@ -189,7 +203,7 @@ function InboxItemDesktop({
             "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-75 cursor-pointer group",
             isSelected
               ? "bg-foreground/5 text-foreground"
-              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
           )}
         >
           <div className="flex items-start gap-2.5">
@@ -222,9 +236,7 @@ function InboxItemDesktop({
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
-        <ContextMenuItem onClick={onForkLocally}>
-          Fork Locally
-        </ContextMenuItem>
+        <ContextMenuItem onClick={onForkLocally}>Fork Locally</ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={(e) => onArchive(e as unknown as React.MouseEvent)}>
           Archive
@@ -263,7 +275,12 @@ function InboxItemMobile({
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
           <div className="flex items-center gap-1">
-            <span className={cn("truncate block text-sm leading-tight flex-1", !chat.isRead && "font-semibold")}>
+            <span
+              className={cn(
+                "truncate block text-sm leading-tight flex-1",
+                !chat.isRead && "font-semibold",
+              )}
+            >
               {chat.name || "Untitled"}
             </span>
             <button
@@ -304,7 +321,9 @@ export function InboxView() {
   }, [setChatSourceMode])
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [filterMode, setFilterMode] = useState<"unread_and_read" | "unread" | "archived" | "all">("unread_and_read")
+  const [filterMode, setFilterMode] = useState<"unread_and_read" | "unread" | "archived" | "all">(
+    "unread_and_read",
+  )
 
   // Fork Locally state
   const [importDialogOpen, setImportDialogOpen] = useState(false)
@@ -325,8 +344,7 @@ export function InboxView() {
   })
 
   const archiveMutation = useMutation({
-    mutationFn: (chatId: string) =>
-      remoteTrpc.agents.archiveChat.mutate({ chatId }),
+    mutationFn: (chatId: string) => remoteTrpc.agents.archiveChat.mutate({ chatId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", "inboxChats"] })
       queryClient.invalidateQueries({ queryKey: ["automations", "inboxUnreadCount"] })
@@ -334,8 +352,7 @@ export function InboxView() {
   })
 
   const markAllReadMutation = useMutation({
-    mutationFn: () =>
-      remoteTrpc.automations.markAllInboxItemsRead.mutate({ teamId: teamId! }),
+    mutationFn: () => remoteTrpc.automations.markAllInboxItemsRead.mutate({ teamId: teamId! }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", "inboxUnreadCount"] })
       queryClient.invalidateQueries({ queryKey: ["automations", "inboxChats"] })
@@ -343,8 +360,7 @@ export function InboxView() {
   })
 
   const archiveBatchMutation = useMutation({
-    mutationFn: (chatIds: string[]) =>
-      remoteTrpc.agents.archiveChatsBatch.mutate({ chatIds }),
+    mutationFn: (chatIds: string[]) => remoteTrpc.agents.archiveChatsBatch.mutate({ chatIds }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", "inboxChats"] })
       queryClient.invalidateQueries({ queryKey: ["automations", "inboxUnreadCount"] })
@@ -377,7 +393,7 @@ export function InboxView() {
         console.error("[InboxView] Failed to fetch chat for fork locally:", err)
       }
     },
-    [projects, getMatchingProjects, autoImport]
+    [projects, getMatchingProjects, autoImport],
   )
 
   const handleCloseImportDialog = useCallback(() => {
@@ -429,7 +445,7 @@ export function InboxView() {
       chats = chats.filter(
         (chat) =>
           chat.name.toLowerCase().includes(query) ||
-          chat.automationName.toLowerCase().includes(query)
+          chat.automationName.toLowerCase().includes(query),
       )
     }
 
@@ -462,33 +478,42 @@ export function InboxView() {
     setSelectedChatId(chat.id)
   }
 
-  const handleArchive = useCallback((e: React.MouseEvent, chatId: string) => {
-    e.stopPropagation()
-    archiveMutation.mutate(chatId)
-    if (selectedChatId === chatId) {
-      setSelectedChatId(null)
-    }
-  }, [archiveMutation, selectedChatId, setSelectedChatId])
-
-  const handleArchiveOthers = useCallback((chatId: string) => {
-    filteredChats.forEach((chat) => {
-      if (chat.id !== chatId) {
-        archiveMutation.mutate(chat.id)
+  const handleArchive = useCallback(
+    (e: React.MouseEvent, chatId: string) => {
+      e.stopPropagation()
+      archiveMutation.mutate(chatId)
+      if (selectedChatId === chatId) {
+        setSelectedChatId(null)
       }
-    })
-    setSelectedChatId(chatId)
-  }, [archiveMutation, filteredChats, setSelectedChatId])
+    },
+    [archiveMutation, selectedChatId, setSelectedChatId],
+  )
 
-  const handleArchiveBelow = useCallback((chatId: string) => {
-    const index = filteredChats.findIndex((c) => c.id === chatId)
-    if (index === -1) return
-    filteredChats.slice(index + 1).forEach((chat) => {
-      archiveMutation.mutate(chat.id)
-    })
-    if (selectedChatId && filteredChats.findIndex(c => c.id === selectedChatId) > index) {
+  const handleArchiveOthers = useCallback(
+    (chatId: string) => {
+      filteredChats.forEach((chat) => {
+        if (chat.id !== chatId) {
+          archiveMutation.mutate(chat.id)
+        }
+      })
       setSelectedChatId(chatId)
-    }
-  }, [archiveMutation, filteredChats, selectedChatId, setSelectedChatId])
+    },
+    [archiveMutation, filteredChats, setSelectedChatId],
+  )
+
+  const handleArchiveBelow = useCallback(
+    (chatId: string) => {
+      const index = filteredChats.findIndex((c) => c.id === chatId)
+      if (index === -1) return
+      filteredChats.slice(index + 1).forEach((chat) => {
+        archiveMutation.mutate(chat.id)
+      })
+      if (selectedChatId && filteredChats.findIndex((c) => c.id === selectedChatId) > index) {
+        setSelectedChatId(chatId)
+      }
+    },
+    [archiveMutation, filteredChats, selectedChatId, setSelectedChatId],
+  )
 
   const handleMarkAllRead = useCallback(() => {
     if (teamId) {
@@ -519,7 +544,7 @@ export function InboxView() {
   if (!teamId) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Logo className="h-8 w-8 animate-pulse text-muted-foreground" />
+        <Logo className="h-8 w-8 animate-pulse opacity-50" />
       </div>
     )
   }
@@ -551,45 +576,61 @@ export function InboxView() {
                   <h1 className="text-lg font-semibold">Inbox</h1>
                 </div>
                 <div className="flex items-center gap-1">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                          <ListFilter className="h-5 w-5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[220px]">
-                        <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
-                        {filterOptions.map(({ value, label, icon: Icon }) => (
-                          <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
-                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="flex-1">{label}</span>
-                            {filterMode === value && <Check className="h-3.5 w-3.5" />}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                          <MoreHorizontal className="h-5 w-5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[200px]">
-                        <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
-                          <Check className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Mark all as read</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                        <ListFilter className="h-5 w-5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[220px]">
+                      <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                      {filterOptions.map(({ value, label, icon: Icon }) => (
+                        <DropdownMenuItem
+                          key={value}
+                          className="gap-2"
+                          onSelect={() => setFilterMode(value)}
+                        >
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="flex-1">{label}</span>
+                          {filterMode === value && <Check className="h-3.5 w-3.5" />}
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
-                          <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Archive all</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
-                          <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Archive read</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                        <MoreHorizontal className="h-5 w-5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[200px]">
+                      <DropdownMenuItem
+                        className="gap-2"
+                        onSelect={handleMarkAllRead}
+                        disabled={hasNoUnread}
+                      >
+                        <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>Mark all as read</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="gap-2"
+                        onSelect={handleArchiveAll}
+                        disabled={filteredChats.length === 0}
+                      >
+                        <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>Archive all</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="gap-2"
+                        onSelect={handleArchiveRead}
+                        disabled={hasNoRead || filterMode === "unread"}
+                      >
+                        <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>Archive read</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
               <div className="px-4 pb-3">
                 <input
@@ -644,220 +685,248 @@ export function InboxView() {
   // Desktop layout
   return (
     <>
-    <div className="flex h-full overflow-hidden" data-inbox-page>
-      {/* Left sidebar - Inbox list */}
-      <ResizableSidebar
-        isOpen={true}
-        onClose={() => {}}
-        widthAtom={agentsInboxSidebarWidthAtom}
-        minWidth={200}
-        maxWidth={400}
-        side="left"
-        animationDuration={0}
-        initialWidth={240}
-        exitWidth={240}
-        disableClickToClose={true}
-      >
-        <div
-          className="flex flex-col h-full bg-background border-r overflow-hidden relative"
-          style={{ borderRightWidth: "0.5px" }}
+      <div className="flex h-full overflow-hidden" data-inbox-page>
+        {/* Left sidebar - Inbox list */}
+        <ResizableSidebar
+          isOpen={true}
+          onClose={() => {}}
+          widthAtom={agentsInboxSidebarWidthAtom}
+          minWidth={200}
+          maxWidth={400}
+          side="left"
+          animationDuration={0}
+          initialWidth={240}
+          exitWidth={240}
+          disableClickToClose={true}
         >
-          {/* Spacer for macOS traffic lights - only when main sidebar is open */}
-          {sidebarOpen && (
-            <TrafficLightSpacer isFullscreen={isFullscreen} isDesktop={isDesktop} />
-          )}
+          <div
+            className="flex flex-col h-full bg-background border-r overflow-hidden relative"
+            style={{ borderRightWidth: "0.5px" }}
+          >
+            {/* Spacer for macOS traffic lights - only when main sidebar is open */}
+            {sidebarOpen && (
+              <TrafficLightSpacer isFullscreen={isFullscreen} isDesktop={isDesktop} />
+            )}
 
-          {/* Filter & actions buttons - absolutely positioned when main sidebar is open */}
-          {sidebarOpen && (
-            <div
-              className="absolute right-2 top-2 z-20 flex items-center gap-0.5"
-              style={{
-                // @ts-expect-error - WebKit-specific property
-                WebkitAppRegion: "no-drag",
-              }}
-            >
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                    <ListFilter className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[220px]">
-                  <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
-                  {filterOptions.map(({ value, label, icon: Icon }) => (
-                    <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="flex-1">{label}</span>
-                      {filterMode === value && <Check className="h-3.5 w-3.5" />}
+            {/* Filter & actions buttons - absolutely positioned when main sidebar is open */}
+            {sidebarOpen && (
+              <div
+                className="absolute right-2 top-2 z-20 flex items-center gap-0.5"
+                style={{
+                  // @ts-expect-error - WebKit-specific property
+                  WebkitAppRegion: "no-drag",
+                }}
+              >
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                      <ListFilter className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[220px]">
+                    <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                    {filterOptions.map(({ value, label, icon: Icon }) => (
+                      <DropdownMenuItem
+                        key={value}
+                        className="gap-2"
+                        onSelect={() => setFilterMode(value)}
+                      >
+                        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="flex-1">{label}</span>
+                        {filterMode === value && <Check className="h-3.5 w-3.5" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[200px]">
+                    <DropdownMenuItem
+                      className="gap-2"
+                      onSelect={handleMarkAllRead}
+                      disabled={hasNoUnread}
+                    >
+                      <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Mark all as read</span>
                     </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[200px]">
-                  <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
-                    <Check className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Mark all as read</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
-                    <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Archive all</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
-                    <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Archive read</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
-
-          {/* Header */}
-          <div className="p-2 pb-3 flex-shrink-0 relative z-10">
-            <div className="space-y-2">
-              {/* Top row - different layout based on main sidebar state */}
-              {sidebarOpen ? (
-                <div className="h-6" />
-              ) : (
-                <div className="flex items-center justify-between gap-1 mb-1">
-                  <button
-                    onClick={() => setSidebarOpen(true)}
-                    className="h-6 w-6 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground"
-                    aria-label="Open sidebar"
-                    style={{
-                      // @ts-expect-error - WebKit-specific property
-                      WebkitAppRegion: "no-drag",
-                    }}
-                  >
-                    <AlignJustify className="h-4 w-4" />
-                  </button>
-                  <div className="flex-1" />
-                  <div
-                    className="flex items-center gap-0.5"
-                    style={{
-                      // @ts-expect-error - WebKit-specific property
-                      WebkitAppRegion: "no-drag",
-                    }}
-                  >
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                          <ListFilter className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[220px]">
-                        <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
-                        {filterOptions.map(({ value, label, icon: Icon }) => (
-                          <DropdownMenuItem key={value} className="gap-2" onSelect={() => setFilterMode(value)}>
-                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="flex-1">{label}</span>
-                            {filterMode === value && <Check className="h-3.5 w-3.5" />}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[200px]">
-                        <DropdownMenuItem className="gap-2" onSelect={handleMarkAllRead} disabled={hasNoUnread}>
-                          <Check className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Mark all as read</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2" onSelect={handleArchiveAll} disabled={filteredChats.length === 0}>
-                          <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Archive all</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2" onSelect={handleArchiveRead} disabled={hasNoRead || filterMode === "unread"}>
-                          <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Archive read</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              )}
-              <input
-                placeholder="Search inbox..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40"
-              />
-            </div>
-          </div>
-
-          {/* Chat list */}
-          <div className="flex-1 overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <IconSpinner className="h-5 w-5" />
-              </div>
-            ) : filteredChats.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                <InboxIcon className="h-8 w-8 text-border mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  {searchQuery ? "No results found" : "Your inbox is empty"}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-0.5 pb-4">
-                {filteredChats.map((chat, index) => (
-                  <InboxItemDesktop
-                    key={chat.id}
-                    chat={chat}
-                    isSelected={selectedChatId === chat.id}
-                    onClick={() => handleChatClick(chat)}
-                    onArchive={(e) => handleArchive(e, chat.id)}
-                    onArchiveOthers={() => handleArchiveOthers(chat.id)}
-                    onArchiveBelow={() => handleArchiveBelow(chat.id)}
-                    onForkLocally={() => handleForkLocally(chat.id)}
-                    isOnlyChat={filteredChats.length <= 1}
-                    isLastChat={index === filteredChats.length - 1}
-                  />
-                ))}
+                    <DropdownMenuItem
+                      className="gap-2"
+                      onSelect={handleArchiveAll}
+                      disabled={filteredChats.length === 0}
+                    >
+                      <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Archive all</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="gap-2"
+                      onSelect={handleArchiveRead}
+                      disabled={hasNoRead || filterMode === "unread"}
+                    >
+                      <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Archive read</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             )}
+
+            {/* Header */}
+            <div className="p-2 pb-3 flex-shrink-0 relative z-10">
+              <div className="space-y-2">
+                {/* Top row - different layout based on main sidebar state */}
+                {sidebarOpen ? (
+                  <div className="h-6" />
+                ) : (
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <button
+                      onClick={() => setSidebarOpen(true)}
+                      className="h-6 w-6 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+                      aria-label="Open sidebar"
+                      style={{
+                        // @ts-expect-error - WebKit-specific property
+                        WebkitAppRegion: "no-drag",
+                      }}
+                    >
+                      <AlignJustify className="h-4 w-4" />
+                    </button>
+                    <div className="flex-1" />
+                    <div
+                      className="flex items-center gap-0.5"
+                      style={{
+                        // @ts-expect-error - WebKit-specific property
+                        WebkitAppRegion: "no-drag",
+                      }}
+                    >
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                            <ListFilter className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[220px]">
+                          <DropdownMenuLabel className="px-1.5">Filter</DropdownMenuLabel>
+                          {filterOptions.map(({ value, label, icon: Icon }) => (
+                            <DropdownMenuItem
+                              key={value}
+                              className="gap-2"
+                              onSelect={() => setFilterMode(value)}
+                            >
+                              <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="flex-1">{label}</span>
+                              {filterMode === value && <Check className="h-3.5 w-3.5" />}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[200px]">
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onSelect={handleMarkAllRead}
+                            disabled={hasNoUnread}
+                          >
+                            <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>Mark all as read</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onSelect={handleArchiveAll}
+                            disabled={filteredChats.length === 0}
+                          >
+                            <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>Archive all</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onSelect={handleArchiveRead}
+                            disabled={hasNoRead || filterMode === "unread"}
+                          >
+                            <ArchiveIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>Archive read</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                )}
+                <input
+                  placeholder="Search inbox..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40"
+                />
+              </div>
+            </div>
+
+            {/* Chat list */}
+            <div className="flex-1 overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <IconSpinner className="h-5 w-5" />
+                </div>
+              ) : filteredChats.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                  <InboxIcon className="h-8 w-8 text-border mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    {searchQuery ? "No results found" : "Your inbox is empty"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-0.5 pb-4">
+                  {filteredChats.map((chat, index) => (
+                    <InboxItemDesktop
+                      key={chat.id}
+                      chat={chat}
+                      isSelected={selectedChatId === chat.id}
+                      onClick={() => handleChatClick(chat)}
+                      onArchive={(e) => handleArchive(e, chat.id)}
+                      onArchiveOthers={() => handleArchiveOthers(chat.id)}
+                      onArchiveBelow={() => handleArchiveBelow(chat.id)}
+                      onForkLocally={() => handleForkLocally(chat.id)}
+                      isOnlyChat={filteredChats.length <= 1}
+                      isLastChat={index === filteredChats.length - 1}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+        </ResizableSidebar>
+
+        {/* Right content - Chat view */}
+        <div className="flex-1 min-w-0 h-full overflow-hidden" style={{ minWidth: "350px" }}>
+          {selectedChatId ? (
+            <ChatView chatId={selectedChatId} isSidebarOpen={true} onToggleSidebar={() => {}} />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <InboxIcon className="h-12 w-12 text-border mb-4" />
+              <p className="text-sm text-muted-foreground">
+                {unreadCount > 0
+                  ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
+                  : "No unread notifications"}
+              </p>
+            </div>
+          )}
         </div>
-      </ResizableSidebar>
-
-      {/* Right content - Chat view */}
-      <div className="flex-1 min-w-0 h-full overflow-hidden" style={{ minWidth: "350px" }}>
-        {selectedChatId ? (
-          <ChatView
-            chatId={selectedChatId}
-            isSidebarOpen={true}
-            onToggleSidebar={() => {}}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <InboxIcon className="h-12 w-12 text-border mb-4" />
-            <p className="text-sm text-muted-foreground">
-              {unreadCount > 0
-                ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
-                : "No unread notifications"}
-            </p>
-          </div>
-        )}
       </div>
-    </div>
 
-    <OpenLocallyDialog
-      isOpen={importDialogOpen}
-      onClose={handleCloseImportDialog}
-      remoteChat={importingRemoteChat}
-      matchingProjects={importMatchingProjects}
-      allProjects={projects ?? []}
-      remoteSubChatId={null}
-    />
+      <OpenLocallyDialog
+        isOpen={importDialogOpen}
+        onClose={handleCloseImportDialog}
+        remoteChat={importingRemoteChat}
+        matchingProjects={importMatchingProjects}
+        allProjects={projects ?? []}
+        remoteSubChatId={null}
+      />
     </>
   )
 }

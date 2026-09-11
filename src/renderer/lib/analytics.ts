@@ -1,5 +1,5 @@
 /**
- * PostHog analytics for 1Code Desktop - Renderer Process
+ * PostHog analytics for mausCode Desktop - Renderer Process
  * Uses PostHog JS SDK for client-side tracking
  */
 
@@ -17,7 +17,8 @@ let appArch: string | null = null
 
 // Check if we're in development mode
 // Renderer can't access env vars directly, so we check a global flag
-const isDev = typeof window !== "undefined" &&
+const isDev =
+  typeof window !== "undefined" &&
   window.location.hostname === "localhost" &&
   !(window as any).__FORCE_ANALYTICS__
 
@@ -29,6 +30,18 @@ function isOptedOut(): boolean {
   try {
     const optOut = localStorage.getItem("preferences:analytics-opt-out")
     return optOut === "true"
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Check if local-only mode is on (blocks hosted services incl. analytics).
+ * Reads directly from localStorage to avoid circular dependencies.
+ */
+function isLocalOnly(): boolean {
+  try {
+    return localStorage.getItem("preferences:local-only-mode") === "true"
   } catch {
     return false
   }
@@ -94,15 +107,12 @@ export async function initAnalytics() {
 /**
  * Capture an analytics event
  */
-export function capture(
-  eventName: string,
-  properties?: Record<string, any>,
-) {
+export function capture(eventName: string, properties?: Record<string, any>) {
   // Skip in development mode
   if (isDev) return
 
-  // Skip if user opted out
-  if (isOptedOut()) return
+  // Skip if user opted out or local-only mode is on
+  if (isOptedOut() || isLocalOnly()) return
 
   if (!initialized) return
 
@@ -115,17 +125,14 @@ export function capture(
 /**
  * Identify a user
  */
-export function identify(
-  userId: string,
-  traits?: Record<string, any>,
-) {
+export function identify(userId: string, traits?: Record<string, any>) {
   currentUserId = userId
 
   // Skip in development mode
   if (isDev) return
 
-  // Skip if user opted out
-  if (isOptedOut()) return
+  // Skip if user opted out or local-only mode is on
+  if (isOptedOut() || isLocalOnly()) return
 
   if (!initialized) return
 
@@ -172,7 +179,7 @@ export function shutdown() {
 export function trackMessageSent(data: {
   workspaceId: string
   messageLength: number
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
 }) {
   capture("message_sent", {
     workspace_id: data.workspaceId,
@@ -180,4 +187,3 @@ export function trackMessageSent(data: {
     mode: data.mode,
   })
 }
-

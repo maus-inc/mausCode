@@ -5,11 +5,11 @@
  * Supports VS Code, VS Code Insiders, Cursor, and Windsurf.
  */
 
-import * as fs from "fs/promises"
-import * as path from "path"
-import * as os from "os"
 import { ipcMain } from "electron"
+import * as fs from "fs/promises"
 import { parse as parseJsonc } from "jsonc-parser"
+import * as os from "os"
+import * as path from "path"
 
 /**
  * Source editor type
@@ -112,7 +112,10 @@ function mapUiTheme(uiTheme: string | undefined): "light" | "dark" {
 /**
  * Scan a single extensions directory
  */
-async function scanExtensionsDir(extensionsDir: string, source: EditorSource): Promise<DiscoveredTheme[]> {
+async function scanExtensionsDir(
+  extensionsDir: string,
+  source: EditorSource,
+): Promise<DiscoveredTheme[]> {
   const themes: DiscoveredTheme[] = []
 
   if (!(await directoryExists(extensionsDir))) {
@@ -127,7 +130,7 @@ async function scanExtensionsDir(extensionsDir: string, source: EditorSource): P
 
     // Create Dirent-like objects from ls output
     const entries_final = await Promise.all(
-      lsEntries.map(async (name) => {
+      lsEntries.map(async (name: string) => {
         const fullPath = path.join(extensionsDir, name)
         try {
           const stat = await fs.stat(fullPath)
@@ -138,7 +141,7 @@ async function scanExtensionsDir(extensionsDir: string, source: EditorSource): P
         } catch {
           return { name, isDirectory: () => false }
         }
-      })
+      }),
     )
 
     for (const entry of entries_final) {
@@ -169,7 +172,8 @@ async function scanExtensionsDir(extensionsDir: string, source: EditorSource): P
           }
 
           // Prefer: actual theme file name > label from package.json > id > file basename
-          const themeName = actualThemeName || theme.label || theme.id || path.basename(theme.path, ".json")
+          const themeName =
+            actualThemeName || theme.label || theme.id || path.basename(theme.path, ".json")
           // Use file path basename in ID to ensure uniqueness
           const fileBasename = path.basename(theme.path, ".json")
           const themeId = `vscode-${extDir}-${fileBasename}`.replace(/[^a-zA-Z0-9-_]/g, "-")
@@ -184,10 +188,7 @@ async function scanExtensionsDir(extensionsDir: string, source: EditorSource): P
             source,
           })
         }
-      } catch {
-        // Skip extensions with invalid package.json
-        continue
-      }
+      } catch {}
     }
   } catch (error) {
     console.error(`Error scanning extensions directory ${extensionsDir}:`, error)
@@ -278,8 +279,10 @@ export function registerThemeScannerIPC(): void {
       const isAllowedPath = EXTENSION_PATHS.some(({ path: allowedDir }) => {
         const normalizedAllowed = path.normalize(allowedDir)
         // Ensure we check with path separator to avoid partial matches
-        return normalizedPath.startsWith(normalizedAllowed + path.sep) ||
-               normalizedPath.startsWith(normalizedAllowed)
+        return (
+          normalizedPath.startsWith(normalizedAllowed + path.sep) ||
+          normalizedPath.startsWith(normalizedAllowed)
+        )
       })
 
       if (!isAllowedPath) {

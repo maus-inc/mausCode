@@ -20,6 +20,9 @@ export interface AgentActionContext {
   setSelectedDraftId?: (id: string | null) => void
   setShowNewChatForm?: (show: boolean) => void
   setDesktopView?: (view: DesktopView) => void
+  // Forces NewChatForm to remount so the in-progress draft is preserved
+  // (markDraftVisible runs on unmount) and a fresh blank form is shown.
+  requestNewChatFormReset?: () => void
 
   // UI states
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
@@ -77,7 +80,11 @@ const createNewAgentAction: AgentActionDefinition = {
   category: "general",
   hotkey: "cmd+n",
   handler: async (context) => {
-    console.log("[Action] create-new-agent handler called")
+    // Bump the reset counter first so any in-progress draft in the current
+    // NewChatForm gets preserved (markDraftVisible runs on unmount) and a
+    // fresh blank form is mounted — even when the user is already on the
+    // new chat view.
+    context.requestNewChatFormReset?.()
     // Clear selected chat
     context.setSelectedChatId?.(null)
     // Clear selected draft so form starts empty
@@ -232,9 +239,7 @@ export function getAgentAction(id: string): AgentActionDefinition | undefined {
   return AGENT_ACTIONS[id]
 }
 
-export function getAvailableAgentActions(
-  context: AgentActionContext,
-): AgentActionDefinition[] {
+export function getAvailableAgentActions(context: AgentActionContext): AgentActionDefinition[] {
   return Object.values(AGENT_ACTIONS).filter((action) => {
     if (action.isAvailable) {
       return action.isAvailable(context)

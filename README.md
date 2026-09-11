@@ -1,145 +1,27 @@
-# 1Code
+# mausCode
 
-[1Code.dev](https://1code.dev)
+**mausCode** is a local-first agent workspace by [maus-inc](https://github.com/maus-inc): run
+coding agents against your projects in an isolated git worktree per chat, watch every tool
+call as it happens, and review the diff before it lands.
 
-Open-source coding agent client. Run Claude Code, Codex, and more - locally or in the cloud.
+- **Multi-agent** — Claude Code and Codex side by side in one app, switch instantly
+- **Worktree isolation** — each chat runs in its own git worktree; your main branch is never touched
+- **Visual diff & built-in git client** — review, stage, commit, push, and open PRs without leaving the app
+- **BYOK** — bring your own provider API keys; local AI chat works without any hosted account
+- **MCP servers & skills** — full MCP lifecycle management plus custom skills and slash commands
+- **Integrated terminal, file viewer, and live previews** — xterm in a panel, `Cmd+P` file search, dev-server preview
+- **Plan mode & extended thinking** — structured plans with markdown preview before execution
 
-By [21st.dev](https://21st.dev) team
+Built on Electron, React, and SQLite (local-first: all data lives on your machine).
 
-## Highlights
-
-- **Multi-Agent Support** - Claude Code and Codex in one app, switch instantly
-- **Visual UI** - Cursor-like desktop app with diff previews and real-time tool execution
-- **Custom Models & Providers (BYOK)** - Bring your own API keys
-- **Git Worktree Isolation** - Each chat runs in its own isolated worktree
-- **Background Agents** - Cloud sandboxes that run when your laptop sleeps
-- **Live Browser Previews** - Preview dev branches in a real browser
-- **Kanban Board** - Visualize agent sessions
-- **Built-in Git Client** - Visual staging, diffs, PR creation, push to GitHub
-- **File Viewer** - File preview with Cmd+P search and image viewer
-- **Integrated Terminal** - Sidebar or bottom panel with Cmd+J toggle
-- **Model Selector** - Switch between models and providers
-- **MCP & Plugins** - Server management, plugin marketplace, rich tool display
-- **Automations** - Trigger agents from GitHub, Linear, Slack, or manually from git events
-- **Chat Forking** - Fork a sub-chat from any assistant message
-- **Message Queue** - Queue prompts while an agent is working
-- **API** - Run agents programmatically with a single API call
-- **Voice Input** - Hold-to-talk dictation
-- **Plan Mode** - Structured plans with markdown preview
-- **Extended Thinking** - Enabled by default with visual UX
-- **Skills & Slash Commands** - Custom skills and slash commands
-- **Custom Sub-agents** - Visual task display in sidebar
-- **Memory** - CLAUDE.md and AGENTS.md support
-- **PWA** - Start and monitor background agents from your phone
-- **Cross Platform** - macOS desktop, web app, Windows and Linux
-
-## Features
-
-### Run coding agents the right way
-
-Run agents locally, in worktrees, in background - without touching main branch.
-
-![Worktree Demo](assets/worktree.gif)
-
-- **Git Worktree Isolation** - Each chat session runs in its own isolated worktree
-- **Background Execution** - Run agents in background while you continue working
-- **Local-first** - All code stays on your machine, no cloud sync required
-- **Branch Safety** - Never accidentally commit to main branch
-- **Shared Terminals** - Share terminal sessions across local-mode workspaces
-
----
-
-### UI that finally respects your code
-
-Cursor-like UI with diff previews, built-in git client, and the ability to see changes before they land.
-
-![Cursor UI Demo](assets/cursor-ui.gif)
-
-- **Diff Previews** - See exactly what changes the agent is making in real-time
-- **Built-in Git Client** - Stage, commit, push to GitHub, and manage branches without leaving the app
-- **Git Activity Badges** - See git operations directly on agent messages
-- **Rollback** - Roll back changes from any user message bubble
-- **Real-time Tool Execution** - See bash commands, file edits, and web searches as they happen
-- **File Viewer** - File preview with Cmd+P search, syntax highlighting, and image viewer
-- **Chat Forking** - Fork a sub-chat from any assistant message to explore alternatives
-- **Chat Export** - Export conversations for sharing or archival
-- **File Mentions** - Reference files directly in chat with @ mentions
-- **Message Queue** - Queue up prompts while an agent is working
-
----
-
-### Plan mode that actually helps you think
-
-The agent asks clarifying questions, builds structured plans, and shows clean markdown preview - all before execution.
-
-![Plan Mode Demo](assets/plan-mode.gif)
-
-- **Clarifying Questions** - The agent asks what it needs to know before starting
-- **Structured Plans** - See step-by-step breakdown of what will happen
-- **Clean Markdown Preview** - Review plans in readable format
-- **Review Before Execution** - Approve or modify the plan before the agent acts
-- **Extended Thinking** - Enabled by default with visual thinking gradient
-- **Sub-agents** - Visual task list for sub-agents in the details sidebar
-
----
-
-### Background agents that never sleep
-
-Close your laptop. Your agents keep running in isolated cloud sandboxes with live browser previews.
-
-- **Runs When You Sleep** - Background agents continue working even when your laptop is closed
-- **Cloud Sandboxes** - Every background session runs in an isolated cloud environment
-- **Live Browser Previews** - See your dev branch running in a real browser
-
----
-
-### Connect anything with MCP
-
-Full MCP server lifecycle management with a built-in plugin marketplace. No config files needed.
-
-- **MCP Server Management** - Toggle, configure, and delete MCP servers from the UI
-- **Plugin Marketplace** - Browse and install plugins with one click
-- **Rich Tool Display** - See MCP tool calls with formatted inputs and outputs
-- **@ Mentions** - Reference MCP servers directly in chat input
-
----
-
-### Automations that work while you sleep
-
-Trigger agents from GitHub, Linear, Slack, or manually from git events. Auto-review PRs, fix CI failures, and complete tasks - all configurable.
-
-- **@1code Triggers** - Tag @1code in GitHub, Linear, or Slack to start agents
-- **Git Event Triggers** - Run automations on push, PR, or any git event
-- **Conditions & Filters** - Control when automations fire
-- **Execution Timeline** - Visual history of past runs
-- **Silent Mode** - Toggle respond-to-trigger for background automations
-
-Automations require a [Pro or Max subscription](https://1code.dev/pro). Learn more at [1code.dev/agents/async](https://1code.dev/agents/async).
-
-
-## API
-
-Run coding agents programmatically. Point at a repo, give it a task - the agent runs in a sandbox and delivers a PR.
-
-```bash
-curl -X POST https://1code.dev/api/v1/tasks \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{
-    "repository": "https://github.com/your-org/your-repo",
-    "prompt": "Fix the failing CI tests"
-  }'
-```
-
-- **Remote Sandboxes** - Isolated cloud environment, repo cloned, dependencies installed
-- **Git & PR Integration** - Agent commits, pushes branches, opens PRs automatically
-- **Async Execution** - Fire and forget, poll for status or get notified
-- **Follow-up Messages** - Send additional instructions to a running task
-
-Learn more at [1code.dev/agents/api](https://1code.dev/agents/api)
+> **Status.** mausCode is in early development. The desktop app is functional for local agent
+> work today. The hosted control plane (sign-in, sync, background agents, hosted changelog,
+> auto-updates) is not available yet — see [Origin & Attribution](#origin--attribution) and
+> `UPSTREAM.md` for what is inherited and what is ahead.
 
 ## Installation
 
-### Option 1: Build from source (free)
+Build from source:
 
 ```bash
 # Prerequisites: Bun, Python 3.11, setuptools, Xcode Command Line Tools (macOS)
@@ -147,32 +29,50 @@ bun install
 bun run claude:download  # Download Claude binary (required!)
 bun run codex:download   # Download Codex binary (required!)
 bun run build
-bun run package:mac  # or package:win, package:linux
+bun run package:mac      # or package:win, package:linux
 ```
 
-> **Important:** The `claude:download` and `codex:download` steps download required agent binaries. If you skip them, the app may build but agent functionality will not work correctly.
+> **Important:** the `claude:download` and `codex:download` steps fetch the agent binaries the
+> app drives. If you skip them, the app builds but agent functionality will not work.
 >
-> **Python note:** Python 3.11 is recommended for native module rebuilds. On Python 3.12+, make sure `setuptools` is installed (`pip install setuptools`).
-
-### Option 2: Subscribe to 1code.dev (recommended)
-
-Get pre-built releases + background agents support by subscribing at [1code.dev](https://1code.dev).
-
-Your subscription helps us maintain and improve 1Code.
+> **Python note:** Python 3.11 is recommended for native module rebuilds. On Python 3.12+,
+> make sure `setuptools` is installed (`pip install setuptools`).
 
 ## Development
 
 ```bash
 bun install
-bun run claude:download  # First time only
-bun run codex:download   # First time only
-bun run dev
+bun run claude:download   # first time only
+bun run codex:download    # first time only
+bun run dev               # Electron with hot reload
 ```
 
-## Feedback & Community
+The app runs in **local-only mode** by default. To point dev builds at a mausCode control
+plane (when available), set `MAIN_VITE_API_URL` in `.env.local` — see `.env.example`.
 
-Join our [Discord](https://discord.gg/8ektTZGnj4) for support and discussions.
+## CLI launcher
+
+From the application menu (mausCode → Install 'mauscode' Command in PATH...), the app
+installs a `mauscode` shell launcher:
+
+```bash
+mauscode .                # open the current directory in mausCode
+mauscode /path/to/project # open a specific project
+```
+
+## Origin & Attribution
+
+mausCode's product and UI foundation was inherited from
+[**1Code**](https://github.com/21st-dev/1code) by 21st.dev and contributors, an
+[Apache-2.0](LICENSE) project archived on 2026-07-07. Upstream authorship is preserved and
+credited — see [`UPSTREAM.md`](UPSTREAM.md) (provenance record and baseline commit
+`9f1bc76`) and [`NOTICE`](NOTICE). mausCode is an independent product by maus-inc; it is not
+endorsed by or affiliated with the original project or company.
+
+The native execution runtime mausCode is building is derived from
+[JCode](https://github.com/1jehuang/jcode) (MIT) and will be documented in `UPSTREAM.md` when
+vendored.
 
 ## License
 
-Apache License 2.0 - see [LICENSE](LICENSE) for details.
+Apache License 2.0 — see [LICENSE](LICENSE) for details.

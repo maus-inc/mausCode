@@ -1,7 +1,7 @@
 "use client"
 
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import { AlignJustify, Plus } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
@@ -13,117 +13,142 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
 import {
-  AgentIcon,
   AttachIcon,
   BranchIcon,
   CheckIcon,
   IconChevronDown,
-  PlanIcon,
   SearchIcon,
 } from "../../../components/ui/icons"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../../components/ui/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover"
+import { defaultAgentModeAtom } from "../../../lib/atoms"
+import { appStore } from "../../../lib/jotai-store"
 import { cn } from "../../../lib/utils"
 import {
+  AGENT_MODES,
+  type AgentMode,
   agentsDebugModeAtom,
+  getNextMode,
+  isAgentMode,
   justCreatedIdsAtom,
   lastSelectedAgentIdAtom,
+  lastSelectedBranchesAtom,
+  lastSelectedClineModelIdAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
-  lastSelectedBranchesAtom,
+  lastSelectedCursorModelIdAtom,
+  lastSelectedGeminiModelIdAtom,
+  lastSelectedGrokModelIdAtom,
   lastSelectedModelIdAtom,
+  lastSelectedOpenclawModelIdAtom,
+  lastSelectedOpenRouterModelIdAtom,
+  lastSelectedQwenModelIdAtom,
   lastSelectedRepoAtom,
+  lastSelectedRooModelIdAtom,
   lastSelectedWorkModeAtom,
   selectedAgentChatIdAtom,
   selectedChatIsRemoteAtom,
   selectedDraftIdAtom,
   selectedProjectAtom,
-  getNextMode,
-  type AgentMode,
+  subChatClineModelIdAtomFamily,
+  subChatCodexModelIdAtomFamily,
+  subChatCodexThinkingAtomFamily,
+  subChatCursorModelIdAtomFamily,
+  subChatGeminiModelIdAtomFamily,
+  subChatGrokModelIdAtomFamily,
+  subChatOpenclawModelIdAtomFamily,
+  subChatOpenRouterModelIdAtomFamily,
+  subChatQwenModelIdAtomFamily,
+  subChatRooModelIdAtomFamily,
 } from "../atoms"
-import { defaultAgentModeAtom } from "../../../lib/atoms"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
-// import { selectedTeamIdAtom } from "@/lib/atoms/team"
-import { atom } from "jotai"
+import { getModeIcon, getModeLabel, getModeTooltip } from "../lib/mode-display"
+
 const selectedTeamIdAtom = atom<string | null>(null)
+
+// Desktop uses real tRPC
+import { toast } from "sonner"
+import { isSubChatProvider } from "../../../../shared/sub-chat-provider"
 import {
-  agentsSettingsDialogOpenAtom,
+  PromptInput,
+  PromptInputActions,
+  PromptInputContextItems,
+} from "../../../components/ui/prompt-input"
+import {
   agentsSettingsDialogActiveTabAtom,
+  agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
+  chatSourceModeAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
+  customHotkeysAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
-  showOfflineModeFeaturesAtom,
+  pinnedOpenRouterModelsAtom,
   selectedOllamaModelAtom,
-  customHotkeysAtom,
-  chatSourceModeAtom,
+  showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
-// Desktop uses real tRPC
-import { toast } from "sonner"
-import { trpc } from "../../../lib/trpc"
 import {
-  AgentsSlashCommand,
-  COMMAND_PROMPTS,
-  BUILTIN_SLASH_COMMANDS,
-  type SlashCommandOption,
-} from "../commands"
-import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
-import { usePastedTextFiles } from "../hooks/use-pasted-text-files"
-import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
-import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
-import {
-  useVoiceRecording,
   blobToBase64,
   getAudioFormat,
+  useVoiceRecording,
 } from "../../../lib/hooks/use-voice-recording"
 import { getResolvedHotkey } from "../../../lib/hotkeys"
+import { trpc } from "../../../lib/trpc"
+import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
+import {
+  AgentsSlashCommand,
+  BUILTIN_SLASH_COMMANDS,
+  COMMAND_PROMPTS,
+  type SlashCommandOption,
+} from "../commands"
+import { AgentModelSelector, type AgentProviderId } from "../components/agent-model-selector"
+import { AgentSendButton } from "../components/agent-send-button"
+import { CreateBranchDialog } from "../components/create-branch-dialog"
+import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
+import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
+import { usePastedTextFiles } from "../hooks/use-pasted-text-files"
+import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
+import {
+  type DraftProject,
+  deleteNewChatDraft,
+  generateDraftId,
+  loadGlobalDrafts,
+  markDraftVisible,
+  saveGlobalDrafts,
+} from "../lib/drafts"
+import {
+  CLAUDE_MODELS,
+  CLINE_MODELS,
+  CODEX_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
+  type CodexThinkingLevel,
+  CURSOR_MODELS,
+  GEMINI_MODELS,
+  GROK_MODELS,
+  OPENCLAW_MODELS,
+  QWEN_MODELS,
+  ROO_MODELS,
+} from "../lib/models"
 import {
   AgentsFileMention,
   AgentsMentionsEditor,
-  MENTION_PREFIXES,
   type AgentsMentionsEditorHandle,
   type FileMentionOption,
+  MENTION_PREFIXES,
 } from "../mentions"
 import { AgentFileItem } from "../ui/agent-file-item"
 import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
-// import { CreateBranchDialog } from "@/app/(alpha)/agents/{components}/create-branch-dialog"
-import {
-  PromptInput,
-  PromptInputActions,
-  PromptInputContextItems,
-} from "../../../components/ui/prompt-input"
-import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
-import { AgentSendButton } from "../components/agent-send-button"
-import { AgentModelSelector } from "../components/agent-model-selector"
-import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
-import {
-  loadGlobalDrafts,
-  saveGlobalDrafts,
-  generateDraftId,
-  deleteNewChatDraft,
-  markDraftVisible,
-  type DraftProject,
-} from "../lib/drafts"
-import {
-  CLAUDE_MODELS,
-  CODEX_MODELS,
-  type CodexThinkingLevel,
-} from "../lib/models"
-// import type { PlanType } from "@/lib/config/subscription-plans"
+
 type PlanType = string
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
@@ -165,10 +190,22 @@ function useAvailableModels() {
 }
 
 // Agent providers
-const agents = [
+const agents: {
+  id: string
+  name: string
+  hasModels?: boolean
+  disabled?: boolean
+}[] = [
   { id: "claude-code", name: "Claude Code", hasModels: true },
-  { id: "cursor", name: "Cursor CLI", disabled: true },
+  { id: "cursor", name: "Cursor CLI", hasModels: true },
+  { id: "grok", name: "Grok CLI", hasModels: true },
+  { id: "qwen", name: "Qwen Code", hasModels: true },
+  { id: "cline", name: "Cline", hasModels: true },
+  { id: "openclaw", name: "OpenClaw", hasModels: true },
+  { id: "roo", name: "Roo Code", hasModels: true },
   { id: "codex", name: "OpenAI Codex" },
+  { id: "gemini", name: "Google Gemini" },
+  { id: "openrouter", name: "OpenRouter" },
 ]
 
 interface NewChatFormProps {
@@ -176,10 +213,7 @@ interface NewChatFormProps {
   onBackToChats?: () => void
 }
 
-export function NewChatForm({
-  isMobileFullscreen = false,
-  onBackToChats,
-}: NewChatFormProps = {}) {
+export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewChatFormProps = {}) {
   // UNCONTROLLED: just track if editor has content for send button
   const [hasContent, setHasContent] = useState(false)
   const [selectedTeamId] = useAtom(selectedTeamIdAtom)
@@ -199,8 +233,7 @@ export function NewChatForm({
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
 
   // Fetch projects to validate selectedProject exists
-  const { data: projectsList, isLoading: isLoadingProjects } =
-    trpc.projects.list.useQuery()
+  const { data: projectsList, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
 
   // Validate selected project exists in DB
   // While loading, trust the stored value to prevent flicker
@@ -216,16 +249,12 @@ export function NewChatForm({
 
   // Clear invalid project from storage
   useEffect(() => {
-    if (selectedProject && projectsList && !validatedProject) {
+    if (selectedProject && projectsList && !isLoadingProjects && !validatedProject) {
       setSelectedProject(null)
     }
-  }, [selectedProject, projectsList, validatedProject, setSelectedProject])
-  const [lastSelectedAgentId, setLastSelectedAgentId] = useAtom(
-    lastSelectedAgentIdAtom,
-  )
-  const [lastSelectedModelId, setLastSelectedModelId] = useAtom(
-    lastSelectedModelIdAtom,
-  )
+  }, [selectedProject, projectsList, isLoadingProjects, validatedProject, setSelectedProject])
+  const [lastSelectedAgentId, setLastSelectedAgentId] = useAtom(lastSelectedAgentIdAtom)
+  const [lastSelectedModelId, setLastSelectedModelId] = useAtom(lastSelectedModelIdAtom)
   // Mode for new chat - uses user's default preference directly
   // Note: defaultAgentMode is initialized synchronously via atomWithStorage with getOnInit: true
   const defaultAgentMode = useAtomValue(defaultAgentModeAtom)
@@ -237,15 +266,19 @@ export function NewChatForm({
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const debugMode = useAtomValue(agentsDebugModeAtom)
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig =
-    normalizeCustomClaudeConfig(customClaudeConfig)
+  const normalizedCustomClaudeConfig = normalizeCustomClaudeConfig(customClaudeConfig)
   const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
   // Connection status for providers
   const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const { data: claudeCodeIntegration } =
-    trpc.claudeCode.getIntegration.useQuery()
+  const { data: claudeCodeIntegration } = trpc.claudeCode.getIntegration.useQuery()
+  const { data: cursorIntegration } = trpc.cursor.getIntegration.useQuery()
+  const { data: grokIntegration } = trpc.grok.getIntegration.useQuery()
+  const { data: qwenIntegration } = trpc.qwen.getIntegration.useQuery()
+  const { data: clineIntegration } = trpc.cline.getIntegration.useQuery()
+  const { data: openclawIntegration } = trpc.openclaw.getIntegration.useQuery()
+  const { data: rooIntegration } = trpc.roo.getIntegration.useQuery()
   const isClaudeConnected =
     Boolean(claudeCodeIntegration?.isConnected) ||
     anthropicOnboardingCompleted ||
@@ -293,25 +326,19 @@ export function NewChatForm({
   }
   // Parse owner/repo from GitHub URL
   const parseGitHubUrl = (url: string) => {
-    const match = url.match(/(?:github\.com\/)?([^\/]+)\/([^\/\s#?]+)/)
+    const match = url.match(/(?:github\.com\/)?([^/]+)\/([^/\s#?]+)/)
     if (!match) return null
     return `${match[1]}/${match[2].replace(/\.git$/, "")}`
   }
-  const enabledAgents = useMemo(
-    () => agents.filter((agent) => !agent.disabled),
-    [],
-  )
+  const enabledAgents = useMemo(() => agents.filter((agent) => !agent.disabled), [])
   const fallbackAgent = enabledAgents[0] ?? agents[0]!
   const [selectedAgent, setSelectedAgent] = useState(
-    () =>
-      enabledAgents.find((agent) => agent.id === lastSelectedAgentId) ||
-      fallbackAgent,
+    () => enabledAgents.find((agent) => agent.id === lastSelectedAgentId) || fallbackAgent,
   )
 
   useEffect(() => {
     const nextAgent =
-      enabledAgents.find((agent) => agent.id === lastSelectedAgentId) ||
-      fallbackAgent
+      enabledAgents.find((agent) => agent.id === lastSelectedAgentId) || fallbackAgent
 
     if (nextAgent && nextAgent.id !== selectedAgent.id) {
       setSelectedAgent(nextAgent)
@@ -327,9 +354,40 @@ export function NewChatForm({
   const [lastSelectedCodexThinking, setLastSelectedCodexThinking] = useAtom(
     lastSelectedCodexThinkingAtom,
   )
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(
-    extendedThinkingEnabledAtom,
+  const [lastSelectedCursorModelId, setLastSelectedCursorModelId] = useAtom(
+    lastSelectedCursorModelIdAtom,
   )
+  const [lastSelectedGrokModelId, setLastSelectedGrokModelId] = useAtom(lastSelectedGrokModelIdAtom)
+  const [lastSelectedQwenModelId, setLastSelectedQwenModelId] = useAtom(lastSelectedQwenModelIdAtom)
+  const [lastSelectedClineModelId, setLastSelectedClineModelId] = useAtom(
+    lastSelectedClineModelIdAtom,
+  )
+  const [lastSelectedOpenclawModelId, setLastSelectedOpenclawModelId] = useAtom(
+    lastSelectedOpenclawModelIdAtom,
+  )
+  const [lastSelectedRooModelId, setLastSelectedRooModelId] = useAtom(lastSelectedRooModelIdAtom)
+  const [lastSelectedGeminiModelId, setLastSelectedGeminiModelId] = useAtom(
+    lastSelectedGeminiModelIdAtom,
+  )
+  const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+  const { data: geminiAuth } = trpc.gemini.getAuthStatus.useQuery()
+  const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
+  const isGeminiConnected =
+    (geminiAuth?.ok === true && geminiAuth.hasKey === true) ||
+    Boolean(geminiCliStatus?.installed && geminiCliStatus.loggedIn)
+
+  const [lastSelectedOpenRouterModelId, setLastSelectedOpenRouterModelId] = useAtom(
+    lastSelectedOpenRouterModelIdAtom,
+  )
+  const pinnedOpenRouterModels = useAtomValue(pinnedOpenRouterModelsAtom)
+  const { data: openRouterAuth } = trpc.openrouter.getAuthStatus.useQuery()
+  const isOpenRouterConnected = openRouterAuth?.ok === true && openRouterAuth.hasKey === true
+  const { data: openRouterCatalog } = trpc.openrouter.listModels.useQuery(undefined, {
+    enabled: isOpenRouterConnected && pinnedOpenRouterModels.length > 0,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  })
 
   const [selectedModel, setSelectedModel] = useState(
     () =>
@@ -344,18 +402,16 @@ export function NewChatForm({
     }
   }, [lastSelectedModelId])
 
+  const hiddenModels = useAtomValue(hiddenModelsAtom)
   const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
   const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
-  const hiddenModels = useAtomValue(hiddenModelsAtom)
-  const codexUiModels = useMemo(
-    () => {
-      let models = hasAppCodexApiKey
-        ? CODEX_MODELS.filter((model) => model.id !== "gpt-5.3-codex")
-        : CODEX_MODELS
-      return models.filter((model) => !hiddenModels.includes(model.id))
-    },
-    [hasAppCodexApiKey, hiddenModels],
-  )
+  const codexUiModels = useMemo(() => {
+    const subscriptionOnly = new Set<string>(CODEX_SUBSCRIPTION_ONLY_MODEL_IDS)
+    const models = hasAppCodexApiKey
+      ? CODEX_MODELS.filter((model) => !subscriptionOnly.has(model.id))
+      : CODEX_MODELS
+    return models.filter((model) => !hiddenModels.includes(model.id))
+  }, [hasAppCodexApiKey, hiddenModels])
   const selectedCodexModel = useMemo(
     () =>
       codexUiModels.find((model) => model.id === lastSelectedCodexModelId) ||
@@ -363,13 +419,108 @@ export function NewChatForm({
       CODEX_MODELS[0]!,
     [codexUiModels, lastSelectedCodexModelId],
   )
+  const cursorUiModels = useMemo(
+    () => CURSOR_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedCursorModel = useMemo(
+    () =>
+      cursorUiModels.find((model) => model.id === lastSelectedCursorModelId) ||
+      cursorUiModels[0] ||
+      CURSOR_MODELS[0]!,
+    [cursorUiModels, lastSelectedCursorModelId],
+  )
+  const grokUiModels = useMemo(
+    () => GROK_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedGrokModel = useMemo(
+    () =>
+      grokUiModels.find((model) => model.id === lastSelectedGrokModelId) ||
+      grokUiModels[0] ||
+      GROK_MODELS[0]!,
+    [grokUiModels, lastSelectedGrokModelId],
+  )
+  const qwenUiModels = useMemo(
+    () => QWEN_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedQwenModel = useMemo(
+    () =>
+      qwenUiModels.find((model) => model.id === lastSelectedQwenModelId) ||
+      qwenUiModels[0] ||
+      QWEN_MODELS[0]!,
+    [qwenUiModels, lastSelectedQwenModelId],
+  )
+  const clineUiModels = useMemo(
+    () => CLINE_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedClineModel = useMemo(
+    () =>
+      clineUiModels.find((model) => model.id === lastSelectedClineModelId) ||
+      clineUiModels[0] ||
+      CLINE_MODELS[0]!,
+    [clineUiModels, lastSelectedClineModelId],
+  )
+  const openclawUiModels = useMemo(
+    () => OPENCLAW_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedOpenclawModel = useMemo(
+    () =>
+      openclawUiModels.find((model) => model.id === lastSelectedOpenclawModelId) ||
+      openclawUiModels[0] ||
+      OPENCLAW_MODELS[0]!,
+    [openclawUiModels, lastSelectedOpenclawModelId],
+  )
+  const rooUiModels = useMemo(
+    () => ROO_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedRooModel = useMemo(
+    () =>
+      rooUiModels.find((model) => model.id === lastSelectedRooModelId) ||
+      rooUiModels[0] ||
+      ROO_MODELS[0]!,
+    [rooUiModels, lastSelectedRooModelId],
+  )
+
+  const geminiUiModels = useMemo(
+    () => GEMINI_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedGeminiModel = useMemo(
+    () =>
+      geminiUiModels.find((model) => model.id === lastSelectedGeminiModelId) ||
+      geminiUiModels[0] ||
+      GEMINI_MODELS[0]!,
+    [geminiUiModels, lastSelectedGeminiModelId],
+  )
+
+  const openRouterUiModels = useMemo(() => {
+    if (!isOpenRouterConnected) return []
+    const catalogIndex = new Map(
+      openRouterCatalog?.available
+        ? openRouterCatalog.models.map((m) => [m.id, m.name] as const)
+        : [],
+    )
+    return pinnedOpenRouterModels
+      .filter((id) => !hiddenModels.includes(id))
+      .map((id) => ({ id, name: catalogIndex.get(id) ?? id }))
+  }, [isOpenRouterConnected, openRouterCatalog, pinnedOpenRouterModels, hiddenModels])
+  const selectedOpenRouterModel = useMemo(() => {
+    if (openRouterUiModels.length === 0) {
+      return { id: "", name: "" }
+    }
+    return (
+      openRouterUiModels.find((m) => m.id === lastSelectedOpenRouterModelId) ||
+      openRouterUiModels[0] || { id: "", name: "" }
+    )
+  }, [openRouterUiModels, lastSelectedOpenRouterModelId])
 
   const selectedCodexThinking = useMemo<CodexThinkingLevel>(() => {
-    if (
-      selectedCodexModel.thinkings.includes(
-        lastSelectedCodexThinking as CodexThinkingLevel,
-      )
-    ) {
+    if (selectedCodexModel.thinkings.includes(lastSelectedCodexThinking as CodexThinkingLevel)) {
       return lastSelectedCodexThinking as CodexThinkingLevel
     }
 
@@ -381,11 +532,7 @@ export function NewChatForm({
   }, [selectedCodexModel, lastSelectedCodexThinking])
 
   useEffect(() => {
-    if (
-      selectedCodexModel.thinkings.includes(
-        lastSelectedCodexThinking as CodexThinkingLevel,
-      )
-    ) {
+    if (selectedCodexModel.thinkings.includes(lastSelectedCodexThinking as CodexThinkingLevel)) {
       return
     }
 
@@ -401,21 +548,83 @@ export function NewChatForm({
     if (selectedAgent.id === "codex") {
       return `${selectedCodexModel.id}/${selectedCodexThinking}`
     }
+    if (selectedAgent.id === "cursor") {
+      return selectedCursorModel.id
+    }
+    if (selectedAgent.id === "grok") {
+      return selectedGrokModel.id
+    }
+    if (selectedAgent.id === "qwen") {
+      return selectedQwenModel.id
+    }
+    if (selectedAgent.id === "cline") {
+      return selectedClineModel.id
+    }
+    if (selectedAgent.id === "openclaw") {
+      return selectedOpenclawModel.id
+    }
+    if (selectedAgent.id === "roo") {
+      return selectedRooModel.id
+    }
+    if (selectedAgent.id === "gemini") {
+      return selectedGeminiModel.id
+    }
+    if (selectedAgent.id === "openrouter") {
+      return selectedOpenRouterModel.id || (selectedModel?.id ?? "opus")
+    }
     return selectedModel?.id ?? "opus"
   }, [
     selectedAgent.id,
     selectedCodexModel.id,
     selectedCodexThinking,
+    selectedCursorModel.id,
+    selectedGrokModel.id,
+    selectedQwenModel.id,
+    selectedClineModel.id,
+    selectedOpenclawModel.id,
+    selectedRooModel.id,
+    selectedGeminiModel.id,
+    selectedOpenRouterModel.id,
     selectedModel?.id,
   ])
 
   // Determine current Ollama model (selected or recommended)
-  const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
-  const claudeAgent =
-    enabledAgents.find((agent) => agent.id === "claude-code") || fallbackAgent
+  const currentOllamaModel =
+    selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
+  const claudeAgent = enabledAgents.find((agent) => agent.id === "claude-code") || fallbackAgent
   const selectedModelLabel = useMemo(() => {
     if (selectedAgent.id === "codex") {
       return selectedCodexModel.name
+    }
+
+    if (selectedAgent.id === "cursor") {
+      return selectedCursorModel.name
+    }
+
+    if (selectedAgent.id === "grok") {
+      return selectedGrokModel.name
+    }
+
+    if (selectedAgent.id === "qwen") {
+      return selectedQwenModel.name
+    }
+
+    if (selectedAgent.id === "cline") {
+      return selectedClineModel.name
+    }
+    if (selectedAgent.id === "openclaw") {
+      return selectedOpenclawModel.name
+    }
+    if (selectedAgent.id === "roo") {
+      return selectedRooModel.name
+    }
+
+    if (selectedAgent.id === "gemini") {
+      return selectedGeminiModel.name
+    }
+
+    if (selectedAgent.id === "openrouter") {
+      return selectedOpenRouterModel.name || "Select model"
     }
 
     if (availableModels.isOffline && availableModels.hasOllama) {
@@ -434,6 +643,14 @@ export function NewChatForm({
   }, [
     selectedAgent.id,
     selectedCodexModel.name,
+    selectedCursorModel.name,
+    selectedGrokModel.name,
+    selectedQwenModel.name,
+    selectedClineModel.name,
+    selectedOpenclawModel.name,
+    selectedRooModel.name,
+    selectedGeminiModel.name,
+    selectedOpenRouterModel.name,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
@@ -442,13 +659,11 @@ export function NewChatForm({
   ])
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false)
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
-  const [lastSelectedBranches, setLastSelectedBranches] = useAtom(
-    lastSelectedBranchesAtom,
-  )
+  const [lastSelectedBranches, setLastSelectedBranches] = useAtom(lastSelectedBranchesAtom)
   const [branchSearch, setBranchSearch] = useState("")
-  const [selectedBranchType, setSelectedBranchType] = useState<
-    "local" | "remote" | undefined
-  >(undefined)
+  const [selectedBranchType, setSelectedBranchType] = useState<"local" | "remote" | undefined>(
+    undefined,
+  )
 
   // Get/set selected branch for current project (persisted per project)
   const selectedBranch = validatedProject?.id
@@ -498,12 +713,9 @@ export function NewChatForm({
 
   // Pasted text files - use a stable temp ID for new chat
   const tempPastedIdRef = useRef(`new-chat-${Date.now()}`)
-  const {
-    pastedTexts,
-    addPastedText,
-    removePastedText,
-    clearPastedTexts,
-  } = usePastedTextFiles(tempPastedIdRef.current)
+  const { pastedTexts, addPastedText, removePastedText, clearPastedTexts } = usePastedTextFiles(
+    tempPastedIdRef.current,
+  )
 
   // File contents cache - stores content for file mentions (keyed by mentionId)
   // This content gets added to the prompt when sending, without showing a separate card
@@ -529,7 +741,7 @@ export function NewChatForm({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: AgentMode
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
@@ -573,7 +785,6 @@ export function NewChatForm({
     try {
       const blob = await stopRecording()
       if (blob.size < 1000) {
-        console.log("[NewChatForm] Recording too short, ignoring")
         return
       }
       setIsTranscribing(true)
@@ -612,9 +823,11 @@ export function NewChatForm({
     if (!voiceHotkey) return
 
     // Parse hotkey once
-    const parts = voiceHotkey.split("+").map(p => p.toLowerCase())
-    const modifiers = parts.filter(p => ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
-    const mainKey = parts.find(p => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
+    const parts = voiceHotkey.split("+").map((p) => p.toLowerCase())
+    const modifiers = parts.filter((p) =>
+      ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p),
+    )
+    const mainKey = parts.find((p) => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
 
     const needsCmd = modifiers.includes("cmd") || modifiers.includes("meta")
     const needsShift = modifiers.includes("shift")
@@ -712,7 +925,15 @@ export function NewChatForm({
 
   // Fetch repos from team
   // Desktop: no remote repos, we use local projects
-  const reposData = { repositories: [] }
+  const reposData = {
+    repositories: [] as Array<{
+      id: string
+      name: string
+      full_name: string
+      sandbox_status?: "not_setup" | "in_progress" | "ready" | "error"
+      pushed_at?: string | null
+    }>,
+  }
   const isLoadingRepos = false
 
   // Memoize repos arrays to prevent useEffect from running on every keystroke
@@ -731,15 +952,10 @@ export function NewChatForm({
     return repos.filter((r) => r.sandbox_status === "ready")
   }, [repos, debugMode.enabled, debugMode.simulateNoReadyRepos])
 
-  const notReadyRepos = useMemo(
-    () => repos.filter((r) => r.sandbox_status !== "ready"),
-    [repos],
-  )
+  const notReadyRepos = useMemo(() => repos.filter((r) => r.sandbox_status !== "ready"), [repos])
 
   // Use state to avoid hydration mismatch
-  const [resolvedRepo, setResolvedRepo] = useState<(typeof repos)[0] | null>(
-    null,
-  )
+  const [resolvedRepo, setResolvedRepo] = useState<(typeof repos)[0] | null>(null)
 
   // Derive selected repo from saved or first available (client-side only)
   // Now includes all repos, not just ready ones
@@ -841,9 +1057,7 @@ export function NewChatForm({
         type: "local",
         protected: false,
         isDefault: branch === defaultBranch,
-        committedAt: lastCommitDate
-          ? new Date(lastCommitDate).toISOString()
-          : null,
+        committedAt: lastCommitDate ? new Date(lastCommitDate).toISOString() : null,
         authorName: null,
       })
     }
@@ -904,24 +1118,19 @@ export function NewChatForm({
 
   // Set default branch when project/branches change (only if no saved branch for this project)
   useEffect(() => {
-    if (
-      branchesQuery.data?.defaultBranch &&
-      validatedProject?.id &&
-      !selectedBranch
-    ) {
+    if (branchesQuery.data?.defaultBranch && validatedProject?.id && !selectedBranch) {
       // Find the default branch in the branches list to get its type
       // Prefer local over remote if both exist
-      const defaultBranchObj = branches.find(
-        (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault && b.type === "local",
-      ) || branches.find(
-        (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault && b.type === "remote",
-      )
+      const defaultBranchObj =
+        branches.find(
+          (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault && b.type === "local",
+        ) ||
+        branches.find(
+          (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault && b.type === "remote",
+        )
       // Fallback to "local" if branch not found in list (shouldn't happen but prevents empty selector)
       const branchType = defaultBranchObj?.type || "local"
-      setSelectedBranch(
-        branchesQuery.data.defaultBranch,
-        branchType,
-      )
+      setSelectedBranch(branchesQuery.data.defaultBranch, branchType)
     }
   }, [
     branchesQuery.data?.defaultBranch,
@@ -1031,6 +1240,40 @@ export function NewChatForm({
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
     onSuccess: (data) => {
+      utils.chats.get.setData({ id: data.id }, data as any)
+
+      const firstSubChatId = data.subChats?.[0]?.id
+      if (firstSubChatId) {
+        if (selectedAgent.id === "codex") {
+          const [modelId, thinking] = selectedChatModel.split("/")
+          appStore.set(subChatCodexModelIdAtomFamily(firstSubChatId), modelId)
+          if (
+            thinking === "low" ||
+            thinking === "medium" ||
+            thinking === "high" ||
+            thinking === "xhigh"
+          ) {
+            appStore.set(subChatCodexThinkingAtomFamily(firstSubChatId), thinking)
+          }
+        } else if (selectedAgent.id === "cursor") {
+          appStore.set(subChatCursorModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "grok") {
+          appStore.set(subChatGrokModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "qwen") {
+          appStore.set(subChatQwenModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "cline") {
+          appStore.set(subChatClineModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "openclaw") {
+          appStore.set(subChatOpenclawModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "roo") {
+          appStore.set(subChatRooModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "gemini") {
+          appStore.set(subChatGeminiModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "openrouter") {
+          appStore.set(subChatOpenRouterModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        }
+      }
+
       // Clear editor, images, files, pasted texts, and file contents cache only on success
       editorRef.current?.clear()
       clearImages()
@@ -1080,11 +1323,7 @@ export function NewChatForm({
           name: project.name,
           path: project.path,
           gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
+          gitProvider: project.gitProvider as "github" | "gitlab" | "bitbucket" | null,
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
@@ -1119,9 +1358,7 @@ export function NewChatForm({
       const [, commandName, args] = slashMatch
 
       // Check if it's a builtin command - if so, don't process as custom command
-      const builtinNames = new Set(
-        BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name),
-      )
+      const builtinNames = new Set(BUILTIN_SLASH_COMMANDS.map((cmd) => cmd.name))
       if (!builtinNames.has(commandName)) {
         // This is a custom command - load content and replace $ARGUMENTS
         try {
@@ -1181,8 +1418,9 @@ export function NewChatForm({
       const pastedMentions = pastedTexts
         .map((pt) => {
           // Sanitize preview to remove special characters that break mention parsing
-          const sanitizedPreview = pt.preview.replace(/[:\[\]|]/g, "")
-          const prefix = pt.kind === "chatHistory" ? MENTION_PREFIXES.CHAT_HISTORY : MENTION_PREFIXES.PASTED
+          const sanitizedPreview = pt.preview.replace(/[:[\]|]/g, "")
+          const prefix =
+            pt.kind === "chatHistory" ? MENTION_PREFIXES.CHAT_HISTORY : MENTION_PREFIXES.PASTED
           return `@[${prefix}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
         })
         .join(" ")
@@ -1210,13 +1448,12 @@ export function NewChatForm({
     // Create chat with selected project, branch, and initial message
     createChatMutation.mutate({
       projectId: selectedProject.id,
-      name: message.trim().slice(0, 50), // Use first 50 chars as chat name
+      name: selectedProject.name || message.trim().slice(0, 50), // Use project name as workspace name
       model: selectedChatModel,
+      ...(isSubChatProvider(selectedAgent.id) ? { provider: selectedAgent.id } : {}),
       initialMessageParts: parts.length > 0 ? parts : undefined,
-      baseBranch:
-        workMode === "worktree" ? selectedBranch || undefined : undefined,
-      branchType:
-        workMode === "worktree" ? selectedBranchType : undefined,
+      baseBranch: workMode === "worktree" ? selectedBranch || undefined : undefined,
+      branchType: workMode === "worktree" ? selectedBranchType : undefined,
       useWorktree: workMode === "worktree",
       mode: agentMode,
     })
@@ -1368,19 +1605,16 @@ export function NewChatForm({
 
       // Handle builtin commands that change app state (no text input needed)
       if (command.category === "builtin") {
+        // Mode-switch commands (/plan /ask /edit /agent /turbo)
+        if (isAgentMode(command.name)) {
+          if (agentMode !== command.name) {
+            setAgentMode(command.name)
+          }
+          return
+        }
         switch (command.name) {
           case "clear":
             editorRef.current?.clear()
-            return
-          case "plan":
-            if (agentMode !== "plan") {
-              setAgentMode("plan")
-            }
-            return
-          case "agent":
-            if (agentMode === "plan") {
-              setAgentMode("agent")
-            }
             return
         }
       }
@@ -1417,24 +1651,92 @@ export function NewChatForm({
   // Text file extensions that should have content read and attached
   const TEXT_FILE_EXTENSIONS = new Set([
     // Code
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-    ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h", ".hpp",
-    ".cs", ".php", ".lua", ".r", ".m", ".mm", ".scala", ".clj", ".ex", ".exs",
-    ".hs", ".elm", ".erl", ".fs", ".fsx", ".ml", ".v", ".vhdl", ".zig",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".py",
+    ".rb",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".swift",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".php",
+    ".lua",
+    ".r",
+    ".m",
+    ".mm",
+    ".scala",
+    ".clj",
+    ".ex",
+    ".exs",
+    ".hs",
+    ".elm",
+    ".erl",
+    ".fs",
+    ".fsx",
+    ".ml",
+    ".v",
+    ".vhdl",
+    ".zig",
     // Config/Data
-    ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".env", ".conf", ".cfg",
-    ".properties", ".plist",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".ini",
+    ".env",
+    ".conf",
+    ".cfg",
+    ".properties",
+    ".plist",
     // Web
-    ".html", ".htm", ".css", ".scss", ".sass", ".less", ".vue", ".svelte", ".astro",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".vue",
+    ".svelte",
+    ".astro",
     // Documentation
-    ".md", ".mdx", ".rst", ".txt", ".text",
+    ".md",
+    ".mdx",
+    ".rst",
+    ".txt",
+    ".text",
     // Graphics (text-based)
     ".svg",
     // Shell/Scripts
-    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".ps1",
+    ".bat",
+    ".cmd",
     // Other
-    ".sql", ".graphql", ".gql", ".prisma", ".dockerfile", ".makefile",
-    ".gitignore", ".gitattributes", ".editorconfig", ".eslintrc", ".prettierrc",
+    ".sql",
+    ".graphql",
+    ".gql",
+    ".prisma",
+    ".dockerfile",
+    ".makefile",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".eslintrc",
+    ".prettierrc",
   ])
 
   const MAX_FILE_SIZE_FOR_CONTENT = 100 * 1024 // 100KB - files larger than this only get path mention
@@ -1469,21 +1771,16 @@ export function NewChatForm({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
+        const filePath: string | undefined =
+          window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
 
         let mentionId: string
         let mentionPath: string
 
         // Check if file is inside the project
-        if (
-          validatedProject?.path &&
-          filePath &&
-          filePath.startsWith(validatedProject.path)
-        ) {
+        if (validatedProject?.path && filePath && filePath.startsWith(validatedProject.path)) {
           // Project file: use relative path with file:local: prefix
-          const relativePath = filePath
-            .slice(validatedProject.path.length)
-            .replace(/^\//, "")
+          const relativePath = filePath.slice(validatedProject.path.length).replace(/^\//, "")
           mentionId = `file:local:${relativePath}`
           mentionPath = relativePath
         } else if (filePath) {
@@ -1664,10 +1961,7 @@ export function NewChatForm({
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <div
-                className="relative w-full cursor-text"
-                onClick={handleContainerClick}
-              >
+              <div className="relative w-full cursor-text" onClick={handleContainerClick}>
                 <PromptInput
                   className={cn(
                     "border bg-input-background relative z-10 p-2 rounded-xl transition-[border-color,box-shadow] duration-150",
@@ -1718,12 +2012,11 @@ export function NewChatForm({
                         }}
                       >
                         <DropdownMenuTrigger className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                          {agentMode === "plan" ? (
-                            <PlanIcon className="h-3.5 w-3.5" />
-                          ) : (
-                            <AgentIcon className="h-3.5 w-3.5" />
-                          )}
-                          <span>{agentMode === "plan" ? "Plan" : "Agent"}</span>
+                          {(() => {
+                            const TriggerIcon = getModeIcon(agentMode)
+                            return <TriggerIcon className="h-3.5 w-3.5" />
+                          })()}
+                          <span>{getModeLabel(agentMode)}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -1732,117 +2025,63 @@ export function NewChatForm({
                           className="!min-w-[116px] !w-[116px]"
                           onCloseAutoFocus={(e) => e.preventDefault()}
                         >
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("agent")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect =
-                                e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "agent",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Agent</span>
-                            </div>
-                            {agentMode !== "plan" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("plan")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect = e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "plan",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Plan</span>
-                            </div>
-                            {agentMode === "plan" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
+                          {AGENT_MODES.map((mode) => {
+                            const ItemIcon = getModeIcon(mode)
+                            return (
+                              <DropdownMenuItem
+                                key={mode}
+                                onClick={() => {
+                                  if (tooltipTimeoutRef.current) {
+                                    clearTimeout(tooltipTimeoutRef.current)
+                                    tooltipTimeoutRef.current = null
+                                  }
+                                  setModeTooltip(null)
+                                  setAgentMode(mode)
+                                  setModeDropdownOpen(false)
+                                }}
+                                className="justify-between gap-2"
+                                onMouseEnter={(e) => {
+                                  if (tooltipTimeoutRef.current) {
+                                    clearTimeout(tooltipTimeoutRef.current)
+                                    tooltipTimeoutRef.current = null
+                                  }
+                                  const rect = e.currentTarget.getBoundingClientRect()
+                                  const showTooltip = () => {
+                                    setModeTooltip({
+                                      visible: true,
+                                      position: {
+                                        top: rect.top,
+                                        left: rect.right + 8,
+                                      },
+                                      mode,
+                                    })
+                                    hasShownTooltipRef.current = true
+                                    tooltipTimeoutRef.current = null
+                                  }
+                                  if (hasShownTooltipRef.current) {
+                                    showTooltip()
+                                  } else {
+                                    tooltipTimeoutRef.current = setTimeout(showTooltip, 1000)
+                                  }
+                                }}
+                                onMouseLeave={() => {
+                                  if (tooltipTimeoutRef.current) {
+                                    clearTimeout(tooltipTimeoutRef.current)
+                                    tooltipTimeoutRef.current = null
+                                  }
+                                  setModeTooltip(null)
+                                }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <ItemIcon className="w-4 h-4 text-muted-foreground" />
+                                  <span>{getModeLabel(mode)}</span>
+                                </div>
+                                {agentMode === mode && (
+                                  <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                                )}
+                              </DropdownMenuItem>
+                            )
+                          })}
                         </DropdownMenuContent>
                         {modeTooltip?.visible &&
                           createPortal(
@@ -1858,11 +2097,7 @@ export function NewChatForm({
                                 data-tooltip="true"
                                 className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
                               >
-                                <span>
-                                  {modeTooltip.mode === "agent"
-                                    ? "Apply changes directly without a plan"
-                                    : "Create a plan before making changes"}
-                                </span>
+                                <span>{getModeTooltip(modeTooltip.mode)}</span>
                               </div>
                             </div>,
                             document.body,
@@ -1873,12 +2108,52 @@ export function NewChatForm({
                         <AgentModelSelector
                           open={isModelDropdownOpen}
                           onOpenChange={setIsModelDropdownOpen}
-                          selectedAgentId={selectedAgent.id as "claude-code" | "codex"}
+                          selectedAgentId={selectedAgent.id as AgentProviderId}
                           onSelectedAgentIdChange={(provider) => {
                             if (provider === "claude-code") {
                               setSelectedAgent(claudeAgent)
-                            } else {
-                              setSelectedAgent(enabledAgents.find((agent) => agent.id === "codex") || fallbackAgent)
+                            } else if (provider === "codex") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "codex") ||
+                                  fallbackAgent,
+                              )
+                            } else if (provider === "gemini") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "gemini") ||
+                                  fallbackAgent,
+                              )
+                            } else if (provider === "openrouter") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "openrouter") ||
+                                  fallbackAgent,
+                              )
+                            } else if (provider === "cursor") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "cursor") ||
+                                  fallbackAgent,
+                              )
+                            } else if (provider === "grok") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "grok") || fallbackAgent,
+                              )
+                            } else if (provider === "qwen") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "qwen") || fallbackAgent,
+                              )
+                            } else if (provider === "cline") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "cline") ||
+                                  fallbackAgent,
+                              )
+                            } else if (provider === "openclaw") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "openclaw") ||
+                                  fallbackAgent,
+                              )
+                            } else if (provider === "roo") {
+                              setSelectedAgent(
+                                enabledAgents.find((agent) => agent.id === "roo") || fallbackAgent,
+                              )
                             }
                             setLastSelectedAgentId(provider)
                           }}
@@ -1888,7 +2163,9 @@ export function NewChatForm({
                             setSettingsDialogOpen(true)
                           }}
                           claude={{
-                            models: availableModels.models.filter((m) => !hiddenModels.includes(m.id)),
+                            models: availableModels.models.filter(
+                              (m) => !hiddenModels.includes(m.id),
+                            ),
                             selectedModelId: selectedModel?.id,
                             onSelectModel: (modelId) => {
                               const model =
@@ -1918,9 +2195,9 @@ export function NewChatForm({
                                 lastSelectedCodexThinking as CodexThinkingLevel,
                               )
                                 ? (lastSelectedCodexThinking as CodexThinkingLevel)
-                                : (model.thinkings.includes("high")
+                                : model.thinkings.includes("high")
                                   ? "high"
-                                  : model.thinkings[0]!)
+                                  : model.thinkings[0]!
 
                               setLastSelectedCodexModelId(model.id)
                               setLastSelectedCodexThinking(nextThinking)
@@ -1928,6 +2205,86 @@ export function NewChatForm({
                             selectedThinking: selectedCodexThinking,
                             onSelectThinking: setLastSelectedCodexThinking,
                             isConnected: codexOnboardingCompleted,
+                          }}
+                          cursor={{
+                            models: cursorUiModels,
+                            selectedModelId: selectedCursorModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = cursorUiModels.find((item) => item.id === modelId)
+                              if (!model) return
+                              setLastSelectedCursorModelId(model.id)
+                            },
+                            isConnected: Boolean(cursorIntegration?.isConnected),
+                          }}
+                          grok={{
+                            models: grokUiModels,
+                            selectedModelId: selectedGrokModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = grokUiModels.find((item) => item.id === modelId)
+                              if (!model) return
+                              setLastSelectedGrokModelId(model.id)
+                            },
+                            isConnected: Boolean(grokIntegration?.isConnected),
+                          }}
+                          qwen={{
+                            models: qwenUiModels,
+                            selectedModelId: selectedQwenModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = qwenUiModels.find((item) => item.id === modelId)
+                              if (!model) return
+                              setLastSelectedQwenModelId(model.id)
+                            },
+                            isConnected: Boolean(qwenIntegration?.isConnected),
+                          }}
+                          cline={{
+                            models: clineUiModels,
+                            selectedModelId: selectedClineModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = clineUiModels.find((item) => item.id === modelId)
+                              if (!model) return
+                              setLastSelectedClineModelId(model.id)
+                            },
+                            isConnected: Boolean(clineIntegration?.isConnected),
+                          }}
+                          openclaw={{
+                            models: openclawUiModels,
+                            selectedModelId: selectedOpenclawModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = openclawUiModels.find((item) => item.id === modelId)
+                              if (!model) return
+                              setLastSelectedOpenclawModelId(model.id)
+                            },
+                            isConnected: Boolean(openclawIntegration?.isConnected),
+                          }}
+                          roo={{
+                            models: rooUiModels,
+                            selectedModelId: selectedRooModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = rooUiModels.find((item) => item.id === modelId)
+                              if (!model) return
+                              setLastSelectedRooModelId(model.id)
+                            },
+                            isConnected: Boolean(rooIntegration?.isConnected),
+                          }}
+                          gemini={{
+                            models: geminiUiModels,
+                            selectedModelId: selectedGeminiModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = geminiUiModels.find((m) => m.id === modelId)
+                              if (!model) return
+                              setLastSelectedGeminiModelId(model.id)
+                            },
+                            isConnected: isGeminiConnected,
+                          }}
+                          openrouter={{
+                            models: openRouterUiModels,
+                            selectedModelId: selectedOpenRouterModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = openRouterUiModels.find((m) => m.id === modelId)
+                              if (!model) return
+                              setLastSelectedOpenRouterModelId(model.id)
+                            },
+                            isConnected: isOpenRouterConnected,
                           }}
                         />
                       </div>
@@ -1948,7 +2305,10 @@ export function NewChatForm({
                       />
                       {/* Voice wave indicator or Attachment button */}
                       {isVoiceRecording ? (
-                        <VoiceWaveIndicator isRecording={isVoiceRecording} audioLevel={voiceAudioLevel} />
+                        <VoiceWaveIndicator
+                          isRecording={isVoiceRecording}
+                          audioLevel={voiceAudioLevel}
+                        />
                       ) : (
                         <Button
                           variant="ghost"
@@ -1963,12 +2323,8 @@ export function NewChatForm({
                       <div className="ml-1">
                         <AgentSendButton
                           isStreaming={false}
-                          isSubmitting={
-                            createChatMutation.isPending || isUploading
-                          }
-                          disabled={Boolean(
-                            !hasContent || !selectedProject || isUploading,
-                          )}
+                          isSubmitting={createChatMutation.isPending || isUploading}
+                          disabled={Boolean(!hasContent || !selectedProject || isUploading)}
                           onClick={handleSend}
                           mode={agentMode}
                           hasContent={hasContent}
@@ -2015,9 +2371,7 @@ export function NewChatForm({
                         >
                           <BranchIcon className="w-4 h-4" />
                           <span className="truncate max-w-[100px]">
-                            {selectedBranch ||
-                              branchesQuery.data?.defaultBranch ||
-                              "main"}
+                            {selectedBranch || branchesQuery.data?.defaultBranch || "main"}
                           </span>
                           <IconChevronDown className="w-3 h-3 opacity-50" />
                         </button>
@@ -2032,6 +2386,7 @@ export function NewChatForm({
                             value={branchSearch}
                             onChange={(e) => setBranchSearch(e.target.value)}
                             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                            // biome-ignore lint/a11y/noAutofocus: just-opened popover; focus must enter the search field for keyboard flow
                             autoFocus
                           />
                           <Button
@@ -2060,10 +2415,7 @@ export function NewChatForm({
                             ref={branchListRef}
                             className="overflow-auto py-1 scrollbar-hide"
                             style={{
-                              height: Math.min(
-                                filteredBranches.length * 32 + 8,
-                                300,
-                              ),
+                              height: Math.min(filteredBranches.length * 32 + 8, 300),
                             }}
                           >
                             <div
@@ -2073,66 +2425,59 @@ export function NewChatForm({
                                 position: "relative",
                               }}
                             >
-                              {branchVirtualizer
-                                .getVirtualItems()
-                                .map((virtualItem) => {
-                                  const branch =
-                                    filteredBranches[virtualItem.index]
-                                  const isSelected =
-                                    (selectedBranch === branch.name &&
-                                      selectedBranchType === branch.type) ||
-                                    (!selectedBranch && branch.isDefault && branch.type === "local")
-                                  return (
-                                    <button
-                                      key={`${branch.type}-${branch.name}`}
-                                      onClick={() => {
-                                        setSelectedBranch(branch.name, branch.type)
-                                        setBranchPopoverOpen(false)
-                                        setBranchSearch("")
-                                      }}
+                              {branchVirtualizer.getVirtualItems().map((virtualItem) => {
+                                const branch = filteredBranches[virtualItem.index]
+                                const isSelected =
+                                  (selectedBranch === branch.name &&
+                                    selectedBranchType === branch.type) ||
+                                  (!selectedBranch && branch.isDefault && branch.type === "local")
+                                return (
+                                  <button
+                                    key={`${branch.type}-${branch.name}`}
+                                    onClick={() => {
+                                      setSelectedBranch(branch.name, branch.type)
+                                      setBranchPopoverOpen(false)
+                                      setBranchSearch("")
+                                    }}
+                                    className={cn(
+                                      "flex items-center gap-1.5 w-[calc(100%-8px)] mx-1 px-1.5 text-sm text-left absolute left-0 top-0 rounded-md cursor-default select-none outline-none transition-colors",
+                                      isSelected
+                                        ? "dark:bg-neutral-800 text-foreground"
+                                        : "dark:hover:bg-neutral-800 hover:text-foreground",
+                                    )}
+                                    style={{
+                                      height: `${virtualItem.size}px`,
+                                      transform: `translateY(${virtualItem.start}px)`,
+                                    }}
+                                  >
+                                    <BranchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span className="truncate flex-1">{branch.name}</span>
+                                    <span
                                       className={cn(
-                                        "flex items-center gap-1.5 w-[calc(100%-8px)] mx-1 px-1.5 text-sm text-left absolute left-0 top-0 rounded-md cursor-default select-none outline-none transition-colors",
-                                        isSelected
-                                          ? "dark:bg-neutral-800 text-foreground"
-                                          : "dark:hover:bg-neutral-800 hover:text-foreground",
+                                        "text-[10px] px-1.5 py-0.5 rounded shrink-0",
+                                        branch.type === "local"
+                                          ? "bg-blue-500/10 text-blue-500"
+                                          : "bg-orange-500/10 text-orange-500",
                                       )}
-                                      style={{
-                                        height: `${virtualItem.size}px`,
-                                        transform: `translateY(${virtualItem.start}px)`,
-                                      }}
                                     >
-                                      <BranchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                                      <span className="truncate flex-1">
-                                        {branch.name}
+                                      {branch.type}
+                                    </span>
+                                    {branch.committedAt && (
+                                      <span className="text-xs text-muted-foreground/70 shrink-0">
+                                        {formatRelativeTime(branch.committedAt)}
                                       </span>
-                                      <span
-                                        className={cn(
-                                          "text-[10px] px-1.5 py-0.5 rounded shrink-0",
-                                          branch.type === "local"
-                                            ? "bg-blue-500/10 text-blue-500"
-                                            : "bg-orange-500/10 text-orange-500",
-                                        )}
-                                      >
-                                        {branch.type}
+                                    )}
+                                    {branch.isDefault && (
+                                      <span className="text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
+                                        default
                                       </span>
-                                      {branch.committedAt && (
-                                        <span className="text-xs text-muted-foreground/70 shrink-0">
-                                          {formatRelativeTime(
-                                            branch.committedAt,
-                                          )}
-                                        </span>
-                                      )}
-                                      {branch.isDefault && (
-                                        <span className="text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
-                                          default
-                                        </span>
-                                      )}
-                                      {isSelected && (
-                                        <CheckIcon className="h-4 w-4 shrink-0 ml-auto" />
-                                      )}
-                                    </button>
-                                  )
-                                })}
+                                    )}
+                                    {isSelected && (
+                                      <CheckIcon className="h-4 w-4 shrink-0 ml-auto" />
+                                    )}
+                                  </button>
+                                )
+                              })}
                             </div>
                           </div>
                         )}
@@ -2147,9 +2492,7 @@ export function NewChatForm({
                       onOpenChange={setCreateBranchDialogOpen}
                       projectPath={validatedProject.path}
                       branches={branches}
-                      defaultBranch={
-                        branchesQuery.data?.defaultBranch || "main"
-                      }
+                      defaultBranch={branchesQuery.data?.defaultBranch || "main"}
                       onBranchCreated={(branchName) => {
                         setSelectedBranch(branchName, "local")
                       }}
@@ -2202,15 +2545,10 @@ export function NewChatForm({
       {showWorktreeBanner && (
         <div className="absolute bottom-4 right-4 max-w-sm p-3 pb-4 bg-muted/50 backdrop-blur-sm rounded-lg border border-border space-y-3 shadow-lg z-50">
           <p className="text-sm text-muted-foreground">
-            Configure a worktree setup script to install dependencies or copy
-            environment variables.
+            Configure a worktree setup script to install dependencies or copy environment variables.
           </p>
           <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleConfigureWorktree}
-            >
+            <Button variant="secondary" size="sm" onClick={handleConfigureWorktree}>
               Settings
             </Button>
             <Button
@@ -2222,9 +2560,8 @@ export function NewChatForm({
                     projectId: validatedProject.id,
                     name: "Worktree Setup",
                     model: selectedChatModel,
-                    initialMessageParts: [
-                      { type: "text", text: prompt },
-                    ],
+                    ...(isSubChatProvider(selectedAgent.id) ? { provider: selectedAgent.id } : {}),
+                    initialMessageParts: [{ type: "text", text: prompt }],
                     useWorktree: false,
                     mode: "agent",
                   })

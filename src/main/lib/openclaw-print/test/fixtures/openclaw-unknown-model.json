@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": "error",
+  "final": "",
+  "payloads": [],
+  "model": null,
+  "provider": null,
+  "sessionId": "5e311fdf-29f7-4cf5-abb7-131c84504673",
+  "error": {
+    "message": "Unknown model: bogus/nope",
+    "kind": "exception"
+  }
+}

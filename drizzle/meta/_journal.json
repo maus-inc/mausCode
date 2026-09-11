@@ -57,6 +57,55 @@
       "when": 1769810815497,
       "tag": "0007_clammy_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789093047261,
+      "tag": "0008_clammy_vargas",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789114995137,
+      "tag": "0009_rail_status_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789118829068,
+      "tag": "0010_subchat_provider_binding",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1789139122442,
+      "tag": "0011_qwen_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1789140614601,
+      "tag": "0012_cline_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1789143384449,
+      "tag": "0013_openclaw_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1789145928695,
+      "tag": "0014_roo_credentials",
+      "breakpoints": true
     }
   ]
 }

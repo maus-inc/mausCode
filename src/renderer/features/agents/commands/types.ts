@@ -34,7 +34,10 @@ export interface SlashTriggerPayload {
 export type BuiltinCommandAction =
   | { type: "clear" }
   | { type: "plan" }
+  | { type: "ask" }
+  | { type: "edit" }
   | { type: "agent" }
+  | { type: "turbo" }
   | { type: "compact" }
   // Prompt-based commands (send to agent)
   | { type: "review" }

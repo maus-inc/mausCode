@@ -1,4 +1,114 @@
-import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from "./types";
+import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from "./types"
+
+/**
+ * NOTE (transplant): `ChunkCoalescer`/`createChunkCoalescer` below, the
+ * `providerMetadata` spread-casts, and the `?? "unknown"` tool-name guard were
+ * transplanted from erenbertr/1code (Apache-2.0, © the 1Code contributors).
+ */
+
+/**
+ * Coalesces high-frequency consecutive `text-delta` chunks into fewer, larger
+ * emits so the renderer receives far fewer IPC messages per second, without
+ * changing the final rendered content.
+ *
+ * Behavior:
+ * - Consecutive `text-delta` chunks sharing the same `id` are buffered and
+ *   concatenated, then flushed either after `flushIntervalMs` (a short time
+ *   window) or as soon as a non-text-delta chunk (tool call, text-end, message
+ *   boundary, etc.) arrives.
+ * - Any non-text-delta chunk flushes the buffer FIRST to preserve ordering.
+ * - A text-delta with a different `id`, or one carrying extra fields such as
+ *   `providerMetadata`, flushes the buffer first and is emitted on its own so
+ *   nothing is lost or reordered.
+ * - `flush()` / `dispose()` drain the buffer immediately (stream end / abort)
+ *   so the final content is never dropped.
+ *
+ * The merged emit is still a valid `text-delta` UIMessageChunk, so the chunk
+ * schema consumed by the renderer is unchanged.
+ */
+export interface ChunkCoalescer<TChunk = UIMessageChunk> {
+  /** Buffer or emit a chunk. Returns the underlying emit result (false = closed). */
+  push: (chunk: TChunk) => boolean
+  /** Emit any buffered text immediately. Returns the underlying emit result. */
+  flush: () => boolean
+  /** Flush and clear the pending timer (call on stream end / abort / unsubscribe). */
+  dispose: () => void
+}
+
+// Generic over the chunk type so it works with both the local UIMessageChunk
+// union (Claude) and the wider AI SDK chunk union (Codex). It only inspects the
+// `type`/`id`/`delta`/`providerMetadata` fields and synthesizes a plain
+// `text-delta`, so any chunk type carrying those fields is supported.
+export function createChunkCoalescer<TChunk = UIMessageChunk>(
+  rawEmit: (chunk: TChunk) => boolean,
+  options?: { flushIntervalMs?: number },
+): ChunkCoalescer<TChunk> {
+  const flushIntervalMs = options?.flushIntervalMs ?? 40
+  let bufferedId: string | null = null
+  let bufferedText = ""
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let lastEmitOk = true
+
+  const clearTimer = () => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  const flush = (): boolean => {
+    clearTimer()
+    if (bufferedId !== null) {
+      const id = bufferedId
+      const delta = bufferedText
+      bufferedId = null
+      bufferedText = ""
+      if (delta.length > 0) {
+        lastEmitOk = rawEmit({ type: "text-delta", id, delta } as unknown as TChunk)
+      }
+    }
+    return lastEmitOk
+  }
+
+  // Only coalesce "plain" text deltas. A delta carrying providerMetadata (or any
+  // non-standard shape) is passed through untouched to avoid dropping metadata.
+  const isPlainTextDelta = (chunk: any): boolean =>
+    chunk?.type === "text-delta" &&
+    typeof chunk.id === "string" &&
+    chunk.providerMetadata === undefined
+
+  const push = (chunk: TChunk): boolean => {
+    if (isPlainTextDelta(chunk)) {
+      const { id, delta } = chunk as { id: string; delta: string }
+      // Switching to a different text block: flush the previous one first so
+      // ids and ordering stay correct.
+      if (bufferedId !== null && bufferedId !== id) {
+        flush()
+      }
+      bufferedId = id
+      bufferedText += delta || ""
+      if (timer === null) {
+        timer = setTimeout(() => {
+          timer = null
+          flush()
+        }, flushIntervalMs)
+      }
+      return lastEmitOk
+    }
+
+    // Any other chunk: flush buffered text first to preserve ordering, then emit.
+    flush()
+    lastEmitOk = rawEmit(chunk)
+    return lastEmitOk
+  }
+
+  const dispose = () => {
+    flush()
+    clearTimer()
+  }
+
+  return { push, flush, dispose }
+}
 
 export function createTransformer(options?: { isUsingOllama?: boolean }) {
   const isUsingOllama = options?.isUsingOllama === true
@@ -77,18 +187,25 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
         } catch (e) {
           // Stream may have been interrupted mid-JSON (e.g. network error, abort)
           // resulting in incomplete JSON like '{"prompt":"write co'
-          console.error("[transform] Failed to parse tool input JSON:", (e as Error).message, "partial:", accumulatedToolInput.slice(0, 120))
+          console.error(
+            "[transform] Failed to parse tool input JSON:",
+            (e as Error).message,
+            "partial:",
+            accumulatedToolInput.slice(0, 120),
+          )
           parsedInput = { _raw: accumulatedToolInput, _parseError: true }
         }
       }
 
       // Emit complete tool call with accumulated input
+      // Cast needed: providerMetadata is used by the renderer for timing
+      // but isn't part of the base UIMessageChunk type
       yield {
         type: "tool-input-available",
         toolCallId: currentToolCallId,
         toolName: currentToolName || "unknown",
         input: parsedInput,
-        providerMetadata: { custom: { startedAt: Date.now() } },
+        ...({ providerMetadata: { custom: { startedAt: Date.now() } } } as any),
       }
       currentToolCallId = null
       currentToolName = null
@@ -97,7 +214,6 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
   }
 
   return function* transform(msg: any): Generator<UIMessageChunk> {
-
     // Track parent_tool_use_id for nested tools
     // Only update when explicitly present (don't reset on messages without it)
     if (msg.parent_tool_use_id !== undefined) {
@@ -171,7 +287,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
         yield {
           type: "tool-input-start",
           toolCallId: currentToolCallId,
-          toolName: currentToolName,
+          toolName: currentToolName ?? "unknown",
         }
       }
 
@@ -219,7 +335,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
           inputTextDelta: prefix + escaped,
         }
       }
-      
+
       // Thinking complete (content_block_stop while in thinking block)
       if (event.type === "content_block_stop" && inThinkingBlock && currentThinkingId) {
         yield {
@@ -315,12 +431,14 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
           // Store mapping for tool-result lookup
           toolIdMapping.set(block.id, compositeId)
 
+          // Cast needed: providerMetadata is used by the renderer for timing
+          // but isn't part of the base UIMessageChunk type
           yield {
             type: "tool-input-available",
             toolCallId: compositeId,
             toolName: block.name,
             input: block.input,
-            providerMetadata: { custom: { startedAt: Date.now() } },
+            ...({ providerMetadata: { custom: { startedAt: Date.now() } } } as any),
           }
         }
       }
@@ -342,11 +460,11 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
           } else {
             // Try to parse structured data from block.content if it's JSON
             let output = msg.tool_use_result
-            if (!output && typeof block.content === 'string') {
+            if (!output && typeof block.content === "string") {
               try {
                 // Some tool results may have JSON embedded in the string
                 const parsed = JSON.parse(block.content)
-                if (parsed && typeof parsed === 'object') {
+                if (parsed && typeof parsed === "object") {
                   output = parsed
                 }
               } catch {
@@ -371,11 +489,23 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       if (msg.subtype === "init") {
         // Map MCP servers with validated status type and additional info
         const mcpServers: MCPServer[] = (msg.mcp_servers || []).map(
-          (s: { name: string; status: string; serverInfo?: { name: string; version: string; icons?: { src: string; mimeType?: string; sizes?: string[]; theme?: "light" | "dark" }[] }; error?: string }) => ({
+          (s: {
+            name: string
+            status: string
+            serverInfo?: {
+              name: string
+              version: string
+              icons?: {
+                src: string
+                mimeType?: string
+                sizes?: string[]
+                theme?: "light" | "dark"
+              }[]
+            }
+            error?: string
+          }) => ({
             name: s.name,
-            status: (["connected", "failed", "pending", "needs-auth"].includes(
-              s.status,
-            )
+            status: (["connected", "failed", "pending", "needs-auth"].includes(s.status)
               ? s.status
               : "pending") as MCPServerStatus,
             ...(s.serverInfo && { serverInfo: s.serverInfo }),

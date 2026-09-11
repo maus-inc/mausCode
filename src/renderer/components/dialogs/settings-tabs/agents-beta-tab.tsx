@@ -1,7 +1,7 @@
+import { useQuery } from "@tanstack/react-query"
 import { useAtom } from "jotai"
 import { Check, Copy, RefreshCw } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
 import {
   autoOfflineModeAtom,
   betaAutomationsEnabledAtom,
@@ -10,18 +10,12 @@ import {
   selectedOllamaModelAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
-import { trpc } from "../../../lib/trpc"
 import { remoteTrpc } from "../../../lib/remote-trpc"
+import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { Button } from "../../ui/button"
 import { ExternalLinkIcon } from "../../ui/icons"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import { Switch } from "../../ui/switch"
 
 // Hook to detect narrow screen
@@ -62,7 +56,9 @@ export function AgentsBetaTab() {
   const isDev = process.env.NODE_ENV === "development"
   const canEnableAutomations = isPaidPlan || isDev
   const [copied, setCopied] = useState(false)
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "not-available" | "error">("idle")
+  const [updateStatus, setUpdateStatus] = useState<
+    "idle" | "checking" | "available" | "not-available" | "error"
+  >("idle")
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const [currentVersion, setCurrentVersion] = useState<string | null>(null)
 
@@ -80,7 +76,6 @@ export function AgentsBetaTab() {
     const isPackaged = await window.desktopApi?.isPackaged?.()
     if (!isPackaged) {
       setUpdateStatus("error")
-      console.log("Update check skipped in dev mode")
       return
     }
 
@@ -129,39 +124,34 @@ export function AgentsBetaTab() {
         {/* Rollback Toggle */}
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              Rollback
-            </span>
+            <span className="text-sm font-medium text-foreground">Rollback</span>
             <span className="text-xs text-muted-foreground">
               Allow rolling back to previous messages and restoring files.
             </span>
           </div>
-          <Switch
-            checked={historyEnabled}
-            onCheckedChange={setHistoryEnabled}
-          />
+          <Switch checked={historyEnabled} onCheckedChange={setHistoryEnabled} />
         </div>
 
         {/* Offline Mode Toggle */}
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              Offline Mode
-            </span>
+            <span className="text-sm font-medium text-foreground">Offline Mode</span>
             <span className="text-xs text-muted-foreground">
               Enable offline mode UI and Ollama integration.
             </span>
           </div>
-          <Switch
-            checked={showOfflineFeatures}
-            onCheckedChange={setShowOfflineFeatures}
-          />
+          <Switch checked={showOfflineFeatures} onCheckedChange={setShowOfflineFeatures} />
         </div>
 
         {/* Automations & Inbox Toggle */}
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">
-            <span className={cn("text-sm font-medium", canEnableAutomations ? "text-foreground" : "text-muted-foreground")}>
+            <span
+              className={cn(
+                "text-sm font-medium",
+                canEnableAutomations ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
               Automations & Inbox
             </span>
             <span className="text-xs text-muted-foreground">
@@ -180,7 +170,6 @@ export function AgentsBetaTab() {
             disabled={!canEnableAutomations}
           />
         </div>
-
       </div>
 
       {/* Offline Mode Settings - only show when feature is enabled */}
@@ -195,13 +184,11 @@ export function AgentsBetaTab() {
               {/* Status */}
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1">
-                  <span className="text-sm font-medium text-foreground">
-                    Ollama Status
-                  </span>
+                  <span className="text-sm font-medium text-foreground">Ollama Status</span>
                   <p className="text-xs text-muted-foreground">
                     {ollamaStatus?.ollama.available
-                      ? `Running - ${ollamaStatus.ollama.models.length} model${ollamaStatus.ollama.models.length !== 1 ? 's' : ''} installed`
-                      : 'Not running or not installed'}
+                      ? `Running - ${ollamaStatus.ollama.models.length} model${ollamaStatus.ollama.models.length !== 1 ? "s" : ""} installed`
+                      : "Not running or not installed"}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -223,15 +210,17 @@ export function AgentsBetaTab() {
               {ollamaStatus?.ollama.available && ollamaStatus.ollama.models.length > 0 && (
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-foreground">
-                      Model
-                    </span>
+                    <span className="text-sm font-medium text-foreground">Model</span>
                     <p className="text-xs text-muted-foreground">
                       Select which model to use for offline mode
                     </p>
                   </div>
                   <Select
-                    value={selectedOllamaModel || ollamaStatus.ollama.recommendedModel || ollamaStatus.ollama.models[0]}
+                    value={
+                      selectedOllamaModel ||
+                      ollamaStatus.ollama.recommendedModel ||
+                      ollamaStatus.ollama.models[0]
+                    }
                     onValueChange={(value) => setSelectedOllamaModel(value)}
                   >
                     <SelectTrigger className="w-auto shrink-0">
@@ -245,7 +234,9 @@ export function AgentsBetaTab() {
                             <span className="truncate">
                               {model}
                               {isRecommended && (
-                                <span className="text-muted-foreground ml-1 text-xs">(recommended)</span>
+                                <span className="text-muted-foreground ml-1 text-xs">
+                                  (recommended)
+                                </span>
                               )}
                             </span>
                           </SelectItem>
@@ -259,17 +250,12 @@ export function AgentsBetaTab() {
               {/* Auto-fallback toggle */}
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1">
-                  <span className="text-sm font-medium text-foreground">
-                    Auto Offline Mode
-                  </span>
+                  <span className="text-sm font-medium text-foreground">Auto Offline Mode</span>
                   <p className="text-xs text-muted-foreground">
                     Automatically use Ollama when internet is unavailable
                   </p>
                 </div>
-                <Switch
-                  checked={autoOffline}
-                  onCheckedChange={setAutoOffline}
-                />
+                <Switch checked={autoOffline} onCheckedChange={setAutoOffline} />
               </div>
 
               {/* Installation instructions - always show */}
@@ -335,11 +321,10 @@ export function AgentsBetaTab() {
         <div className="bg-background rounded-lg border border-border overflow-hidden">
           <div className="flex items-center justify-between p-4">
             <div className="flex flex-col space-y-1">
-              <span className="text-sm font-medium text-foreground">
-                Early Access
-              </span>
+              <span className="text-sm font-medium text-foreground">Early Access</span>
               <span className="text-xs text-muted-foreground">
-                Receive beta versions before they're released to everyone. Beta versions may be less stable.
+                Receive beta versions before they're released to everyone. Beta versions may be less
+                stable.
               </span>
             </div>
             <Switch
@@ -371,7 +356,9 @@ export function AgentsBetaTab() {
                 onClick={handleCheckForUpdates}
                 disabled={updateStatus === "checking"}
               >
-                <RefreshCw className={cn("h-4 w-4 mr-2", updateStatus === "checking" && "animate-spin")} />
+                <RefreshCw
+                  className={cn("h-4 w-4 mr-2", updateStatus === "checking" && "animate-spin")}
+                />
                 {updateStatus === "checking" ? "Checking..." : "Check Now"}
               </Button>
             </div>

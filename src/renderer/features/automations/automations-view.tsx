@@ -1,29 +1,29 @@
 "use client"
 
 import "./automations-styles.css"
-import { useAtomValue, useSetAtom, useAtom } from "jotai"
-import { selectedTeamIdAtom } from "../../lib/atoms"
-import {
-  desktopViewAtom,
-  automationDetailIdAtom,
-  automationTemplateParamsAtom,
-  agentsSidebarOpenAtom,
-  agentsMobileViewModeAtom,
-} from "../agents/atoms"
+import { useQuery } from "@tanstack/react-query"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { AlignJustify, Plus } from "lucide-react"
+import { useCallback, useMemo, useState } from "react"
 import { Logo } from "../../components/ui/logo"
-import { useState, useMemo, useCallback } from "react"
-import { Plus, AlignJustify } from "lucide-react"
+import { selectedTeamIdAtom } from "../../lib/atoms"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
 import { remoteTrpc } from "../../lib/remote-trpc"
-import { useQuery } from "@tanstack/react-query"
+import {
+  agentsMobileViewModeAtom,
+  agentsSidebarOpenAtom,
+  automationDetailIdAtom,
+  automationTemplateParamsAtom,
+  desktopViewAtom,
+} from "../agents/atoms"
 
 import {
-  AutomationCard,
-  TemplateCard,
-  TabToggle,
   AUTOMATION_TEMPLATES,
-  type ViewTab,
+  AutomationCard,
   type Platform,
+  TabToggle,
+  TemplateCard,
+  type ViewTab,
 } from "./_components"
 
 export function AutomationsView() {
@@ -74,9 +74,7 @@ export function AutomationsView() {
   const filteredAutomations = useMemo(() => {
     if (!searchQuery.trim()) return automations
     const query = searchQuery.toLowerCase()
-    return automations.filter((a: any) =>
-      a.name?.toLowerCase().includes(query)
-    )
+    return automations.filter((a: any) => a.name?.toLowerCase().includes(query))
   }, [automations, searchQuery])
 
   const handleNewAutomation = () => {
@@ -85,7 +83,7 @@ export function AutomationsView() {
     setDesktopView("automations-detail")
   }
 
-  const handleUseTemplate = (template: typeof AUTOMATION_TEMPLATES[number]) => {
+  const handleUseTemplate = (template: (typeof AUTOMATION_TEMPLATES)[number]) => {
     setAutomationDetailId("new")
     setTemplateParams({
       name: template.name,
@@ -119,7 +117,7 @@ export function AutomationsView() {
   if (!teamId) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Logo className="h-8 w-8 animate-pulse text-muted-foreground" />
+        <Logo className="h-8 w-8 animate-pulse opacity-50" />
       </div>
     )
   }

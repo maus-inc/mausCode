@@ -10,7 +10,7 @@ let cachedBaseUrl: string | null = null
 
 /**
  * Get the API base URL (cached after first call)
- * Always returns https://21st.dev (both in dev and production)
+ * Returns the control-plane base URL configured in the main process
  */
 export async function getApiBaseUrl(): Promise<string> {
   if (cachedBaseUrl) return cachedBaseUrl
@@ -29,7 +29,7 @@ export async function getApiBaseUrl(): Promise<string> {
 export async function apiFetch(
   path: string,
   init?: RequestInit,
-  options?: { withCredentials?: boolean }
+  options?: { withCredentials?: boolean },
 ): Promise<Response> {
   const baseUrl = await getApiBaseUrl()
   return fetch(`${baseUrl}${path}`, {

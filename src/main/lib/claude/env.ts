@@ -1,14 +1,11 @@
-import { app } from "electron"
 import { execSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { stripVTControlCharacters } from "node:util"
-import {
-  getDefaultShell,
-  isWindows,
-  platform
-} from "../platform"
+import { app } from "electron"
+import { resolveCliBinaryPath } from "../cli-binaries"
+import { getDefaultShell, isWindows, platform } from "../platform"
 
 // Cache the shell environment
 let cachedShellEnv: Record<string, string> | null = null
@@ -24,6 +21,11 @@ const STRIPPED_ENV_KEYS_BASE = [
   "OPENAI_API_KEY",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
+  // Strip nested-session markers so the spawned Claude binary doesn't detect
+  // a parent Claude Code session and refuse to start. This happens when the
+  // Electron app itself is launched from inside Claude Code (e.g. Conductor).
+  "CLAUDECODE",
+  "CLAUDE_CODE_SSE_PORT",
 ]
 
 // In dev mode, also strip ANTHROPIC_API_KEY so OAuth token is used instead
@@ -62,11 +64,7 @@ export function getBundledClaudeBinaryPath(): string {
   // In dev: apps/desktop/resources/bin/{platform}-{arch}/claude
   // In production: {resourcesPath}/bin/claude
   const resourcesPath = isDev
-    ? path.join(
-        app.getAppPath(),
-        "resources/bin",
-        `${currentPlatform}-${arch}`
-      )
+    ? path.join(app.getAppPath(), "resources/bin", `${currentPlatform}-${arch}`)
     : path.join(process.resourcesPath, "bin")
 
   console.log("[claude-binary] resourcesPath:", resourcesPath)
@@ -76,32 +74,36 @@ export function getBundledClaudeBinaryPath(): string {
 
   console.log("[claude-binary] binaryPath:", binaryPath)
 
-  // Check if binary exists
-  const exists = fs.existsSync(binaryPath)
+  // NOTE (transplant): PATH fallback via resolveCliBinaryPath from
+  // SamSammane/1code-ui (Apache-2.0) — dev boxes and global installs work
+  // without a bundled binary.
+  try {
+    const resolvedPath = resolveCliBinaryPath({
+      bundledPath: binaryPath,
+      commandName: "claude",
+      downloadHint: "Run 'bun run claude:download' or install Claude Code CLI globally.",
+    })
 
-  if (!exists) {
-    console.error(
-      "[claude-binary] WARNING: Binary not found at path:",
-      binaryPath
-    )
-    console.error(
-      "[claude-binary] Run 'bun run claude:download' to download it"
-    )
-  } else {
-    const stats = fs.statSync(binaryPath)
+    const stats = fs.statSync(resolvedPath)
     const sizeMB = (stats.size / 1024 / 1024).toFixed(1)
     const isExecutable = (stats.mode & fs.constants.X_OK) !== 0
-    console.log("[claude-binary] exists:", exists)
+    console.log("[claude-binary] exists:", true)
     console.log("[claude-binary] size:", sizeMB, "MB")
     console.log("[claude-binary] isExecutable:", isExecutable)
+    console.log("[claude-binary] resolved:", resolvedPath)
+    console.log("[claude-binary] ============================================")
+
+    cachedBinaryPath = resolvedPath
+    binaryPathComputed = true
+    return resolvedPath
+  } catch (error) {
+    console.error("[claude-binary] WARNING:", error instanceof Error ? error.message : error)
+    console.log("[claude-binary] ============================================")
+
+    cachedBinaryPath = binaryPath
+    binaryPathComputed = true
+    return binaryPath
   }
-  console.log("[claude-binary] ============================================")
-
-  // Cache the result
-  cachedBinaryPath = binaryPath
-  binaryPathComputed = true
-
-  return binaryPath
 }
 
 /**
@@ -112,9 +114,7 @@ function parseEnvOutput(output: string): Record<string, string> {
   if (!envSection) return {}
 
   const env: Record<string, string> = {}
-  for (const line of stripVTControlCharacters(envSection)
-    .split("\n")
-    .filter(Boolean)) {
+  for (const line of stripVTControlCharacters(envSection).split("\n").filter(Boolean)) {
     const separatorIndex = line.indexOf("=")
     if (separatorIndex > 0) {
       const key = line.substring(0, separatorIndex)
@@ -150,9 +150,7 @@ export function getClaudeShellEnvironment(): Record<string, string> {
 
   // Windows: use platform provider to build environment
   if (isWindows()) {
-    console.log(
-      "[claude-env] Windows detected, deriving PATH without shell invocation"
-    )
+    console.log("[claude-env] Windows detected, deriving PATH without shell invocation")
 
     // Use platform provider to build environment
     const env = platform.buildEnvironment()
@@ -160,9 +158,7 @@ export function getClaudeShellEnvironment(): Record<string, string> {
     // Strip sensitive keys
     stripSensitiveKeys(env)
 
-    console.log(
-      `[claude-env] Built Windows environment with ${Object.keys(env).length} vars`
-    )
+    console.log(`[claude-env] Built Windows environment with ${Object.keys(env).length} vars`)
     cachedShellEnv = env
     return { ...env }
   }
@@ -188,9 +184,7 @@ export function getClaudeShellEnvironment(): Record<string, string> {
     const env = parseEnvOutput(output)
     stripSensitiveKeys(env)
 
-    console.log(
-      `[claude-env] Loaded ${Object.keys(env).length} environment variables from shell`
-    )
+    console.log(`[claude-env] Loaded ${Object.keys(env).length} environment variables from shell`)
     cachedShellEnv = env
     return { ...env }
   } catch (error) {
@@ -291,19 +285,16 @@ export function clearClaudeEnvCache(): void {
 /**
  * Debug: Log key environment variables
  */
-export function logClaudeEnv(
-  env: Record<string, string>,
-  prefix: string = ""
-): void {
+export function logClaudeEnv(env: Record<string, string>, prefix: string = ""): void {
   console.log(`${prefix}[claude-env] HOME: ${env.HOME}`)
   console.log(`${prefix}[claude-env] USER: ${env.USER}`)
   console.log(
-    `${prefix}[claude-env] PATH includes homebrew: ${env.PATH?.includes("/opt/homebrew")}`
+    `${prefix}[claude-env] PATH includes homebrew: ${env.PATH?.includes("/opt/homebrew")}`,
   )
   console.log(
-    `${prefix}[claude-env] PATH includes /usr/local/bin: ${env.PATH?.includes("/usr/local/bin")}`
+    `${prefix}[claude-env] PATH includes /usr/local/bin: ${env.PATH?.includes("/usr/local/bin")}`,
   )
   console.log(
-    `${prefix}[claude-env] ANTHROPIC_AUTH_TOKEN: ${env.ANTHROPIC_AUTH_TOKEN ? "set" : "not set"}`
+    `${prefix}[claude-env] ANTHROPIC_AUTH_TOKEN: ${env.ANTHROPIC_AUTH_TOKEN ? "set" : "not set"}`,
   )
 }

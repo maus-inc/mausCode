@@ -1,11 +1,12 @@
 "use client"
 
-import { memo, useState, useEffect, useRef } from "react"
 import { ChevronRight } from "lucide-react"
-import { cn } from "../../../lib/utils"
+import { memo, useEffect, useRef, useState } from "react"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { cn } from "../../../lib/utils"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface ThinkingToolPart {
@@ -41,11 +42,8 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
   part,
   chatStatus,
 }: AgentThinkingToolProps) {
-  const isPending =
-    part.state !== "output-available" && part.state !== "output-error"
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isStreaming = isPending && isActivelyStreaming
-  const isInterrupted = isPending && !isActivelyStreaming && chatStatus !== undefined
+  const { isPending, isInterrupted } = getToolStatus(part, chatStatus)
+  const isStreaming = isPending
 
   // Default: expanded while streaming, collapsed when done
   const [isExpanded, setIsExpanded] = useState(isStreaming)
@@ -118,9 +116,7 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
             </span>
             {/* Preview when collapsed */}
             {!isExpanded && previewText && (
-              <span className="text-muted-foreground/60 truncate">
-                {previewText}
-              </span>
+              <span className="text-muted-foreground/60 truncate">{previewText}</span>
             )}
             {/* Elapsed time */}
             {elapsedDisplay && (
@@ -152,10 +148,7 @@ export const AgentThinkingTool = memo(function AgentThinkingTool({
           />
           <div
             ref={scrollRef}
-            className={cn(
-              "px-2",
-              isStreaming && "overflow-y-auto scrollbar-hide max-h-36",
-            )}
+            className={cn("px-2", isStreaming && "overflow-y-auto scrollbar-hide max-h-36")}
           >
             <ChatMarkdownRenderer content={thinkingText} size="sm" isStreaming={isStreaming} />
           </div>

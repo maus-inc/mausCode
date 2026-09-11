@@ -1,18 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Server as ServerIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
-import {
-  EyeOpenFilledIcon,
-  ProfileIconFilled,
-  SlidersFilledIcon,
-} from "../../icons"
-import {
-  agentsSettingsDialogActiveTabAtom,
-  devToolsUnlockedAtom,
-  isDesktopAtom,
-  type SettingsTab,
-} from "../../lib/atoms"
-import { cn } from "../../lib/utils"
 import {
   BrainFilledIcon,
   BugFilledIcon,
@@ -24,6 +12,14 @@ import {
   PluginFilledIcon,
   SkillIconFilled,
 } from "../../components/ui/icons"
+import { EyeOpenFilledIcon, ProfileIconFilled, SlidersFilledIcon } from "../../icons"
+import {
+  agentsSettingsDialogActiveTabAtom,
+  devToolsUnlockedAtom,
+  isDesktopAtom,
+  type SettingsTab,
+} from "../../lib/atoms"
+import { cn } from "../../lib/utils"
 import { desktopViewAtom } from "../agents/atoms"
 
 // Check if we're in development mode
@@ -72,6 +68,11 @@ const ADVANCED_TABS_BASE = [
     id: "models" as SettingsTab,
     label: "Models",
     icon: BrainFilledIcon,
+  },
+  {
+    id: "backends" as SettingsTab,
+    label: "Backends",
+    icon: ServerIcon,
   },
   {
     id: "skills" as SettingsTab,
@@ -124,13 +125,13 @@ function TabButton({ tab, isActive, onClick }: TabButtonProps) {
         "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
         isActive
           ? "bg-foreground/5 text-foreground font-medium"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground font-medium"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground font-medium",
       )}
     >
       <Icon
         className={cn(
           "h-4 w-4",
-          isProjectTab ? "opacity-100" : isActive ? "opacity-100" : "opacity-50"
+          isProjectTab ? "opacity-100" : isActive ? "opacity-100" : "opacity-50",
         )}
       />
       <span className="flex-1 truncate">{tab.label}</span>
@@ -227,7 +228,6 @@ export function SettingsSidebar() {
             />
           ))}
         </div>
-
       </div>
     </div>
   )

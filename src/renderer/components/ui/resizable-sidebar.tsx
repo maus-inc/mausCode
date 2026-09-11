@@ -4,6 +4,7 @@ import { useAtom, type WritableAtom } from "jotai"
 import { AnimatePresence, motion } from "motion/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal, flushSync } from "react-dom"
+import { EASE_OUT_EXPO } from "../../lib/motion"
 import { Kbd } from "./kbd"
 
 interface ResizableSidebarProps {
@@ -177,8 +178,7 @@ export function ResizableSidebar({
       const target = e.target as HTMLElement
       const tooltipElement = target.closest('[data-tooltip="true"]')
       const isClickOnTooltip =
-        tooltipElement ||
-        (tooltipRef.current && tooltipRef.current.contains(target))
+        tooltipElement || (tooltipRef.current && tooltipRef.current.contains(target))
 
       // Check if click is on tooltip
       if (isClickOnTooltip) {
@@ -217,11 +217,9 @@ export function ResizableSidebar({
       let hasMoved = false
       let currentLocalWidth: number | null = null
 
-      const handleElement =
-        resizeHandleRef.current ?? (event.currentTarget as HTMLElement)
+      const handleElement = resizeHandleRef.current ?? (event.currentTarget as HTMLElement)
 
-      const clampWidth = (width: number) =>
-        Math.max(minWidth, Math.min(maxWidth, width))
+      const clampWidth = (width: number) => Math.max(minWidth, Math.min(maxWidth, width))
 
       handleElement.setPointerCapture?.(pointerId)
       // Clear tooltip timeout when starting resize
@@ -244,9 +242,7 @@ export function ResizableSidebar({
 
       const handlePointerMove = (pointerEvent: PointerEvent) => {
         const delta = Math.abs(
-          side === "left"
-            ? pointerEvent.clientX - startX
-            : startX - pointerEvent.clientX,
+          side === "left" ? pointerEvent.clientX - startX : startX - pointerEvent.clientX,
         )
         if (!hasMoved && delta >= 3) {
           hasMoved = true
@@ -272,9 +268,7 @@ export function ResizableSidebar({
           handleClose()
         } else if (hasMoved && pointerEvent) {
           const delta =
-            side === "left"
-              ? pointerEvent.clientX - startX
-              : startX - pointerEvent.clientX
+            side === "left" ? pointerEvent.clientX - startX : startX - pointerEvent.clientX
           const finalWidth = clampWidth(startWidth + delta)
           // Save final width to persisted atom (triggers localStorage sync)
           setSidebarWidth(finalWidth)
@@ -347,34 +341,20 @@ export function ResizableSidebar({
         {isOpen && (
           <motion.div
             ref={sidebarRef}
-            initial={
-              !shouldAnimate
-                ? {
-                    width: currentWidth,
-                    opacity: 1,
-                  }
-                : {
-                    width: initialWidth,
-                    opacity: 0,
-                  }
-            }
-            animate={{
-              width: currentWidth,
-              opacity: 1,
-            }}
-            exit={{
-              width: exitWidth,
-              opacity: 0,
-            }}
+            initial={!shouldAnimate ? { width: currentWidth } : { width: initialWidth }}
+            animate={{ width: currentWidth }}
+            exit={{ width: exitWidth }}
             transition={{
               duration: isResizing ? 0 : animationDuration,
-              ease: [0.4, 0, 0.2, 1],
+              ease: EASE_OUT_EXPO,
             }}
             className={`bg-transparent flex flex-col text-xs h-full relative ${className}`}
             style={{ minWidth: minWidth, overflow: "hidden", ...style }}
-            {...(dataAttributes ? Object.fromEntries(
-              Object.entries(dataAttributes).map(([key, value]) => [`data-${key}`, value])
-            ) : {})}
+            {...(dataAttributes
+              ? Object.fromEntries(
+                  Object.entries(dataAttributes).map(([key, value]) => [`data-${key}`, value]),
+                )
+              : {})}
           >
             {/* Extended hover area */}
             <div
@@ -489,8 +469,7 @@ export function ResizableSidebar({
                           side === "left"
                             ? "translateY(-50%)"
                             : "translateX(-100%) translateY(-50%)",
-                        transformOrigin:
-                          side === "left" ? "left center" : "right center",
+                        transformOrigin: side === "left" ? "left center" : "right center",
                         pointerEvents: "none",
                       }}
                     >

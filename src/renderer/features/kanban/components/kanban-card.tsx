@@ -1,10 +1,6 @@
-import { memo } from "react"
-import { AnimatePresence, motion } from "motion/react"
-import { formatTimeAgo } from "../../../lib/utils/format-time-ago"
-import { cn } from "../../../lib/utils"
-import type { SubChatStatus } from "../lib/derive-status"
-import { LoadingDot, QuestionIcon, ArchiveIcon } from "../../../components/ui/icons"
 import { Pin } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
+import { memo } from "react"
 import { Checkbox } from "../../../components/ui/checkbox"
 import {
   ContextMenu,
@@ -16,6 +12,10 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu"
+import { ArchiveIcon, LoadingDot, QuestionIcon } from "../../../components/ui/icons"
+import { cn } from "../../../lib/utils"
+import { formatTimeAgo } from "../../../lib/utils/format-time-ago"
+import type { SubChatStatus } from "../lib/derive-status"
 
 export interface KanbanCardData {
   id: string
@@ -24,7 +24,7 @@ export interface KanbanCardData {
   chatName: string | null
   projectName: string | null
   branch: string | null
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
   status: SubChatStatus
   hasUnseenChanges: boolean
   hasPendingPlan: boolean
@@ -78,7 +78,8 @@ export const KanbanCard = memo(function KanbanCard({
   const hasPendingQuestion = card.hasPendingQuestion
 
   // Show status indicator if there's something to show (pin has lowest priority)
-  const showStatusIndicator = hasPendingQuestion || isLoading || hasPendingPlan || hasUnseenChanges || card.isPinned
+  const showStatusIndicator =
+    hasPendingQuestion || isLoading || hasPendingPlan || hasUnseenChanges || card.isPinned
 
   // Card content (shared between draft and regular cards)
   const cardContent = (
@@ -127,7 +128,10 @@ export const KanbanCard = memo(function KanbanCard({
                         exit={{ opacity: 0, scale: 0.5 }}
                         transition={{ duration: 0.15 }}
                       >
-                        <LoadingDot isLoading={true} className="w-2.5 h-2.5 text-muted-foreground" />
+                        <LoadingDot
+                          isLoading={true}
+                          className="w-2.5 h-2.5 text-muted-foreground"
+                        />
                       </motion.div>
                     ) : hasPendingPlan ? (
                       <motion.div
@@ -146,7 +150,10 @@ export const KanbanCard = memo(function KanbanCard({
                         exit={{ opacity: 0, scale: 0.5 }}
                         transition={{ duration: 0.15 }}
                       >
-                        <LoadingDot isLoading={false} className="w-2.5 h-2.5 text-muted-foreground" />
+                        <LoadingDot
+                          isLoading={false}
+                          className="w-2.5 h-2.5 text-muted-foreground"
+                        />
                       </motion.div>
                     ) : card.isPinned ? (
                       <motion.div
@@ -188,12 +195,8 @@ export const KanbanCard = memo(function KanbanCard({
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {card.stats && (card.stats.additions > 0 || card.stats.deletions > 0) && (
               <>
-                <span className="text-green-600 dark:text-green-400">
-                  +{card.stats.additions}
-                </span>
-                <span className="text-red-600 dark:text-red-400">
-                  -{card.stats.deletions}
-                </span>
+                <span className="text-green-600 dark:text-green-400">+{card.stats.additions}</span>
+                <span className="text-red-600 dark:text-red-400">-{card.stats.deletions}</span>
               </>
             )}
             <span>{timeAgo}</span>
@@ -215,7 +218,7 @@ export const KanbanCard = memo(function KanbanCard({
           "bg-card border border-border/50",
           "hover:bg-accent/50 hover:border-border",
           "transition-colors duration-75",
-          "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+          "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
         )}
       >
         {cardContent}
@@ -236,7 +239,7 @@ export const KanbanCard = memo(function KanbanCard({
             "hover:bg-accent/50 hover:border-border",
             "transition-colors duration-75",
             "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
-            card.isSelected && "bg-primary/10 border-primary/30"
+            card.isSelected && "bg-primary/10 border-primary/30",
           )}
         >
           {cardContent}
@@ -257,7 +260,9 @@ export const KanbanCard = memo(function KanbanCard({
         <ContextMenuSub>
           <ContextMenuSubTrigger>Export workspace</ContextMenuSubTrigger>
           <ContextMenuSubContent sideOffset={6} alignOffset={-4}>
-            <ContextMenuItem onClick={() => onExportChat({ chatId: card.chatId, format: "markdown" })}>
+            <ContextMenuItem
+              onClick={() => onExportChat({ chatId: card.chatId, format: "markdown" })}
+            >
               Download as Markdown
             </ContextMenuItem>
             <ContextMenuItem onClick={() => onExportChat({ chatId: card.chatId, format: "json" })}>
@@ -267,7 +272,9 @@ export const KanbanCard = memo(function KanbanCard({
               Download as Text
             </ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem onClick={() => onCopyChat({ chatId: card.chatId, format: "markdown" })}>
+            <ContextMenuItem
+              onClick={() => onCopyChat({ chatId: card.chatId, format: "markdown" })}
+            >
               Copy as Markdown
             </ContextMenuItem>
             <ContextMenuItem onClick={() => onCopyChat({ chatId: card.chatId, format: "json" })}>
@@ -284,9 +291,7 @@ export const KanbanCard = memo(function KanbanCard({
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => onArchive(card.chatId)}>
-          Archive workspace
-        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onArchive(card.chatId)}>Archive workspace</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   )

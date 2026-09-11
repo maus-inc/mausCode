@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, "arena/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Renderer build OOMs below ~3 GB heap (monaco + mermaid + shiki graph);
+  # see .dump/ci/research/repository-infrastructure-audit.md section 6.
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  quality:
+    name: Quality gates (lint, test, typecheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # biome --since needs the base ref
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v4
+        with:
+          # node:test suites use --experimental-strip-types (node >= 22.6).
+          node-version: "22"
+      - name: "Install dependencies (scripts skipped: no native modules needed here)"
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build workspace packages (runtime-client dist for typecheck/tests)
+        run: bun run build:runtime-client
+      - name: Lint + format (changed files only)
+        # Repo-wide rollout is a ratchet step; gate only what the change touches.
+        # PRs diff against base.sha; pushes diff against the previous head
+        # (falls back to origin/main for branch creation).
+        env:
+          LINT_BASE: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
+        run: node scripts/ci/lint-changed.mjs
+      - name: Unit tests (vitest)
+        run: bun run test
+      - name: Unit tests (node:test runtime suites)
+        run: bun run test:node
+      - name: Contract tests
+        run: bun run test:contracts
+      - name: "Typecheck (ratchet: no new errors vs baseline)"
+        run: bun run ratchet:typecheck
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: "Install dependencies (scripts skipped: bundling needs no native rebuild)"
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build workspace packages (runtime-client dist for the main bundle)
+        run: bun run build:runtime-client
+      - name: Build all targets (main, preload, renderer)
+        run: bun run build
+      - name: Report bundle sizes
+        shell: bash
+        run: du -sh out/main out/preload out/renderer 2>/dev/null || true
+
+  package:
+    name: Package (${{ matrix.os }}, unsigned)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install dependencies (full install incl. native module rebuild)
+        run: bun install --frozen-lockfile
+      - name: Fetch bundled agent binaries for this platform
+        # electron-builder extraResources expects resources/bin/<platform-arch> + VERSION.
+        # GITHUB_TOKEN avoids api.github.com anonymous rate limits (60/hr/IP, macOS pool).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun run claude:download
+          bun run codex:download
+      - name: Build workspace packages (runtime-client dist for the main bundle)
+        run: bun run build:runtime-client
+      - name: Build
+        run: bun run build
+      - name: Package (electron-builder --dir, no signing/notarization)
+        run: bunx electron-builder --dir
+
+  security:
+    name: Security gates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: "Dependency audit (ratchet: no new critical advisories)"
+        run: bun run ratchet:audit
+      - name: Secrets scan (gitleaks, pinned + checksum-verified)
+        # gitleaks-action requires a paid license for org-owned repos; the CLI does not.
+        run: |
+          VERSION=8.30.1
+          EXPECTED=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          TARBALL="gitleaks_${VERSION}_linux_x64.tar.gz"
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${TARBALL}" -o /tmp/gitleaks.tar.gz
+          echo "${EXPECTED}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks dir --verbose .
+      - name: Dependency review (PR-affecting changes)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: critical

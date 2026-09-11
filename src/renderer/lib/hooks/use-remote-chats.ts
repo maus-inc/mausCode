@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useAtom, useAtomValue } from "jotai"
 import { useCallback, useEffect } from "react"
 import { selectedTeamIdAtom } from "../atoms"
-import { remoteApi, type RemoteChat, type RemoteChatWithSubChats } from "../remote-api"
+import { type RemoteChat, type RemoteChatWithSubChats, remoteApi } from "../remote-api"
 
 /**
  * Fetch user's teams and auto-select first team if none selected
@@ -14,9 +14,9 @@ export function useUserTeams(enabled: boolean = true) {
   const query = useQuery({
     queryKey: ["user-teams"],
     queryFn: () => remoteApi.getTeams(),
-    staleTime: 5 * 60 * 1000,   // 5 min - teams rarely change
-    gcTime: Infinity,           // Never garbage collect
-    refetchOnMount: true,       // Revalidate if stale
+    staleTime: 5 * 60 * 1000, // 5 min - teams rarely change
+    gcTime: Infinity, // Never garbage collect
+    refetchOnMount: true, // Revalidate if stale
     refetchOnWindowFocus: false,
     enabled,
     retry: 1,
@@ -38,13 +38,11 @@ export function useUserTeams(enabled: boolean = true) {
       // Validate cached teamId exists in current user's teams
       const teamExists = query.data.some((t) => t.id === teamId)
       if (!teamExists) {
-        console.log("[useUserTeams] Cached teamId not found, resetting to first team")
         setTeamId(query.data[0].id)
       }
     } else {
       // User has no teams - clear stale teamId
       if (teamId) {
-        console.log("[useUserTeams] User has no teams, clearing teamId")
         setTeamId(null)
       }
     }
@@ -64,9 +62,9 @@ export function useRemoteChats() {
     queryKey: ["remote-chats", teamId],
     queryFn: () => remoteApi.getAgentChats(teamId!),
     enabled: !!teamId,
-    staleTime: 30 * 1000,       // Consider stale after 30s
-    gcTime: 30 * 60 * 1000,     // Keep in cache 30 min
-    refetchOnMount: true,       // Revalidate on mount
+    staleTime: 30 * 1000, // Consider stale after 30s
+    gcTime: 30 * 60 * 1000, // Keep in cache 30 min
+    refetchOnMount: true, // Revalidate on mount
     refetchOnWindowFocus: true, // Revalidate when window focused
     placeholderData: (prev) => prev,
   })
@@ -80,8 +78,8 @@ export function useRemoteChat(chatId: string | null) {
     queryKey: ["remote-chat", chatId],
     queryFn: () => remoteApi.getAgentChat(chatId!),
     enabled: !!chatId,
-    staleTime: 60 * 1000,      // 1 minute
-    gcTime: 30 * 60 * 1000,    // 30 minutes
+    staleTime: 60 * 1000, // 1 minute
+    gcTime: 30 * 60 * 1000, // 30 minutes
   })
 }
 
@@ -99,7 +97,7 @@ export function usePrefetchRemoteChat() {
         staleTime: 60 * 1000,
       })
     },
-    [queryClient]
+    [queryClient],
   )
 }
 

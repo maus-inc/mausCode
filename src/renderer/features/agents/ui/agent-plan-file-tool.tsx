@@ -4,7 +4,13 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { Button } from "../../../components/ui/button"
-import { CheckIcon, CollapseIcon, CopyIcon, ExpandIcon, PlanIcon } from "../../../components/ui/icons"
+import {
+  CheckIcon,
+  CollapseIcon,
+  CopyIcon,
+  ExpandIcon,
+  PlanIcon,
+} from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
@@ -47,7 +53,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
 }: AgentPlanFileToolProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
-  const { isPending } = getToolStatus(part, chatStatus)
+  const { isPending, isInputStreaming } = getToolStatus(part, chatStatus)
   const isWrite = part.type === "tool-Write"
   // Get mode from per-subChat atomFamily
   const subChatModeAtom = useMemo(() => subChatModeAtomFamily(subChatId), [subChatId])
@@ -60,23 +66,13 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   const bottomGradientRef = useRef<HTMLDivElement>(null)
 
   // Plan sidebar atoms - per subChat
-  const planSidebarOpenAtom = useMemo(
-    () => planSidebarOpenAtomFamily(subChatId),
-    [subChatId],
-  )
-  const currentPlanPathAtom = useMemo(
-    () => currentPlanPathAtomFamily(subChatId),
-    [subChatId],
-  )
+  const planSidebarOpenAtom = useMemo(() => planSidebarOpenAtomFamily(subChatId), [subChatId])
+  const currentPlanPathAtom = useMemo(() => currentPlanPathAtomFamily(subChatId), [subChatId])
   const [, setIsPlanSidebarOpen] = useAtom(planSidebarOpenAtom)
   const [, setCurrentPlanPath] = useAtom(currentPlanPathAtom)
 
-  // Only consider streaming if chat is actively streaming
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
-
   // Get plan content - for Write mode it's in input.content, for Edit it's in new_string
-  const planContent = isWrite ? (part.input?.content || "") : (part.input?.new_string || "")
+  const planContent = isWrite ? part.input?.content || "" : part.input?.new_string || ""
   const filePath = part.input?.file_path || ""
 
   // Show shimmer during streaming/pending
@@ -265,7 +261,11 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
         <div
           ref={topGradientRef}
           className="absolute top-0 left-0 right-0 h-6 pointer-events-none z-10 transition-opacity duration-150"
-          style={{ opacity: 0, background: "linear-gradient(to bottom, color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--background))) 0%, transparent 100%)" }}
+          style={{
+            opacity: 0,
+            background:
+              "linear-gradient(to bottom, color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--background))) 0%, transparent 100%)",
+          }}
         />
 
         <div
@@ -287,7 +287,11 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
         <div
           ref={bottomGradientRef}
           className="absolute bottom-0 left-0 right-0 h-6 pointer-events-none z-10 transition-opacity duration-150"
-          style={{ opacity: 1, background: "linear-gradient(to top, color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--background))) 0%, transparent 100%)" }}
+          style={{
+            opacity: 1,
+            background:
+              "linear-gradient(to top, color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--background))) 0%, transparent 100%)",
+          }}
         />
       </div>
 

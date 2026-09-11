@@ -1,14 +1,11 @@
-import { AuthStore, AuthData, AuthUser } from "./auth-store"
-import { app, BrowserWindow } from "electron"
-import { AUTH_SERVER_PORT } from "./constants"
+import { app, type BrowserWindow } from "electron"
+import { type AuthData, AuthStore, type AuthUser } from "./auth-store"
+import { AUTH_SERVER_PORT, PROTOCOL } from "./constants"
+import { getApiUrl, isControlPlaneConfigured } from "./lib/config"
 
-// Get API URL - in packaged app always use production, in dev allow override
-function getApiBaseUrl(): string {
-  if (app.isPackaged) {
-    return "https://21st.dev"
-  }
-  return import.meta.env.MAIN_VITE_API_URL || "https://21st.dev"
-}
+// API base URL comes from lib/config.ts (single source of truth).
+// Empty = local-only mode: sign-in is unavailable until the mausCode
+// control plane is configured (MAIN_VITE_API_URL).
 
 export class AuthManager {
   private store: AuthStore
@@ -34,16 +31,12 @@ export class AuthManager {
     this.onTokenRefresh = callback
   }
 
-  private getApiUrl(): string {
-    return getApiBaseUrl()
-  }
-
   /**
    * Exchange auth code for session tokens
    * Called after receiving code via deep link
    */
   async exchangeCode(code: string): Promise<AuthData> {
-    const response = await fetch(`${this.getApiUrl()}/api/auth/desktop/exchange`, {
+    const response = await fetch(`${getApiUrl()}/api/auth/desktop/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -79,7 +72,7 @@ export class AuthManager {
     const platform = process.platform
     const arch = process.arch
     const version = app.getVersion()
-    return `21st Desktop ${version} (${platform} ${arch})`
+    return `mausCode Desktop ${version} (${platform} ${arch})`
   }
 
   /**
@@ -108,7 +101,7 @@ export class AuthManager {
     }
 
     try {
-      const response = await fetch(`${this.getApiUrl()}/api/auth/desktop/refresh`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/desktop/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken }),
@@ -207,16 +200,24 @@ export class AuthManager {
    * Start auth flow by opening browser
    */
   startAuthFlow(mainWindow: BrowserWindow | null): void {
+    if (!isControlPlaneConfigured()) {
+      // Local-only mode: there is no mausCode control plane to sign in to.
+      console.warn(
+        "[Auth] Control plane not configured (MAIN_VITE_API_URL empty) - sign-in unavailable",
+      )
+      return
+    }
+
     const { shell } = require("electron")
 
-    let authUrl = `${this.getApiUrl()}/auth/desktop?auto=true`
+    let authUrl = `${getApiUrl()}/auth/desktop?auto=true`
 
     // In dev mode, use localhost callback (we run HTTP server on AUTH_SERVER_PORT)
     // Also pass the protocol so web knows which deep link to use as fallback
     if (this.isDev) {
       authUrl += `&callback=${encodeURIComponent(`http://localhost:${AUTH_SERVER_PORT}/auth/callback`)}`
       // Pass dev protocol so production web can use correct deep link if callback fails
-      authUrl += `&protocol=twentyfirst-agents-dev`
+      authUrl += `&protocol=${PROTOCOL}`
     }
 
     shell.openExternal(authUrl)
@@ -232,7 +233,7 @@ export class AuthManager {
     }
 
     // Update on server using X-Desktop-Token header
-    const response = await fetch(`${this.getApiUrl()}/api/user/profile`, {
+    const response = await fetch(`${getApiUrl()}/api/user/profile`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -261,7 +262,7 @@ export class AuthManager {
     if (!token) return null
 
     try {
-      const response = await fetch(`${this.getApiUrl()}/api/desktop/user/plan`, {
+      const response = await fetch(`${getApiUrl()}/api/desktop/user/plan`, {
         headers: { "X-Desktop-Token": token },
       })
 

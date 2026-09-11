@@ -1,15 +1,15 @@
 "use client"
 
 import { useAtomValue, useSetAtom } from "jotai"
-import { ChevronLeft } from "lucide-react"
 import { useEffect, useMemo, useRef } from "react"
-import { CodexLoginContent } from "../agents/components/codex-login-content"
-import { useCodexLoginFlow } from "../agents/hooks/use-codex-login-flow"
 import {
   billingMethodAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
 } from "../../lib/atoms"
+import { CodexLoginContent } from "../agents/components/codex-login-content"
+import { useCodexLoginFlow } from "../agents/hooks/use-codex-login-flow"
+import { OnboardingShell } from "./components/onboarding-shell"
 
 export function CodexOnboardingPage() {
   const billingMethod = useAtomValue(billingMethodAtom)
@@ -76,40 +76,26 @@ export function CodexOnboardingPage() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
-      <div
-        className="fixed top-0 left-0 right-0 h-10"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+    <OnboardingShell onBack={handleBack}>
+      <CodexLoginContent
+        state={state}
+        method={method}
+        apiKey={apiKeyInput}
+        error={error}
+        url={url}
+        isOpeningUrl={isOpeningUrl}
+        isConnecting={isRunning || isOpeningUrl}
+        onOpenUrl={() => {
+          void openUrl()
+        }}
+        onRetry={() => {
+          void start()
+        }}
+        onApiKeyChange={setApiKeyInput}
+        onSubmitApiKey={() => {
+          void saveApiKey()
+        }}
       />
-
-      <button
-        onClick={() => void handleBack()}
-        className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
-      >
-        <ChevronLeft className="h-5 w-5" />
-      </button>
-
-      <div className="w-full max-w-[480px] px-4">
-        <CodexLoginContent
-          state={state}
-          method={method}
-          apiKey={apiKeyInput}
-          error={error}
-          url={url}
-          isOpeningUrl={isOpeningUrl}
-          isConnecting={isRunning || isOpeningUrl}
-          onOpenUrl={() => {
-            void openUrl()
-          }}
-          onRetry={() => {
-            void start()
-          }}
-          onApiKeyChange={setApiKeyInput}
-          onSubmitApiKey={() => {
-            void saveApiKey()
-          }}
-        />
-      </div>
-    </div>
+    </OnboardingShell>
   )
 }
