@@ -1,3 +1,4 @@
+import { DEFAULT_API_BASE_URL } from "../../../../shared/app-identity"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 
@@ -6,8 +7,9 @@ let cachedApiBase: string | null = null
 
 async function getApiBase(): Promise<string> {
   if (!cachedApiBase) {
-    // Uses MAIN_VITE_API_URL in dev, "https://21st.dev" in production
-    cachedApiBase = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+    // Control-plane base URL (MAIN_VITE_API_URL build override; empty in
+    // local-only mode — see shared/app-identity.ts)
+    cachedApiBase = (await window.desktopApi?.getApiBaseUrl()) || DEFAULT_API_BASE_URL
   }
   return cachedApiBase
 }

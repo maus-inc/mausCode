@@ -215,8 +215,11 @@ export function removeMcpServerConfig(
 
 /**
  * Resolve original project path from a worktree path.
- * Supports legacy (~/.21st/worktrees/{projectId}/{chatId}/) and
- * new format (~/.21st/worktrees/{projectName}/{worktreeFolder}/).
+ * Worktrees live under ~/.mauscode/worktrees in two layouts:
+ *   legacy: {projectId}/{chatId}/
+ *   current: {projectName}/{worktreeFolder}/
+ * Paths created by 1Code under ~/.21st/worktrees are still resolved
+ * (legacy location — read-only support, mausCode never writes there).
  *
  * @param pathToResolve - Either a worktree path or regular project path
  * @returns The original project path, or the input if not a worktree, or null if resolution fails
@@ -224,21 +227,34 @@ export function removeMcpServerConfig(
 export function resolveProjectPathFromWorktree(
   pathToResolve: string
 ): string | null {
-  const worktreeMarker = path.join(".21st", "worktrees")
+  // Worktree bases: current location first, then the legacy 1Code location.
+  const worktreeBases: { marker: string; base: string }[] = [
+    {
+      marker: ".mauscode/worktrees",
+      base: path.join(os.homedir(), ".mauscode", "worktrees"),
+    },
+    {
+      // Legacy 1Code location — detection only, never written
+      marker: ".21st/worktrees",
+      base: path.join(os.homedir(), ".21st", "worktrees"),
+    },
+  ]
 
   // Normalize for cross-platform (handle both / and \ separators)
   const normalizedPath = pathToResolve.replace(/\\/g, "/")
-  const normalizedMarker = worktreeMarker.replace(/\\/g, "/")
 
-  if (!normalizedPath.includes(normalizedMarker)) {
+  const matched = worktreeBases.find(({ marker }) =>
+    normalizedPath.includes(marker),
+  )
+  if (!matched) {
     // Not a worktree path, return as-is
     return pathToResolve
   }
 
   try {
     // Extract segments from path structure
-    // Path format: /Users/.../.21st/worktrees/{projectSlug}/{worktreeFolder}
-    const worktreeBase = path.join(os.homedir(), ".21st", "worktrees")
+    // Path format: /Users/.../.mauscode/worktrees/{projectSlug}/{worktreeFolder}
+    const worktreeBase = matched.base
     const normalizedBase = worktreeBase.replace(/\\/g, "/")
     const relativePath = normalizedPath
       .replace(normalizedBase, "")

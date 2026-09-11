@@ -25,6 +25,7 @@ import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
+import { getApiUrl } from "../../config"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
 
@@ -1276,10 +1277,12 @@ export const chatsRouter = router({
         try {
           const authManager = getAuthManager()
           const token = await authManager.getValidToken()
-          // Use localhost in dev, production otherwise
-          const apiUrl = process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://21st.dev"
+          // Control-plane base URL (empty = local-only mode; falls through to heuristic)
+          const apiUrl = getApiUrl()
 
-          if (!token) {
+          if (!apiUrl) {
+            apiError = "Control plane not configured"
+          } else if (!token) {
             apiError = "No auth token available"
           } else {
             const response = await fetch(
@@ -1399,10 +1402,13 @@ export const chatsRouter = router({
           return { name: getFallbackName(input.userMessage) }
         }
 
-        // Online - use web API
+        // Online - use control plane API (empty base = local-only mode)
+        const apiUrl = getApiUrl()
+        if (!apiUrl) {
+          return { name: getFallbackName(input.userMessage) }
+        }
         const authManager = getAuthManager()
         const token = await authManager.getValidToken()
-        const apiUrl = "https://21st.dev"
 
         console.log(
           "[generateSubChatName] Online - calling API with token:",

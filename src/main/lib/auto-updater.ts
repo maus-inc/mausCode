@@ -25,8 +25,14 @@ function initAutoUpdaterConfig() {
   autoUpdater.autoRunAppAfterInstall = true // Restart app after install
 }
 
-// CDN base URL for updates
-const CDN_BASE = "https://cdn.21st.dev/releases/desktop"
+// Update feed URL for mausCode releases.
+// Configured at build time via MAIN_VITE_UPDATE_FEED_URL. Empty by default:
+// the inherited 21st.dev CDN served 1Code's release manifests and must never
+// be an update source for mausCode. Until mausCode has its own CDN,
+// auto-update is simply off (see .dump/rebrand/decisions/open-decisions.md D4).
+function getUpdateFeedUrl(): string {
+  return import.meta.env.MAIN_VITE_UPDATE_FEED_URL || ""
+}
 
 // Minimum interval between update checks (prevent spam on rapid focus/blur)
 const MIN_CHECK_INTERVAL = 60 * 1000 // 1 minute
@@ -100,12 +106,16 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
   autoUpdater.allowDowngrade = false
   log.info(`[AutoUpdater] Using update channel: ${savedChannel}`)
 
-  // Configure feed URL to point to R2 CDN
-  // Note: We use a custom request headers to bypass CDN cache
-  autoUpdater.setFeedURL({
-    provider: "generic",
-    url: CDN_BASE,
-  })
+  // Configure feed URL (skipped in local-only mode — updater stays off)
+  const feedUrl = getUpdateFeedUrl()
+  if (feedUrl) {
+    autoUpdater.setFeedURL({
+      provider: "generic",
+      url: feedUrl,
+    })
+  } else {
+    log.info("[AutoUpdater] No update feed configured (MAIN_VITE_UPDATE_FEED_URL empty) - auto-update disabled")
+  }
 
   // Add cache-busting to update requests
   autoUpdater.requestHeaders = {
@@ -180,7 +190,7 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
   // Register IPC handlers
   registerIpcHandlers()
 
-  log.info("[AutoUpdater] Initialized with feed URL:", CDN_BASE)
+  log.info("[AutoUpdater] Initialized. Feed URL:", getUpdateFeedUrl() || "(none - disabled)")
 }
 
 /**
@@ -193,22 +203,27 @@ function registerIpcHandlers() {
       log.info("[AutoUpdater] Skipping update check in dev mode")
       return null
     }
+    const feedUrl = getUpdateFeedUrl()
+    if (!feedUrl) {
+      log.info("[AutoUpdater] Skipping update check - no feed configured")
+      return null
+    }
     try {
       // If force is true, add cache-busting timestamp to URL
       if (force) {
         const cacheBuster = `?t=${Date.now()}`
         autoUpdater.setFeedURL({
           provider: "generic",
-          url: `${CDN_BASE}${cacheBuster}`,
+          url: `${feedUrl}${cacheBuster}`,
         })
-        log.info("[AutoUpdater] Force check with cache-busting:", `${CDN_BASE}${cacheBuster}`)
+        log.info("[AutoUpdater] Force check with cache-busting:", `${feedUrl}${cacheBuster}`)
       }
       const result = await autoUpdater.checkForUpdates()
       // Reset feed URL back to normal after force check
       if (force) {
         autoUpdater.setFeedURL({
           provider: "generic",
-          url: CDN_BASE,
+          url: feedUrl,
         })
       }
       return result?.updateInfo || null

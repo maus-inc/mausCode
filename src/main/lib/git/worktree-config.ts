@@ -2,6 +2,10 @@ import { readFile, writeFile, mkdir, access } from "node:fs/promises"
 import { join, dirname, isAbsolute } from "node:path"
 import { exec } from "node:child_process"
 import { promisify } from "node:util"
+import {
+  WORKTREE_CONFIG_PATH,
+  LEGACY_WORKTREE_CONFIG_PATH,
+} from "../../../shared/app-identity"
 
 const execAsync = promisify(exec)
 
@@ -11,7 +15,15 @@ export interface WorktreeConfig {
   "setup-worktree"?: string[] | string
 }
 
-export type WorktreeConfigSource = "custom" | "cursor" | "1code" | null
+/**
+ * Source of a detected worktree config.
+ * - "mauscode": .mauscode/worktree.json (current format)
+ * - "cursor":   .cursor/worktrees.json (Cursor's own format, respected)
+ * - "1code":    .1code/worktree.json (legacy 1Code format — detected only,
+ *               never written by mausCode)
+ * - "custom":   an explicitly configured path
+ */
+export type WorktreeConfigSource = "custom" | "mauscode" | "cursor" | "1code" | null
 
 export interface DetectedWorktreeConfig {
   config: WorktreeConfig | null
@@ -20,7 +32,18 @@ export interface DetectedWorktreeConfig {
 }
 
 const CURSOR_CONFIG_PATH = ".cursor/worktrees.json"
-const ONECODE_CONFIG_PATH = ".1code/worktree.json"
+
+interface ConfigPathInfo {
+  exists: boolean
+  path: string
+}
+
+export interface AvailableConfigPaths {
+  mauscode: ConfigPathInfo
+  cursor: ConfigPathInfo
+  /** Legacy 1Code config — reported for transparency, never writable. */
+  legacy1code: ConfigPathInfo
+}
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -41,8 +64,9 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
 }
 
 /**
- * Detect worktree config for a project
- * Priority: custom path > .cursor/worktrees.json > .1code/worktree.json
+ * Detect worktree config for a project.
+ * Priority: custom path > .mauscode/worktree.json > .cursor/worktrees.json
+ * > .1code/worktree.json (legacy 1Code, read-only)
  */
 export async function detectWorktreeConfig(
   projectPath: string,
@@ -59,7 +83,16 @@ export async function detectWorktreeConfig(
     }
   }
 
-  // 2. Check .cursor/worktrees.json
+  // 2. Check .mauscode/worktree.json (current format)
+  const mauscodePath = join(projectPath, WORKTREE_CONFIG_PATH)
+  if (await fileExists(mauscodePath)) {
+    const config = await readJsonFile<WorktreeConfig>(mauscodePath)
+    if (config) {
+      return { config, path: mauscodePath, source: "mauscode" }
+    }
+  }
+
+  // 3. Check .cursor/worktrees.json
   const cursorPath = join(projectPath, CURSOR_CONFIG_PATH)
   if (await fileExists(cursorPath)) {
     const config = await readJsonFile<WorktreeConfig>(cursorPath)
@@ -68,12 +101,12 @@ export async function detectWorktreeConfig(
     }
   }
 
-  // 3. Check .1code/worktree.json
-  const onecodePath = join(projectPath, ONECODE_CONFIG_PATH)
-  if (await fileExists(onecodePath)) {
-    const config = await readJsonFile<WorktreeConfig>(onecodePath)
+  // 4. Check .1code/worktree.json (legacy 1Code format — detection only)
+  const legacyPath = join(projectPath, LEGACY_WORKTREE_CONFIG_PATH)
+  if (await fileExists(legacyPath)) {
+    const config = await readJsonFile<WorktreeConfig>(legacyPath)
     if (config) {
-      return { config, path: onecodePath, source: "1code" }
+      return { config, path: legacyPath, source: "1code" }
     }
   }
 
@@ -86,40 +119,44 @@ export async function detectWorktreeConfig(
  */
 export async function getAvailableConfigPaths(
   projectPath: string,
-): Promise<{
-  cursor: { exists: boolean; path: string }
-  onecode: { exists: boolean; path: string }
-}> {
+): Promise<AvailableConfigPaths> {
+  const mauscodePath = join(projectPath, WORKTREE_CONFIG_PATH)
   const cursorPath = join(projectPath, CURSOR_CONFIG_PATH)
-  const onecodePath = join(projectPath, ONECODE_CONFIG_PATH)
+  const legacyPath = join(projectPath, LEGACY_WORKTREE_CONFIG_PATH)
 
   return {
+    mauscode: {
+      exists: await fileExists(mauscodePath),
+      path: mauscodePath,
+    },
     cursor: {
       exists: await fileExists(cursorPath),
       path: cursorPath,
     },
-    onecode: {
-      exists: await fileExists(onecodePath),
-      path: onecodePath,
+    legacy1code: {
+      exists: await fileExists(legacyPath),
+      path: legacyPath,
     },
   }
 }
 
 /**
- * Save worktree config to a file
- * Creates parent directories if needed
+ * Save worktree config to a file.
+ * Target "mauscode" writes .mauscode/worktree.json (default), "cursor" writes
+ * .cursor/worktrees.json. The legacy .1code/worktree.json is never written.
+ * Creates parent directories if needed.
  */
 export async function saveWorktreeConfig(
   projectPath: string,
   config: WorktreeConfig,
-  target: "cursor" | "1code" | string = "1code",
+  target: "mauscode" | "cursor" | string = "mauscode",
 ): Promise<{ success: boolean; path: string; error?: string }> {
   let targetPath: string
 
   if (target === "cursor") {
     targetPath = join(projectPath, CURSOR_CONFIG_PATH)
-  } else if (target === "1code") {
-    targetPath = join(projectPath, ONECODE_CONFIG_PATH)
+  } else if (target === "mauscode") {
+    targetPath = join(projectPath, WORKTREE_CONFIG_PATH)
   } else {
     // Custom path
     targetPath = isAbsolute(target) ? target : join(projectPath, target)
@@ -127,6 +164,7 @@ export async function saveWorktreeConfig(
 
   try {
     // Create parent directory
+    await mkdir(dirname(targetPath), { recursive: true })
     await mkdir(dirname(targetPath), { recursive: true })
 
     // Write config

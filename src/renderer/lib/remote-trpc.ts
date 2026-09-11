@@ -1,7 +1,8 @@
 /**
- * tRPC client for remote web backend (21st.dev)
+ * tRPC client for the mausCode control-plane web backend
  * Uses signedFetch via IPC for authentication (no CORS issues)
  */
+import { DEFAULT_API_BASE_URL } from "../../shared/app-identity"
 import { createTRPCClient, httpLink } from "@trpc/client"
 import type { AppRouter } from "../../../../web/server/api/root"
 import SuperJSON from "superjson"
@@ -14,7 +15,7 @@ let cachedApiBase: string | null = null
 
 async function getApiBase(): Promise<string> {
   if (!cachedApiBase) {
-    cachedApiBase = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+    cachedApiBase = (await window.desktopApi?.getApiBaseUrl()) || DEFAULT_API_BASE_URL
   }
   return cachedApiBase
 }

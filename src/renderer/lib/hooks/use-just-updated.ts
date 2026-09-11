@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from "react"
 import { useAtom } from "jotai"
+import { RELEASES_URL } from "../../../shared/app-identity"
 import { justUpdatedAtom, justUpdatedVersionAtom } from "../atoms"
 
 const LAST_VERSION_KEY = "app:last-version"
@@ -52,7 +53,7 @@ export function useJustUpdated() {
     if (api) {
       // Link to changelog with anchor to current version
       const version = justUpdatedVersion ? `#v${justUpdatedVersion}` : ""
-      api.openExternal(`https://1code.dev/changelog${version}`)
+      api.openExternal(`${RELEASES_URL}${version ? `#${version}` : ""}`)
     }
     dismissJustUpdated()
   }, [justUpdatedVersion, dismissJustUpdated])

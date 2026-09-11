@@ -1,3 +1,4 @@
+import { parseWorktreeRelativePath } from "../../../../shared/worktree-paths"
 import { useSetAtom } from "jotai"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { subChatFilesAtom, subChatToChatMapAtom, type SubChatFileChange } from "../atoms"
@@ -53,11 +54,11 @@ export function useChangedFilesTracking(
       }
     }
 
-    // Handle worktree paths: /Users/.../.21st/worktrees/{chatId}/{subChatId}/relativePath
-    // Extract everything after the subChatId directory
-    const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
-    if (worktreeMatch) {
-      return worktreeMatch[1]
+    // Handle worktree paths: /Users/.../.mauscode/worktrees/{project}/{folder}/relativePath
+    // (legacy 1Code .21st/worktrees paths are matched too — see shared/worktree-paths)
+    const worktreeRelative = parseWorktreeRelativePath(filePath)
+    if (worktreeRelative) {
+      return worktreeRelative
     }
 
     // Heuristic: find common root directories

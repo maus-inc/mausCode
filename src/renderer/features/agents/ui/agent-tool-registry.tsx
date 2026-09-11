@@ -1,4 +1,5 @@
 "use client"
+import { parseWorktreeRelativePath } from "../../../../shared/worktree-paths"
 
 import {
   Eye,
@@ -74,10 +75,11 @@ export function getDisplayPath(filePath: string, projectPath?: string): string {
       return filePath.slice(prefix.length)
     }
   }
-  // Handle worktree paths: /.21st/worktrees/{chatId}/{subChatId}/relativePath
-  const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
-  if (worktreeMatch) {
-    return worktreeMatch[1]
+  // Handle worktree paths: /.mauscode/worktrees/{project}/{folder}/relativePath
+  // (legacy 1Code .21st/worktrees paths are matched too — see shared/worktree-paths)
+  const worktreeRelative = parseWorktreeRelativePath(filePath)
+  if (worktreeRelative) {
+    return worktreeRelative
   }
   // Handle claude-sessions paths: .../claude-sessions/{sessionId}/{folder}/{file}
   const sessionMatch = filePath.match(/claude-sessions\/[^/]+\/(.+)$/)

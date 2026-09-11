@@ -2,6 +2,7 @@
  * Remote API - wrapper around tRPC client for web backend
  * Provides clean interface for fetching remote sandbox data
  */
+import { DEFAULT_API_BASE_URL } from "../../shared/app-identity"
 import { remoteTrpc } from "./remote-trpc"
 
 // API base URL - dynamically fetched from main process
@@ -9,7 +10,7 @@ let API_BASE: string | null = null
 
 async function getApiBase(): Promise<string> {
   if (!API_BASE) {
-    API_BASE = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+    API_BASE = (await window.desktopApi?.getApiBaseUrl()) || DEFAULT_API_BASE_URL
   }
   return API_BASE
 }
