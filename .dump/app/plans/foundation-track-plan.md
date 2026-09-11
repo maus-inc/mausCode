@@ -43,7 +43,7 @@ rebranding/restructuring:
 ## Risks
 
 - Parallel-agent file collisions on `docs/*` and `UPSTREAM.md` — mitigate by keeping
-  drafts in `.dump/mausagent/` until the human confirms ownership.
+  drafts in `.dump/app/` until the human confirms ownership.
 - 1Code baseline SHA may be unrecoverable from this checkout (single squashed init
   commit) — fallback is documenting init SHA + archive date + tree hash.
 - No bun in sandbox limits build/test verification — mitigate with node-based checks
