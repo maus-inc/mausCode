@@ -144,6 +144,10 @@ import {
   selectedAgentChatIdAtom,
   selectedCommitAtom,
   selectedDiffFilePathAtom,
+  selectedDraftIdAtom,
+  showNewChatFormAtom,
+  desktopViewAtom,
+  requestNewChatFormResetAtom,
   setLoading,
   subChatFilesAtom,
   agentsSidebarOpenAtom,
@@ -7288,30 +7292,58 @@ Make sure to preserve all functionality from both branches when resolving confli
     agentChat?.name,
   ])
 
-  // Keyboard shortcut: New sub-chat
+  // Keyboard shortcut: New chat (mirrors sidebar "+" / Cmd+N new-workspace flow)
   // Web: Opt+Cmd+T (browser uses Cmd+T for new tab)
   // Desktop: Cmd+T
+  // Cmd+Shift+T creates a new sub-chat tab inside the current workspace.
+  const setShowNewChatFormForHotkey = useSetAtom(showNewChatFormAtom)
+  const setSelectedDraftIdForHotkey = useSetAtom(selectedDraftIdAtom)
+  const setDesktopViewForHotkey = useSetAtom(desktopViewAtom)
+  const requestNewChatFormResetForHotkey = useSetAtom(requestNewChatFormResetAtom)
+  const setSelectedChatIdForHotkey = useSetAtom(selectedAgentChatIdAtom)
+
+  const triggerNewChatForm = useCallback(() => {
+    requestNewChatFormResetForHotkey()
+    setSelectedChatIdForHotkey(null)
+    setSelectedDraftIdForHotkey(null)
+    setShowNewChatFormForHotkey(true)
+    setDesktopViewForHotkey(null)
+  }, [
+    requestNewChatFormResetForHotkey,
+    setSelectedChatIdForHotkey,
+    setSelectedDraftIdForHotkey,
+    setShowNewChatFormForHotkey,
+    setDesktopViewForHotkey,
+  ])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isDesktop = isDesktopApp()
 
-      // Desktop: Cmd+T (without Alt)
-      if (isDesktop && e.metaKey && e.code === "KeyT" && !e.altKey) {
+      // Cmd+Shift+T → create new sub-chat tab (existing split/new-tab behavior)
+      if (e.metaKey && e.shiftKey && e.code === "KeyT" && !e.altKey) {
         e.preventDefault()
         handleCreateNewSubChat()
         return
       }
 
-      // Web: Opt+Cmd+T (with Alt)
-      if (e.altKey && e.metaKey && e.code === "KeyT") {
+      // Desktop: Cmd+T → open the new chat form (same as sidebar "new" button)
+      if (isDesktop && e.metaKey && e.code === "KeyT" && !e.altKey && !e.shiftKey) {
         e.preventDefault()
-        handleCreateNewSubChat()
+        triggerNewChatForm()
+        return
+      }
+
+      // Web: Opt+Cmd+T → open the new chat form
+      if (e.altKey && e.metaKey && e.code === "KeyT" && !e.shiftKey) {
+        e.preventDefault()
+        triggerNewChatForm()
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleCreateNewSubChat])
+  }, [handleCreateNewSubChat, triggerNewChatForm])
 
   // NOTE: Desktop notifications for pending questions are now triggered directly
   // in ipc-chat-transport.ts when the ask-user-question chunk arrives.

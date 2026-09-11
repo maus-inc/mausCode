@@ -19,7 +19,6 @@ import {
   IconSpinner,
   PlanIcon,
   AgentIcon,
-  IconOpenSidebarRight,
   PinFilledIcon,
   DiffIcon,
   ClockIcon,
@@ -654,27 +653,6 @@ export function SubChatSelector({
           <AlignJustify className="h-4 w-4" />
           <span className="sr-only">Back to chats</span>
         </Button>
-      )}
-
-      {/* Open sidebar button - only on desktop when in tabs mode */}
-      {!isMobile && subChatsSidebarMode === "tabs" && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSubChatsSidebarMode("sidebar")}
-              className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md flex items-center justify-center"
-              style={{
-                // @ts-expect-error - WebKit-specific property
-                WebkitAppRegion: "no-drag",
-              }}
-            >
-              <IconOpenSidebarRight className="h-4 w-4 scale-x-[-1]" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Open chats pane</TooltipContent>
-        </Tooltip>
       )}
 
       <div

@@ -1,10 +1,11 @@
 "use client"
 
 /**
- * NOTE (transplant): web-hook stub signatures, updatedAt sort fixes, and the
- * new-chat-form reset-counter keys were transplanted from erenbertr/1code
- * (Apache-2.0). Their rail/all-projects/build/kanban restructure, AnimatePresence
- * wrapper, and sidebar-prop changes were NOT taken (sidebar lineage held).
+ * NOTE (transplant): web-hook stub signatures, updatedAt sort fixes, the
+ * new-chat-form reset-counter keys, the rail/all-projects restructure, the
+ * AnimatePresence wrapper, and the subchats-sidebar absorption were
+ * transplanted from erenbertr/1code (Apache-2.0). Kanban kept as the final
+ * fallback (upstream removed it); Build surface NOT taken (build/ excluded).
  */
 
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -27,9 +28,8 @@ import {
   agentsMobileViewModeAtom,
   agentsPreviewSidebarOpenAtom,
   agentsSidebarOpenAtom,
-  agentsSubChatsSidebarModeAtom,
-  agentsSubChatsSidebarWidthAtom,
   desktopViewAtom,
+  selectedProjectAtom,
 } from "../atoms"
 import {
   selectedTeamIdAtom,
@@ -48,13 +48,13 @@ import {
 } from "../../../lib/atoms"
 import { NewChatForm } from "../main/new-chat-form"
 import { KanbanView } from "../../kanban"
+import { AllProjectsPage } from "../../projects/all-projects-page"
 import { AutomationsView, AutomationsDetailView, InboxView } from "../../automations"
 import { ChatView } from "../main/active-chat"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
 import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
-import { AgentsSubChatsSidebar } from "../../sidebar/agents-subchats-sidebar"
 import { AgentPreview } from "./agent-preview"
 import { AgentDiffView } from "./agent-diff-view"
 import { TerminalSidebar, terminalSidebarOpenAtomFamily } from "../../terminal"
@@ -65,8 +65,7 @@ import {
 } from "../stores/sub-chat-store"
 import { useShallow } from "zustand/react/shallow"
 import { motion, AnimatePresence } from "motion/react"
-// import { ResizableSidebar } from "@/app/(alpha)/canvas/[id]/{components}/resizable-sidebar"
-import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
+import { DURATION_INSTANT, EASE_OUT } from "../../../lib/motion"
 // import { useClerk, useUser } from "@clerk/nextjs"
 // import { useCombinedAuth } from "@/lib/hooks/use-combined-auth"
 const useCombinedAuth = () => ({ userId: null }) // Desktop mock
@@ -84,6 +83,7 @@ const useIsAdmin = () => false
 export function AgentsContent() {
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const desktopView = useAtomValue(desktopViewAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatIsRemote = useSetAtom(selectedChatIsRemoteAtom)
   const setChatSourceMode = useSetAtom(chatSourceModeAtom)
   const chatSourceMode = useAtomValue(chatSourceModeAtom)
@@ -104,9 +104,6 @@ export function AgentsContent() {
     agentsPreviewSidebarOpenAtom,
   )
   const [mobileViewMode, setMobileViewMode] = useAtom(agentsMobileViewModeAtom)
-  const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
-    agentsSubChatsSidebarModeAtom,
-  )
   // Per-chat terminal sidebar state
   const terminalSidebarAtom = useMemo(
     () => terminalSidebarOpenAtomFamily(selectedChatId || ""),
@@ -114,10 +111,7 @@ export function AgentsContent() {
   )
   const setTerminalSidebarOpen = useSetAtom(terminalSidebarAtom)
 
-  const hasOpenedSubChatsSidebar = useRef(false)
-  const wasSubChatsSidebarOpen = useRef(false)
-  const [shouldAnimateSubChatsSidebar, setShouldAnimateSubChatsSidebar] =
-    useState(subChatsSidebarMode !== "sidebar")
+  // Sub-chats sidebar refs removed — unified sidebar handles sub-chats now
   const searchParams = useSearchParams()
   const router = useRouter()
   const isInitialized = useRef(false)
@@ -791,44 +785,7 @@ export function AgentsContent() {
     }
   }
 
-  // Check if sub-chats data is loaded (use separate selectors to avoid object creation)
-  const subChatsStoreChatId = useAgentSubChatStore((state) => state.chatId)
-  const subChatsCount = useAgentSubChatStore(
-    (state) => state.allSubChats.length,
-  )
-
-  // Check if sub-chats are still loading (store not yet initialized for this chat)
-  const isLoadingSubChats =
-    selectedChatId !== null &&
-    (subChatsStoreChatId !== selectedChatId || subChatsCount === 0)
-
-  // Track sub-chats sidebar open state for animation control
-  // Now renders even while loading to show spinner (mobile always uses tabs)
-  const isSubChatsSidebarOpen =
-    selectedChatId &&
-    subChatsSidebarMode === "sidebar" &&
-    !isMobile &&
-    !desktopView
-
-  useEffect(() => {
-    // When sidebar closes, reset for animation on next open
-    if (!isSubChatsSidebarOpen && wasSubChatsSidebarOpen.current) {
-      hasOpenedSubChatsSidebar.current = false
-      setShouldAnimateSubChatsSidebar(true)
-    }
-    wasSubChatsSidebarOpen.current = !!isSubChatsSidebarOpen
-
-    // Mark as opened after animation completes
-    if (isSubChatsSidebarOpen && !hasOpenedSubChatsSidebar.current) {
-      const timer = setTimeout(() => {
-        hasOpenedSubChatsSidebar.current = true
-        setShouldAnimateSubChatsSidebar(false)
-      }, 150 + 50) // 150ms duration + 50ms buffer
-      return () => clearTimeout(timer)
-    } else if (isSubChatsSidebarOpen && hasOpenedSubChatsSidebar.current) {
-      setShouldAnimateSubChatsSidebar(false)
-    }
-  }, [isSubChatsSidebarOpen])
+  // Sub-chats sidebar removed — unified sidebar handles hierarchy now
 
   // Check if chat has sandbox with port for preview
   const chatMeta = chatData?.meta as
@@ -881,12 +838,8 @@ export function AgentsContent() {
         ) : mobileViewMode === "chats" ? (
           // Chats List Mode (default) - uses AgentsSidebar in fullscreen
           <AgentsSidebar
-            userId={userId}
-            clerkUser={user}
             onSignOut={handleSignOut}
             onToggleSidebar={() => {}}
-            isMobileFullscreen={true}
-            onChatSelect={() => setMobileViewMode("chat")}
           />
         ) : mobileViewMode === "preview" && selectedChatId && canShowPreview ? (
           // Preview Mode
@@ -976,70 +929,66 @@ export function AgentsContent() {
   return (
     <>
       <div className="flex h-full">
-        {/* Sub-chats sidebar - only show in sidebar mode when viewing a chat */}
-        <ResizableSidebar
-          isOpen={!!isSubChatsSidebarOpen}
-          onClose={() => {
-            setShouldAnimateSubChatsSidebar(true)
-            setSubChatsSidebarMode("tabs")
-          }}
-          widthAtom={agentsSubChatsSidebarWidthAtom}
-          minWidth={160}
-          maxWidth={300}
-          side="left"
-          animationDuration={0}
-          initialWidth={0}
-          exitWidth={0}
-          disableClickToClose={true}
-        >
-          <AgentsSubChatsSidebar
-            onClose={() => {
-              setShouldAnimateSubChatsSidebar(true)
-              setSubChatsSidebarMode("tabs")
-            }}
-            isMobile={isMobile}
-            isSidebarOpen={sidebarOpen}
-            onBackToChats={() => setSidebarOpen((prev) => !prev)}
-            isLoading={isLoadingSubChats}
-            agentName={chatData?.name}
-          />
-        </ResizableSidebar>
-
         {/* Main content */}
         <div
           className="flex-1 min-w-0 overflow-hidden"
           style={{ minWidth: "350px" }}
         >
-          {desktopView === "settings" ? (
-            <SettingsContent />
-          ) : betaAutomationsEnabled && desktopView === "automations" ? (
-            <AutomationsView />
-          ) : betaAutomationsEnabled && desktopView === "automations-detail" ? (
-            <AutomationsDetailView />
-          ) : betaAutomationsEnabled && desktopView === "inbox" ? (
-            <InboxView />
-          ) : selectedChatId ? (
-            <div className="h-full flex flex-col relative overflow-hidden">
-              <ChatView
-                key={`${chatSourceMode}-${selectedChatId}`}
-                chatId={selectedChatId}
-                isSidebarOpen={sidebarOpen}
-                onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-                selectedTeamName={selectedTeam?.name}
-                selectedTeamImageUrl={selectedTeam?.image_url}
-              />
-            </div>
-          ) : selectedDraftId || showNewChatForm ? (
-            <div className="h-full flex flex-col relative overflow-hidden">
-              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`} />
-            </div>
-          ) : betaKanbanEnabled ? (
-            <KanbanView />
-          ) : (
-            <div className="h-full flex flex-col relative overflow-hidden">
-              <NewChatForm key={`new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`} />
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={
+                desktopView === "settings" ? "settings"
+                : betaAutomationsEnabled && desktopView === "automations" ? "automations"
+                : betaAutomationsEnabled && desktopView === "automations-detail" ? "automations-detail"
+                : betaAutomationsEnabled && desktopView === "inbox" ? "inbox"
+                : selectedChatId ? `chat-${chatSourceMode}-${selectedChatId}`
+                : !selectedProject ? "all-projects"
+                : selectedDraftId || showNewChatForm ? `new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`
+                : betaKanbanEnabled ? "kanban"
+                : `new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`
+              }
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: DURATION_INSTANT, ease: EASE_OUT }}
+              className="h-full"
+            >
+              {desktopView === "settings" ? (
+                <SettingsContent />
+              ) : betaAutomationsEnabled && desktopView === "automations" ? (
+                <AutomationsView />
+              ) : betaAutomationsEnabled && desktopView === "automations-detail" ? (
+                <AutomationsDetailView />
+              ) : betaAutomationsEnabled && desktopView === "inbox" ? (
+                <InboxView />
+              ) : selectedChatId ? (
+                <div className="h-full flex flex-col relative overflow-hidden">
+                  <ChatView
+                    key={`${chatSourceMode}-${selectedChatId}`}
+                    chatId={selectedChatId}
+                    isSidebarOpen={sidebarOpen}
+                    onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+                    selectedTeamName={selectedTeam?.name}
+                    selectedTeamImageUrl={selectedTeam?.image_url}
+                  />
+                </div>
+              ) : !selectedProject ? (
+                <div className="h-full flex flex-col relative overflow-hidden">
+                  <AllProjectsPage />
+                </div>
+              ) : selectedDraftId || showNewChatForm ? (
+                <div className="h-full flex flex-col relative overflow-hidden">
+                  <NewChatForm key={`new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`} />
+                </div>
+              ) : betaKanbanEnabled ? (
+                <KanbanView />
+              ) : (
+                <div className="h-full flex flex-col relative overflow-hidden">
+                  <NewChatForm key={`new-chat-${newChatFormKeyRef.current}-${newChatResetCounter}`} />
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
 

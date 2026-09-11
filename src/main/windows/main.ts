@@ -322,6 +322,105 @@ function registerIpcHandlers(): void {
     shell.openExternal(url),
   )
 
+  // Open the directory in the OS file manager (Finder / Explorer / Files).
+  // Transplanted from erenbertr/1code (Apache-2.0) for the projects rail.
+  ipcMain.handle("shell:open-folder", async (_event, dirPath: string) => {
+    if (typeof dirPath !== "string" || !dirPath) {
+      return { success: false, error: "Invalid path" }
+    }
+    if (!existsSync(dirPath)) {
+      return { success: false, error: "Path does not exist" }
+    }
+    try {
+      const errorMessage = await shell.openPath(dirPath)
+      if (errorMessage) {
+        return { success: false, error: errorMessage }
+      }
+      return { success: true }
+    } catch (error) {
+      console.error("[Main] Failed to open folder:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }
+    }
+  })
+
+  // Open the directory in Visual Studio Code.
+  // Transplanted from erenbertr/1code (Apache-2.0) for the unified sidebar.
+  ipcMain.handle("shell:open-vscode", async (_event, dirPath: string) => {
+    if (typeof dirPath !== "string" || !dirPath) {
+      return { success: false, error: "Invalid path" }
+    }
+    if (!existsSync(dirPath)) {
+      return { success: false, error: "Path does not exist" }
+    }
+    try {
+      const { spawn } = await import("child_process")
+      if (process.platform === "darwin") {
+        spawn("open", ["-a", "Visual Studio Code", dirPath], {
+          detached: true,
+          stdio: "ignore",
+        }).unref()
+        return { success: true }
+      }
+      // Windows/Linux: rely on `code` CLI being on PATH
+      spawn("code", [dirPath], {
+        detached: true,
+        stdio: "ignore",
+        shell: process.platform === "win32",
+      }).unref()
+      return { success: true }
+    } catch (error) {
+      console.error("[Main] Failed to open VS Code:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }
+    }
+  })
+
+  // Open a native terminal at the given directory.
+  // Transplanted from erenbertr/1code (Apache-2.0) for the unified sidebar.
+  ipcMain.handle("shell:open-terminal", async (_event, dirPath: string) => {
+    if (typeof dirPath !== "string" || !dirPath) {
+      return { success: false, error: "Invalid path" }
+    }
+    if (!existsSync(dirPath)) {
+      return { success: false, error: "Path does not exist" }
+    }
+    try {
+      const { spawn } = await import("child_process")
+      if (process.platform === "darwin") {
+        spawn("open", ["-a", "Terminal", dirPath], {
+          detached: true,
+          stdio: "ignore",
+        }).unref()
+        return { success: true }
+      }
+      if (process.platform === "win32") {
+        spawn("cmd", ["/c", "start", "", "cmd"], {
+          cwd: dirPath,
+          detached: true,
+          stdio: "ignore",
+        }).unref()
+        return { success: true }
+      }
+      spawn("x-terminal-emulator", [], {
+        cwd: dirPath,
+        detached: true,
+        stdio: "ignore",
+      }).unref()
+      return { success: true }
+    } catch (error) {
+      console.error("[Main] Failed to open terminal:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }
+    }
+  })
+
   // Clipboard
   ipcMain.handle("clipboard:write", (_event, text: string) =>
     clipboard.writeText(text),

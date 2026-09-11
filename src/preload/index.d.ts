@@ -70,6 +70,9 @@ export interface DesktopApi {
   setBadge: (count: number | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
   openExternal: (url: string) => Promise<void>
+  openFolder: (path: string) => Promise<{ success: boolean; error?: string }>
+  openTerminal: (path: string) => Promise<{ success: boolean; error?: string }>
+  openVSCode: (path: string) => Promise<{ success: boolean; error?: string }>
   getApiBaseUrl: () => Promise<string>
 
   // Clipboard

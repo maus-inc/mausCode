@@ -2,8 +2,8 @@
  * NOTE (transplant): fullscreen-poll slowdown, persistent title-bar controls,
  * TrafficLightSpacer, sidebar animation duration, and new-chat-form reset
  * wiring were transplanted from erenbertr/1code (Apache-2.0).
- * Their ProjectsRail render, ClaudeLoginModal removal, and kanban removals
- * were NOT taken (sidebar lineage held; ours kept).
+ * Their ProjectsRail render was taken on sidebar-lineage adoption (Batch C).
+ * ClaudeLoginModal removal and kanban removals were NOT taken (ours kept).
  */
 import { useCallback, useEffect, useState, useMemo, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
@@ -36,6 +36,7 @@ import { CodexLoginModal } from "../../components/dialogs/codex-login-modal"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { AgentsSidebar } from "../sidebar/agents-sidebar"
+import { ProjectsRail } from "../sidebar/projects-rail"
 import { AgentsContent } from "../agents/ui/agents-content"
 import { UpdateBanner } from "../../components/update-banner"
 import { WindowsTitleBar } from "../../components/windows-title-bar"
@@ -347,7 +348,10 @@ export function AgentsLayout() {
         )}
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - switches between chat list and settings nav */}
+          {/* Projects rail — primary nav (projects only). Hidden in settings + mobile. */}
+          {!isMobile && !isSettingsView && <ProjectsRail />}
+
+          {/* Secondary nav — chats grouped per project, or settings nav */}
           <ResizableSidebar
           isOpen={!isMobile && sidebarOpen}
           onClose={handleCloseSidebar}
