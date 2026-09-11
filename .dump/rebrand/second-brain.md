@@ -30,8 +30,10 @@ evidence required for any perf claim, no new dependencies.
   were removed entirely (update CDN would have served 1Code's release manifests).
 - **D5 compatibility agents** — public term for secondary runtime support (Claude Code /
   Codex / OpenCode / Hermes).
-- **D6 version = keep 0.0.72** — continuity with the inherited release line; first mausCode
-  release gets its own versioning decision.
+- **D6 version = 0.1.0** — human chose the clean-break "first mausCode" framing over
+  continuing 1Code's 0.0.72 line. `package.json` = 0.1.0. Semver-safe (0.1.0 > 0.0.72),
+  all version reads are dynamic, and no auto-update path exists from 1Code (different
+  appId/control plane).
 
 ## What was done (by area)
 

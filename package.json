@@ -1,6 +1,6 @@
 {
   "name": "mauscode-desktop",
-  "version": "0.0.72",
+  "version": "0.1.0",
   "private": true,
   "description": "mausCode - UI for parallel work with AI agents",
   "homepage": "https://github.com/maus-inc/mausCode",

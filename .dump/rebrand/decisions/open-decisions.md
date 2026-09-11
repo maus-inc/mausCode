@@ -60,7 +60,7 @@ Claude Code / Codex / OpenCode / Hermes are secondary compatibility options in t
 
 The inherited `package.json` carries `0.0.72` (1Code's version). A new product could restart at `0.1.0`.
 
-- **A. Keep `0.0.72` (recommended for now)** — no release pipeline exists yet; restarting the line is a release-engineering decision best made with the first real release (and is one line).
+- **A. Keep `0.0.72` (was recommended for now)** — no release pipeline exists yet; restarting the line is a release-engineering decision best made with the first real release (and is one line).
 - B. Restart at `0.1.0` immediately.
 
-**Implemented as:** A (version untouched).
+**RESOLVED (2026-09-11):** B — restart at `0.1.0`. The human chose the clean-break "first mausCode" framing. `package.json` version set to `0.1.0`. Safe to jump: 0.1.0 > 0.0.72 in semver (no downgrade signal), version reads are all dynamic (`app.getVersion()`, updater `info.version`), and there is no auto-update path from 1Code to mausCode (different appId/control plane) — the bump only starts mausCode's own release line.
