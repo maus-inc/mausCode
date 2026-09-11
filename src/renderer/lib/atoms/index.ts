@@ -1,5 +1,9 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
+import {
+  DEFAULT_DARK_THEME_ID,
+  DEFAULT_LIGHT_THEME_ID,
+} from "../themes/builtin-themes"
 import { desktopViewAtom as _desktopViewAtom } from "../../features/agents/atoms"
 
 // ============================================
@@ -572,7 +576,7 @@ export const selectedFullThemeIdAtom = atomWithStorage<string | null>(
  */
 export const systemLightThemeIdAtom = atomWithStorage<string>(
   "preferences:system-light-theme-id",
-  "21st-light", // Default light theme
+  DEFAULT_LIGHT_THEME_ID, // Default light theme
   undefined,
   { getOnInit: true },
 )
@@ -582,7 +586,7 @@ export const systemLightThemeIdAtom = atomWithStorage<string>(
  */
 export const systemDarkThemeIdAtom = atomWithStorage<string>(
   "preferences:system-dark-theme-id",
-  "21st-dark", // Default dark theme
+  DEFAULT_DARK_THEME_ID, // Default dark theme
   undefined,
   { getOnInit: true },
 )
@@ -764,7 +768,7 @@ export const billingMethodAtom = atomWithStorage<BillingMethod>(
 )
 
 // Whether user has completed Anthropic OAuth during onboarding
-// This is used to show the onboarding screen after 21st.dev sign-in
+// This is used to show the onboarding screen after control-plane sign-in
 // Reset on logout
 export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:anthropic-completed",
@@ -866,7 +870,7 @@ export type SessionInfo = {
 // Persisted to localStorage so MCP tools are visible after page refresh
 // Updated when a new chat session starts
 export const sessionInfoAtom = atomWithStorage<SessionInfo | null>(
-  "21st-session-info",
+  "mauscode-session-info",
   null,
   undefined,
   { getOnInit: true },

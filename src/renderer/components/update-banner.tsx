@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 import { useUpdateChecker } from "../lib/hooks/use-update-checker"
 import { useJustUpdated } from "../lib/hooks/use-just-updated"
+import { RELEASES_URL } from "../../shared/app-identity"
 import { Button } from "./ui/button"
 import { IconSpinner } from "../icons"
 
@@ -136,7 +137,7 @@ export function UpdateBanner() {
 
   const handleOpenChangelog = () => {
     // Open changelog URL
-    window.desktopApi?.openExternal("https://1code.dev/changelog")
+    window.desktopApi?.openExternal(RELEASES_URL)
     // Dismiss the banner
     if (isMocking) {
       setMockStatus("dismissed")

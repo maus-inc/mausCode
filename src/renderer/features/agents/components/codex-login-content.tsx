@@ -47,7 +47,7 @@ export function CodexLoginContent({
       <div className="text-center space-y-4">
         <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
           <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-            <Logo className="w-5 h-5" fill="white" />
+            <Logo className="w-5 h-5 invert" />
           </div>
           <div className="w-10 h-10 rounded-full bg-foreground flex items-center justify-center">
             <CodexIcon className="w-6 h-6 text-background" />

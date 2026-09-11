@@ -391,7 +391,7 @@ export function AutomationsDetailView() {
   if (!teamId) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Logo className="h-8 w-8 animate-pulse text-muted-foreground" />
+        <Logo className="h-8 w-8 animate-pulse opacity-50" />
       </div>
     )
   }

@@ -12,6 +12,7 @@ import {
 import { ArrowUpRight } from "lucide-react"
 import { KeyboardIcon } from "../../../components/ui/icons"
 import { DiscordIcon } from "../../../icons"
+import { RELEASES_URL } from "../../../../shared/app-identity"
 import { useSetAtom } from "jotai"
 import { agentsSettingsDialogOpenAtom, agentsSettingsDialogActiveTabAtom } from "../../../lib/atoms"
 
@@ -70,8 +71,11 @@ export function AgentsHelpPopover({
 
   useEffect(() => {
     let cancelled = false
+    ;(async () => {
+      const apiBase = await window.desktopApi.getApiBaseUrl()
+    if (!apiBase) return // local-only mode: no control-plane changelog
     window.desktopApi
-      .signedFetch("https://21st.dev/api/changelog/desktop?per_page=3")
+      .signedFetch(`${apiBase}/api/changelog/desktop?per_page=3`)
       .then((result) => {
         if (cancelled) return
         const data = result.data as {
@@ -88,6 +92,7 @@ export function AgentsHelpPopover({
         }
       })
       .catch(() => {})
+    })()
     return () => {
       cancelled = true
     }
@@ -98,13 +103,11 @@ export function AgentsHelpPopover({
   }
 
   const handleChangelogClick = () => {
-    window.desktopApi.openExternal("https://1code.dev/agents/changelog")
+    window.desktopApi.openExternal(RELEASES_URL)
   }
 
   const handleReleaseClick = (version: string) => {
-    window.desktopApi.openExternal(
-      `https://1code.dev/agents/changelog#${version}`,
-    )
+    window.desktopApi.openExternal(`${RELEASES_URL}#${version}`)
   }
 
   const handleKeyboardShortcutsClick = () => {

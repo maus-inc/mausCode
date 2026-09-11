@@ -9,12 +9,12 @@ import type { VSCodeFullTheme } from "../atoms"
 import { CURSOR_DARK, CURSOR_LIGHT, CURSOR_MIDNIGHT } from "./cursor-themes"
 
 /**
- * 21st Dark - Default dark theme matching the app's original design
- * Uses the brand blue (#0034FF) as primary/accent color
+ * mausCode Dark - Default dark theme (inherited base design)
+ * Uses blue (#0034FF) as primary/accent color
  */
-const TWENTYFIRST_DARK: VSCodeFullTheme = {
-  id: "21st-dark",
-  name: "21st Dark",
+const MAUSCODE_DARK: VSCodeFullTheme = {
+  id: "mauscode-dark",
+  name: "mausCode Dark",
   type: "dark",
   source: "builtin",
   colors: {
@@ -73,12 +73,12 @@ const TWENTYFIRST_DARK: VSCodeFullTheme = {
 }
 
 /**
- * 21st Light - Default light theme matching the app's original design
- * Uses the brand blue (#0034FF) as primary/accent color
+ * mausCode Light - Default light theme (inherited base design)
+ * Uses blue (#0034FF) as primary/accent color
  */
-const TWENTYFIRST_LIGHT: VSCodeFullTheme = {
-  id: "21st-light",
-  name: "21st Light",
+const MAUSCODE_LIGHT: VSCodeFullTheme = {
+  id: "mauscode-light",
+  name: "mausCode Light",
   type: "light",
   source: "builtin",
   colors: {
@@ -912,9 +912,9 @@ const CLAUDE_DARK: VSCodeFullTheme = {
  * All built-in themes
  */
 export const BUILTIN_THEMES: VSCodeFullTheme[] = [
-  // 21st Default themes (first)
-  TWENTYFIRST_DARK,
-  TWENTYFIRST_LIGHT,
+  // mausCode default themes (first)
+  MAUSCODE_DARK,
+  MAUSCODE_LIGHT,
   // Cursor themes
   CURSOR_DARK,
   CURSOR_LIGHT,
@@ -947,8 +947,8 @@ export function getBuiltinThemesByType(type: "light" | "dark"): VSCodeFullTheme[
 /**
  * Default theme IDs for light/dark modes
  */
-export const DEFAULT_LIGHT_THEME_ID = "21st-light"
-export const DEFAULT_DARK_THEME_ID = "21st-dark"
+export const DEFAULT_LIGHT_THEME_ID = "mauscode-light"
+export const DEFAULT_DARK_THEME_ID = "mauscode-dark"
 
 /**
  * Set of builtin theme names (lowercase) for filtering discovered themes
