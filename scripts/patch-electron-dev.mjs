@@ -1,7 +1,7 @@
 // Patches the Electron.app bundle in node_modules to show "mausCode" name and icon in macOS dock during dev mode.
 import { execSync } from "node:child_process"
 import { copyFileSync, existsSync } from "node:fs"
-import { join, dirname } from "node:path"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
