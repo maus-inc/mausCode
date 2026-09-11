@@ -23,7 +23,7 @@ type CursorChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
 }
 
 type ImageAttachment = {

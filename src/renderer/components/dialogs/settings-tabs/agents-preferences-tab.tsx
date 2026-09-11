@@ -14,6 +14,8 @@ import {
   type AutoAdvanceTarget,
   type CtrlTabTarget,
 } from "../../../lib/atoms"
+import { AGENT_MODES } from "../../../features/agents/atoms"
+import { getModeLabel } from "../../../features/agents/lib/mode-display"
 import { APP_META, type ExternalApp } from "../../../../shared/external-apps"
 
 // Editor icon imports
@@ -216,7 +218,7 @@ export function AgentsPreferencesTab() {
               Default Mode
             </span>
             <span className="text-xs text-muted-foreground">
-              Mode for new agents (Plan = read-only, Agent = can edit)
+              Mode for new agents (Plan = read-only … Turbo = no asking)
             </span>
           </div>
           <Select
@@ -225,12 +227,15 @@ export function AgentsPreferencesTab() {
           >
             <SelectTrigger className="w-auto px-2">
               <span className="text-xs">
-                {defaultAgentMode === "agent" ? "Agent" : "Plan"}
+                {getModeLabel(defaultAgentMode)}
               </span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="agent">Agent</SelectItem>
-              <SelectItem value="plan">Plan</SelectItem>
+              {AGENT_MODES.map((mode) => (
+                <SelectItem key={mode} value={mode}>
+                  {getModeLabel(mode)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

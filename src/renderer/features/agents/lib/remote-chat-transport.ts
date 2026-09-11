@@ -19,7 +19,7 @@ type RemoteChatTransportConfig = {
   subChatId: string
   subChatName: string
   sandboxUrl: string
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
   model?: string // Claude model ID (e.g., "claude-sonnet-4-6")
 }
 
@@ -52,13 +52,15 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
     const streamId = generateStreamId()
     const subId = this.config.subChatId.slice(-8)
 
-    // Build headers - only include x-model if model is specified
+    // Build headers - only include x-model if model is specified.
+    // The remote backend only knows plan/agent: non-plan modes collapse to
+    // "agent" (remote enforcement stays plan-vs-everything-else).
     const headers: Record<string, string> = {
       "sandbox-url": this.config.sandboxUrl,
       "parent-chat-id": this.config.chatId,
       "sub-chat-id": this.config.subChatId,
       "sub-chat-name": encodeURIComponent(this.config.subChatName),
-      "sub-chat-mode": this.config.mode,
+      "sub-chat-mode": this.config.mode === "plan" ? "plan" : "agent",
     }
     if (this.config.model) {
       headers["x-model"] = this.config.model

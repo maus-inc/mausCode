@@ -2243,7 +2243,7 @@ const ChatViewInner = memo(function ChatViewInner({
       }
 
       // Revert local state on error to maintain sync with database
-      const revertedMode: AgentMode = variables.mode === "plan" ? "agent" : "plan"
+      const revertedMode: AgentMode = modeBeforeChangeRef.current
       setSubChatMode(revertedMode)
       // Also update store for consistency
       useAgentSubChatStore
@@ -2315,9 +2315,13 @@ const ChatViewInner = memo(function ChatViewInner({
     }
   }, [subChatId])
 
+  // Last mode before the most recent change (for DB-write-failure revert)
+  const modeBeforeChangeRef = useRef<AgentMode>(subChatMode)
+
   // Handle mode changes - updates atomFamily, store, and database together
   // No effect needed - this is called directly when user toggles mode
   const handleModeChange = useCallback((newMode: AgentMode) => {
+    modeBeforeChangeRef.current = subChatMode
     // Update atomFamily (source of truth for UI)
     setSubChatMode(newMode)
 
@@ -2328,7 +2332,7 @@ const ChatViewInner = memo(function ChatViewInner({
     if (!subChatId.startsWith("temp-")) {
       updateSubChatModeMutation.mutate({ subChatId, mode: newMode })
     }
-  }, [subChatId, setSubChatMode, updateSubChatModeMutation])
+  }, [subChatId, setSubChatMode, subChatMode, updateSubChatModeMutation])
 
   // File/image upload hook
   const {
@@ -3528,7 +3532,7 @@ const ChatViewInner = memo(function ChatViewInner({
         })
 
         const newSubChat = result.subChat
-        const newMode = (newSubChat.mode as "plan" | "agent") || "agent"
+        const newMode = (newSubChat.mode as AgentMode) || "agent"
 
         // Invalidate + await ensures agentSubChats has the fork before we switch tabs
         await utils.agents.getAgentChat.invalidate({ chatId: parentChatId })
@@ -5506,7 +5510,7 @@ export function ChatView({
   const agentSubChats = (agentChat?.subChats ?? []) as Array<{
     id: string
     name?: string | null
-    mode?: "plan" | "agent" | null
+    mode?: AgentMode | null
     created_at?: Date | string | null
     updated_at?: Date | string | null
     messages?: any
@@ -6402,7 +6406,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           createdAt ?? existingLocal?.created_at ?? new Date().toISOString(),
         updated_at: updatedAt ?? existingLocal?.updated_at,
         mode:
-          (sc.mode as "plan" | "agent" | undefined) ||
+          (sc.mode as AgentMode | undefined) ||
           existingLocal?.mode ||
           "agent",
       }

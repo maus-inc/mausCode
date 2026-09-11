@@ -60,7 +60,7 @@ export const runtimeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(),
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
         model: z.string().optional(),
         customToken: z.string().optional(),
         customBaseUrl: z.string().optional(),

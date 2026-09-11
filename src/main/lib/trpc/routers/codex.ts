@@ -1623,7 +1623,7 @@ export const codexRouter = router({
         model: z.string().optional(),
         cwd: z.string(),
         projectPath: z.string().optional(),
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
         sessionId: z.string().optional(),
         forceNewSession: z.boolean().optional(),
         images: z.array(imageAttachmentSchema).optional(),

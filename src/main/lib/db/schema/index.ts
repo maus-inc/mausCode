@@ -89,7 +89,7 @@ export const subChats = sqliteTable("sub_chats", {
     .references(() => chats.id, { onDelete: "cascade" }),
   sessionId: text("session_id"), // Claude SDK session ID for resume
   streamId: text("stream_id"), // Track in-progress streams
-  mode: text("mode").notNull().default("agent"), // "plan" | "agent"
+  mode: text("mode").notNull().default("agent"), // "plan" | "ask" | "edit" | "agent" | "turbo"
   // Canonical provider binding ("claude-code" | "codex" | "gemini" | "openrouter" | "cursor").
   // NULL = legacy row: renderer falls back to message-metadata inference + lazy backfill.
   provider: text("provider"),

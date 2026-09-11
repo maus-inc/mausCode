@@ -385,6 +385,76 @@ const pendingToolApprovals = new Map<
 
 const PLAN_MODE_BLOCKED_TOOLS = new Set(["Bash", "NotebookEdit"])
 
+// Tools that trigger a user approval prompt in "ask" mode.
+const ASK_MODE_APPROVAL_TOOLS = new Set([
+  "Edit",
+  "Write",
+  "NotebookEdit",
+  "MultiEdit",
+  "Bash",
+])
+
+// In "edit" / "agent" modes, allow almost everything except dangerous
+// deletions. Returns a denial reason if dangerous, null otherwise.
+// (Ported from the 5-mode reference implementation; messages reworded for
+// the mausCode Agent/Turbo naming.)
+function detectDangerousDeletion(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  modeLabel: string,
+): string | null {
+  if (toolName !== "Bash") return null
+  const command =
+    typeof toolInput.command === "string" ? toolInput.command : ""
+  if (!command) return null
+
+  // rm -rf style (any order of flags containing both r and f)
+  if (/\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/.test(command)) {
+    return `rm -rf is blocked in ${modeLabel} mode. Switch to Turbo to allow.`
+  }
+
+  // SQL destructive
+  if (/\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i.test(command)) {
+    return `Destructive SQL (DROP/TRUNCATE) is blocked in ${modeLabel} mode.`
+  }
+
+  // git push --force / --force-with-lease
+  if (/\bgit\s+push\b[^\n]*--force\b/.test(command)) {
+    return `git push --force is blocked in ${modeLabel} mode.`
+  }
+
+  // git reset --hard
+  if (/\bgit\s+reset\s+--hard\b/.test(command)) {
+    return `git reset --hard is blocked in ${modeLabel} mode.`
+  }
+
+  // Overwriting sensitive system/user files
+  if (/>\s*(\/etc\/|~\/\.ssh\/|\/usr\/|\/bin\/|\/sbin\/)/.test(command)) {
+    return `Overwriting sensitive system files is blocked in ${modeLabel} mode.`
+  }
+
+  return null
+}
+
+// One-line description of a tool call for ask-mode approval prompts.
+function describeToolCallForApproval(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+): string {
+  if (toolName === "Bash") {
+    const command =
+      typeof toolInput.command === "string" ? toolInput.command : ""
+    const desc =
+      typeof toolInput.description === "string" ? toolInput.description : ""
+    const detail = (desc || command).slice(0, 200)
+    return detail ? `Run command: ${detail}` : "Run a shell command"
+  }
+  const filePath =
+    typeof toolInput.file_path === "string" ? toolInput.file_path : ""
+  if (filePath) return `${toolName} ${filePath}`.slice(0, 200)
+  return `${toolName} (no file path)`
+}
+
 const clearPendingApprovals = (message: string, subChatId?: string) => {
   for (const [toolUseId, pending] of pendingToolApprovals) {
     if (subChatId && pending.subChatId !== subChatId) continue
@@ -836,7 +906,7 @@ export const claudeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
         customConfig: z
@@ -1940,7 +2010,113 @@ ${prompt}
                         message: `Tool "${toolName}" blocked in plan mode.`,
                       }
                     }
+                  } else if (input.mode === "ask") {
+                    if (ASK_MODE_APPROVAL_TOOLS.has(toolName)) {
+                      const { toolUseID } = options
+                      // Reuse the AskUserQuestion UI as an Allow/Deny prompt
+                      // (same shape as the native runtime permission_request
+                      // translation; no toolUseId prefix routes the answer to
+                      // the legacy respondToolApproval mutation).
+                      safeEmit({
+                        type: "ask-user-question",
+                        toolUseId: toolUseID,
+                        questions: [
+                          {
+                            question: describeToolCallForApproval(
+                              toolName,
+                              toolInput,
+                            ),
+                            header: toolName,
+                            options: [
+                              {
+                                label: "Allow",
+                                description: `Allow ${toolName} this time`,
+                              },
+                              { label: "Deny", description: `Deny ${toolName}` },
+                            ],
+                            multiSelect: false,
+                          },
+                        ],
+                      } as UIMessageChunk)
+
+                      // Wait for response (60s timeout denies)
+                      const approval = await new Promise<{
+                        approved: boolean
+                        message?: string
+                        updatedInput?: unknown
+                      }>((resolve) => {
+                        const timeoutId = setTimeout(() => {
+                          pendingToolApprovals.delete(toolUseID)
+                          safeEmit({
+                            type: "ask-user-question-timeout",
+                            toolUseId: toolUseID,
+                          } as UIMessageChunk)
+                          resolve({
+                            approved: false,
+                            message: "Timed out waiting for approval",
+                          })
+                        }, 60000)
+
+                        pendingToolApprovals.set(toolUseID, {
+                          subChatId: input.subChatId,
+                          resolve: (d) => {
+                            clearTimeout(timeoutId)
+                            resolve(d)
+                          },
+                        })
+                      })
+
+                      // The question dialog submits approved:true with the picked
+                      // option label in answers — a "Deny" pick is a denial.
+                      const approvalAnswers = (
+                        approval.updatedInput as
+                          | { answers?: Record<string, string> }
+                          | undefined
+                      )?.answers
+                      const deniedByAnswer = approvalAnswers
+                        ? Object.values(approvalAnswers).some((a) =>
+                            a
+                              .split(",")
+                              .map((x) => x.trim())
+                              .includes("Deny"),
+                          )
+                        : false
+                      const denied =
+                        !approval.approved || deniedByAnswer
+                      safeEmit({
+                        type: "ask-user-question-result",
+                        toolUseId: toolUseID,
+                        result: denied
+                          ? approval.message || "Denied"
+                          : "Allowed",
+                      } as unknown as UIMessageChunk)
+                      if (denied) {
+                        return {
+                          behavior: "deny" as const,
+                          message:
+                            approval.message ||
+                            `Tool "${toolName}" denied in ask mode.`,
+                        }
+                      }
+                    }
+                  } else if (
+                    input.mode === "edit" ||
+                    input.mode === "agent"
+                  ) {
+                    // File edits (and everything else) auto-allowed except
+                    // dangerous deletions.
+                    const modeLabel =
+                      input.mode === "edit" ? "Edit" : "Agent"
+                    const reason = detectDangerousDeletion(
+                      toolName,
+                      toolInput,
+                      modeLabel,
+                    )
+                    if (reason) {
+                      return { behavior: "deny" as const, message: reason }
+                    }
                   }
+                  // "turbo" / legacy fall through to default allow.
                   if (toolName === "AskUserQuestion") {
                     const { toolUseID } = options
                     // Emit to UI (safely in case observer is closed)

@@ -467,7 +467,7 @@ export const chatsRouter = router({
         baseBranch: z.string().optional(), // Branch to base the worktree off
         branchType: z.enum(["local", "remote"]).optional(), // Whether baseBranch is local or remote
         useWorktree: z.boolean().default(true), // If false, work directly in project dir
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
         provider: subChatProviderSchema.optional(),
       }),
     )
@@ -942,7 +942,7 @@ export const chatsRouter = router({
       z.object({
         chatId: z.string(),
         name: z.string().optional(),
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
         provider: subChatProviderSchema.optional(),
       }),
     )
@@ -1234,7 +1234,7 @@ export const chatsRouter = router({
    * Update sub-chat mode
    */
   updateSubChatMode: publicProcedure
-    .input(z.object({ id: z.string(), mode: z.enum(["plan", "agent"]) }))
+    .input(z.object({ id: z.string(), mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]) }))
     .mutation(({ input }) => {
       const db = getDatabase()
       return db
@@ -2066,8 +2066,8 @@ export const chatsRouter = router({
     for (const row of allSubChats) {
       if (!row.subChatId || !row.chatId) continue
 
-      // If mode is "agent", plan is already approved - skip
-      if (row.mode === "agent") continue
+      // If mode is not "plan", plan is already approved - skip
+      if (row.mode !== "plan") continue
 
       // Only check for ExitPlanMode in plan mode sub-chats
       if (!row.messages) continue

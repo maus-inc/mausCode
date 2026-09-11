@@ -104,6 +104,7 @@ import {
   subChatFilesAtom,
   requestNewChatFormResetAtom,
   type UndoItem,
+  type AgentMode,
 } from "../agents/atoms"
 import { useAgentSubChatStore, OPEN_SUB_CHATS_CHANGE_EVENT, type SubChatMeta } from "../agents/stores/sub-chat-store"
 import { getWindowId } from "../../contexts/WindowContext"
@@ -1134,7 +1135,7 @@ const WorkspaceSubChats = React.memo(function WorkspaceSubChats({
                   name: sc.name ?? "New Chat",
                   created_at: sc.createdAt?.toISOString() ?? new Date().toISOString(),
                   updated_at: sc.updatedAt?.toISOString() ?? undefined,
-                  mode: sc.mode as "agent" | "plan" | undefined,
+                  mode: sc.mode as AgentMode | undefined,
                 }}
                 isActive={selectedChatId === chatId && activeSubChatId === sc.id}
                 isLoading={loadingSubChats.has(sc.id)}

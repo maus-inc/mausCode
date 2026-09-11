@@ -3,16 +3,23 @@ import { atomFamily, atomWithStorage } from "jotai/utils"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { FileMentionOption } from "../mentions/agents-mentions-editor"
 
-// Agent mode type - extensible for future modes like "debug"
-export type AgentMode = "agent" | "plan"
+// Agent mode type - autonomy-ordered: plan < ask < edit < agent < turbo.
+// "agent" is canonical (legacy rows keep working); its semantics are "full
+// agent minus dangerous deletions", full bypass is "turbo".
+export type AgentMode = "plan" | "ask" | "edit" | "agent" | "turbo"
 
-// Ordered list of modes - Shift+Tab cycles through these
-export const AGENT_MODES: AgentMode[] = ["agent", "plan"]
+// Ordered list of modes - Shift+Tab cycles through these (autonomy order)
+export const AGENT_MODES: AgentMode[] = ["plan", "ask", "edit", "agent", "turbo"]
 
 // Get next mode in cycle (for Shift+Tab toggle)
 export function getNextMode(current: AgentMode): AgentMode {
   const idx = AGENT_MODES.indexOf(current)
   return AGENT_MODES[(idx + 1) % AGENT_MODES.length]
+}
+
+// Type guard for validating mode strings (slash commands, stored values)
+export function isAgentMode(value: string): value is AgentMode {
+  return (AGENT_MODES as string[]).includes(value)
 }
 
 // Selected agent chat ID - null means "new chat" view (persisted to restore on reload)
@@ -798,9 +805,9 @@ export const archiveSearchQueryAtom = atom<string>("")
 export const archiveRepositoryFilterAtom = atom<string | null>(null)
 
 // Track last used mode (plan/agent) per chat
-// Map<chatId, "plan" | "agent">
-export const lastChatModesAtom = atom<Map<string, "plan" | "agent">>(
-  new Map<string, "plan" | "agent">(),
+// Map<chatId, AgentMode>
+export const lastChatModesAtom = atom<Map<string, AgentMode>>(
+  new Map<string, AgentMode>(),
 )
 
 // Mobile view mode - chat (default, shows NewChatForm), chats list, preview, diff, or terminal

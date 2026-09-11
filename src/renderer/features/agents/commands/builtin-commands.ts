@@ -71,10 +71,31 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandOption[] = [
     category: "builtin",
   },
   {
+    id: "builtin:ask",
+    name: "ask",
+    command: "/ask",
+    description: "Switch to Ask mode (approve each risky tool)",
+    category: "builtin",
+  },
+  {
+    id: "builtin:edit",
+    name: "edit",
+    command: "/edit",
+    description: "Switch to Edit mode (auto-accept file edits)",
+    category: "builtin",
+  },
+  {
     id: "builtin:agent",
     name: "agent",
     command: "/agent",
-    description: "Switch to Agent mode (applies changes directly)",
+    description: "Switch to Agent mode (full agent, deletions blocked)",
+    category: "builtin",
+  },
+  {
+    id: "builtin:turbo",
+    name: "turbo",
+    command: "/turbo",
+    description: "Switch to Turbo mode (run everything, no asking)",
     category: "builtin",
   },
   {
