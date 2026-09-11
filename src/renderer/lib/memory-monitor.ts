@@ -58,10 +58,8 @@ let peak = 0
 
 function persist(line: string): void {
   // Fire and forget — preload exposes this; if not, skip silently.
-  // NOTE (mausCode): the main-side mem-trace handler was not transplanted,
-  // so this degrades to console-only. Cast needed: no DesktopApi member.
   try {
-    ;(window.desktopApi as { appendMemLog?: (line: string) => Promise<unknown> } | undefined)?.appendMemLog?.(line)?.catch(() => {})
+    window.desktopApi?.appendMemLog?.(line).catch(() => {})
   } catch {
     // ignore
   }

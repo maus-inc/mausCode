@@ -44,8 +44,12 @@
 - [x] Batch A verify: tsc 76->33 (zero new; new-chat-form 16->0), 70/70
       runtime tests (4 jcode-vendored fails pre-existing, untouched), secret
       scan clean (1 benign placeholder), api-bridge 0 additions
-- [ ] Batch B: remaining modified-file hunk triage (tool UI, selectors,
-      details-sidebar, terminal, misc) minus sidebar/kanban/build
+- [x] Batch B: remainder hunk triage — all 63 diff files classified; takes:
+      mention `source` +`plugin` (fixes 2 tsc), mem-trace main/preload/d.ts
+      completion; verified deliberate keeps (native/kanban/login-modal/
+      usage-widget/rail-build-api-bridge-Cmd+T-logs-casts)
+- [x] Batch B verify: tsc 33->31 (exact delta = 2 fixed, zero new), 70/70
+      runtime tests, secret scan clean, api-bridge 0 additions
 - [ ] Sidebar LAST, only after the lineage decision (agents-sidebar rewrite,
       projects-rail, all-projects-page, footer wiring all HELD)
 

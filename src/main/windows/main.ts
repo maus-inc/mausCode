@@ -1,8 +1,9 @@
 /**
  * NOTE (transplant): the `app.dock?.setBadge` guard and the
  * `render-process-gone` auto-recovery handler below were transplanted from
- * erenbertr/1code (Apache-2.0). Their native-turn removal, auth bypass, and
- * shell/mem-trace IPC handlers were NOT taken (kept ours / deferred).
+ * erenbertr/1code (Apache-2.0), as was the `debug:append-mem-log` handler
+ * (mem-trace persistence for the dev memory monitor). Their native-turn
+ * removal, auth bypass, and shell IPC handlers were NOT taken.
  */
 import {
   BrowserWindow,
@@ -17,7 +18,7 @@ import {
   dialog,
 } from "electron"
 import { join } from "path"
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
+import { readFileSync, existsSync, writeFileSync, mkdirSync, statSync, appendFileSync } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
@@ -54,6 +55,31 @@ function registerIpcHandlers(): void {
   // App info
   ipcMain.handle("app:version", () => app.getVersion())
   ipcMain.handle("app:isPackaged", () => app.isPackaged)
+
+  // Dev-only: append a line to a memory-trace file so memory samples survive
+  // a renderer crash (the devtools console is wiped on reload). Read with
+  // `tail -50 ~/Library/Application\\ Support/mausCode\\ Dev/mem-trace.ndjson`.
+  ipcMain.handle("debug:append-mem-log", (_event, line: string) => {
+    try {
+      const userData = app.getPath("userData")
+      mkdirSync(userData, { recursive: true })
+      const path = join(userData, "mem-trace.ndjson")
+      // Cap the file at ~1MB by truncating when it gets large.
+      try {
+        const stat = statSync(path)
+        if (stat.size > 1_000_000) {
+          writeFileSync(path, "")
+        }
+      } catch {
+        // File doesn't exist yet — fine.
+      }
+      appendFileSync(path, line + "\n")
+      return true
+    } catch (error) {
+      console.error("[Main] Failed to append mem-trace:", error)
+      return false
+    }
+  })
 
   // Windows: Frame preference persistence
   ipcMain.handle("window:set-frame-preference", (_event, useNativeFrame: boolean) => {

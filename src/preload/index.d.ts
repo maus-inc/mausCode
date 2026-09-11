@@ -29,6 +29,7 @@ export interface DesktopApi {
   platform: NodeJS.Platform
   arch: string
   getVersion: () => Promise<string>
+  appendMemLog: (line: string) => Promise<boolean>
 
   // Auto-update
   checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
