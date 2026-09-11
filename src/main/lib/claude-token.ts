@@ -1,6 +1,13 @@
-import { execSync, spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+/**
+ * NOTE (transplant): the OAuth refresh flow below (correct Claude Code token
+ * endpoint + client id + scopes, `getValidExistingClaudeToken` with
+ * refresh-and-persist, expiry guards, execFileSync hardening,
+ * subscription/rate-limit fields) was transplanted from erenbertr/1code
+ * (Apache-2.0, © the 1Code contributors).
+ */
+import { execFileSync, execSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { buildExtendedPath, isWindows } from "./platform";
 
@@ -10,6 +17,8 @@ interface ClaudeCredentials {
     refreshToken?: string;
     expiresAt?: number;
     scopes?: string[];
+    subscriptionType?: string | null;
+    rateLimitTier?: string | null;
   };
 }
 
@@ -18,7 +27,19 @@ export interface ClaudeOAuthCredential {
   refreshToken?: string;
   expiresAt?: number;
   scopes?: string[];
+  subscriptionType?: string | null;
+  rateLimitTier?: string | null;
 }
+
+const CLAUDE_CODE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+const CLAUDE_OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
+const CLAUDE_CODE_OAUTH_SCOPES = [
+  "user:profile",
+  "user:inference",
+  "user:sessions:claude_code",
+  "user:mcp_servers",
+  "user:file_upload",
+];
 
 /**
  * Read Claude OAuth credentials from system credential store
@@ -40,9 +61,17 @@ function readFromKeychain(): ClaudeOAuthCredential | null {
  */
 function readFromMacOSKeychain(): ClaudeOAuthCredential | null {
   try {
-    const result = execSync(
-      'security find-generic-password -s "Claude Code-credentials" -w',
-      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    const result = execFileSync(
+      "security",
+      [
+        "find-generic-password",
+        "-a",
+        process.env.USER || userInfo().username,
+        "-s",
+        "Claude Code-credentials",
+        "-w",
+      ],
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
 
     if (result) {
@@ -53,6 +82,8 @@ function readFromMacOSKeychain(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          subscriptionType: credentials.claudeAiOauth.subscriptionType,
+          rateLimitTier: credentials.claudeAiOauth.rateLimitTier,
         };
       }
     }
@@ -79,6 +110,8 @@ function readFromWindowsCredentialManager(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          subscriptionType: credentials.claudeAiOauth.subscriptionType,
+          rateLimitTier: credentials.claudeAiOauth.rateLimitTier,
         };
       }
     }
@@ -108,6 +141,8 @@ function readFromLinuxSecretService(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          subscriptionType: credentials.claudeAiOauth.subscriptionType,
+          rateLimitTier: credentials.claudeAiOauth.rateLimitTier,
         };
       }
     }
@@ -130,6 +165,8 @@ function readFromLinuxSecretService(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          subscriptionType: credentials.claudeAiOauth.subscriptionType,
+          rateLimitTier: credentials.claudeAiOauth.rateLimitTier,
         };
       }
     }
@@ -156,6 +193,8 @@ function readFromCredentialsFile(): ClaudeOAuthCredential | null {
           refreshToken: credentials.claudeAiOauth.refreshToken,
           expiresAt: credentials.claudeAiOauth.expiresAt,
           scopes: credentials.claudeAiOauth.scopes,
+          subscriptionType: credentials.claudeAiOauth.subscriptionType,
+          rateLimitTier: credentials.claudeAiOauth.rateLimitTier,
         };
       }
     }
@@ -181,32 +220,132 @@ export function getExistingClaudeCredentials(): ClaudeOAuthCredential | null {
 
 /**
  * Get existing Claude OAuth token from keychain or credentials file
- * @deprecated Use getExistingClaudeCredentials() to get full credentials with refresh token
+ * @deprecated Use getValidExistingClaudeToken() for auth paths that can await.
  */
 export function getExistingClaudeToken(): string | null {
   const creds = getExistingClaudeCredentials();
-  return creds?.accessToken || null;
+  if (!creds?.accessToken) return null;
+  return isPastExpiresAt(creds.expiresAt) ? null : creds.accessToken;
+}
+
+function serializeCredentials(creds: ClaudeOAuthCredential): string {
+  return JSON.stringify({
+    claudeAiOauth: {
+      accessToken: creds.accessToken,
+      refreshToken: creds.refreshToken,
+      expiresAt: creds.expiresAt,
+      scopes: creds.scopes,
+      subscriptionType: creds.subscriptionType,
+      rateLimitTier: creds.rateLimitTier,
+    },
+  });
+}
+
+function writeToMacOSKeychain(creds: ClaudeOAuthCredential): boolean {
+  try {
+    execFileSync(
+      "security",
+      [
+        "add-generic-password",
+        "-a",
+        process.env.USER || userInfo().username,
+        "-s",
+        "Claude Code-credentials",
+        "-w",
+        serializeCredentials(creds),
+        "-U",
+      ],
+      { stdio: ["ignore", "ignore", "pipe"] }
+    );
+    return true;
+  } catch (error) {
+    console.warn("[claude-token] Failed to update macOS Keychain:", error);
+    return false;
+  }
+}
+
+function writeToCredentialsFile(creds: ClaudeOAuthCredential): boolean {
+  try {
+    const credentialsPath = join(homedir(), ".claude", ".credentials.json");
+    mkdirSync(join(homedir(), ".claude"), { recursive: true });
+    writeFileSync(credentialsPath, serializeCredentials(creds), { mode: 0o600 });
+    return true;
+  } catch (error) {
+    console.warn("[claude-token] Failed to update credentials file:", error);
+    return false;
+  }
+}
+
+function writeExistingClaudeCredentials(creds: ClaudeOAuthCredential): boolean {
+  if (process.platform === "darwin") {
+    return writeToMacOSKeychain(creds);
+  }
+  return writeToCredentialsFile(creds);
+}
+
+/**
+ * Return a Claude OAuth token that is valid enough for SDK use.
+ * Refreshes near-expired local Claude Code credentials and persists the
+ * refreshed token so the desktop app does not fail after the CLI token rotates.
+ */
+export async function getValidExistingClaudeToken(): Promise<string | null> {
+  const creds = getExistingClaudeCredentials();
+  if (!creds) return null;
+
+  if (!isTokenExpired(creds.expiresAt)) {
+    return creds.accessToken;
+  }
+
+  if (!creds.refreshToken) {
+    console.warn("[claude-token] Local Claude token is expired and has no refresh token");
+    return isPastExpiresAt(creds.expiresAt) ? null : creds.accessToken;
+  }
+
+  try {
+    console.log("[claude-token] Refreshing local Claude Code OAuth token");
+    const refreshed = await refreshClaudeToken(creds.refreshToken, creds.scopes);
+    const nextCreds: ClaudeOAuthCredential = {
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken || creds.refreshToken,
+      expiresAt: refreshed.expiresAt,
+      scopes: refreshed.scopes || creds.scopes,
+      subscriptionType: refreshed.subscriptionType ?? creds.subscriptionType,
+      rateLimitTier: refreshed.rateLimitTier ?? creds.rateLimitTier,
+    };
+    writeExistingClaudeCredentials(nextCreds);
+    return nextCreds.accessToken;
+  } catch (error) {
+    console.warn("[claude-token] Failed to refresh Claude OAuth token:", error);
+    return isPastExpiresAt(creds.expiresAt) ? null : creds.accessToken;
+  }
 }
 
 /**
  * Refresh Claude OAuth token using refresh token
- * Uses the Anthropic API token endpoint
+ * Uses the Claude Code OAuth token endpoint
  */
-export async function refreshClaudeToken(refreshToken: string): Promise<{
+export async function refreshClaudeToken(
+  refreshToken: string,
+  scopes: string[] = CLAUDE_CODE_OAUTH_SCOPES,
+): Promise<{
   accessToken: string;
   refreshToken?: string;
   expiresAt?: number;
+  scopes?: string[];
+  subscriptionType?: string | null;
+  rateLimitTier?: string | null;
 }> {
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: 'claude-desktop',
-  });
-
-  const response = await fetch('https://api.anthropic.com/v1/oauth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
+  const requestedScopes =
+    scopes.length > 0 ? scopes : CLAUDE_CODE_OAUTH_SCOPES;
+  const response = await fetch(CLAUDE_OAUTH_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "refresh_token",
+      client_id: CLAUDE_CODE_CLIENT_ID,
+      refresh_token: refreshToken,
+      scope: requestedScopes.join(" "),
+    }),
   });
 
   if (!response.ok) {
@@ -218,6 +357,9 @@ export async function refreshClaudeToken(refreshToken: string): Promise<{
     access_token: string;
     refresh_token?: string;
     expires_in?: number;
+    scope?: string;
+    subscription_type?: string | null;
+    rate_limit_tier?: string | null;
     token_type?: string;
   };
 
@@ -225,6 +367,9 @@ export async function refreshClaudeToken(refreshToken: string): Promise<{
     accessToken: data.access_token,
     refreshToken: data.refresh_token || refreshToken,
     expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
+    scopes: data.scope?.split(" ").filter(Boolean),
+    subscriptionType: data.subscription_type,
+    rateLimitTier: data.rate_limit_tier,
   };
 }
 
@@ -239,6 +384,10 @@ export function isTokenExpired(expiresAt?: number): boolean {
   // Consider expired if less than 5 minutes remaining
   const bufferMs = 5 * 60 * 1000;
   return Date.now() + bufferMs >= expiresAt;
+}
+
+function isPastExpiresAt(expiresAt?: number): boolean {
+  return !!expiresAt && Date.now() >= expiresAt;
 }
 
 /**

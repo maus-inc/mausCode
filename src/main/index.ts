@@ -867,7 +867,7 @@ if (gotTheLock) {
           },
         },
       ])
-      app.dock.setMenu(dockMenu)
+      app.dock?.setMenu(dockMenu) // Transplanted from erenbertr/1code (Apache-2.0): dock is macOS-only
     }
 
     // Set update state and rebuild menu

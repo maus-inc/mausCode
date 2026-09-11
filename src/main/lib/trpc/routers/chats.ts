@@ -1,3 +1,9 @@
+/**
+ * NOTE (transplant): `generateCommitMessageWithClaudeOAuth`, the
+ * inProgress/isUnseen list augmentation, `markViewed`/`markAllViewed`, and
+ * `updateColor` were transplanted from erenbertr/1code (Apache-2.0, © the 1Code
+ * contributors).
+ */
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
 import { BrowserWindow } from "electron"
 import * as fs from "fs/promises"
@@ -26,6 +32,7 @@ import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
+import { getValidExistingClaudeToken } from "../../claude-token"
 import { publicProcedure, router } from "../index"
 
 type WorktreeSetupFailurePayload = {
@@ -143,6 +150,101 @@ Title:`
  * @param deletions - Lines deleted
  * @param model - Optional model to use (if not provided, uses recommended model)
  */
+/**
+ * Generate a commit message using the local Claude Code OAuth token.
+ * Calls Anthropic's /v1/messages directly with the OAuth bearer token,
+ * so we get the same model the user is already chatting with — no extra binary
+ * spawn, no 21st.dev round-trip.
+ *
+ * Returns null when no token is available, the request fails, or the response
+ * doesn't yield a usable single-line commit message — caller falls through.
+ */
+async function generateCommitMessageWithClaudeOAuth(
+  diff: string,
+  fileCount: number,
+  additions: number,
+  deletions: number,
+  fileNames: string[],
+): Promise<string | null> {
+  try {
+    const token = await getValidExistingClaudeToken()
+    if (!token) {
+      return null
+    }
+
+    const fileList = fileNames.slice(0, 20).join("\n")
+    const prompt = `You are generating a Conventional Commits message for a focused set of files in a single working session.
+
+Rules:
+- Output EXACTLY ONE LINE. No code fences, no quotes, no preface.
+- Format: <type>(<optional-scope>): <imperative summary>
+- Types: feat, fix, refactor, perf, docs, style, test, chore, build, ci
+- <= 72 chars total. Imperative mood ("add", not "added"). Lowercase after the colon.
+- Describe WHAT changed and WHY in plain language. Reference the actual change, not the file count.
+- Never write generic stubs like "update X files" or "various changes".
+
+Stats: ${fileCount} file${fileCount === 1 ? "" : "s"}, +${additions}/-${deletions} lines.
+
+Files:
+${fileList}
+
+Diff (truncated):
+${diff.slice(0, 8000)}
+
+Commit message:`
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "oauth-2025-04-20",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 120,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    })
+
+    if (!response.ok) {
+      console.error(
+        "[generateCommitMessage] Claude OAuth request failed:",
+        response.status,
+        await response.text().catch(() => ""),
+      )
+      return null
+    }
+
+    const data = (await response.json()) as {
+      content?: Array<{ type?: string; text?: string }>
+    }
+    const text = data.content?.find((b) => b.type === "text")?.text?.trim()
+    if (!text) {
+      return null
+    }
+
+    const firstLine = text
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length > 0)
+    if (!firstLine) {
+      return null
+    }
+
+    // Strip stray surrounding backticks/quotes if the model wrapped the line.
+    const cleaned = firstLine.replace(/^[`"']+|[`"']+$/g, "").trim()
+    if (cleaned.length > 0 && cleaned.length <= 200) {
+      return cleaned
+    }
+    return null
+  } catch (error) {
+    console.error("[generateCommitMessage] Claude OAuth error:", error)
+    return null
+  }
+}
+
 async function generateCommitMessageWithOllama(
   diff: string,
   fileCount: number,
@@ -212,6 +314,13 @@ Commit message:`
 export const chatsRouter = router({
   /**
    * List all non-archived chats (optionally filter by project)
+   *
+   * Each row is augmented with two computed flags so the sidebar can render
+   * per-chat status without depending on renderer-only state (which resets on
+   * app restart):
+   *  - inProgress: any sub-chat currently streaming (stream_id IS NOT NULL)
+   *  - isUnseen: not streaming AND latest activity (max of chat.updated_at
+   *    and any sub_chats.updated_at) is newer than chats.last_viewed_at.
    */
   list: publicProcedure
     .input(z.object({ projectId: z.string().optional() }))
@@ -221,12 +330,60 @@ export const chatsRouter = router({
       if (input.projectId) {
         conditions.push(eq(chats.projectId, input.projectId))
       }
-      return db
+      const rows = db
         .select()
         .from(chats)
         .where(and(...conditions))
         .orderBy(desc(chats.updatedAt))
         .all()
+
+      if (rows.length === 0) return []
+
+      const chatIds = rows.map((c) => c.id)
+      const subChatRows = db
+        .select({
+          chatId: subChats.chatId,
+          streamId: subChats.streamId,
+          updatedAt: subChats.updatedAt,
+        })
+        .from(subChats)
+        .where(inArray(subChats.chatId, chatIds))
+        .all()
+
+      const perChat = new Map<
+        string,
+        { hasStream: boolean; latestActivityMs: number }
+      >()
+      for (const sc of subChatRows) {
+        const cur = perChat.get(sc.chatId) ?? {
+          hasStream: false,
+          latestActivityMs: 0,
+        }
+        perChat.set(sc.chatId, {
+          hasStream: cur.hasStream || sc.streamId != null,
+          latestActivityMs: Math.max(
+            cur.latestActivityMs,
+            sc.updatedAt ? sc.updatedAt.getTime() : 0,
+          ),
+        })
+      }
+
+      return rows.map((c) => {
+        const status = perChat.get(c.id) ?? {
+          hasStream: false,
+          latestActivityMs: 0,
+        }
+        const chatActivityMs = Math.max(
+          status.latestActivityMs,
+          c.updatedAt ? c.updatedAt.getTime() : 0,
+        )
+        const lastViewedMs = c.lastViewedAt ? c.lastViewedAt.getTime() : 0
+        return {
+          ...c,
+          inProgress: status.hasStream,
+          isUnseen: !status.hasStream && chatActivityMs > lastViewedMs,
+        }
+      })
     }),
 
   /**
@@ -468,6 +625,46 @@ export const chatsRouter = router({
     }),
 
   /**
+   * Mark a chat as viewed by the current user. Stores wall-clock now so the
+   * project list can compute "unseen" badges by comparing against subChat
+   * activity timestamps.
+   */
+  markViewed: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(chats)
+        .set({ lastViewedAt: new Date() })
+        .where(eq(chats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
+   * Bulk-mark every non-archived chat as viewed. Optional projectId scopes the
+   * reset to a single project; omit it to clear notifications across all
+   * projects. Returns the affected chat ids so the renderer can drop matching
+   * entries from its local unseen-state atoms in a single pass.
+   */
+  markAllViewed: publicProcedure
+    .input(z.object({ projectId: z.string().optional() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      const conditions = [isNull(chats.archivedAt)]
+      if (input.projectId) {
+        conditions.push(eq(chats.projectId, input.projectId))
+      }
+      const updated = db
+        .update(chats)
+        .set({ lastViewedAt: new Date() })
+        .where(and(...conditions))
+        .returning({ id: chats.id })
+        .all()
+      return { ids: updated.map((row) => row.id) }
+    }),
+
+  /**
    * Rename a chat
    */
   rename: publicProcedure
@@ -477,6 +674,26 @@ export const chatsRouter = router({
       return db
         .update(chats)
         .set({ name: input.name, updatedAt: new Date() })
+        .where(eq(chats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
+   * Update accent color for a workspace (hex string or null to clear)
+   */
+  updateColor: publicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        accentColor: z.string().nullable(),
+      }),
+    )
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(chats)
+        .set({ accentColor: input.accentColor, updatedAt: new Date() })
         .where(eq(chats.id, input.id))
         .returning()
         .get()
@@ -576,12 +793,16 @@ export const chatsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(({ input }) => {
       const db = getDatabase()
-      return db
+      const row = db
         .update(chats)
         .set({ archivedAt: null })
         .where(eq(chats.id, input.id))
         .returning()
         .get()
+      // Match the augmented shape of `list` so clients can prepend the result
+      // into the list cache. A just-restored chat has no running stream, and
+      // callers invalidate right after, refreshing the true unseen state.
+      return row ? { ...row, inProgress: false, isUnseen: false } : row
     }),
 
   /**
@@ -1271,6 +1492,27 @@ export const chatsRouter = router({
         console.log("[generateCommitMessage] Ollama failed, using heuristic fallback")
         // Fall through to heuristic fallback below
       } else {
+        // Online - prefer the local Claude Code OAuth token so the same model
+        // the user is chatting with writes the commit message.
+        const fileNamesForPrompt = files.map((f) =>
+          f.newPath !== "/dev/null" ? f.newPath : f.oldPath,
+        )
+        const claudeMessage = await generateCommitMessageWithClaudeOAuth(
+          filteredDiff,
+          files.length,
+          additions,
+          deletions,
+          fileNamesForPrompt,
+        )
+        if (claudeMessage) {
+          console.log(
+            "[generateCommitMessage] Generated via Claude OAuth:",
+            claudeMessage,
+          )
+          return { message: claudeMessage }
+        }
+
+
         // Online - call web API to generate commit message
         let apiError: string | null = null
         try {

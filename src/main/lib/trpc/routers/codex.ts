@@ -1,3 +1,9 @@
+/**
+ * NOTE (transplant): reasoning-effort model parsing (`model/effort` selection,
+ * `buildCodexProviderArgs`, session fingerprinting), the codex-acp adapter
+ * clarification, and text-delta chunk coalescing in the stream loop were
+ * transplanted from erenbertr/1code (Apache-2.0, © the 1Code contributors).
+ */
 import { createACPProvider, type ACPProvider } from "@mcpc-tech/acp-ai-provider"
 import { observable } from "@trpc/server/observable"
 import { streamText } from "ai"
@@ -14,6 +20,7 @@ import {
   normalizeCodexAssistantMessage,
   normalizeCodexStreamChunk,
 } from "../../../../shared/codex-tool-normalizer"
+import { createChunkCoalescer } from "../../claude"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
@@ -35,6 +42,7 @@ type CodexProviderSession = {
   cwd: string
   authFingerprint: string | null
   mcpFingerprint: string
+  reasoningEffort: string | null
 }
 
 type CodexLoginSessionState =
@@ -80,6 +88,8 @@ type CodexMcpServerForSettings = {
   tools: McpToolInfo[]
   needsAuth: boolean
   config: Record<string, unknown>
+  serverInfo?: { name: string; version: string; icons?: Array<{ src: string }> }
+  error?: string
 }
 
 type CodexMcpSnapshot = {
@@ -136,7 +146,8 @@ const AUTH_HINTS = [
   "401",
   "403",
 ]
-const DEFAULT_CODEX_MODEL = "gpt-5.3-codex/high"
+const DEFAULT_CODEX_MODEL = "gpt-5.5"
+const CODEX_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh"])
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 const CODEX_USAGE_POLL_ATTEMPTS = 3
 const CODEX_USAGE_POLL_INTERVAL_MS = 200
@@ -185,7 +196,7 @@ const codexMcpListEntrySchema = z
 
 type CodexMcpListEntry = z.infer<typeof codexMcpListEntrySchema>
 
-function getCodexPackageName(): string {
+function getCodexAcpPackageName(): string {
   const platform = process.platform
   const arch = process.arch
 
@@ -220,8 +231,11 @@ function toUnpackedAsarPath(filePath: string): string {
   return filePath
 }
 
+// ACP chat sessions must go through codex-acp (Zed's ACP adapter). The official
+// `codex mcp-server` only speaks MCP and rejects ACP `initialize`, which breaks
+// every chat with "method not found: initialize".
 function resolveCodexAcpBinaryPath(): string {
-  const packageName = getCodexPackageName()
+  const packageName = getCodexAcpPackageName()
   const binaryName = process.platform === "win32" ? "codex-acp.exe" : "codex-acp"
   const codexPackageRoot = dirname(
     require.resolve("@zed-industries/codex-acp/package.json"),
@@ -1098,6 +1112,28 @@ function extractCodexModelId(rawModel: unknown): string | undefined {
   return normalizedModel
 }
 
+function parseCodexModelSelection(rawModel: unknown): {
+  modelId?: string
+  reasoningEffort?: string
+} {
+  const rawModelId = extractCodexModelId(rawModel)
+  if (!rawModelId) {
+    return {}
+  }
+
+  const [modelId, reasoningEffort, ...extraParts] = rawModelId.split("/")
+  if (
+    modelId &&
+    reasoningEffort &&
+    extraParts.length === 0 &&
+    CODEX_REASONING_EFFORTS.has(reasoningEffort)
+  ) {
+    return { modelId, reasoningEffort }
+  }
+
+  return { modelId: rawModelId }
+}
+
 function preprocessCodexModelName(params: {
   modelId: string
   authConfig?: { apiKey: string }
@@ -1162,6 +1198,17 @@ function getCodexAuthMethodId(authConfig?: {
   return "codex-api-key"
 }
 
+// codex-acp takes no subcommand — only `-c key=value` config overrides.
+function buildCodexProviderArgs(reasoningEffort?: string): string[] {
+  const args: string[] = []
+
+  if (reasoningEffort && CODEX_REASONING_EFFORTS.has(reasoningEffort)) {
+    args.push("-c", `model_reasoning_effort="${reasoningEffort}"`)
+  }
+
+  return args
+}
+
 function buildUserParts(
   prompt: string,
   images:
@@ -1224,6 +1271,7 @@ function getOrCreateProvider(params: {
   mcpServers: CodexMcpServerForSession[]
   mcpFingerprint: string
   existingSessionId?: string
+  reasoningEffort?: string
   authConfig?: {
     apiKey: string
   }
@@ -1235,7 +1283,8 @@ function getOrCreateProvider(params: {
     existing &&
     existing.cwd === params.cwd &&
     existing.authFingerprint === authFingerprint &&
-    existing.mcpFingerprint === params.mcpFingerprint
+    existing.mcpFingerprint === params.mcpFingerprint &&
+    existing.reasoningEffort === (params.reasoningEffort || null)
   ) {
     return existing.provider
   }
@@ -1254,6 +1303,7 @@ function getOrCreateProvider(params: {
 
   const provider = createACPProvider({
     command: resolveCodexAcpBinaryPath(),
+    args: buildCodexProviderArgs(params.reasoningEffort),
     env: buildCodexProviderEnv(params.authConfig),
     authMethodId: getCodexAuthMethodId(params.authConfig),
     session: {
@@ -1271,6 +1321,7 @@ function getOrCreateProvider(params: {
     cwd: params.cwd,
     authFingerprint,
     mcpFingerprint: params.mcpFingerprint,
+    reasoningEffort: params.reasoningEffort || null,
   })
 
   return provider
@@ -1614,6 +1665,17 @@ export const codexRouter = router({
           }
         }
 
+        // Coalesce high-frequency text-delta chunks into fewer IPC emits.
+        // Non-text chunks flush the buffer first (ordering preserved); the buffer
+        // is drained explicitly on stream end / error / abort below.
+        const coalescer = createChunkCoalescer<any>(
+          (chunk) => {
+            safeEmit(chunk)
+            return isActive
+          },
+          { flushIntervalMs: 40 },
+        )
+
         ;(async () => {
           try {
             const db = getDatabase()
@@ -1629,13 +1691,20 @@ export const codexRouter = router({
             }
 
             const existingMessages = parseStoredMessages(existingSubChat.messages)
+            const parsedModelSelection = parseCodexModelSelection(input.model)
             const requestedModelId =
-              extractCodexModelId(input.model) || DEFAULT_CODEX_MODEL
+              parsedModelSelection.modelId || DEFAULT_CODEX_MODEL
             const selectedModelId = preprocessCodexModelName({
               modelId: requestedModelId,
               authConfig: input.authConfig,
             })
-            const metadataModel = selectedModelId
+            const selectedReasoningEffort = parsedModelSelection.reasoningEffort
+            const metadataModel = selectedReasoningEffort
+              ? `${selectedModelId}/${selectedReasoningEffort}`
+              : selectedModelId
+            // codex-acp exposes models as `modelId/reasoningEffort` (e.g.
+            // `gpt-5.5/high`) — a bare model id is rejected as unavailable.
+            const acpModelId = `${selectedModelId}/${selectedReasoningEffort || "high"}`
 
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
@@ -1737,6 +1806,7 @@ export const codexRouter = router({
                 input.forceNewSession
                   ? undefined
                   : input.sessionId ?? getLastSessionId(existingMessages),
+              reasoningEffort: selectedReasoningEffort,
               authConfig: input.authConfig,
             })
 
@@ -1762,7 +1832,7 @@ export const codexRouter = router({
             }
 
             const result = streamText({
-              model: provider.languageModel(selectedModelId),
+              model: provider.languageModel(acpModelId),
               messages: [
                 {
                   role: "user",
@@ -1842,6 +1912,8 @@ export const codexRouter = router({
               if (done) break
 
               if (value?.type === "error") {
+                // Drain buffered text before the error chunk (ordering).
+                coalescer.flush()
                 const normalized = extractCodexError(value)
 
                 if (isCodexAuthError(normalized)) {
@@ -1857,8 +1929,11 @@ export const codexRouter = router({
                 continue
               }
 
-              safeEmit(value)
+              coalescer.push(value)
             }
+
+            // Drain any buffered text-delta before the post-stream emits.
+            coalescer.flush()
 
             if (pendingFinishChunk) {
               const usageMetadata = await resolveUsageOnce()
@@ -1875,6 +1950,7 @@ export const codexRouter = router({
 
             safeComplete()
           } catch (error) {
+            coalescer.flush()
             const normalized = extractCodexError(error)
 
             console.error("[codex] chat stream error:", error)
@@ -1900,6 +1976,7 @@ export const codexRouter = router({
 
         return () => {
           isActive = false
+          coalescer.dispose() // Clear flush timer (flush is a no-op once inactive)
           abortController.abort()
 
           const activeStream = activeStreams.get(input.subChatId)

@@ -24,6 +24,11 @@ const STRIPPED_ENV_KEYS_BASE = [
   "OPENAI_API_KEY",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
+  // Strip nested-session markers so the spawned Claude binary doesn't detect
+  // a parent Claude Code session and refuse to start. This happens when the
+  // Electron app itself is launched from inside Claude Code (e.g. Conductor).
+  "CLAUDECODE",
+  "CLAUDE_CODE_SSE_PORT",
 ]
 
 // In dev mode, also strip ANTHROPIC_API_KEY so OAuth token is used instead

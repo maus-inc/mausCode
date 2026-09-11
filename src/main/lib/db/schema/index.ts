@@ -22,6 +22,14 @@ export const projects = sqliteTable("projects", {
   gitRepo: text("git_repo"),
   // Custom project icon (absolute path to local image file)
   iconPath: text("icon_path"),
+  // --- Transplanted from erenbertr/1code (Apache-2.0): rail/status features ---
+  // Custom accent color for visual differentiation (hex string e.g. "#ef4444")
+  accentColor: text("accent_color"),
+  // User-defined ordering in the projects rail (lower = earlier). Default 0; ties fall back to updatedAt DESC.
+  sortOrder: integer("sort_order").notNull().default(0),
+  // Whether this project appears in the leftmost rail. Hidden projects still
+  // show on the all-projects page. Default true so existing rows behave as before.
+  showInRail: integer("show_in_rail", { mode: "boolean" }).notNull().default(true),
 })
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -44,6 +52,10 @@ export const chats = sqliteTable("chats", {
     () => new Date(),
   ),
   archivedAt: integer("archived_at", { mode: "timestamp" }),
+  // Last time the user opened/viewed this chat. Used to compute "unseen" status
+  // (chat counts as unseen when subChat activity is newer than this timestamp).
+  // Null = never viewed. Transplanted from erenbertr/1code (Apache-2.0).
+  lastViewedAt: integer("last_viewed_at", { mode: "timestamp" }),
   // Worktree fields (for git isolation per chat)
   worktreePath: text("worktree_path"),
   branch: text("branch"),
@@ -51,6 +63,9 @@ export const chats = sqliteTable("chats", {
   // PR tracking fields
   prUrl: text("pr_url"),
   prNumber: integer("pr_number"),
+  // Custom accent color for visual differentiation (hex string e.g. "#ef4444").
+  // Transplanted from erenbertr/1code (Apache-2.0).
+  accentColor: text("accent_color"),
 }, (table) => [
   index("chats_worktree_path_idx").on(table.worktreePath),
 ])

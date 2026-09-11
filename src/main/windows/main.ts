@@ -1,3 +1,9 @@
+/**
+ * NOTE (transplant): the `app.dock?.setBadge` guard and the
+ * `render-process-gone` auto-recovery handler below were transplanted from
+ * erenbertr/1code (Apache-2.0). Their native-turn removal, auth bypass, and
+ * shell/mem-trace IPC handlers were NOT taken (kept ours / deferred).
+ */
 import {
   BrowserWindow,
   Notification,
@@ -82,7 +88,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("app:set-badge", (event, count: number | null) => {
     const win = getWindowFromEvent(event)
     if (process.platform === "darwin") {
-      app.dock.setBadge(count ? String(count) : "")
+      app.dock?.setBadge(count ? String(count) : "")
     } else if (process.platform === "win32" && win) {
       // Windows: Update title with count as fallback
       if (count !== null && count > 0) {
@@ -646,6 +652,13 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       partition: "persist:main", // Use persistent session for cookies
     },
   })
+  // Track recent recovery attempts so we can keep healing the window after
+  // intermittent renderer crashes (V8 OOM / SIGTRAP). The previous one-shot
+  // behavior left the window dead on the second crash, which felt like the
+  // whole app had failed and forced a manual restart.
+  const rendererRecoveryAttempts: number[] = []
+  const RENDERER_RECOVERY_WINDOW_MS = 60_000
+  const RENDERER_RECOVERY_MAX_ATTEMPTS = 5
 
   // Register window with manager and get stable ID for localStorage namespacing
   const stableWindowId = windowManager.register(window)
@@ -743,18 +756,64 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     return { action: "deny" }
   })
 
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[Main] Renderer process gone in window", window.id, details)
+
+    if (window.isDestroyed()) {
+      return
+    }
+
+    // Reason "clean-exit" / "killed" means the renderer exited intentionally
+    // (e.g. window close, navigation). Don't try to recover those.
+    if (details.reason === "clean-exit" || details.reason === "killed") {
+      return
+    }
+
+    const now = Date.now()
+    while (
+      rendererRecoveryAttempts.length > 0 &&
+      now - rendererRecoveryAttempts[0]! > RENDERER_RECOVERY_WINDOW_MS
+    ) {
+      rendererRecoveryAttempts.shift()
+    }
+
+    if (rendererRecoveryAttempts.length >= RENDERER_RECOVERY_MAX_ATTEMPTS) {
+      console.error(
+        "[Main] Renderer crashed",
+        rendererRecoveryAttempts.length,
+        "times within",
+        RENDERER_RECOVERY_WINDOW_MS / 1000,
+        "s in window",
+        window.id,
+        "- giving up on auto-recovery",
+      )
+      return
+    }
+
+    rendererRecoveryAttempts.push(now)
+    setTimeout(() => {
+      if (!window.isDestroyed()) {
+        console.log(
+          "[Main] Recovering renderer in window",
+          window.id,
+          `(attempt ${rendererRecoveryAttempts.length}/${RENDERER_RECOVERY_MAX_ATTEMPTS})`,
+        )
+        window.webContents.reloadIgnoringCache()
+      }
+    }, 150)
+  })
+
   // Prevent window close if there are active streaming sessions
   window.on("close", (event) => {
     // Skip confirmation if app quit was already confirmed by the user
     if (isQuitting) {
       // Still abort sessions gracefully so partial state is saved
       abortAllClaudeSessions()
-      abortAllNativeTurns()
       abortAllCodexStreams()
       return
     }
 
-    if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveNativeTurns()) {
+    if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
       event.preventDefault()
       dialog
         .showMessageBox(window, {

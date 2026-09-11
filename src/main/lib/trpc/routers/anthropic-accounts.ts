@@ -1,13 +1,21 @@
+/**
+ * NOTE (transplant): AccountSource + the system-keychain account fallback in
+ * list/getActive were transplanted from erenbertr/1code (Apache-2.0). Their
+ * encrypt/decrypt re-inline was NOT taken — this tree keeps token-crypto.
+ */
 import { eq, sql } from "drizzle-orm"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
+import { getValidExistingClaudeToken } from "../../claude-token"
 import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../../db"
 import { createId } from "../../db/utils"
 import { publicProcedure, router } from "../index"
 import { decryptToken, encryptToken } from "../../token-crypto"
 import { clearClaudeCaches } from "./claude"
 
+const SYSTEM_KEYCHAIN_ACCOUNT_ID = "system-keychain"
 
+type AccountSource = "db" | "legacy" | "system"
 
 /**
  * Multi-account Anthropic management router
@@ -16,7 +24,7 @@ export const anthropicAccountsRouter = router({
   /**
    * List all stored Anthropic accounts
    */
-  list: publicProcedure.query(() => {
+  list: publicProcedure.query(async () => {
     const db = getDatabase()
 
     try {
@@ -38,6 +46,7 @@ export const anthropicAccountsRouter = router({
           ...acc,
           connectedAt: acc.connectedAt?.toISOString() ?? null,
           lastUsedAt: acc.lastUsedAt?.toISOString() ?? null,
+          source: "db" as AccountSource,
         }))
       }
     } catch {
@@ -59,10 +68,25 @@ export const anthropicAccountsRouter = router({
           displayName: "Anthropic Account",
           connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
           lastUsedAt: null,
+          source: "legacy" as AccountSource,
         }]
       }
     } catch {
       // Legacy table also doesn't exist
+    }
+
+    // Final fallback: surface the local Claude Code CLI credential
+    // (macOS Keychain / ~/.claude/.credentials.json) so the user sees
+    // an active connection in Settings even though it's not in our DB.
+    if ((await getValidExistingClaudeToken())?.trim()) {
+      return [{
+        id: SYSTEM_KEYCHAIN_ACCOUNT_ID,
+        email: null,
+        displayName: "Local Claude Code",
+        connectedAt: null,
+        lastUsedAt: null,
+        source: "system" as AccountSource,
+      }]
     }
 
     return []
@@ -71,7 +95,7 @@ export const anthropicAccountsRouter = router({
   /**
    * Get currently active account info
    */
-  getActive: publicProcedure.query(() => {
+  getActive: publicProcedure.query(async () => {
     const db = getDatabase()
 
     try {
@@ -97,6 +121,7 @@ export const anthropicAccountsRouter = router({
           return {
             ...account,
             connectedAt: account.connectedAt?.toISOString() ?? null,
+            source: "db" as AccountSource,
           }
         }
       }
@@ -118,10 +143,22 @@ export const anthropicAccountsRouter = router({
           email: null,
           displayName: "Anthropic Account",
           connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
+          source: "legacy" as AccountSource,
         }
       }
     } catch {
       // Legacy table also doesn't exist
+    }
+
+    // Final fallback: local Claude Code CLI credential
+    if ((await getValidExistingClaudeToken())?.trim()) {
+      return {
+        id: SYSTEM_KEYCHAIN_ACCOUNT_ID,
+        email: null,
+        displayName: "Local Claude Code",
+        connectedAt: null,
+        source: "system" as AccountSource,
+      }
     }
 
     return null

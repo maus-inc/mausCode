@@ -28,12 +28,12 @@ Survey of the entire public fork network of `21st-dev/1code` (618 forks) as of 2
 ## Cherry-pick ledger (live, will edit as we pick)
 
 ## Category A - Approved by user (from erenbertr/1code)
-- [ ] Codex upgrades: bundled CLI 0..->0..137.0, codex-acp adapter repair, tool-normalizer `src/shared/codex-tool-normalizer.ts`
-- [ ] Gemini ACP provider integration (message history + images, auto-alias/model fallback)
-- [ ] OpenRouter provider + model selection (new-chat form, agent selector, workspace instructions in system prompt)
-- [ ] Streaming stability fixes (abort listener removal, renderer crash-under-heap fixes, tab eviction)
+- [x] Codex upgrades: bundled CLI 0..->0..137.0, codex-acp adapter repair, tool-normalizer `src/shared/codex-tool-normalizer.ts` - BACKEND TRANSPLANTED 2026-09-11 (Phase 2)
+- [x] Gemini ACP provider integration (message history + images, auto-alias/model fallback) - BACKEND TRANSPLANTED 2026-09-11 (Phase 2; router+libs+auth store; renderer UI in Phase 3)
+- [x] OpenRouter provider + model selection (new-chat form, agent selector, workspace instructions in system prompt) - BACKEND TRANSPLANTED 2026-09-11 (Phase 2; router+libs+auth store; renderer UI in Phase 3)
+- [x] Streaming stability fixes (abort listener removal, renderer crash-under-heap fixes, tab eviction) - PARTIAL 2026-09-11 (Phase 2: render-process-gone auto-recovery + dock guards; renderer-side pieces in Phase 3)
 
-- [ ] Usage-stats footer (quota %, 80% orange, reset-time label)
+- [x] Usage-stats footer (quota %, 80% orange, reset-time label) - BACKEND TRANSPLANTED 2026-09-11 (Phase 2: usage+github routers, claude/gemini/openrouter usage libs; footer UI in Phase 3)
 - [ ] Sidebar QoL (restore previously opened chat, file refresh button, drag/manual reorder via sort_order)
 - [ ] Details-sidebar / misc polish (as diff-reviewed)
 EXCLUDED by user: kanban (5 files)mind-map AI builder (React-Flow build surface, any "AI-bro feature removal" (their deletions: kanban, claude-login-modal.tsx, agents-subchats-sidebar.tsx - we keep ours)
@@ -129,7 +129,9 @@ Delta base: `HEAD` (our init) <-> `forkup/main`. 230 files total: 66 A,, 123 M,,
 ## Action log
 - 2026-09-11: full fork-network scan(618 forks); candidates identified; catalog created.
 - 2026-09-11(b): Category-A file map produced (above); Category-C maps added; SamSammanne Not Found; t3code fetched. Next: t3code deep-research + transplant per approval.
-
+- 2026-09-11(c): app-track intake - pulled ledger onto arena; spot-verified (9/9 repos resolve, SamSammanne 404 re-confirmed, 1Code Apache-2.0/archived, T3 MIT, aadivar+normalizer paths exist); scaffolded `openspec/changes/add-fork-harvest-transplants/` (phased plan). No code transplanted yet - per-phase go-ahead pending.
+- 2026-09-11(d): Phase 1 TRANSPLANTED (aadivar usage widget; see checkbox above).
+- 2026-09-11(e): Phase 2 TRANSPLANTED (erenbertr backend core): normalizer+codex hunks, claude-token refresh, system-first auth, chats/projects routers + migration 0009, gemini/openrouter/github/usage routers + 8 lib files, renderer-crash recovery. Rejected: auth bypass, native-turn removals, token-crypto re-inline, build/ai feat. tsc 99->76 (zero main errors), 43/43 tests, secret scan clean.
 
 ## Notes on unrecoverable upstream
 - `cdn.21st.dev` v0.0.85-0.0.88 source: never published to any fetched fork(binaries exist only. If wanted, ask 21st-dev to publish(optional, repo archived.

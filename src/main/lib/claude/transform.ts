@@ -1,5 +1,115 @@
 import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from "./types";
 
+/**
+ * NOTE (transplant): `ChunkCoalescer`/`createChunkCoalescer` below, the
+ * `providerMetadata` spread-casts, and the `?? "unknown"` tool-name guard were
+ * transplanted from erenbertr/1code (Apache-2.0, © the 1Code contributors).
+ */
+
+/**
+ * Coalesces high-frequency consecutive `text-delta` chunks into fewer, larger
+ * emits so the renderer receives far fewer IPC messages per second, without
+ * changing the final rendered content.
+ *
+ * Behavior:
+ * - Consecutive `text-delta` chunks sharing the same `id` are buffered and
+ *   concatenated, then flushed either after `flushIntervalMs` (a short time
+ *   window) or as soon as a non-text-delta chunk (tool call, text-end, message
+ *   boundary, etc.) arrives.
+ * - Any non-text-delta chunk flushes the buffer FIRST to preserve ordering.
+ * - A text-delta with a different `id`, or one carrying extra fields such as
+ *   `providerMetadata`, flushes the buffer first and is emitted on its own so
+ *   nothing is lost or reordered.
+ * - `flush()` / `dispose()` drain the buffer immediately (stream end / abort)
+ *   so the final content is never dropped.
+ *
+ * The merged emit is still a valid `text-delta` UIMessageChunk, so the chunk
+ * schema consumed by the renderer is unchanged.
+ */
+export interface ChunkCoalescer<TChunk = UIMessageChunk> {
+  /** Buffer or emit a chunk. Returns the underlying emit result (false = closed). */
+  push: (chunk: TChunk) => boolean
+  /** Emit any buffered text immediately. Returns the underlying emit result. */
+  flush: () => boolean
+  /** Flush and clear the pending timer (call on stream end / abort / unsubscribe). */
+  dispose: () => void
+}
+
+// Generic over the chunk type so it works with both the local UIMessageChunk
+// union (Claude) and the wider AI SDK chunk union (Codex). It only inspects the
+// `type`/`id`/`delta`/`providerMetadata` fields and synthesizes a plain
+// `text-delta`, so any chunk type carrying those fields is supported.
+export function createChunkCoalescer<TChunk = UIMessageChunk>(
+  rawEmit: (chunk: TChunk) => boolean,
+  options?: { flushIntervalMs?: number },
+): ChunkCoalescer<TChunk> {
+  const flushIntervalMs = options?.flushIntervalMs ?? 40
+  let bufferedId: string | null = null
+  let bufferedText = ""
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let lastEmitOk = true
+
+  const clearTimer = () => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  const flush = (): boolean => {
+    clearTimer()
+    if (bufferedId !== null) {
+      const id = bufferedId
+      const delta = bufferedText
+      bufferedId = null
+      bufferedText = ""
+      if (delta.length > 0) {
+        lastEmitOk = rawEmit({ type: "text-delta", id, delta } as unknown as TChunk)
+      }
+    }
+    return lastEmitOk
+  }
+
+  // Only coalesce "plain" text deltas. A delta carrying providerMetadata (or any
+  // non-standard shape) is passed through untouched to avoid dropping metadata.
+  const isPlainTextDelta = (chunk: any): boolean =>
+    chunk?.type === "text-delta" &&
+    typeof chunk.id === "string" &&
+    chunk.providerMetadata === undefined
+
+  const push = (chunk: TChunk): boolean => {
+    if (isPlainTextDelta(chunk)) {
+      const { id, delta } = chunk as { id: string; delta: string }
+      // Switching to a different text block: flush the previous one first so
+      // ids and ordering stay correct.
+      if (bufferedId !== null && bufferedId !== id) {
+        flush()
+      }
+      bufferedId = id
+      bufferedText += delta || ""
+      if (timer === null) {
+        timer = setTimeout(() => {
+          timer = null
+          flush()
+        }, flushIntervalMs)
+      }
+      return lastEmitOk
+    }
+
+    // Any other chunk: flush buffered text first to preserve ordering, then emit.
+    flush()
+    lastEmitOk = rawEmit(chunk)
+    return lastEmitOk
+  }
+
+  const dispose = () => {
+    flush()
+    clearTimer()
+  }
+
+  return { push, flush, dispose }
+}
+
 export function createTransformer(options?: { isUsingOllama?: boolean }) {
   const isUsingOllama = options?.isUsingOllama === true
   let textId: string | null = null
@@ -83,12 +193,14 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       }
 
       // Emit complete tool call with accumulated input
+      // Cast needed: providerMetadata is used by the renderer for timing
+      // but isn't part of the base UIMessageChunk type
       yield {
         type: "tool-input-available",
         toolCallId: currentToolCallId,
         toolName: currentToolName || "unknown",
         input: parsedInput,
-        providerMetadata: { custom: { startedAt: Date.now() } },
+        ...({ providerMetadata: { custom: { startedAt: Date.now() } } } as any),
       }
       currentToolCallId = null
       currentToolName = null
@@ -171,7 +283,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
         yield {
           type: "tool-input-start",
           toolCallId: currentToolCallId,
-          toolName: currentToolName,
+          toolName: currentToolName ?? "unknown",
         }
       }
 
@@ -315,12 +427,14 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
           // Store mapping for tool-result lookup
           toolIdMapping.set(block.id, compositeId)
 
+          // Cast needed: providerMetadata is used by the renderer for timing
+          // but isn't part of the base UIMessageChunk type
           yield {
             type: "tool-input-available",
             toolCallId: compositeId,
             toolName: block.name,
             input: block.input,
-            providerMetadata: { custom: { startedAt: Date.now() } },
+            ...({ providerMetadata: { custom: { startedAt: Date.now() } } } as any),
           }
         }
       }

@@ -26,8 +26,13 @@
 
 ## Phase 2 — erenbertr backend core
 
-- [ ] tRPC routers + `codex-tool-normalizer.ts` + codex 0.137 bump + ACP repair
-- [ ] Same verification + ledger update per pickup
+- [x] Normalizer + codex reasoning-effort/model parse + coalescer loop + codex 0.137 bump + ACP repair (codex-acp 0.15.0)
+- [x] Claude token refresh rework + system-first auth + async getClaudeCodeToken + ambient-env precedence + SDK getOAuthToken hook
+- [x] chats (OAuth commit-msgs, inProgress/isUnseen, markViewed/All, updateColor) + projects (listWithStatus, reorder, updateColor, setShowInRail) + schema 0009 (5 cols)
+- [x] New providers: gemini + openrouter + github + usage routers, 8 lib files, @ai-sdk/google + @openrouter/ai-sdk-provider
+- [x] Renderer-crash auto-recovery + dock guards; token-crypto/native/auth preserved; build/ai/ai-one-shot excluded
+- [x] Verify: tsc 99→76 (zero main-process errors, zero-new), 43/43 runtime tests, secret scan clean, 0000–0009 replay OK
+- [x] Catalog action log + checkboxes updated
 
 ## Phase 3 — erenbertr transports + UI + QoL
 

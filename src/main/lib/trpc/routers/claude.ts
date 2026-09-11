@@ -1,3 +1,9 @@
+/**
+ * NOTE (transplant): async system-first `getClaudeCodeToken` with decrypt
+ * fallbacks, ambient-env precedence rework (OAuth wins over stale shell keys),
+ * the SDK `getOAuthToken` hook, dead-option removal, and `as const` type fixes
+ * were transplanted from erenbertr/1code (Apache-2.0, © the 1Code contributors).
+ */
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
@@ -29,6 +35,7 @@ import {
   type ClaudeConfig,
   type McpServerConfig,
 } from "../../claude-config"
+import { getValidExistingClaudeToken } from "../../claude-token"
 import { anthropicAccounts, anthropicSettings, chats, claudeCodeCredentials, getDatabase, projects as projectsTable, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
 import {
@@ -158,15 +165,30 @@ function decryptToken(encrypted: string): string {
 }
 
 /**
- * Get Claude Code OAuth token from local SQLite
- * Uses multi-account system first (active account), falls back to legacy table
- * Returns null if not connected
+ * Get Claude Code OAuth token.
+ * Order: local Claude Code keychain → in-app multi-account DB → legacy DB table
+ * (`~/.claude/.credentials.json` or OS keychain entry "Claude Code-credentials").
+ * Returns null if no credentials are available anywhere.
  */
-function getClaudeCodeToken(): string | null {
+async function getClaudeCodeToken(): Promise<string | null> {
   try {
     const db = getDatabase()
 
     console.log("[claude-auth] ========== CLAUDE CODE AUTH DEBUG ==========")
+
+    // Prefer the token maintained by the local Claude Code CLI. The CLI refreshes
+    // this credential, while older in-app rows may contain an expired access token.
+    const localToken = await getValidExistingClaudeToken()
+    if (localToken) {
+      console.log("[claude-auth] Using local Claude Code credentials from system")
+      console.log(
+        "[claude-auth] Token preview:",
+        localToken.slice(0, 20) + "..." + localToken.slice(-10),
+      )
+      console.log("[claude-auth] Token total length:", localToken.length)
+      console.log("[claude-auth] ============================================")
+      return localToken
+    }
 
     // First try multi-account system
     const settings = db
@@ -187,15 +209,22 @@ function getClaudeCodeToken(): string | null {
           "[claude-auth] Using multi-account system, activeAccountId:",
           settings.activeAccountId,
         )
-        const decrypted = decryptToken(account.oauthToken)
-        console.log("[claude-auth] Token decrypted successfully")
-        console.log(
-          "[claude-auth] Token preview:",
-          decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
-        )
-        console.log("[claude-auth] Token total length:", decrypted.length)
-        console.log("[claude-auth] ============================================")
-        return decrypted
+        try {
+          const decrypted = decryptToken(account.oauthToken)
+          console.log("[claude-auth] Token decrypted successfully")
+          console.log(
+            "[claude-auth] Token preview:",
+            decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
+          )
+          console.log("[claude-auth] Token total length:", decrypted.length)
+          console.log("[claude-auth] ============================================")
+          return decrypted
+        } catch (error) {
+          console.warn(
+            "[claude-auth] Active account token could not be decrypted; falling back:",
+            error,
+          )
+        }
       }
 
       console.log(
@@ -223,22 +252,29 @@ function getClaudeCodeToken(): string | null {
         : null,
     )
 
-    if (!cred?.oauthToken) {
-      console.log("[claude-auth] No Claude Code credentials found")
-      console.log("[claude-auth] ============================================")
-      return null
+    if (cred?.oauthToken) {
+      try {
+        const decrypted = decryptToken(cred.oauthToken)
+        console.log("[claude-auth] Token decrypted successfully (legacy)")
+        console.log(
+          "[claude-auth] Token preview:",
+          decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
+        )
+        console.log("[claude-auth] Token total length:", decrypted.length)
+        console.log("[claude-auth] ============================================")
+
+        return decrypted
+      } catch (error) {
+        console.warn(
+          "[claude-auth] Legacy token could not be decrypted; falling back:",
+          error,
+        )
+      }
     }
 
-    const decrypted = decryptToken(cred.oauthToken)
-    console.log("[claude-auth] Token decrypted successfully (legacy)")
-    console.log(
-      "[claude-auth] Token preview:",
-      decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
-    )
-    console.log("[claude-auth] Token total length:", decrypted.length)
+    console.log("[claude-auth] No Claude Code credentials found")
     console.log("[claude-auth] ============================================")
-
-    return decrypted
+    return null
   } catch (error) {
     console.error("[claude-auth] Error getting Claude Code token:", error)
     return null
@@ -979,7 +1015,7 @@ export const claudeRouter = router({
 
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
             // Only check if offline mode is enabled in settings
-            const claudeCodeToken = getClaudeCodeToken()
+            const claudeCodeToken = await getClaudeCodeToken()
             const offlineResult = await checkOfflineFallback(
               input.customConfig,
               claudeCodeToken,
@@ -1034,7 +1070,6 @@ export const claudeRouter = router({
             }
 
             const transform = createTransformer({
-              emitSdkMessageUuid: historyEnabled,
               isUsingOllama,
             })
 
@@ -1384,25 +1419,46 @@ export const claudeRouter = router({
               )
             }
 
-            // Check if user has existing API key or proxy configured in their shell environment
-            // If so, use that instead of OAuth (allows using custom API proxies)
-            // Based on PR #29 by @sa4hnd
-            const hasExistingApiConfig = !!(
-              claudeEnv.ANTHROPIC_API_KEY || claudeEnv.ANTHROPIC_AUTH_TOKEN || claudeEnv.ANTHROPIC_BASE_URL
+            // Explicit custom settings should win. Ambient shell/process Anthropic
+            // variables should not override a working Claude Code login; stale API
+            // keys otherwise make the SDK fail while `claude` works in Terminal.
+            const ambientAnthropicEnvKeys = [
+              "ANTHROPIC_API_KEY",
+              "ANTHROPIC_AUTH_TOKEN",
+              "ANTHROPIC_BASE_URL",
+            ] as const
+            const hasAmbientApiConfig = ambientAnthropicEnvKeys.some(
+              (key) => !!claudeEnv[key],
             )
+            const shouldUseAmbientApiConfig =
+              !finalCustomConfig && !claudeCodeToken && hasAmbientApiConfig
 
-            if (hasExistingApiConfig) {
+            if (claudeCodeToken && !finalCustomConfig) {
+              for (const key of ambientAnthropicEnvKeys) {
+                if (claudeEnv[key]) {
+                  console.log(
+                    `[claude-auth] Ignoring ambient ${key}; using Claude Code OAuth`,
+                  )
+                  delete claudeEnv[key]
+                }
+              }
+            }
+
+            if (shouldUseAmbientApiConfig) {
               console.log(
                 `[claude] Using existing CLI config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${claudeEnv.ANTHROPIC_BASE_URL || "default"}`,
               )
             }
 
-            // Build final env - only add OAuth token if we have one AND no existing API config
-            // Existing CLI config takes precedence over OAuth
-            const finalEnv = {
+            // Build final env. A valid Claude Code OAuth token takes precedence
+            // over ambient shell API credentials; explicit custom config was
+            // already applied above and remains in claudeEnv.
+            // Typed as Record<string, string> to preserve access to dynamic env vars
+            // like ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN
+            const finalEnv: Record<string, string> = {
               ...claudeEnv,
               ...(claudeCodeToken &&
-                !hasExistingApiConfig && {
+                !finalCustomConfig && {
                   CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
                 }),
               // Re-enable CLAUDE_CONFIG_DIR now that we properly map MCP configs
@@ -1412,8 +1468,8 @@ export const claudeRouter = router({
             // Log auth method being used
             console.log("[claude-auth] ========== AUTH METHOD USED ==========")
             console.log(
-              "[claude-auth] hasExistingApiConfig:",
-              hasExistingApiConfig,
+              "[claude-auth] shouldUseAmbientApiConfig:",
+              shouldUseAmbientApiConfig,
             )
             console.log(
               "[claude-auth] claudeCodeToken available:",
@@ -1760,6 +1816,10 @@ ${prompt}
                     mcpServers: mcpServersFiltered,
                   }),
                 env: finalEnv,
+                ...(claudeCodeToken &&
+                  !finalCustomConfig && {
+                    getOAuthToken: async () => getValidExistingClaudeToken(),
+                  }),
                 permissionMode:
                   input.mode === "plan"
                     ? ("plan" as const)
@@ -1864,19 +1924,19 @@ ${prompt}
                           : ""
                       if (!/\.md$/i.test(filePath)) {
                         return {
-                          behavior: "deny",
+                          behavior: "deny" as const,
                           message:
                             'Only ".md" files can be modified in plan mode.',
                         }
                       }
                     } else if (toolName == "ExitPlanMode") {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `IMPORTANT: DONT IMPLEMENT THE PLAN UNTIL THE EXPLIT COMMAND. THE PLAN WAS **ONLY** PRESENTED TO USER, FINISH CURRENT MESSAGE AS SOON AS POSSIBLE`,
                       }
                     } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `Tool "${toolName}" blocked in plan mode.`,
                       }
                     }
@@ -1931,13 +1991,15 @@ ${prompt}
                         askToolPart.state = "result"
                       }
                       // Emit result to frontend so it updates in real-time
+                      // Cast through unknown because ask-user-question-result is a custom
+                      // extension not in the UIMessageChunk union type
                       safeEmit({
                         type: "ask-user-question-result",
                         toolUseId: toolUseID,
                         result: errorMessage,
-                      } as UIMessageChunk)
+                      } as unknown as UIMessageChunk)
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: errorMessage,
                       }
                     }
@@ -1950,18 +2012,20 @@ ${prompt}
                       askToolPart.state = "result"
                     }
                     // Emit result to frontend so it updates in real-time
+                    // Cast through unknown because ask-user-question-result is a custom
+                    // extension not in the UIMessageChunk union type
                     safeEmit({
                       type: "ask-user-question-result",
                       toolUseId: toolUseID,
                       result: answerResult,
-                    } as UIMessageChunk)
+                    } as unknown as UIMessageChunk)
                     return {
-                      behavior: "allow",
-                      updatedInput: response.updatedInput,
+                      behavior: "allow" as const,
+                      updatedInput: response.updatedInput as Record<string, unknown>,
                     }
                   }
                   return {
-                    behavior: "allow",
+                    behavior: "allow" as const,
                     updatedInput: toolInput,
                   }
                 },
@@ -2180,7 +2244,7 @@ ${prompt}
                       // Show OAuth reconnect only when OAuth auth is actually in use.
                       // If API-key auth is active, treat as API auth failure instead.
                       const isApiKeyAuthMode = Boolean(
-                        finalCustomConfig || hasExistingApiConfig,
+                        finalCustomConfig || shouldUseAmbientApiConfig,
                       )
                       if (isApiKeyAuthMode) {
                         errorCategory = "AUTH_FAILURE"
