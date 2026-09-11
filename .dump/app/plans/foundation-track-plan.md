@@ -7,7 +7,7 @@ To minimize merge-conflict surface, this track owns **foundation + protocol-faci
 groundwork** and avoids touching the same product files others are likely
 rebranding/restructuring:
 
-- `.dump/mausagent/` — my second brain (exclusive).
+- `.dump/app/` — my second brain (exclusive to the app track).
 - `UPSTREAM.md`, `docs/protocol.md`, `docs/architecture.md`, `docs/vision.md`,
   `benchmarks/` — proposed new files (low conflict risk; will coordinate via human
   if another agent claims them).
