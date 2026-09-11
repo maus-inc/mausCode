@@ -380,7 +380,7 @@ product modules; never rewrite a stable module for cleanliness.
 | Worktree config/naming | `src/main/lib/git/worktree*` | KEEP | Good product behavior, no backend coupling |
 | Renderer `features/*` (agents, terminal, changes, kanban, …) | `src/renderer/` | KEEP as reference implementation | No redesign before the native vertical slice works |
 | `credential-manager.ts` (821 lines) | `src/main/lib/credential-manager.ts` | REMOVE | Dead: imports nonexistent modules, zero references |
-| `mock-api.ts` | `src/renderer/lib/mock-api.ts` | REMOVE | Self-marked DEPRECATED |
+| `mock-api.ts` | `src/renderer/lib/mock-api.ts` | KEEP | Actively imported by 6 chat UI files as the tRPC bridge; the DEPRECATED label in CLAUDE.md is stale — the file was investigated 2026-09-11 and must not be removed without rewiring its importers |
 
 ## 19. Inherited service coupling points (strip list)
 
