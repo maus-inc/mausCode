@@ -24,7 +24,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // differs (e.g. local verification against an upstream checkout).
 const rustCrate = process.env.JCODE_HARNESS_API_SRC
   ? path.resolve(process.env.JCODE_HARNESS_API_SRC)
-  : path.resolve(here, "../../runtime/jcode/crates/jcode-harness-api/src");
+  : path.resolve(here, "../../../runtime/jcode/crates/jcode-harness-api/src");
 
 function snakeCase(variant: string): string {
   return variant.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();

@@ -11,7 +11,7 @@ const sdkRoot = path.resolve(here, "..");
 // mausCode: see schema-parity.test.ts for why this path is configurable.
 const rustCrate = process.env.JCODE_HARNESS_API_SRC
   ? path.resolve(process.env.JCODE_HARNESS_API_SRC)
-  : path.resolve(here, "../../runtime/jcode/crates/jcode-harness-api/src");
+  : path.resolve(here, "../../../runtime/jcode/crates/jcode-harness-api/src");
 const rustEvents = path.join(rustCrate, "events.rs");
 
 function snakeCase(variant: string): string {
