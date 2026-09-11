@@ -665,6 +665,7 @@ export const recordingHotkeyForActionAtom = atom<string | null>(null)
 // Login modal (shown when Claude Code auth fails)
 export const agentsLoginModalOpenAtom = atom<boolean>(false)
 export const codexLoginModalOpenAtom = atom<boolean>(false)
+export const cursorLoginModalOpenAtom = atom<boolean>(false)
 
 export type ClaudeLoginModalConfig = {
   hideCustomModelSettingsLink: boolean

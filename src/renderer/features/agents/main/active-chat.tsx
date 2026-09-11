@@ -124,6 +124,7 @@ import {
   isCreatingPrAtom,
   chatsAwaitingAnswerAtom,
   justCreatedIdsAtom,
+  lastSelectedAgentIdAtom,
   loadingSubChatsAtom,
   maxMountedTabsAtom,
   MODEL_ID_MAP,
@@ -153,6 +154,7 @@ import {
   agentsSidebarOpenAtom,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
+  subChatCursorModelIdAtomFamily,
   subChatEngineAtomFamily,
   subChatModelIdAtomFamily,
   subChatModeAtomFamily,
@@ -178,7 +180,8 @@ import { usePastedTextFiles, type PastedTextFile } from "../hooks/use-pasted-tex
 import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import { ACPChatTransport } from "../lib/acp-chat-transport"
-import { isCodexModelSelection, isOpenRouterModelId } from "../lib/models"
+import { CursorChatTransport } from "../lib/cursor-chat-transport"
+import { CURSOR_MODEL_IDS, isCodexModelSelection, isOpenRouterModelId } from "../lib/models"
 import { isAssistantMessageQuestion } from "../lib/is-question"
 import { respondToApproval } from "../lib/approval-routing"
 import { formatHistoryForContext } from "../lib/export-chat"
@@ -1957,13 +1960,13 @@ const ChatViewInner = memo(function ChatViewInner({
   chat: Chat<any>
   subChatId: string
   parentChatId: string
-  provider?: "claude-code" | "codex" | "gemini" | "openrouter"
+  provider?: "claude-code" | "codex" | "gemini" | "openrouter" | "cursor"
   isFirstSubChat: boolean
   onAutoRename: (userMessage: string, subChatId: string) => void
   onCreateNewSubChat?: () => void
   onProviderChange?: (
     subChatId: string,
-    provider: "claude-code" | "codex" | "gemini" | "openrouter",
+    provider: "claude-code" | "codex" | "gemini" | "openrouter" | "cursor",
   ) => void
   refreshDiff?: () => void
   teamId?: string
@@ -4579,7 +4582,7 @@ const ChatViewInner = memo(function ChatViewInner({
   const shouldShowStackedCards =
     !displayQuestions && (queue.length > 0 || shouldShowStatusCard)
   const handleInputProviderChange = useCallback(
-    (nextProvider: "claude-code" | "codex" | "gemini" | "openrouter") => {
+    (nextProvider: "claude-code" | "codex" | "gemini" | "openrouter" | "cursor") => {
       onProviderChange?.(subChatId, nextProvider)
     },
     [onProviderChange, subChatId],
@@ -4588,7 +4591,7 @@ const ChatViewInner = memo(function ChatViewInner({
   // Continue conversation with a different provider - creates new sub-chat with history attachment
   const isContinuingRef = useRef(false)
   const handleContinueWithProvider = useCallback(
-    async (targetProvider: "claude-code" | "codex" | "gemini" | "openrouter") => {
+    async (targetProvider: "claude-code" | "codex" | "gemini" | "openrouter" | "cursor") => {
       if (isStreaming || isContinuingRef.current) return
       if (!messages || messages.length === 0) return
       isContinuingRef.current = true
@@ -4624,6 +4627,10 @@ const ChatViewInner = memo(function ChatViewInner({
         appStore.set(
           subChatCodexThinkingAtomFamily(newId),
           appStore.get(subChatCodexThinkingAtomFamily(subChatId)),
+        )
+        appStore.set(
+          subChatCursorModelIdAtomFamily(newId),
+          appStore.get(subChatCursorModelIdAtomFamily(subChatId)),
         )
 
         // 4. Store pending chat history for the new sub-chat to consume on mount
@@ -5372,7 +5379,7 @@ export function ChatView({
   const [
     subChatProviderOverrides,
     setSubChatProviderOverrides,
-  ] = useState<Record<string, "claude-code" | "codex" | "gemini" | "openrouter">>({})
+  ] = useState<Record<string, "claude-code" | "codex" | "gemini" | "openrouter" | "cursor">>({})
 
   useEffect(() => {
     setSubChatProviderOverrides({})
@@ -6475,7 +6482,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   }, [agentSubChats, activeSubChatIdForPlan, setCurrentPlanPath])
 
   const inferProviderFromMessages = useCallback(
-    (subChatId?: string): "claude-code" | "codex" | "gemini" | "openrouter" => {
+    (subChatId?: string): "claude-code" | "codex" | "gemini" | "openrouter" | "cursor" => {
       if (!subChatId) return "claude-code"
 
       const override = subChatProviderOverrides[subChatId]
@@ -6502,6 +6509,13 @@ Make sure to preserve all functionality from both branches when resolving confli
         const model = (message as any)?.metadata?.model
         if (typeof model !== "string") continue
         const normalizedModel = model.toLowerCase()
+        if (
+          CURSOR_MODEL_IDS.has(normalizedModel) ||
+          normalizedModel.includes("composer") ||
+          normalizedModel.startsWith("cursor-")
+        ) {
+          return "cursor"
+        }
         // Codex selections persist as `modelId/reasoningEffort` (e.g. `gpt-5.5/high`),
         // which would otherwise be misread as an OpenRouter `provider/model` id —
         // so the Codex check must run before the OpenRouter slash check.
@@ -6517,6 +6531,17 @@ Make sure to preserve all functionality from both branches when resolving confli
         ) {
           return "gemini"
         }
+      }
+
+      const lastSelectedAgentId = appStore.get(lastSelectedAgentIdAtom)
+      if (
+        lastSelectedAgentId === "cursor" ||
+        lastSelectedAgentId === "codex" ||
+        lastSelectedAgentId === "gemini" ||
+        lastSelectedAgentId === "openrouter" ||
+        lastSelectedAgentId === "claude-code"
+      ) {
+        return lastSelectedAgentId
       }
 
       return "claude-code"
@@ -6683,9 +6708,11 @@ Make sure to preserve all functionality from both branches when resolving confli
         if (isRemoteChat) return existing
 
         const existingTransport = (existing as any)?.transport
-        const existingProvider: "claude-code" | "codex" | "gemini" | "openrouter" =
-          existingTransport instanceof ACPChatTransport
-            ? "codex"
+        const existingProvider: "claude-code" | "codex" | "gemini" | "openrouter" | "cursor" =
+          existingTransport instanceof CursorChatTransport
+            ? "cursor"
+            : existingTransport instanceof ACPChatTransport
+              ? "codex"
             : existingTransport instanceof GeminiChatTransport
               ? "gemini"
               : existingTransport instanceof OpenRouterChatTransport
@@ -6753,7 +6780,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         worktreePath: worktreePath ? "exists" : "none",
       })
 
-      let transport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | NativeChatTransport | GeminiChatTransport | OpenRouterChatTransport | null = null
+      let transport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | CursorChatTransport | NativeChatTransport | GeminiChatTransport | OpenRouterChatTransport | null = null
 
       if (isRemoteChat && chatSandboxUrl) {
         // Remote sandbox chat: use HTTP SSE transport
@@ -6795,6 +6822,15 @@ Make sure to preserve all functionality from both branches when resolving confli
             projectPath,
             mode: subChatMode,
             provider: "codex",
+          })
+        } else if (chatProvider === "cursor") {
+          console.log("[getOrCreateChat] Using CursorChatTransport", { provider: chatProvider })
+          transport = new CursorChatTransport({
+            chatId,
+            subChatId,
+            cwd: worktreePath,
+            projectPath,
+            mode: subChatMode,
           })
         } else if (appStore.get(subChatEngineAtomFamily(subChatId)) === "native") {
           console.log("[getOrCreateChat] Using NativeChatTransport")
@@ -6959,7 +6995,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   )
 
   const handleProviderChange = useCallback(
-    (subChatId: string, nextProvider: "claude-code" | "codex" | "gemini" | "openrouter") => {
+    (subChatId: string, nextProvider: "claude-code" | "codex" | "gemini" | "openrouter" | "cursor") => {
       // Provider switch is only allowed for brand new sub-chats.
       const activeChat = agentChatStore.get(subChatId) as any
       let messageCount = Array.isArray(activeChat?.messages)
@@ -7076,6 +7112,10 @@ Make sure to preserve all functionality from both branches when resolving confli
       appStore.get(subChatCodexThinkingAtomFamily(sourceSubChatId)),
     )
     appStore.set(
+      subChatCursorModelIdAtomFamily(newId),
+      appStore.get(subChatCursorModelIdAtomFamily(sourceSubChatId)),
+    )
+    appStore.set(
       subChatEngineAtomFamily(newId),
       appStore.get(subChatEngineAtomFamily(sourceSubChatId)),
     )
@@ -7098,7 +7138,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     })
 
     const chatProvider = newSubChatProvider
-    let newSubChatTransport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | NativeChatTransport | GeminiChatTransport | OpenRouterChatTransport | null = null
+    let newSubChatTransport: IPCChatTransport | RemoteChatTransport | ACPChatTransport | CursorChatTransport | NativeChatTransport | GeminiChatTransport | OpenRouterChatTransport | null = null
 
     if (isNewSubChatRemote && newSubChatSandboxUrl) {
       // Remote sandbox chat: use HTTP SSE transport
@@ -7136,6 +7176,15 @@ Make sure to preserve all functionality from both branches when resolving confli
           projectPath,
           mode: newSubChatMode,
           provider: "codex",
+        })
+      } else if (chatProvider === "cursor") {
+        console.log("[createNewSubChat] Using CursorChatTransport", { provider: chatProvider })
+        newSubChatTransport = new CursorChatTransport({
+          chatId,
+          subChatId: newId,
+          cwd: worktreePath,
+          projectPath,
+          mode: newSubChatMode,
         })
       } else if (appStore.get(subChatEngineAtomFamily(newId)) === "native") {
         console.log("[createNewSubChat] Using NativeChatTransport")

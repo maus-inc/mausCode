@@ -50,10 +50,11 @@
       usage-widget/rail-build-api-bridge-Cmd+T-logs-casts)
 - [x] Batch B verify: tsc 33->31 (exact delta = 2 fixed, zero new), 70/70
       runtime tests, secret scan clean, api-bridge 0 additions
-- [ ] Batch C (SIDEBAR — lineage DECIDED 2026-09-11: adopt erenbertr):
+- [x] Batch C (SIDEBAR — lineage DECIDED 2026-09-11: adopt erenbertr):
       projects-rail + all-projects-page (new), agents-sidebar rewrite,
       subchats-sidebar absorption, content/layout/App rail wiring, Cmd+T
       rebind, footer wiring + usage-widget retirement
+- [x] Batch C verify: tsc 31->25 (delta = 6 fixed, zero new), node--test 27/27, secrets clean
 
 ## Phase 4 — T3 contracts (needs explicit approval)
 
@@ -72,9 +73,10 @@
       CODEX_SUBSCRIPTION_ONLY_MODEL_IDS + filters, hidden-models v5
 - [x] Verify: tsc identical-31 (zero new), 70/70 tests, secrets clean
 - [x] Cursor-provider adoption: APPROVED 2026-09-11
-- [ ] Phase 6b: Cursor provider port (binary, router, transport, login UI,
+- [x] Phase 6b: Cursor provider port (binary, router, transport, login UI,
       selector/form/input wiring, MCP tab) per
       .dump/app/decisions/phase6-cursor-provider-adoption.md
+- [x] Phase 6b verify: tsc zero-delta (25), node--test 27/27, secrets clean
 - [x] Rejected: web-standalone + vendor-auth-optional (out of scope /
       opposite direction)
 

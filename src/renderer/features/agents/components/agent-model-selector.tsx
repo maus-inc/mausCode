@@ -13,7 +13,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "../../../components/ui/command"
-import { CheckIcon, ClaudeCodeIcon, IconChevronDown, ThinkingIcon } from "../../../components/ui/icons"
+import { CheckIcon, ClaudeCodeIcon, CursorIcon, IconChevronDown, ThinkingIcon } from "../../../components/ui/icons"
 import { Switch } from "../../../components/ui/switch"
 import { Checkbox } from "../../../components/ui/checkbox"
 import { Button } from "../../../components/ui/button"
@@ -47,7 +47,7 @@ const OpenRouterIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-export type AgentProviderId = "claude-code" | "codex" | "gemini" | "openrouter"
+export type AgentProviderId = "claude-code" | "codex" | "gemini" | "openrouter" | "cursor"
 
 type ClaudeModelOption = {
   id: string
@@ -68,6 +68,12 @@ type GeminiModelOption = {
 }
 
 type OpenRouterModelOption = {
+  id: string
+  name: string
+}
+
+// NOTE (transplant): Cursor CLI provider group (SamSammane/1code-ui, Apache-2.0).
+type CursorModelOption = {
   id: string
   name: string
 }
@@ -117,11 +123,18 @@ interface AgentModelSelectorProps {
     onSelectModel: (modelId: string) => void
     isConnected: boolean
   }
+  cursor: {
+    models: CursorModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
 }
 
 type FlatModelItem =
   | { type: "claude"; model: ClaudeModelOption }
   | { type: "codex"; model: CodexModelOption }
+  | { type: "cursor"; model: CursorModelOption }
   | { type: "gemini"; model: GeminiModelOption }
   | { type: "openrouter"; model: OpenRouterModelOption }
   | { type: "ollama"; modelName: string; isRecommended: boolean }
@@ -363,6 +376,7 @@ export function AgentModelSelector({
   codex,
   gemini,
   openrouter,
+  cursor,
 }: AgentModelSelectorProps) {
   const [search, setSearch] = useState("")
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
@@ -395,6 +409,10 @@ export function AgentModelSelector({
       items.push({ type: "codex", model: m })
     }
 
+    for (const m of cursor.models) {
+      items.push({ type: "cursor", model: m })
+    }
+
     if (gemini) {
       for (const m of gemini.models) {
         items.push({ type: "gemini", model: m })
@@ -408,7 +426,7 @@ export function AgentModelSelector({
     }
 
     return items
-  }, [claude, codex, gemini, openrouter])
+  }, [claude, codex, gemini, openrouter, cursor])
 
   // Filter by search
   const filteredModels = useMemo(() => {
@@ -423,6 +441,8 @@ export function AgentModelSelector({
             `${item.model.name} ${item.model.version}`.toLowerCase().includes(q)
           )
         case "codex":
+          return item.model.name.toLowerCase().includes(q)
+        case "cursor":
           return item.model.name.toLowerCase().includes(q)
         case "gemini":
           return (
@@ -463,6 +483,8 @@ export function AgentModelSelector({
       <GeminiIcon className="h-3.5 w-3.5" />
     ) : selectedAgentId === "openrouter" ? (
       <OpenRouterIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "cursor" ? (
+      <CursorIcon className="h-3.5 w-3.5" />
     ) : (
       <ClaudeCodeIcon className="h-3.5 w-3.5" />
     )
@@ -473,6 +495,8 @@ export function AgentModelSelector({
         return selectedAgentId === "claude-code" && claude.selectedModelId === item.model.id
       case "codex":
         return selectedAgentId === "codex" && codex.selectedModelId === item.model.id
+      case "cursor":
+        return selectedAgentId === "cursor" && cursor.selectedModelId === item.model.id
       case "gemini":
         return selectedAgentId === "gemini" && gemini?.selectedModelId === item.model.id
       case "openrouter":
@@ -486,6 +510,7 @@ export function AgentModelSelector({
 
   const getItemProvider = (item: FlatModelItem): AgentProviderId => {
     if (item.type === "codex") return "codex"
+    if (item.type === "cursor") return "cursor"
     if (item.type === "gemini") return "gemini"
     if (item.type === "openrouter") return "openrouter"
     return "claude-code"
@@ -553,6 +578,11 @@ export function AgentModelSelector({
         onSelectedAgentIdChange("codex")
         codex.onSelectModel(item.model.id)
         break
+      case "cursor":
+        if (!canSelectProvider("cursor")) return
+        onSelectedAgentIdChange("cursor")
+        cursor.onSelectModel(item.model.id)
+        break
       case "gemini":
         if (!canSelectProvider("gemini")) return
         if (!gemini) return
@@ -584,6 +614,8 @@ export function AgentModelSelector({
         return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "codex":
         return <CodexIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "cursor":
+        return <CursorIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "gemini":
         return <GeminiIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "openrouter":
@@ -600,6 +632,8 @@ export function AgentModelSelector({
       case "claude":
         return `${item.model.name} ${item.model.version}`
       case "codex":
+        return item.model.name
+      case "cursor":
         return item.model.name
       case "gemini":
         return item.model.name
@@ -618,6 +652,8 @@ export function AgentModelSelector({
         return `claude-${item.model.id}`
       case "codex":
         return `codex-${item.model.id}`
+      case "cursor":
+        return `cursor-${item.model.id}`
       case "gemini":
         return `gemini-${item.model.id}`
       case "openrouter":
@@ -750,7 +786,9 @@ export function AgentModelSelector({
             ? "Codex"
             : pendingProvider === "gemini"
               ? "Gemini"
-              : "Claude Code"
+              : pendingProvider === "cursor"
+                ? "Cursor CLI"
+                : "Claude Code"
         }
         onConfirm={handleConfirmCrossProvider}
         onClose={handleCloseConfirmDialog}

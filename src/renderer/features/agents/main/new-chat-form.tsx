@@ -33,6 +33,7 @@ import {
   lastSelectedAgentIdAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedCursorModelIdAtom,
   lastSelectedGeminiModelIdAtom,
   lastSelectedOpenRouterModelIdAtom,
   lastSelectedBranchesAtom,
@@ -45,6 +46,7 @@ import {
   selectedProjectAtom,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
+  subChatCursorModelIdAtomFamily,
   subChatGeminiModelIdAtomFamily,
   subChatOpenRouterModelIdAtomFamily,
   getNextMode,
@@ -112,7 +114,7 @@ import {
 } from "../../../components/ui/prompt-input"
 import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
-import { AgentModelSelector } from "../components/agent-model-selector"
+import { AgentModelSelector, type AgentProviderId } from "../components/agent-model-selector"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
@@ -128,6 +130,7 @@ import {
   CLAUDE_MODELS,
   CODEX_MODELS,
   CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
+  CURSOR_MODELS,
   GEMINI_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
@@ -172,9 +175,14 @@ function useAvailableModels() {
 }
 
 // Agent providers
-const agents = [
+const agents: {
+  id: string
+  name: string
+  hasModels?: boolean
+  disabled?: boolean
+}[] = [
   { id: "claude-code", name: "Claude Code", hasModels: true },
-  { id: "cursor", name: "Cursor CLI", disabled: true },
+  { id: "cursor", name: "Cursor CLI", hasModels: true },
   { id: "codex", name: "OpenAI Codex" },
   { id: "gemini", name: "Google Gemini" },
   { id: "openrouter", name: "OpenRouter" },
@@ -225,10 +233,21 @@ export function NewChatForm({
 
   // Clear invalid project from storage
   useEffect(() => {
-    if (selectedProject && projectsList && !validatedProject) {
+    if (
+      selectedProject &&
+      projectsList &&
+      !isLoadingProjects &&
+      !validatedProject
+    ) {
       setSelectedProject(null)
     }
-  }, [selectedProject, projectsList, validatedProject, setSelectedProject])
+  }, [
+    selectedProject,
+    projectsList,
+    isLoadingProjects,
+    validatedProject,
+    setSelectedProject,
+  ])
   const [lastSelectedAgentId, setLastSelectedAgentId] = useAtom(
     lastSelectedAgentIdAtom,
   )
@@ -255,6 +274,7 @@ export function NewChatForm({
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const { data: claudeCodeIntegration } =
     trpc.claudeCode.getIntegration.useQuery()
+  const { data: cursorIntegration } = trpc.cursor.getIntegration.useQuery()
   const isClaudeConnected =
     Boolean(claudeCodeIntegration?.isConnected) ||
     anthropicOnboardingCompleted ||
@@ -336,6 +356,9 @@ export function NewChatForm({
   const [lastSelectedCodexThinking, setLastSelectedCodexThinking] = useAtom(
     lastSelectedCodexThinkingAtom,
   )
+  const [lastSelectedCursorModelId, setLastSelectedCursorModelId] = useAtom(
+    lastSelectedCursorModelIdAtom,
+  )
   const [lastSelectedGeminiModelId, setLastSelectedGeminiModelId] = useAtom(
     lastSelectedGeminiModelIdAtom,
   )
@@ -393,6 +416,17 @@ export function NewChatForm({
       codexUiModels[0] ||
       CODEX_MODELS[0]!,
     [codexUiModels, lastSelectedCodexModelId],
+  )
+  const cursorUiModels = useMemo(
+    () => CURSOR_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedCursorModel = useMemo(
+    () =>
+      cursorUiModels.find((model) => model.id === lastSelectedCursorModelId) ||
+      cursorUiModels[0] ||
+      CURSOR_MODELS[0]!,
+    [cursorUiModels, lastSelectedCursorModelId],
   )
 
   const geminiUiModels = useMemo(
@@ -466,6 +500,9 @@ export function NewChatForm({
     if (selectedAgent.id === "codex") {
       return `${selectedCodexModel.id}/${selectedCodexThinking}`
     }
+    if (selectedAgent.id === "cursor") {
+      return selectedCursorModel.id
+    }
     if (selectedAgent.id === "gemini") {
       return selectedGeminiModel.id
     }
@@ -477,6 +514,7 @@ export function NewChatForm({
     selectedAgent.id,
     selectedCodexModel.id,
     selectedCodexThinking,
+    selectedCursorModel.id,
     selectedGeminiModel.id,
     selectedOpenRouterModel.id,
     selectedModel?.id,
@@ -489,6 +527,10 @@ export function NewChatForm({
   const selectedModelLabel = useMemo(() => {
     if (selectedAgent.id === "codex") {
       return selectedCodexModel.name
+    }
+
+    if (selectedAgent.id === "cursor") {
+      return selectedCursorModel.name
     }
 
     if (selectedAgent.id === "gemini") {
@@ -515,6 +557,7 @@ export function NewChatForm({
   }, [
     selectedAgent.id,
     selectedCodexModel.name,
+    selectedCursorModel.name,
     selectedGeminiModel.name,
     selectedOpenRouterModel.name,
     availableModels.isOffline,
@@ -1134,6 +1177,8 @@ export function NewChatForm({
           ) {
             appStore.set(subChatCodexThinkingAtomFamily(firstSubChatId), thinking)
           }
+        } else if (selectedAgent.id === "cursor") {
+          appStore.set(subChatCursorModelIdAtomFamily(firstSubChatId), selectedChatModel)
         } else if (selectedAgent.id === "gemini") {
           appStore.set(subChatGeminiModelIdAtomFamily(firstSubChatId), selectedChatModel)
         } else if (selectedAgent.id === "openrouter") {
@@ -1977,7 +2022,7 @@ export function NewChatForm({
                         <AgentModelSelector
                           open={isModelDropdownOpen}
                           onOpenChange={setIsModelDropdownOpen}
-                          selectedAgentId={selectedAgent.id as "claude-code" | "codex" | "gemini" | "openrouter"}
+                          selectedAgentId={selectedAgent.id as AgentProviderId}
                           onSelectedAgentIdChange={(provider) => {
                             if (provider === "claude-code") {
                               setSelectedAgent(claudeAgent)
@@ -1987,6 +2032,8 @@ export function NewChatForm({
                               setSelectedAgent(enabledAgents.find((agent) => agent.id === "gemini") || fallbackAgent)
                             } else if (provider === "openrouter") {
                               setSelectedAgent(enabledAgents.find((agent) => agent.id === "openrouter") || fallbackAgent)
+                            } else if (provider === "cursor") {
+                              setSelectedAgent(enabledAgents.find((agent) => agent.id === "cursor") || fallbackAgent)
                             }
                             setLastSelectedAgentId(provider)
                           }}
@@ -2036,6 +2083,16 @@ export function NewChatForm({
                             selectedThinking: selectedCodexThinking,
                             onSelectThinking: setLastSelectedCodexThinking,
                             isConnected: codexOnboardingCompleted,
+                          }}
+                          cursor={{
+                            models: cursorUiModels,
+                            selectedModelId: selectedCursorModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = cursorUiModels.find((item) => item.id === modelId)
+                              if (!model) return
+                              setLastSelectedCursorModelId(model.id)
+                            },
+                            isConnected: Boolean(cursorIntegration?.isConnected),
                           }}
                           gemini={{
                             models: geminiUiModels,

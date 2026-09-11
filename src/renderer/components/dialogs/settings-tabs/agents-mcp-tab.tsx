@@ -26,10 +26,10 @@ import {
 } from "./mcp"
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
 
-type McpProvider = "claude-code" | "codex"
+type McpProvider = "claude-code" | "codex" | "cursor"
 type ProviderSection = {
   provider: McpProvider
-  title: "CODEX" | "CLAUDE CODE"
+  title: "CODEX" | "CLAUDE CODE" | "CURSOR"
 }
 
 type ListedServer = {
@@ -165,6 +165,12 @@ function McpServerDetail({
             </Button>
           )}
         </div>
+
+        {provider === "cursor" && (
+          <p className="text-xs text-muted-foreground">
+            Managed in project <code className="bg-muted px-1 py-0.5 rounded">.cursor/mcp.json</code>
+          </p>
+        )}
 
         {/* Enable/Disable Toggle */}
         {isToggleable && onToggleEnabled && (
@@ -458,7 +464,11 @@ function CreateMcpServerForm({
 export function AgentsMcpTab() {
   const lastSelectedAgentId = useAtomValue(lastSelectedAgentIdAtom)
   const defaultAddProvider: McpProvider =
-    lastSelectedAgentId === "codex" ? "codex" : "claude-code"
+    lastSelectedAgentId === "codex"
+      ? "codex"
+      : lastSelectedAgentId === "cursor"
+        ? "claude-code"
+        : "claude-code"
   const [selectedServerKey, setSelectedServerKey] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
@@ -470,13 +480,29 @@ export function AgentsMcpTab() {
   } | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const providerSections = useMemo<ProviderSection[]>(
-    () => [
+  const providerSections = useMemo<ProviderSection[]>(() => {
+    const sections: ProviderSection[] = [
       { provider: "claude-code", title: "CLAUDE CODE" },
       { provider: "codex", title: "CODEX" },
-    ],
-    [],
-  )
+      { provider: "cursor", title: "CURSOR" },
+    ]
+
+    if (lastSelectedAgentId === "cursor") {
+      return [
+        { provider: "cursor", title: "CURSOR" },
+        ...sections.filter((section) => section.provider !== "cursor"),
+      ]
+    }
+
+    if (lastSelectedAgentId === "codex") {
+      return [
+        { provider: "codex", title: "CODEX" },
+        ...sections.filter((section) => section.provider !== "codex"),
+      ]
+    }
+
+    return sections
+  }, [lastSelectedAgentId])
 
   // Focus search on "/" hotkey
   useEffect(() => {
@@ -498,16 +524,27 @@ export function AgentsMcpTab() {
   const codexMcpQuery = trpc.codex.getAllMcpConfig.useQuery(undefined, {
     staleTime: 10 * 60 * 1000,
   })
-  const hasAnyData = Boolean(claudeMcpQuery.data || codexMcpQuery.data)
+  const cursorMcpQuery = trpc.cursor.getAllMcpConfig.useQuery(undefined, {
+    staleTime: 10 * 60 * 1000,
+  })
+  const hasAnyData = Boolean(
+    claudeMcpQuery.data || codexMcpQuery.data || cursorMcpQuery.data,
+  )
   const isLoadingConfig =
-    !hasAnyData && (claudeMcpQuery.isLoading || codexMcpQuery.isLoading)
+    !hasAnyData &&
+    (claudeMcpQuery.isLoading ||
+      codexMcpQuery.isLoading ||
+      cursorMcpQuery.isLoading)
   const refreshClaudeMcpMutation = trpc.claude.refreshMcpConfig.useMutation()
   const refreshCodexMcpMutation = trpc.codex.refreshMcpConfig.useMutation()
+  const refreshCursorMcpMutation = trpc.cursor.refreshMcpConfig.useMutation()
   const isRefreshingConfig =
     claudeMcpQuery.isFetching ||
     codexMcpQuery.isFetching ||
+    cursorMcpQuery.isFetching ||
     refreshClaudeMcpMutation.isPending ||
-    refreshCodexMcpMutation.isPending
+    refreshCodexMcpMutation.isPending ||
+    refreshCursorMcpMutation.isPending
 
   const startClaudeOAuthMutation = trpc.claude.startMcpOAuth.useMutation()
   const startCodexOAuthMutation = trpc.codex.startMcpOAuth.useMutation()
@@ -537,15 +574,18 @@ export function AgentsMcpTab() {
     return {
       codex: sortGroups(codexMcpQuery.data?.groups || []),
       claudeCode: sortGroups(claudeMcpQuery.data?.groups || []),
+      cursor: sortGroups(cursorMcpQuery.data?.groups || []),
     }
-  }, [codexMcpQuery.data?.groups, claudeMcpQuery.data?.groups])
+  }, [codexMcpQuery.data?.groups, claudeMcpQuery.data?.groups, cursorMcpQuery.data?.groups])
 
   const allListedServers = useMemo<ListedServer[]>(() => {
     return providerSections.flatMap((section) => {
       const groups =
         section.provider === "codex"
           ? sortedGroupsByProvider.codex
-          : sortedGroupsByProvider.claudeCode
+          : section.provider === "cursor"
+            ? sortedGroupsByProvider.cursor
+            : sortedGroupsByProvider.claudeCode
 
       return groups.flatMap((group) =>
         group.mcpServers.map((server) => ({
@@ -617,6 +657,9 @@ export function AgentsMcpTab() {
         if (targetProvider === "codex") {
           await refreshCodexMcpMutation.mutateAsync()
           await codexMcpQuery.refetch({ cancelRefetch: false })
+        } else if (targetProvider === "cursor") {
+          await refreshCursorMcpMutation.mutateAsync()
+          await cursorMcpQuery.refetch({ cancelRefetch: false })
         } else if (targetProvider === "claude-code") {
           await refreshClaudeMcpMutation.mutateAsync()
           await claudeMcpQuery.refetch({ cancelRefetch: false })
@@ -624,10 +667,12 @@ export function AgentsMcpTab() {
           await Promise.all([
             refreshCodexMcpMutation.mutateAsync(),
             refreshClaudeMcpMutation.mutateAsync(),
+            refreshCursorMcpMutation.mutateAsync(),
           ])
           await Promise.all([
             codexMcpQuery.refetch({ cancelRefetch: false }),
             claudeMcpQuery.refetch({ cancelRefetch: false }),
+            cursorMcpQuery.refetch({ cancelRefetch: false }),
           ])
         }
         if (!silent) {
@@ -642,8 +687,10 @@ export function AgentsMcpTab() {
     [
       codexMcpQuery,
       claudeMcpQuery,
+      cursorMcpQuery,
       refreshCodexMcpMutation,
       refreshClaudeMcpMutation,
+      refreshCursorMcpMutation,
     ],
   )
 
@@ -755,6 +802,9 @@ export function AgentsMcpTab() {
   }
 
   const isEditableServer = (item: ListedServer): boolean => {
+    if (item.provider === "cursor") {
+      return false
+    }
     if (item.provider === "codex") {
       // Codex edit/delete currently supports global scope only.
       return !item.projectPath
@@ -923,12 +973,15 @@ export function AgentsMcpTab() {
           <McpServerDetail
             provider={selectedServer.provider}
             server={selectedServer.server}
-            onAuth={() =>
-              handleAuth(
-                selectedServer.provider,
-                selectedServer.server.name,
-                selectedServer.projectPath,
-              )
+            onAuth={
+              selectedServer.provider === "cursor"
+                ? undefined
+                : () =>
+                    handleAuth(
+                      selectedServer.provider,
+                      selectedServer.server.name,
+                      selectedServer.projectPath,
+                    )
             }
             onLogout={
               selectedServer.provider === "codex" && canCodexLogout(selectedServer.server)

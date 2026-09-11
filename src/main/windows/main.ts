@@ -25,6 +25,7 @@ import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/routers/claude"
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
+import { hasActiveCursorStreams, abortAllCursorStreams } from "../lib/trpc/routers/cursor"
 import { hasActiveNativeTurns, abortAllNativeTurns } from "../lib/trpc/routers/runtime"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
@@ -849,7 +850,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       if (!input.shift) {
         // Block Cmd+R entirely
         event.preventDefault()
-      } else if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveNativeTurns()) {
+      } else if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveNativeTurns() || hasActiveCursorStreams()) {
         // Cmd+Shift+R with active streams — intercept and confirm
         event.preventDefault()
         dialog
@@ -868,6 +869,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
               abortAllClaudeSessions()
               abortAllNativeTurns()
               abortAllCodexStreams()
+              abortAllCursorStreams()
               window.webContents.reloadIgnoringCache()
             }
           })
@@ -935,10 +937,11 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       // Still abort sessions gracefully so partial state is saved
       abortAllClaudeSessions()
       abortAllCodexStreams()
+      abortAllCursorStreams()
       return
     }
 
-    if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+    if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveCursorStreams()) {
       event.preventDefault()
       dialog
         .showMessageBox(window, {
@@ -956,6 +959,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
             abortAllClaudeSessions()
             abortAllNativeTurns()
             abortAllCodexStreams()
+            abortAllCursorStreams()
             window.destroy()
           }
         })

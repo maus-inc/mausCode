@@ -15,7 +15,16 @@ A complete 5th provider ("Cursor CLI") driving the `cursor-agent` binary over AC
 - Requires: `cursor-agent` on PATH (Windows: %LocalAppData%/cursor-agent) +
   Cursor subscription; `@mcpc-tech/acp-ai-provider` (already in our tree).
 
-## Recommendation: HOLD for explicit user decision (user-facing scope)
+## Outcome: ADOPTED 2026-09-11 (user-approved after Batch C)
+
+Ported in brief order (model-id + CURSOR_MODELS + atoms -> binary + router ->
+transport -> login UI -> selector/form/input wiring -> MCP tab), adapted to our
+5-provider selector (gemini/openrouter kept) and per-subchat seed pattern.
+Model IDs re-validation against `cursor-agent` ACP session availability is
+still open (brief risk #3 stands). Login surfaces via CursorLoginModal on
+auth-error; no models-tab section (matches fork).
+
+## Original recommendation (superseded): HOLD for explicit user decision
 
 1. mausCode already serves 4 providers + native; a 5th provider adds login UX,
    onboarding, settings, testing, and support surface.
