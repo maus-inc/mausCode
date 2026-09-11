@@ -63,9 +63,13 @@ evidence required for any perf claim, no new dependencies.
   changes is a data-integrity decision needing its own design + tests; deferred, now well-scoped.
 - **npm `overrides` to fix the renderer build failure** — the failure was npm/bun.lock
   dependency *drift in this sandbox*, not a code bug; repo stays on bun.lock, no overrides added.
-- **Generating app icon sets in this pass** — needs a design asset + icon toolchain; tracked
-  as pending-visual rather than shipping a machine-stretched logo as the .icns/.ico.
-- **Bumping the version on rebrand** — see D6.
+- **Bumping the version on rebrand** — see D6 (later reversed by the human: 0.1.0).
+
+## Visual assets (2026-09-11, human-directed)
+
+Initially deferred the icon set (no design master available). The human then supplied the
+official masters in `new mauscode branding/`, and the set was generated (see
+`audits/ui-rebrand-audit.md` for exact sources + geometry).
 
 ## Branch integration (parallel CI workstream)
 
@@ -150,11 +154,15 @@ rebased my commits onto it and resolved:
 
 ## Risks / follow-ups
 
-- **App icons + DMG backgrounds still 1Code art** (pending-visual): `build/icon.icns`,
-  `icon.ico`, `icon.png`, `dmg-background*`, `background*`, `settingsTemplate*`,
-  `trayTemplate*`, `src/renderer/assets/*.gif`. Also `scripts/generate-icon.mjs` can't run
-  here (sharp missing). Blocker: a design-approved master image. Until then, installers
-  ship old artwork with new metadata.
+- **Demo GIFs still 1Code footage** (owner: human): `assets/{worktree,plan-mode,cursor-
+  ui}.gif` are screen recordings of the 1Code UI — the old name is baked into the frames,
+  so only re-recording fixes them. Marked in `assets/RE-RECORD.md`; re-record on the first
+  visually-final release. Not referenced by `src/` yet (staged assets).
+- **Installer icon provenance**: app/tray/settings icons were generated from the official
+  masters in `new mauscode branding/` (ImageMagick resize + a no-dependency `.icns`
+  container script; `scripts/generate-icon.mjs` still can't run here — sharp missing). If
+  the masters are ever revised, regenerate from them; keep the tray geometry (1840² @ +200+200,
+  r=350 on 2240²) so it matches the 1Code-era tray slot.
 - **Control plane absent** — sign-in/changelog/auto-update/automations are inert by design
   until `MAIN_VITE_API_URL` is configured. README states this honestly ("early development").
 - **Notarization** — `21st-notarize` keychain unavailable in sandbox; maus-inc must

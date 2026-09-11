@@ -5,8 +5,8 @@ before changing anything; "rework" means strings/identity that still communicate
 1Code mental model were rewritten, and working behavior was preserved.
 
 Status legend: **done** — changed in this branch · **done (bug fix)** — file touched for import
-correctness after the worktree-paths extraction, no string changes · **pending-visual** — needs
-generated image assets (see Risks) · **n/a** — no brand content.
+correctness after the worktree-paths extraction, no string changes · **owner: human — RE-RECORD**
+— human-owned task with a tracking file in the repo · **n/a** — no brand content.
 
 ## Surfaces
 
@@ -32,8 +32,8 @@ generated image assets (see Risks) · **n/a** — no brand content.
 | Automations UI | `features/automations/*.tsx` (3 files) | done | Brand strings in automation views (hosted feature, off by default) |
 | Documentation | `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `openspec/project.md`, `.env.example` | done | Full rewrites (see second-brain.md) |
 | Manifests / app metadata | `package.json` (name, productName, author, homepage, build.appId, build.protocols, NSMicrophoneUsageDescription) | done | `mauscode-desktop` / `mausCode` / `maus-inc` / `dev.mausinc.mauscode` / scheme `mauscode` |
-| App icons / DMG backgrounds | `build/icon.*`, `build/dmg-background*`, `build/background*`, `build/settingsTemplate*`, `build/trayTemplate*` | **pending-visual** | Inherited 1Code bitmaps still in place. Generating .icns/.ico/app-icon sets needs a design asset + icon toolchain (see Risks). Tracked as a follow-up task, not a string issue. |
-| Loading gif / assets | `src/renderer/assets/*.gif` | **pending-visual** | Inherited animation asset; swap when new visual set exists |
+| App icons / DMG backgrounds | `build/icon.{png,icns,ico}`, `build/dmg-background*`, `build/background*`, `build/settingsTemplate*`, `build/trayTemplate*` | done | 1Code bitmaps replaced from official masters (2026-09-11). App icon = `icon-blackbackdropwhitelogotransparentbg` (png/icns/ico size chain). Tray = `logo-whitebackgroundblacklogo` squircled (r=350 @ 1840², +200+200 on 2240² — matches 1Code tray geometry). Settings = generic gear template (12/24px). DMG + window backgrounds: confetti recolored from pastel blue/pink to pale black (SVG `#09090b` fills + raster `fx` desaturation, opacity preserved). |
+| Demo GIFs | `assets/{worktree,plan-mode,cursor-ui}.gif` (repo root) | **owner: human — RE-RECORD** | Screen recordings of the 1Code UI; old name is baked into the footage, so a logo/string swap cannot fix them. Marked in `assets/RE-RECORD.md`; re-record on the first visually-final mausCode release. |
 
 ## What deliberately was NOT changed
 
