@@ -93,6 +93,12 @@
 - [x] Rejected: backend-route (no consumer), banner-model/changelog-url
       (already inline), release-config (overlaps ours, branded, no consumer)
 
+## Phase 9 — ning (reviewed 2026-09-11, rejected wholesale)
+
+- [x] Rejected: security-mining (zh-only pentest niche); tooling/ subsystem
+      (arch fork: private claude home, ProviderAdapter, router rewrites);
+      skills exts (need that backend); skill-md + voice already-have
+
 ## Pending (not in any phase until reviewed)
 
-- [ ] ning skills/security-mining / Locus deep mine / T3 server-auth+orchestration+MCP
+- [ ] Locus deep mine / T3 server-auth+orchestration+MCP
