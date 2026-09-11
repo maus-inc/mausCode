@@ -80,6 +80,19 @@
 - [x] Rejected: web-standalone + vendor-auth-optional (out of scope /
       opposite direction)
 
+## Phase 7 — sylvain mine (reviewed 2026-09-11)
+
+- [x] Take: dev-server feature (detect router + hook + button + constants,
+      running-atom, active-chat render; FR->EN)
+- [x] Verify: tsc zero-delta (25), node--test 27/27, secrets clean
+- [x] Rejected: archive/reorder (already-have), emoji picker (dep+pipeline
+      weight), 5-mode taxonomy HELD (user-facing scope decision)
+
+## Phase 8 — jhckevin (reviewed 2026-09-11, rejected wholesale)
+
+- [x] Rejected: backend-route (no consumer), banner-model/changelog-url
+      (already inline), release-config (overlaps ours, branded, no consumer)
+
 ## Pending (not in any phase until reviewed)
 
-- [ ] ning / sylv / jhckevin / Locus / T3 server-auth+orchestration+MCP
+- [ ] ning skills/security-mining / Locus deep mine / T3 server-auth+orchestration+MCP

@@ -9,6 +9,7 @@ import { anthropicAccountsRouter } from "./anthropic-accounts"
 import { ollamaRouter } from "./ollama"
 import { codexRouter } from "./codex"
 import { cursorRouter } from "./cursor"
+import { devServerRouter } from "./dev-server"
 // Transplanted from erenbertr/1code (Apache-2.0): provider + usage routers
 import { geminiRouter } from "./gemini"
 import { openrouterRouter } from "./openrouter"
@@ -45,6 +46,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     ollama: ollamaRouter,
     codex: codexRouter,
     cursor: cursorRouter,
+    devServer: devServerRouter,
     gemini: geminiRouter,
     openrouter: openrouterRouter,
     github: githubRouter,

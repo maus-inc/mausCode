@@ -97,6 +97,7 @@ import { FileViewerSidebar } from "../../file-viewer"
 import { FileSearchDialog } from "../../file-viewer/components/file-search-dialog"
 import { terminalBottomHeightAtom, terminalDisplayModeAtom, terminalSidebarOpenAtomFamily } from "../../terminal/atoms"
 import { TerminalBottomPanelContent, TerminalSidebar } from "../../terminal/terminal-sidebar"
+import { DevServerButton } from "../../terminal/dev-server-button"
 import { getTerminalScopeKey } from "../../terminal/utils"
 import {
   agentsChangesPanelCollapsedAtom,
@@ -7899,6 +7900,14 @@ Make sure to preserve all functionality from both branches when resolving confli
                       </span>
                     </PreviewSetupHoverCard>
                   ))}
+                {/* Dev Server Play/Stop Button - desktop only, local worktree only */}
+                {!isMobileFullscreen && worktreePath && (
+                  <DevServerButton
+                    chatId={chatId}
+                    scopeKey={terminalScopeKey}
+                    cwd={worktreePath}
+                  />
+                )}
                 {/* Overview/Terminal Button - shows when sidebar is closed and worktree/sandbox exists (desktop only) */}
                 {!isMobileFullscreen &&
                   (worktreePath || sandboxId) && (

@@ -21,6 +21,12 @@ export const terminalSidebarOpenAtomFamily = atomFamily((chatId: string) =>
   ),
 )
 
+// NOTE (transplant): dev-server running flag per terminal scope (sylvaindiv/1code, Apache-2.0).
+// Ephemeral (not persisted); the hook reconciles against trpc.terminal.getSession on mount.
+export const devServerRunningAtomFamily = atomFamily((_scopeKey: string) =>
+  atom(false),
+)
+
 // Deprecated: Keep for backwards compatibility, but should not be used
 // Use terminalSidebarOpenAtomFamily(chatId) instead
 export const terminalSidebarOpenAtom = atom(false)
