@@ -18,6 +18,8 @@ export { NativeTranslator, NATIVE_ERROR_PREFIX, NATIVE_QUESTION_PREFIX } from ".
 export { ensureNativeSession, getMappedNativeSession } from "./sessions"
 export { applyNativeCredentials, NativeCredentialError } from "./credentials"
 export type { NativeCredentialRequest, NativeCredentialResult } from "./credentials"
+export { resolveNativeMcpSnapshot } from "./mcp-config"
+export type { NativeMcpSnapshot, NativeMcpServerView, NativeMcpConfigError } from "./mcp-config"
 export {
   buildDaemonEndpointEnv,
   endpointMatches,
