@@ -61,12 +61,17 @@
 
 - [ ] Evaluate as Codex-adapter upgrade; feeds adapter, not native
 
-## Phase 6 — SamSammane/1code-ui (repo now accessible; IN PROGRESS)
+## Phase 6 — SamSammane/1code-ui (reviewed; micro-ports done)
 
 - [x] Re-check access: HEAD `12f0676` resolves; fetched to `refs/harvest/1code-ui`
-- [ ] Review 3 commits (Cursor CLI integration, web API server, parity fixes)
-- [ ] Transplant decision + scoped port (excl. dist-web build output)
-- [ ] Verify + ledger update per pickup
+- [x] Review 3 commits (Cursor CLI integration, web API server, parity fixes;
+      dist-web excluded)
+- [x] Scoped port: cli-binaries + codex/claude PATH fallback,
+      CODEX_SUBSCRIPTION_ONLY_MODEL_IDS + filters, hidden-models v5
+- [x] Verify: tsc identical-31 (zero new), 70/70 tests, secrets clean
+- [ ] Cursor-provider adoption: USER DECISION (see
+      .dump/app/decisions/phase6-cursor-provider-adoption.md); web-standalone
+      + vendor-auth-optional rejected (out of scope / opposite direction)
 
 ## Pending (not in any phase until reviewed)
 

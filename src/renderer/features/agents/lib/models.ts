@@ -7,6 +7,12 @@ export const CLAUDE_MODELS = [
 
 export type CodexThinkingLevel = "low" | "medium" | "high" | "xhigh"
 
+/** Codex models that require ChatGPT sign-in (not available with API key auth).
+ * Transplanted from SamSammane/1code-ui (Apache-2.0). */
+export const CODEX_SUBSCRIPTION_ONLY_MODEL_IDS = [
+  "gpt-5.3-codex-spark",
+] as const
+
 export const CODEX_MODELS = [
   {
     id: "gpt-5.5",

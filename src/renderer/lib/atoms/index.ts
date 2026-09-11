@@ -825,8 +825,8 @@ export function normalizeCodexApiKey(apiKey: string): string | null {
 // Set of model IDs that are hidden from the model selector dropdown
 // Models are shown by default; only hidden models are stored
 export const hiddenModelsAtom = atomWithStorage<string[]>(
-  "preferences:hidden-models-v4",
-  ["gpt-5.1-codex-max", "gpt-5.1-codex-mini"],
+  "preferences:hidden-models-v5",
+  ["gpt-5.4-mini", "gpt-5.3-codex-spark"],
   undefined,
   { getOnInit: true },
 )

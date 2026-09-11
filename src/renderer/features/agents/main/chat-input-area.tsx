@@ -98,6 +98,7 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
   GEMINI_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
@@ -567,10 +568,15 @@ export const ChatInputArea = memo(function ChatInputArea({
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const { data: claudeCodeIntegration } =
     trpc.claudeCode.getIntegration.useQuery()
-  const codexUiModels = useMemo(
-    () => CODEX_MODELS.filter((model) => !hiddenModels.includes(model.id)),
-    [hiddenModels],
-  )
+  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
+  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
+  const codexUiModels = useMemo(() => {
+    const subscriptionOnly = new Set<string>(CODEX_SUBSCRIPTION_ONLY_MODEL_IDS)
+    const models = hasAppCodexApiKey
+      ? CODEX_MODELS.filter((model) => !subscriptionOnly.has(model.id))
+      : CODEX_MODELS
+    return models.filter((model) => !hiddenModels.includes(model.id))
+  }, [hasAppCodexApiKey, hiddenModels])
   const geminiUiModels = useMemo(
     () => GEMINI_MODELS.filter((model) => !hiddenModels.includes(model.id)),
     [hiddenModels],

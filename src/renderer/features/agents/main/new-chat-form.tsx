@@ -57,6 +57,8 @@ import { WorkModeSelector } from "../components/work-mode-selector"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
 import {
+  codexApiKeyAtom,
+  normalizeCodexApiKey,
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
   anthropicOnboardingCompletedAtom,
@@ -125,6 +127,7 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
   GEMINI_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
@@ -375,10 +378,15 @@ export function NewChatForm({
   }, [lastSelectedModelId])
 
   const hiddenModels = useAtomValue(hiddenModelsAtom)
-  const codexUiModels = useMemo(
-    () => CODEX_MODELS.filter((model) => !hiddenModels.includes(model.id)),
-    [hiddenModels],
-  )
+  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
+  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
+  const codexUiModels = useMemo(() => {
+    const subscriptionOnly = new Set<string>(CODEX_SUBSCRIPTION_ONLY_MODEL_IDS)
+    const models = hasAppCodexApiKey
+      ? CODEX_MODELS.filter((model) => !subscriptionOnly.has(model.id))
+      : CODEX_MODELS
+    return models.filter((model) => !hiddenModels.includes(model.id))
+  }, [hasAppCodexApiKey, hiddenModels])
   const selectedCodexModel = useMemo(
     () =>
       codexUiModels.find((model) => model.id === lastSelectedCodexModelId) ||

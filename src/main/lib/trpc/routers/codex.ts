@@ -22,6 +22,7 @@ import {
 } from "../../../../shared/codex-tool-normalizer"
 import { createChunkCoalescer } from "../../claude"
 import { getClaudeShellEnvironment } from "../../claude/env"
+import { resolveCliBinaryPath } from "../../cli-binaries"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
 import {
@@ -260,17 +261,23 @@ function resolveBundledCodexCliPath(): string {
       )
 
   const binaryPath = join(resourcesDir, binaryName)
-  if (existsSync(binaryPath)) {
-    return binaryPath
-  }
 
-  const hint = app.isPackaged
+  // NOTE (transplant): PATH fallback via resolveCliBinaryPath from
+  // SamSammane/1code-ui (Apache-2.0) — dev boxes and global installs work
+  // without a bundled binary.
+  const downloadHint = app.isPackaged
     ? "Binary is missing from bundled resources."
-    : "Run `bun run codex:download` to download it for local dev."
+    : "Run `bun run codex:download` or install Codex CLI globally."
 
-  throw new Error(
-    `[codex] Bundled Codex CLI not found at ${binaryPath}. ${hint}`,
-  )
+  const resolved = resolveCliBinaryPath({
+    bundledPath: binaryPath,
+    commandName: "codex",
+    downloadHint,
+  })
+  if (resolved !== binaryPath) {
+    console.log(`[codex] Using Codex CLI from PATH: ${resolved}`)
+  }
+  return resolved
 }
 
 function stripAnsi(input: string): string {
