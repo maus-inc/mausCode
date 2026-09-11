@@ -220,6 +220,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                   icon={nestedMeta.icon}
                   title={nestedMeta.title(nestedPart)}
                   subtitle={nestedMeta.subtitle?.(nestedPart)}
+                  diffStats={nestedMeta.diffStats?.(nestedPart)}
                   tooltipContent={nestedMeta.tooltipContent?.(nestedPart, projectPath)}
                   isPending={nestedIsPending}
                   isError={nestedIsError}

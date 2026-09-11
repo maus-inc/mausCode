@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
@@ -200,7 +200,15 @@ export async function applySandboxGitState(
 	const isFullExport = exportData.meta.isFullExport ?? false;
 	console.log(`[sandbox-import] Is full export: ${isFullExport}`);
 
+	// The bundle and patch payloads are written to disk before git reads them.
+	// mkdtemp creates a directory only this process can enter, so a local user
+	// cannot pre-create the path and substitute its contents. The previous
+	// filenames were built from Date.now() in the shared temp directory and so
+	// were guessable.
+	let scratchDir: string | undefined;
+
 	try {
+		scratchDir = await mkdtemp(join(tmpdir(), "sandbox-import-"));
 		// For full exports (cloning to empty repo), set up remote first
 		if (isFullExport && exportData.meta.remoteUrl) {
 			console.log(`[sandbox-import] Setting up remote origin: ${exportData.meta.remoteUrl}`);
@@ -232,58 +240,54 @@ export async function applySandboxGitState(
 		// 2. Apply git bundle (if there are new commits)
 		if (exportData.bundle) {
 			console.log(`[sandbox-import] Step 2: Applying git bundle (${exportData.bundle.length} bytes)...`);
-			const bundlePath = join(tmpdir(), `sandbox-import-${Date.now()}.bundle`);
+			const bundlePath = join(scratchDir, "export.bundle");
 			console.log(`[sandbox-import] Bundle temp path: ${bundlePath}`);
-			try {
-				await writeFile(bundlePath, exportData.bundle);
-				console.log(`[sandbox-import] Bundle written to temp file`);
+			await writeFile(bundlePath, exportData.bundle);
+			console.log(`[sandbox-import] Bundle written to temp file`);
 
-				// Verify the bundle is valid
-				console.log(`[sandbox-import] Verifying bundle...`);
-				const verifyResult = await execFileAsync("git", ["-C", worktreePath, "bundle", "verify", bundlePath], {
-					timeout: 30_000,
-				});
-				console.log(`[sandbox-import] Bundle verify output:`, verifyResult.stdout);
+			// Verify the bundle is valid
+			console.log(`[sandbox-import] Verifying bundle...`);
+			const verifyResult = await execFileAsync("git", ["-C", worktreePath, "bundle", "verify", bundlePath], {
+				timeout: 30_000,
+			});
+			console.log(`[sandbox-import] Bundle verify output:`, verifyResult.stdout);
 
-				if (isFullExport) {
-					// Full export: fetch all refs from bundle, then checkout the branch
-					// Use --update-head-ok to allow fetching into the currently checked out branch
-					console.log(`[sandbox-import] Full export: fetching all refs from bundle...`);
-					const fetchResult = await execFileAsync(
-						"git",
-						["-C", worktreePath, "fetch", "--update-head-ok", bundlePath, "refs/heads/*:refs/heads/*"],
-						{ timeout: 120_000 },
-					);
-					console.log(`[sandbox-import] Fetch output:`, fetchResult.stdout, fetchResult.stderr);
+			if (isFullExport) {
+				// Full export: fetch all refs from bundle, then checkout the branch
+				// Use --update-head-ok to allow fetching into the currently checked out branch
+				console.log(`[sandbox-import] Full export: fetching all refs from bundle...`);
+				const fetchResult = await execFileAsync(
+					"git",
+					["-C", worktreePath, "fetch", "--update-head-ok", bundlePath, "refs/heads/*:refs/heads/*"],
+					{ timeout: 120_000 },
+				);
+				console.log(`[sandbox-import] Fetch output:`, fetchResult.stdout, fetchResult.stderr);
 
-					// Checkout the branch that was active in the sandbox (with force to update working tree)
-					const targetBranch = exportData.meta.branch;
-					console.log(`[sandbox-import] Checking out branch: ${targetBranch}`);
-					await git.checkout(["-f", targetBranch]);
-					console.log(`[sandbox-import] Checked out branch successfully: ${targetBranch}`);
-				} else {
-					// Delta export: fetch HEAD to temp branch, then reset
-					await execFileAsync(
-						"git",
-						["-C", worktreePath, "fetch", bundlePath, "HEAD:sandbox-import-temp"],
-						{ timeout: 60_000 },
-					);
+				// Checkout the branch that was active in the sandbox (with force to update working tree)
+				const targetBranch = exportData.meta.branch;
+				console.log(`[sandbox-import] Checking out branch: ${targetBranch}`);
+				await git.checkout(["-f", targetBranch]);
+				console.log(`[sandbox-import] Checked out branch successfully: ${targetBranch}`);
+			} else {
+				// Delta export: fetch HEAD to temp branch, then reset
+				await execFileAsync(
+					"git",
+					["-C", worktreePath, "fetch", bundlePath, "HEAD:sandbox-import-temp"],
+					{ timeout: 60_000 },
+				);
 
-					// Reset to the fetched commits
-					await git.reset(["--hard", "sandbox-import-temp"]);
+				// Reset to the fetched commits
+				await git.reset(["--hard", "sandbox-import-temp"]);
 
-					// Clean up temp branch
-					await git.branch(["-D", "sandbox-import-temp"]).catch(() => {});
-				}
-			} finally {
-				await unlink(bundlePath).catch(() => {});
+				// Clean up temp branch
+				await git.branch(["-D", "sandbox-import-temp"]).catch(() => {});
 			}
 		}
 
 		// 3. Apply staged patch (stage the changes)
 		if (exportData.stagedPatch) {
 			console.log(`[sandbox-import] Step 3: Applying staged patch (${exportData.stagedPatch.length} chars)...`);
-			const stagedPatchPath = join(tmpdir(), `sandbox-staged-${Date.now()}.patch`);
+			const stagedPatchPath = join(scratchDir, "staged.patch");
 			try {
 				await writeFile(stagedPatchPath, exportData.stagedPatch);
 
@@ -301,8 +305,6 @@ export async function applySandboxGitState(
 				}).catch(() => {});
 			} catch (error) {
 				console.warn(`[sandbox-import] Failed to apply staged patch: ${error}`);
-			} finally {
-				await unlink(stagedPatchPath).catch(() => {});
 			}
 		} else {
 			console.log(`[sandbox-import] Step 3: No staged patch to apply`);
@@ -311,7 +313,7 @@ export async function applySandboxGitState(
 		// 4. Apply unstaged patch (don't stage)
 		if (exportData.unstagedPatch) {
 			console.log(`[sandbox-import] Step 4: Applying unstaged patch (${exportData.unstagedPatch.length} chars)...`);
-			const unstagedPatchPath = join(tmpdir(), `sandbox-unstaged-${Date.now()}.patch`);
+			const unstagedPatchPath = join(scratchDir, "unstaged.patch");
 			try {
 				await writeFile(unstagedPatchPath, exportData.unstagedPatch);
 
@@ -321,8 +323,6 @@ export async function applySandboxGitState(
 				console.log(`[sandbox-import] Unstaged patch applied successfully`);
 			} catch (error) {
 				console.warn(`[sandbox-import] Failed to apply unstaged patch: ${error}`);
-			} finally {
-				await unlink(unstagedPatchPath).catch(() => {});
 			}
 		} else {
 			console.log(`[sandbox-import] Step 4: No unstaged patch to apply`);
@@ -348,6 +348,10 @@ export async function applySandboxGitState(
 		console.error(`[sandbox-import] applySandboxGitState FAILED: ${errorMessage}`);
 		console.error(`[sandbox-import] Stack:`, error);
 		return { success: false, error: errorMessage };
+	} finally {
+		if (scratchDir) {
+			await rm(scratchDir, { recursive: true, force: true }).catch(() => {});
+		}
 	}
 }
 

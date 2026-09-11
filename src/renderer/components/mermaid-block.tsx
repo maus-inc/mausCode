@@ -5,7 +5,6 @@ import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pa
 import { cn } from "../lib/utils"
 import {
   Dialog,
-  DialogContent,
   DialogPortal,
   DialogTitle,
 } from "./ui/dialog"
@@ -126,7 +125,11 @@ const getMermaidConfig = (isDark: boolean): Record<string, unknown> => ({
         titleColor: "#18181b",
         edgeLabelBackground: "#fafafa",
       },
-  securityLevel: "loose" as const,
+  // "strict" encodes HTML in diagram text and disables click callbacks.
+  // Diagram source comes from agent-authored markdown (including files read out
+  // of untrusted repositories), so "loose" - which allows raw HTML and
+  // click handlers - is an XSS path into the Electron renderer.
+  securityLevel: "strict" as const,
   fontFamily: "inherit",
 })
 
