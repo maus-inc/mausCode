@@ -63,9 +63,12 @@
 - [x] Deps: effect 4.0.0-rc.112 (exact), vitest + @effect/vitest (dev); npm run test:contracts
 - [x] Verify: vitest 382/382, tsc zero-delta (25), node--test 27/27, secrets clean
 
-## Phase 5 — T3 codex-app-server evaluation (not committed)
+## Phase 5 — T3 codex-app-server evaluation (SPIKED 2026-09-11)
 
-- [ ] Evaluate as Codex-adapter upgrade; feeds adapter, not native
+- [x] Spike: 18 files run in our toolchain (vitest 36/36 incl. live stdio
+      mock-peer round-trip); report in .dump/app/research/phase5-codex-app-server-spike.md
+- [x] Verdict: ADOPT as follow-up port (native app-server replaces ACP hop;
+      adapter only, WONTFIX unchanged); RC pins kept in devDeps; scratch removed
 
 ## Phase 6 — SamSammane/1code-ui (reviewed; micro-ports done)
 

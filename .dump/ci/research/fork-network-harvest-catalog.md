@@ -127,6 +127,7 @@ Delta base: `HEAD` (our init) <-> `forkup/main`. 230 files total: 66 A,, 123 M,,
 - Status: 3,833 commits; active nightly (`v0.0.41-nightly.2026.0911` = today); many `agents/mcp-*` branches(mcp controls, conversations, environment, projects, queue-inputs, scheduled-tasks, terminals, preview-controls, checkpoints,. Target for: **optional backend for external CLIs** - port + refactor to our stack(do not build blind)Detailed lineage/architecture/port-plan requested `deep-research` - separate section below soon.
 
 ## Action log
+- 2026-09-11(q): Phase 5 SPIKED (effect-codex-app-server @211618f): 18 files, vitest 36/36 incl. stdio mock-peer round-trip in our toolchain; verdict ADOPT as follow-up adapter port (report .dump/app/research/phase5-codex-app-server-spike.md); RC-skew lesson recorded, pins kept; scratch removed; WONTFIX unchanged.
 - 2026-09-11(p): Phase 4 PORTED (T3 contracts @211618f, MIT): 67 files to src/shared/contracts/ (verbatim + headers; tests vite-plus/test->vitest); effect 4.0.0-rc.112 exact (isolated layer, decision in .dump/app/decisions/effect-adoption-t3-layers-2026-09-11.md); npm run test:contracts = 382/382; tsc zero-delta (25), 27/27, secrets clean. T3 ids kept verbatim (renames deferred to scaffold wiring).
 - 2026-09-11: full fork-network scan(618 forks); candidates identified; catalog created.
 - 2026-09-11(b): Category-A file map produced (above); Category-C maps added; SamSammanne Not Found; t3code fetched. Next: t3code deep-research + transplant per approval.

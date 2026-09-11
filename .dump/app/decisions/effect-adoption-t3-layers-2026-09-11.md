@@ -23,7 +23,12 @@ Adopt `effect` as a dependency ISOLATED to ported T3 layers
 
 ## Terms
 - Pin EXACT `effect@4.0.0-rc.112` (+ `@effect/vitest` same for tests,
-  `vitest` per its peer range). No `^`.
+  `vitest` per its peer range). No `^`. Phase 5 spike proved transitives
+  drift independently: `@effect/platform-node-shared@rc.114` broke against
+  `effect@rc.112`, fixed by direct exact pin. ALL `@effect/*` packages
+  (incl. `@effect/platform-node[-shared]`, kept as devDeps for the
+  codex-app-server port) stay exact-pinned; add npm overrides if a caret
+  escapes again.
 - Upgrade to v4 stable when released; until then, no other code may depend
   on Effect behavior.
 - Port is verbatim except: attribution headers, `vite-plus/test`→`vitest`
