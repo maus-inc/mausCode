@@ -134,6 +134,7 @@ import {
   GEMINI_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
+import { isSubChatProvider } from "../../../../shared/sub-chat-provider"
 type PlanType = string
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
@@ -1370,6 +1371,7 @@ export function NewChatForm({
       projectId: selectedProject.id,
       name: selectedProject.name || message.trim().slice(0, 50), // Use project name as workspace name
       model: selectedChatModel,
+      ...(isSubChatProvider(selectedAgent.id) ? { provider: selectedAgent.id } : {}),
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
         workMode === "worktree" ? selectedBranch || undefined : undefined,
@@ -2407,6 +2409,7 @@ export function NewChatForm({
                     projectId: validatedProject.id,
                     name: "Worktree Setup",
                     model: selectedChatModel,
+                    ...(isSubChatProvider(selectedAgent.id) ? { provider: selectedAgent.id } : {}),
                     initialMessageParts: [
                       { type: "text", text: prompt },
                     ],

@@ -10,6 +10,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
+import { subChatProviderSchema } from "../../../../shared/sub-chat-provider"
 import { getAuthManager } from "../../../index"
 import {
   trackPRCreated,
@@ -467,6 +468,7 @@ export const chatsRouter = router({
         branchType: z.enum(["local", "remote"]).optional(), // Whether baseBranch is local or remote
         useWorktree: z.boolean().default(true), // If false, work directly in project dir
         mode: z.enum(["plan", "agent"]).default("agent"),
+        provider: subChatProviderSchema.optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -524,6 +526,7 @@ export const chatsRouter = router({
         .values({
           chatId: chat.id,
           mode: input.mode,
+          ...(input.provider ? { provider: input.provider } : {}),
           messages: initialMessages,
         })
         .returning()
@@ -940,6 +943,7 @@ export const chatsRouter = router({
         chatId: z.string(),
         name: z.string().optional(),
         mode: z.enum(["plan", "agent"]).default("agent"),
+        provider: subChatProviderSchema.optional(),
       }),
     )
     .mutation(({ input }) => {
@@ -950,6 +954,7 @@ export const chatsRouter = router({
           chatId: input.chatId,
           name: input.name,
           mode: input.mode,
+          ...(input.provider ? { provider: input.provider } : {}),
           messages: "[]",
         })
         .returning()
@@ -1049,6 +1054,7 @@ export const chatsRouter = router({
           chatId: sourceSubChat.chatId,
           name: forkName,
           mode: sourceSubChat.mode,
+          provider: sourceSubChat.provider,
           messages: JSON.stringify(forkedMessages),
           sessionId: sourceSubChat.sessionId,
         })
@@ -1234,6 +1240,23 @@ export const chatsRouter = router({
       return db
         .update(subChats)
         .set({ mode: input.mode })
+        .where(eq(subChats.id, input.id))
+        .returning()
+        .get()
+    }),
+
+  /**
+   * Persist the canonical provider binding for a sub-chat.
+   * Renderer writes this on provider switch and lazily backfills legacy
+   * NULL rows after inferring from message metadata.
+   */
+  updateSubChatProvider: publicProcedure
+    .input(z.object({ id: z.string(), provider: subChatProviderSchema }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return db
+        .update(subChats)
+        .set({ provider: input.provider })
         .where(eq(subChats.id, input.id))
         .returning()
         .get()

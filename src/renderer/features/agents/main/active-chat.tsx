@@ -183,6 +183,7 @@ import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import { ACPChatTransport } from "../lib/acp-chat-transport"
 import { CursorChatTransport } from "../lib/cursor-chat-transport"
 import { CURSOR_MODEL_IDS, isCodexModelSelection, isOpenRouterModelId } from "../lib/models"
+import { isSubChatProvider } from "../../../../shared/sub-chat-provider"
 import { isAssistantMessageQuestion } from "../lib/is-question"
 import { respondToApproval } from "../lib/approval-routing"
 import { formatHistoryForContext } from "../lib/export-chat"
@@ -4612,6 +4613,7 @@ const ChatViewInner = memo(function ChatViewInner({
           chatId: parentChatId,
           name: "New Chat",
           mode: subChatMode,
+          provider: targetProvider,
         })
 
         const newId = newSubChat.id
@@ -5509,6 +5511,7 @@ export function ChatView({
     updated_at?: Date | string | null
     messages?: any
     stream_id?: string | null
+    provider?: string | null
   }>
 
   // Workspace isolation: limit mounted tabs to prevent memory growth
@@ -6491,7 +6494,11 @@ Make sure to preserve all functionality from both branches when resolving confli
 
       const subChat = ((agentChat as any)?.subChats || []).find(
         (sc: any) => sc?.id === subChatId,
-      ) as { messages?: any } | undefined
+      ) as { messages?: any; provider?: string | null } | undefined
+
+      // Canonical binding wins when present (persisted at create/switch).
+      if (isSubChatProvider(subChat?.provider)) return subChat.provider
+
       const rawMessages = subChat?.messages
 
       let messages: any[] = []
@@ -6700,6 +6707,19 @@ Make sure to preserve all functionality from both branches when resolving confli
       const isRemoteChat = !!(agentChat as any)?.isRemote || !!chatSandboxId
 
       const chatProvider = inferProviderFromMessages(subChatId)
+
+      // Lazy backfill: legacy rows have NULL binding; persist what we resolved
+      // so the next mount reads truth instead of re-inferring. Fire-and-forget.
+      {
+        const bound = ((agentChat as any)?.subChats || []).find(
+          (sc: any) => sc?.id === subChatId,
+        ) as { provider?: string | null } | undefined
+        if (bound && !isSubChatProvider(bound.provider)) {
+          void trpcClient.chats.updateSubChatProvider
+            .mutate({ id: subChatId, provider: chatProvider })
+            .catch(() => {})
+        }
+      }
 
       // Fast path for existing chats. Recreate the runtime Chat if provider inference
       // catches up after the first render, e.g. a new Codex chat initially rendered
@@ -7025,6 +7045,11 @@ Make sure to preserve all functionality from both branches when resolving confli
         [subChatId]: nextProvider,
       }))
 
+      // Persist the canonical binding (fire-and-forget; override covers UI now).
+      void trpcClient.chats.updateSubChatProvider
+        .mutate({ id: subChatId, provider: nextProvider })
+        .catch(() => {})
+
       // Force transport recreation with the newly selected provider.
       agentChatStore.delete(subChatId)
       forceUpdate({})
@@ -7055,6 +7080,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         chatId,
         name: "New Chat",
         mode: newSubChatMode,
+        provider: newSubChatProvider,
       })
       newId = newSubChat.id
       utils.agents.getAgentChat.invalidate({ chatId })

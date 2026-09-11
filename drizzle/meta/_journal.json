@@ -71,6 +71,13 @@
       "when": 1789114995137,
       "tag": "0009_rail_status_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789118829068,
+      "tag": "0010_subchat_provider_binding",
+      "breakpoints": true
     }
   ]
 }
