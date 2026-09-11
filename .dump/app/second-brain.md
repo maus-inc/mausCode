@@ -74,9 +74,10 @@ Detail lives in `research/` and `plans/`; this file states what is true.
     config mirror + schema-cache evidence; Phase 2 Rust relay specified.
   - `add-native-session-init` (`1c50995`, implemented): honest native snapshot
     (`toolsUnknown`, config-error notices), engine-toggle clearing.
-  - `add-codex-native-support` (`db77404`, analysis only): recommendation
-    WONTFIX recorded; human DEFERRED the decision pending a fork/cherry-pick
-    list — no behavior change.
+  - `add-codex-native-support` (CLOSED as WONTFIX 2026-09-11): Codex stays on
+    the CLI adapter (OAuth unprovisionable via harness; key-only would fork
+    toggle rules); toggle's codex-disabled copy fixed; adapter upgrades move
+    under `add-fork-harvest-transplants`. Revisit on a harness OAuth arm.
 - Fork-harvest intake (2026-09-11): pulled the harvest ledger
   (`.dump/ci/research/`, commits `fb47761`+`140eb25`) onto the arena branch;
   spot-verified (9/9 repos resolve, SamSammanne confirmed gone, 1Code

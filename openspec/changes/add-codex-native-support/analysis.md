@@ -66,3 +66,12 @@ can actually invoke codex models through the daemon's route validation
   tests).
 - WONTFIX cost: one accurate disabled-state string on the codex engine toggle
   + decision records (this file, tasks.md, second-brain).
+
+## Verdict: WONTFIX (decided 2026-09-11)
+
+Human decision after the fork-harvest intake: WONTFIX, following the
+recommendation. Decisive additions from the harvest: the Codex adapter has a
+concrete upgrade path (erenbertr 0.137 bump + ACP repair + tool normalizer;
+T3 `effect-codex-app-server` evaluation) that keeps Codex well-served without
+native. Revisit condition stands: a harness OAuth credential arm. Codex stays
+on the CLI adapter; the engine toggle's codex-disabled copy now says so.

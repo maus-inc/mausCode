@@ -698,7 +698,8 @@ export const ChatInputArea = memo(function ChatInputArea({
     [subChatId],
   )
   const [engine, setEngine] = useAtom(subChatEngineAtom)
-  // Native engine supports local claude-code chats only (no Codex, no remote sandboxes yet)
+  // Native engine supports local claude-code chats only (Codex stays on the
+  // CLI adapter by WONTFIX decision; no remote sandboxes yet)
   const canSwitchEngine = canSwitchProvider && provider !== "codex"
 
   const setSessionInfo = useSetAtom(sessionInfoAtom)
@@ -1571,9 +1572,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                     onClick={() => switchEngine(engine === "native" ? "legacy" : "native")}
                     disabled={!canSwitchEngine}
                     title={
-                      engine === "native"
-                        ? "Engine: Native (mausCode runtime). Click to switch back to Legacy. Switchable on empty chats only."
-                        : "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
+                      provider === "codex"
+                        ? "Engine: Legacy — Codex chats are served by the Codex CLI adapter; the native runtime doesn't serve Codex (subscription OAuth can't be provisioned to it)."
+                        : engine === "native"
+                          ? "Engine: Native (mausCode runtime). Click to switch back to Legacy. Switchable on empty chats only."
+                          : "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
                     }
                     className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-40 disabled:cursor-not-allowed"
                   >

@@ -3,29 +3,31 @@
 ## Decision (gate for everything below)
 
 - [x] Human approves this proposal's decision step — approved 2026-09-11 (scope: all)
-- [ ] Human records the decision: SUPPORT Codex on native vs WONTFIX with
+- [x] Human records the decision: SUPPORT Codex on native vs WONTFIX with
       rationale (technical recommendation supplied at review time)
-      — DEFERRED 2026-09-11: human will supply a list of upstream forks with
-      cherry-picks first; the decision waits for that list. Analysis complete
-      in `analysis.md` (recommendation: WONTFIX, revisit-gated).
-      UPDATE: list received 2026-09-11 (`.dump/ci/research/`
-      fork-network-harvest-catalog.md). Its Codex items (erenbertr 0.137 bump,
-      ACP repair, tool normalizer; T3 effect-codex-app-server) upgrade the
-      Codex ADAPTER, not Codex-on-native — nothing provisions OAuth through
-      the harness, so the substance is unchanged. Decision re-asked.
+      — DECIDED 2026-09-11: **WONTFIX**. Rationale: the recommended Codex
+      Subscription/OAuth auth cannot be provisioned through the v1 harness
+      (no Codex arm in `set_api_key`; trust flow is interactive; token
+      tunneling would pierce instance isolation); key-only SUPPORT would fork
+      the toggle rules by billing method; and the fork harvest gives the
+      Codex adapter a real upgrade path (0.137 bump, ACP repair, tool
+      normalizer, T3 app-server protocol) without native. Revisit if the
+      harness gains an OAuth credential arm. Full record in `analysis.md`.
 - [ ] Run `openspec validate add-codex-native-support --strict --no-interactive`
       in an environment with the OpenSpec CLI and resolve findings
 
-## If SUPPORT: implementation
+## If SUPPORT: implementation (STRUCK — WONTFIX decided 2026-09-11)
 
-- [ ] Daemon provider plumbing for Codex-backed sessions (no exportable key)
-- [ ] Credential resolution for the Codex auth mechanism (ref-only, audited)
-- [ ] Engine-toggle availability for codex chats + selection-order update
-- [ ] Unit + live tests for Codex-backed native turns
-- [ ] Update second-brain + task states
+- [ ] ~~Daemon provider plumbing for Codex-backed sessions (no exportable key)~~
+- [ ] ~~Credential resolution for the Codex auth mechanism (ref-only, audited)~~
+- [ ] ~~Engine-toggle availability for codex chats + selection-order update~~
+- [ ] ~~Unit + live tests for Codex-backed native turns~~
+- [ ] ~~Update second-brain + task states~~
 
 ## If WONTFIX: records only
 
-- [ ] Record decision + rationale in `decisions/` and second-brain
-- [ ] Accurate disabled-state copy for the codex engine toggle
-- [ ] Strike (don't silently drop) the SUPPORT tasks above, close the change
+- [x] Record decision + rationale in `decisions/` and second-brain
+- [x] Accurate disabled-state copy for the codex engine toggle
+- [x] Strike (don't silently drop) the SUPPORT tasks above, close the change
+      — CLOSED 2026-09-11 as WONTFIX. Codex adapter upgrades continue under
+      `add-fork-harvest-transplants` (Phases 2–3, 5).
