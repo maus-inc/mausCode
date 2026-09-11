@@ -214,10 +214,7 @@ export interface RelevanceScore {
 /**
  * Calculate relevance score for an item
  */
-export function calculateRelevance(
-  item: MentionItem,
-  query: string
-): RelevanceScore {
+export function calculateRelevance(item: MentionItem, query: string): RelevanceScore {
   const normalizedQuery = query.toLowerCase().trim()
   const normalizedLabel = item.label.toLowerCase()
   const normalizedDescription = item.description?.toLowerCase() ?? ""
@@ -262,8 +259,7 @@ export function calculateRelevance(
   } else {
     // Multi-word query - all words must match somewhere
     const allWordsMatch = queryWords.every(
-      (word) =>
-        normalizedLabel.includes(word) || normalizedDescription.includes(word)
+      (word) => normalizedLabel.includes(word) || normalizedDescription.includes(word),
     )
 
     if (allWordsMatch) {
@@ -280,7 +276,7 @@ export function calculateRelevance(
   if (item.keywords && item.keywords.length > 0 && queryWords.length > 0) {
     const normalizedKeywords = item.keywords.map((k) => k.toLowerCase())
     const matchedKeywords = queryWords.filter((word) =>
-      normalizedKeywords.some((kw) => kw.includes(word))
+      normalizedKeywords.some((kw) => kw.includes(word)),
     )
     // 20 points per matched keyword, up to 60
     keywordsMatch = Math.min(matchedKeywords.length * 20, 60)
@@ -307,10 +303,7 @@ export function calculateRelevance(
 /**
  * Sort items by relevance to query
  */
-export function sortByRelevance<T extends MentionItem>(
-  items: T[],
-  query: string
-): T[] {
+export function sortByRelevance<T extends MentionItem>(items: T[], query: string): T[] {
   if (!query.trim()) {
     // No query - sort by priority only
     return [...items].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))

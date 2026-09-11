@@ -2,21 +2,16 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema";
-import {
-  NonNegativeInt,
-  PositiveInt,
-  TrimmedNonEmptyString,
-  TrimmedString,
-} from "./baseSchemas.ts";
+import * as Schema from "effect/Schema"
+import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts"
 
-const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200;
-const PROJECT_SEARCH_CONTENTS_MAX_LIMIT = 500;
-const PROJECT_WRITE_FILE_PATH_MAX_LENGTH = 512;
-const PROJECT_READ_FILE_PATH_MAX_LENGTH = 512;
+const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200
+const PROJECT_SEARCH_CONTENTS_MAX_LIMIT = 500
+const PROJECT_WRITE_FILE_PATH_MAX_LENGTH = 512
+const PROJECT_READ_FILE_PATH_MAX_LENGTH = 512
 
-export const ProjectEntryKind = Schema.Literals(["file", "directory"]);
-export type ProjectEntryKind = typeof ProjectEntryKind.Type;
+export const ProjectEntryKind = Schema.Literals(["file", "directory"])
+export type ProjectEntryKind = typeof ProjectEntryKind.Type
 
 export const ProjectSearchEntriesInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
@@ -26,20 +21,20 @@ export const ProjectSearchEntriesInput = Schema.Struct({
   limit: PositiveInt.check(Schema.isLessThanOrEqualTo(PROJECT_SEARCH_ENTRIES_MAX_LIMIT)),
   kind: Schema.optional(ProjectEntryKind),
   imageOnly: Schema.optional(Schema.Boolean),
-});
-export type ProjectSearchEntriesInput = typeof ProjectSearchEntriesInput.Type;
+})
+export type ProjectSearchEntriesInput = typeof ProjectSearchEntriesInput.Type
 
 export const ProjectEntry = Schema.Struct({
   path: TrimmedNonEmptyString,
   kind: ProjectEntryKind,
-});
-export type ProjectEntry = typeof ProjectEntry.Type;
+})
+export type ProjectEntry = typeof ProjectEntry.Type
 
 export const ProjectSearchEntriesResult = Schema.Struct({
   entries: Schema.Array(ProjectEntry),
   truncated: Schema.Boolean,
-});
-export type ProjectSearchEntriesResult = typeof ProjectSearchEntriesResult.Type;
+})
+export type ProjectSearchEntriesResult = typeof ProjectSearchEntriesResult.Type
 
 export const ProjectSearchContentsInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
@@ -50,40 +45,40 @@ export const ProjectSearchContentsInput = Schema.Struct({
   caseSensitive: Schema.Boolean,
   wholeWord: Schema.Boolean,
   useRegex: Schema.Boolean,
-});
-export type ProjectSearchContentsInput = typeof ProjectSearchContentsInput.Type;
+})
+export type ProjectSearchContentsInput = typeof ProjectSearchContentsInput.Type
 
 export const ProjectContentMatchRange = Schema.Struct({
   start: NonNegativeInt,
   end: NonNegativeInt,
-});
-export type ProjectContentMatchRange = typeof ProjectContentMatchRange.Type;
+})
+export type ProjectContentMatchRange = typeof ProjectContentMatchRange.Type
 
 export const ProjectContentMatch = Schema.Struct({
   path: TrimmedNonEmptyString,
   lineNumber: PositiveInt,
   lineContent: Schema.String,
   matchRanges: Schema.Array(ProjectContentMatchRange),
-});
-export type ProjectContentMatch = typeof ProjectContentMatch.Type;
+})
+export type ProjectContentMatch = typeof ProjectContentMatch.Type
 
 export const ProjectSearchContentsResult = Schema.Struct({
   matches: Schema.Array(ProjectContentMatch),
   truncated: Schema.Boolean,
   regexFallbackError: Schema.optional(Schema.String),
-});
-export type ProjectSearchContentsResult = typeof ProjectSearchContentsResult.Type;
+})
+export type ProjectSearchContentsResult = typeof ProjectSearchContentsResult.Type
 
 export const ProjectListEntriesInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
-});
-export type ProjectListEntriesInput = typeof ProjectListEntriesInput.Type;
+})
+export type ProjectListEntriesInput = typeof ProjectListEntriesInput.Type
 
 export const ProjectListEntriesResult = Schema.Struct({
   entries: Schema.Array(ProjectEntry),
   truncated: Schema.Boolean,
-});
-export type ProjectListEntriesResult = typeof ProjectListEntriesResult.Type;
+})
+export type ProjectListEntriesResult = typeof ProjectListEntriesResult.Type
 
 export const ProjectEntriesFailure = Schema.Literals([
   "workspace_root_not_found",
@@ -93,20 +88,20 @@ export const ProjectEntriesFailure = Schema.Literals([
   "search_index_create_failed",
   "search_index_scan_timed_out",
   "search_index_search_failed",
-]);
-export type ProjectEntriesFailure = typeof ProjectEntriesFailure.Type;
+])
+export type ProjectEntriesFailure = typeof ProjectEntriesFailure.Type
 
 type ProjectEntriesFailureContext = {
-  readonly failure: ProjectEntriesFailure;
-  readonly normalizedCwd?: string;
-  readonly timeout?: string;
-  readonly detail?: string;
-  readonly cause?: unknown;
-};
+  readonly failure: ProjectEntriesFailure
+  readonly normalizedCwd?: string
+  readonly timeout?: string
+  readonly detail?: string
+  readonly cause?: unknown
+}
 
 function decodedProjectErrorMessage(props: object): string | undefined {
-  if (!("message" in props)) return undefined;
-  return typeof props.message === "string" ? props.message : undefined;
+  if (!("message" in props)) return undefined
+  return typeof props.message === "string" ? props.message : undefined
 }
 
 export class ProjectSearchEntriesError extends Schema.TaggedError<ProjectSearchEntriesError>()(
@@ -128,9 +123,9 @@ export class ProjectSearchEntriesError extends Schema.TaggedError<ProjectSearchE
   // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(
     props: ProjectEntriesFailureContext & {
-      readonly cwd: string;
-      readonly queryLength: number;
-      readonly limit: number;
+      readonly cwd: string
+      readonly queryLength: number
+      readonly limit: number
     },
   ) {
     super({
@@ -138,7 +133,7 @@ export class ProjectSearchEntriesError extends Schema.TaggedError<ProjectSearchE
       message:
         decodedProjectErrorMessage(props) ??
         `Failed to search workspace entries in '${props.cwd}'.`,
-    } as any);
+    } as any)
   }
 }
 
@@ -159,9 +154,9 @@ export class ProjectSearchContentsError extends Schema.TaggedError<ProjectSearch
   // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(
     props: ProjectEntriesFailureContext & {
-      readonly cwd: string;
-      readonly queryLength: number;
-      readonly limit: number;
+      readonly cwd: string
+      readonly queryLength: number
+      readonly limit: number
     },
   ) {
     super({
@@ -169,7 +164,7 @@ export class ProjectSearchContentsError extends Schema.TaggedError<ProjectSearch
       message:
         decodedProjectErrorMessage(props) ??
         `Failed to search workspace contents in '${props.cwd}'.`,
-    } as any);
+    } as any)
   }
 }
 
@@ -191,7 +186,7 @@ export class ProjectListEntriesError extends Schema.TaggedError<ProjectListEntri
       ...props,
       message:
         decodedProjectErrorMessage(props) ?? `Failed to list workspace entries in '${props.cwd}'.`,
-    } as any);
+    } as any)
   }
 }
 
@@ -200,16 +195,16 @@ export const ProjectReadFileInput = Schema.Struct({
   // Workspace-relative, or an absolute host path for a file outside the
   // workspace. Only workspace-relative paths can be written back.
   relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_READ_FILE_PATH_MAX_LENGTH)),
-});
-export type ProjectReadFileInput = typeof ProjectReadFileInput.Type;
+})
+export type ProjectReadFileInput = typeof ProjectReadFileInput.Type
 
 export const ProjectReadFileResult = Schema.Struct({
   relativePath: TrimmedNonEmptyString,
   contents: Schema.String,
   byteLength: NonNegativeInt,
   truncated: Schema.Boolean,
-});
-export type ProjectReadFileResult = typeof ProjectReadFileResult.Type;
+})
+export type ProjectReadFileResult = typeof ProjectReadFileResult.Type
 
 export const ProjectFileFailure = Schema.Literals([
   "workspace_path_outside_root",
@@ -217,8 +212,8 @@ export const ProjectFileFailure = Schema.Literals([
   "path_not_file",
   "binary_file",
   "operation_failed",
-]);
-export type ProjectFileFailure = typeof ProjectFileFailure.Type;
+])
+export type ProjectFileFailure = typeof ProjectFileFailure.Type
 
 export const ProjectFileOperation = Schema.Literals([
   "realpath-workspace-root",
@@ -229,19 +224,19 @@ export const ProjectFileOperation = Schema.Literals([
   "close",
   "make-directory",
   "write-file",
-]);
-export type ProjectFileOperation = typeof ProjectFileOperation.Type;
+])
+export type ProjectFileOperation = typeof ProjectFileOperation.Type
 
 type ProjectFileFailureContext = {
-  readonly cwd: string;
-  readonly relativePath: string;
-  readonly failure: ProjectFileFailure;
-  readonly resolvedPath?: string;
-  readonly resolvedWorkspaceRoot?: string;
-  readonly operation?: ProjectFileOperation;
-  readonly operationPath?: string;
-  readonly cause?: unknown;
-};
+  readonly cwd: string
+  readonly relativePath: string
+  readonly failure: ProjectFileFailure
+  readonly resolvedPath?: string
+  readonly resolvedWorkspaceRoot?: string
+  readonly operation?: ProjectFileOperation
+  readonly operationPath?: string
+  readonly cause?: unknown
+}
 
 export class ProjectReadFileError extends Schema.TaggedError<ProjectReadFileError>()(
   "ProjectReadFileError",
@@ -264,7 +259,7 @@ export class ProjectReadFileError extends Schema.TaggedError<ProjectReadFileErro
       message:
         decodedProjectErrorMessage(props) ??
         `Failed to read workspace file '${props.relativePath}' in '${props.cwd}'.`,
-    } as any);
+    } as any)
   }
 }
 
@@ -272,13 +267,13 @@ export const ProjectWriteFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_WRITE_FILE_PATH_MAX_LENGTH)),
   contents: Schema.String,
-});
-export type ProjectWriteFileInput = typeof ProjectWriteFileInput.Type;
+})
+export type ProjectWriteFileInput = typeof ProjectWriteFileInput.Type
 
 export const ProjectWriteFileResult = Schema.Struct({
   relativePath: TrimmedNonEmptyString,
-});
-export type ProjectWriteFileResult = typeof ProjectWriteFileResult.Type;
+})
+export type ProjectWriteFileResult = typeof ProjectWriteFileResult.Type
 
 export class ProjectWriteFileError extends Schema.TaggedError<ProjectWriteFileError>()(
   "ProjectWriteFileError",
@@ -301,6 +296,6 @@ export class ProjectWriteFileError extends Schema.TaggedError<ProjectWriteFileEr
       message:
         decodedProjectErrorMessage(props) ??
         `Failed to write workspace file '${props.relativePath}' in '${props.cwd}'.`,
-    } as any);
+    } as any)
   }
 }

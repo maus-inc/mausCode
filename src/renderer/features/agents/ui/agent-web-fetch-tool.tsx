@@ -1,12 +1,7 @@
 "use client"
 
 import { memo, useState } from "react"
-import {
-  GlobeIcon,
-  IconSpinner,
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
+import { GlobeIcon, IconSpinner, ExpandIcon, CollapseIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
@@ -60,24 +55,22 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
         onClick={() => hasContent && !isPending && setIsExpanded(!isExpanded)}
         className={cn(
           "flex items-center justify-between px-2.5 h-7",
-          hasContent && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          hasContent &&
+            !isPending &&
+            "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
         <div className="flex items-center gap-1.5 text-xs truncate flex-1 min-w-0">
           <GlobeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
-          
+
           {isPending ? (
-            <TextShimmer
-              as="span"
-              duration={1.2}
-              className="text-xs text-muted-foreground"
-            >
+            <TextShimmer as="span" duration={1.2} className="text-xs text-muted-foreground">
               Fetching
             </TextShimmer>
           ) : (
             <span className="text-xs text-muted-foreground">Fetched</span>
           )}
-          
+
           <span className="truncate text-foreground">{hostname}</span>
         </div>
 
@@ -91,9 +84,7 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
                 {statusCode ? `Error ${statusCode}` : "Failed"}
               </span>
             ) : (
-              <span className="text-muted-foreground">
-                {formatBytes(bytes)}
-              </span>
+              <span className="text-muted-foreground">{formatBytes(bytes)}</span>
             )}
           </div>
 
@@ -128,4 +119,3 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
     </div>
   )
 }, areToolPropsEqual)
-

@@ -53,12 +53,7 @@ export const VoiceWaveIndicator = memo(function VoiceWaveIndicator({
   if (!isRecording) return null
 
   return (
-    <div
-      className={cn(
-        "flex items-center justify-center gap-[3px] h-5 px-2",
-        className
-      )}
-    >
+    <div className={cn("flex items-center justify-center gap-[3px] h-5 px-2", className)}>
       {[0, 1, 2, 3, 4].map((i) => (
         <div
           key={i}

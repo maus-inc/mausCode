@@ -2,12 +2,12 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema";
-import { EnvironmentId, MessageId, NonNegativeInt, ThreadId } from "./baseSchemas.ts";
+import * as Schema from "effect/Schema"
+import { EnvironmentId, MessageId, NonNegativeInt, ThreadId } from "./baseSchemas.ts"
 
-export const ASSISTANT_CITATION_MAX_TEXT_LENGTH = 8_000;
-export const ASSISTANT_CITATION_MAX_COMMENT_LENGTH = 8_000;
-export const ASSISTANT_CITATION_CONTEXT_LENGTH = 32;
+export const ASSISTANT_CITATION_MAX_TEXT_LENGTH = 8_000
+export const ASSISTANT_CITATION_MAX_COMMENT_LENGTH = 8_000
+export const ASSISTANT_CITATION_CONTEXT_LENGTH = 32
 
 /**
  * A quote of rendered assistant text with an optional user comment.
@@ -31,5 +31,5 @@ export const AssistantCitation = Schema.Struct({
   suffix: Schema.String.check(Schema.isMaxLength(ASSISTANT_CITATION_CONTEXT_LENGTH)),
 }).check(
   Schema.makeFilter((citation) => citation.end > citation.start && citation.text.trim().length > 0),
-);
-export type AssistantCitation = typeof AssistantCitation.Type;
+)
+export type AssistantCitation = typeof AssistantCitation.Type

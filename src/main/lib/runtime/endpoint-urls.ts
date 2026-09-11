@@ -76,7 +76,10 @@ export function buildDaemonEndpointEnv(settings: NativeEndpoints): Record<string
  * reports reachability. Never sends tokens; never follows the URL into
  * anything but a bare connectivity check.
  */
-export async function probeEndpoint(url: string, timeoutMs = 8000): Promise<{ ok: boolean; detail: string }> {
+export async function probeEndpoint(
+  url: string,
+  timeoutMs = 8000,
+): Promise<{ ok: boolean; detail: string }> {
   const normalized = normalizeEndpointUrl(url)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -99,4 +102,3 @@ export async function probeEndpoint(url: string, timeoutMs = 8000): Promise<{ ok
     clearTimeout(timer)
   }
 }
-

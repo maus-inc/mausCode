@@ -8,7 +8,7 @@ export function useAgentsFileUpload() {
   const uploadFile = async (file: File) => {
     setIsUploading(true)
     // Mock upload
-    setUploadedFiles(prev => [...prev, file])
+    setUploadedFiles((prev) => [...prev, file])
     setIsUploading(false)
     return { url: URL.createObjectURL(file), filename: file.name }
   }

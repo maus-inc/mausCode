@@ -11,7 +11,8 @@ import * as path from "path"
 
 // PostHog configuration - hardcoded key for opensource users, env var override for internal builds
 // This enables analytics for all users including those building from source
-const POSTHOG_DESKTOP_KEY = import.meta.env.MAIN_VITE_POSTHOG_KEY || "phc_wM7gbrJhOLTvynyhnhPkrVGDc5mKRSXsLGQHqM3T3vq"
+const POSTHOG_DESKTOP_KEY =
+  import.meta.env.MAIN_VITE_POSTHOG_KEY || "phc_wM7gbrJhOLTvynyhnhPkrVGDc5mKRSXsLGQHqM3T3vq"
 const POSTHOG_HOST = import.meta.env.MAIN_VITE_POSTHOG_HOST || "https://us.i.posthog.com"
 
 let posthog: PostHog | null = null
@@ -133,10 +134,7 @@ export function initAnalytics() {
 /**
  * Capture an analytics event
  */
-export function capture(
-  eventName: string,
-  properties?: Record<string, any>,
-) {
+export function capture(eventName: string, properties?: Record<string, any>) {
   // Skip in development mode
   if (isDev()) return
 
@@ -160,10 +158,7 @@ export function capture(
 /**
  * Identify a user
  */
-export function identify(
-  userId: string,
-  traits?: Record<string, any>,
-) {
+export function identify(userId: string, traits?: Record<string, any>) {
   currentUserId = userId
 
   // Skip in development mode
@@ -251,10 +246,7 @@ export function trackAuthCompleted(userId: string, email?: string) {
 /**
  * Track project opened
  */
-export function trackProjectOpened(project: {
-  id: string
-  hasGitRemote: boolean
-}) {
+export function trackProjectOpened(project: { id: string; hasGitRemote: boolean }) {
   capture("project_opened", {
     project_id: project.id,
     has_git_remote: project.hasGitRemote,
@@ -346,10 +338,7 @@ export function trackCommitCreated(data: {
 /**
  * Track sub-chat created
  */
-export function trackSubChatCreated(data: {
-  workspaceId: string
-  subChatId: string
-}) {
+export function trackSubChatCreated(data: { workspaceId: string; subChatId: string }) {
   capture("sub_chat_created", {
     workspace_id: data.workspaceId,
     sub_chat_id: data.subChatId,

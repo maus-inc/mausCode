@@ -45,12 +45,7 @@ interface ChatDataSyncProps {
   children: ReactNode
 }
 
-export function ChatDataSync({
-  chat,
-  subChatId,
-  streamId,
-  children,
-}: ChatDataSyncProps) {
+export function ChatDataSync({ chat, subChatId, streamId, children }: ChatDataSyncProps) {
   // Call useChat - this causes re-renders on every chunk
   const { messages, sendMessage, status, stop, regenerate } = useChat({
     id: subChatId,
@@ -100,9 +95,5 @@ export function ChatDataSync({
     },
   }).current
 
-  return (
-    <ChatActionsContext.Provider value={contextValue}>
-      {children}
-    </ChatActionsContext.Provider>
-  )
+  return <ChatActionsContext.Provider value={contextValue}>{children}</ChatActionsContext.Provider>
 }

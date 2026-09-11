@@ -136,7 +136,9 @@ async function getLatestVersion() {
 
   try {
     // Fetch from the same endpoint that install.sh uses
-    const response = await fetch("https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest")
+    const response = await fetch(
+      "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
+    )
     if (response.ok) {
       const version = await response.text()
       return version.trim()
@@ -276,10 +278,7 @@ async function main() {
   fs.mkdirSync(BIN_DIR, { recursive: true })
 
   // Write version file
-  fs.writeFileSync(
-    path.join(BIN_DIR, "VERSION"),
-    `${version}\n${new Date().toISOString()}\n`
-  )
+  fs.writeFileSync(path.join(BIN_DIR, "VERSION"), `${version}\n${new Date().toISOString()}\n`)
 
   // Download each platform
   let success = true

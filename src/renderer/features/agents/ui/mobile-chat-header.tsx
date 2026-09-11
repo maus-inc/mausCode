@@ -14,10 +14,7 @@ import {
 } from "../../../components/ui/icons"
 import { Button } from "../../../components/ui/button"
 import { cn } from "../../../lib/utils"
-import {
-  useAgentSubChatStore,
-  type SubChatMeta,
-} from "../stores/sub-chat-store"
+import { useAgentSubChatStore, type SubChatMeta } from "../stores/sub-chat-store"
 import { PopoverTrigger } from "../../../components/ui/popover"
 import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { formatTimeAgo } from "../utils/format-time-ago"
@@ -74,9 +71,7 @@ export function MobileChatHeader({
     return allSubChats.find((sc) => sc.id === activeSubChatId)
   }, [allSubChats, activeSubChatId])
 
-  const isLoading = activeSubChatId
-    ? loadingSubChatsAtomValue.has(activeSubChatId)
-    : false
+  const isLoading = activeSubChatId ? loadingSubChatsAtomValue.has(activeSubChatId) : false
   const mode = activeSubChat?.mode || "agent"
 
   // Sort sub-chats by most recent first for history
@@ -144,27 +139,16 @@ export function MobileChatHeader({
         align="start"
         side="bottom"
         sideOffset={8}
-        getItemValue={(subChat) =>
-          `${subChat.name || "New Chat"} ${subChat.id}`
-        }
+        getItemValue={(subChat) => `${subChat.name || "New Chat"} ${subChat.id}`}
         renderItem={(subChat) => {
-          const timeAgo = formatTimeAgo(
-            subChat.updated_at || subChat.created_at,
-          )
+          const timeAgo = formatTimeAgo(subChat.updated_at || subChat.created_at)
           const isActive = subChat.id === activeSubChatId
           return (
             <div
-              className={cn(
-                "flex items-center gap-2 flex-1 min-w-0",
-                isActive && "font-medium",
-              )}
+              className={cn("flex items-center gap-2 flex-1 min-w-0", isActive && "font-medium")}
             >
-              <span className="text-sm truncate">
-                {subChat.name || "New Chat"}
-              </span>
-              <span className="text-sm text-muted-foreground whitespace-nowrap">
-                {timeAgo}
-              </span>
+              <span className="text-sm truncate">{subChat.name || "New Chat"}</span>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">{timeAgo}</span>
             </div>
           )
         }}
@@ -194,9 +178,7 @@ export function MobileChatHeader({
               </div>
 
               {/* Name */}
-              <span className="truncate text-left">
-                {activeSubChat?.name || "New Chat"}
-              </span>
+              <span className="truncate text-left">{activeSubChat?.name || "New Chat"}</span>
 
               {/* Chevron */}
               <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />

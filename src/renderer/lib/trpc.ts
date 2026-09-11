@@ -42,7 +42,9 @@ export function createLocalLinks(): TRPCLink<AppRouter>[] {
   if (hasElectronPreload()) {
     return [ipcLink({ transformer: superjson })]
   }
-  console.warn("[mausCode] electronTRPC preload missing — local data calls will fail (browser mode)")
+  console.warn(
+    "[mausCode] electronTRPC preload missing — local data calls will fail (browser mode)",
+  )
   return [unavailableLink()]
 }
 

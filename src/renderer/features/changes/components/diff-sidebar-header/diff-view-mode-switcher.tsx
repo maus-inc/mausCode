@@ -8,11 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  IconSidePeek,
-  IconCenterPeek,
-  IconFullPage,
-} from "@/components/ui/icons"
+import { IconSidePeek, IconCenterPeek, IconFullPage } from "@/components/ui/icons"
 import type { DiffViewDisplayMode } from "@/features/agents/atoms"
 
 interface DiffViewModeSwitcherProps {
@@ -38,10 +34,7 @@ const MODES = [
   },
 ]
 
-export function DiffViewModeSwitcher({
-  mode,
-  onModeChange,
-}: DiffViewModeSwitcherProps) {
+export function DiffViewModeSwitcher({ mode, onModeChange }: DiffViewModeSwitcherProps) {
   const currentMode = MODES.find((m) => m.value === mode) ?? MODES[0]
   const CurrentIcon = currentMode.Icon
 
@@ -65,9 +58,7 @@ export function DiffViewModeSwitcher({
           >
             <Icon className="size-4 text-muted-foreground" />
             <span className="flex-1">{label}</span>
-            {mode === value && (
-              <Check className="size-4 text-muted-foreground ml-auto" />
-            )}
+            {mode === value && <Check className="size-4 text-muted-foreground ml-auto" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

@@ -3,9 +3,9 @@
  */
 
 export interface OllamaStatus {
-  available: boolean       // Is Ollama running and accessible
-  version?: string         // Ollama version
-  models: string[]         // Installed models
+  available: boolean // Is Ollama running and accessible
+  version?: string // Ollama version
+  models: string[] // Installed models
   recommendedModel?: string // Best model for coding
 }
 
@@ -18,7 +18,7 @@ export async function checkOllamaStatus(): Promise<OllamaStatus> {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 2000)
 
-    const response = await fetch('http://localhost:11434/api/tags', {
+    const response = await fetch("http://localhost:11434/api/tags", {
       signal: controller.signal,
     })
 
@@ -34,26 +34,27 @@ export async function checkOllamaStatus(): Promise<OllamaStatus> {
     // Recommended coding models (in order of preference)
     // Check for exact matches first, then check for any qwen/deepseek/codestral variant
     const codingModels = [
-      'qwen2.5-coder:7b',
-      'qwen2.5-coder:3b',
-      'qwen2.5-coder:1.5b',
-      'qwen3-coder:30b',
-      'qwen3-coder:14b',
-      'qwen3-coder:8b',
-      'qwen3-coder:4b',
-      'deepseek-coder:6.7b',
-      'deepseek-coder:33b',
-      'codestral:22b',
+      "qwen2.5-coder:7b",
+      "qwen2.5-coder:3b",
+      "qwen2.5-coder:1.5b",
+      "qwen3-coder:30b",
+      "qwen3-coder:14b",
+      "qwen3-coder:8b",
+      "qwen3-coder:4b",
+      "deepseek-coder:6.7b",
+      "deepseek-coder:33b",
+      "codestral:22b",
     ]
 
-    let recommendedModel = codingModels.find(m => models.includes(m))
+    let recommendedModel = codingModels.find((m) => models.includes(m))
 
     // If no exact match, try to find any qwen-coder, deepseek-coder, or codestral variant
     if (!recommendedModel) {
-      recommendedModel = models.find((m: string) =>
-        m.includes('qwen') && m.includes('coder') ||
-        m.includes('deepseek') && m.includes('coder') ||
-        m.includes('codestral')
+      recommendedModel = models.find(
+        (m: string) =>
+          (m.includes("qwen") && m.includes("coder")) ||
+          (m.includes("deepseek") && m.includes("coder")) ||
+          m.includes("codestral"),
       )
     }
 
@@ -78,8 +79,8 @@ export function getOllamaConfig(modelName?: string): {
   baseUrl: string
 } {
   return {
-    model: modelName || 'qwen2.5-coder:7b',
-    token: 'ollama',
-    baseUrl: 'http://localhost:11434',
+    model: modelName || "qwen2.5-coder:7b",
+    token: "ollama",
+    baseUrl: "http://localhost:11434",
   }
 }

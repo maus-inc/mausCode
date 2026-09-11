@@ -34,78 +34,79 @@ export const useMessageQueueStore = create<MessageQueueState>()(
     queues: {},
     queueSentTriggers: {},
 
-  addToQueue: (subChatId, item) => {
-    set((state) => ({
-      queues: {
-        ...state.queues,
-        [subChatId]: [...(state.queues[subChatId] || []), item],
-      },
-    }))
-  },
-
-  removeFromQueue: (subChatId, itemId) => {
-    set((state) => {
-      const currentQueue = state.queues[subChatId] || []
-      return {
+    addToQueue: (subChatId, item) => {
+      set((state) => ({
         queues: {
           ...state.queues,
-          [subChatId]: removeQueueItem(currentQueue, itemId),
+          [subChatId]: [...(state.queues[subChatId] || []), item],
         },
-      }
-    })
-  },
+      }))
+    },
 
-  getQueue: (subChatId) => {
-    return get().queues[subChatId] ?? EMPTY_QUEUE
-  },
+    removeFromQueue: (subChatId, itemId) => {
+      set((state) => {
+        const currentQueue = state.queues[subChatId] || []
+        return {
+          queues: {
+            ...state.queues,
+            [subChatId]: removeQueueItem(currentQueue, itemId),
+          },
+        }
+      })
+    },
 
-  getNextItem: (subChatId) => {
-    const queue = get().queues[subChatId] || []
-    return queue.find((item) => item.status === "pending") || null
-  },
+    getQueue: (subChatId) => {
+      return get().queues[subChatId] ?? EMPTY_QUEUE
+    },
 
-  clearQueue: (subChatId) => {
-    set((state) => ({
-      queues: {
-        ...state.queues,
-        [subChatId]: [],
-      },
-    }))
-  },
+    getNextItem: (subChatId) => {
+      const queue = get().queues[subChatId] || []
+      return queue.find((item) => item.status === "pending") || null
+    },
 
-  // Atomic pop: find and remove in single set() call to prevent race conditions
-  popItem: (subChatId, itemId) => {
-    let foundItem: AgentQueueItem | null = null
-    set((state) => {
-      const currentQueue = state.queues[subChatId] || []
-      foundItem = currentQueue.find((i) => i.id === itemId) || null
-      if (!foundItem) return state
-      return {
+    clearQueue: (subChatId) => {
+      set((state) => ({
         queues: {
           ...state.queues,
-          [subChatId]: currentQueue.filter((i) => i.id !== itemId),
+          [subChatId]: [],
         },
-      }
-    })
-    return foundItem
-  },
+      }))
+    },
 
-  // Add item to front of queue (used for error recovery - requeue failed items)
-  prependItem: (subChatId, item) => {
-    set((state) => ({
-      queues: {
-        ...state.queues,
-        [subChatId]: [item, ...(state.queues[subChatId] || [])],
-      },
-    }))
-  },
+    // Atomic pop: find and remove in single set() call to prevent race conditions
+    popItem: (subChatId, itemId) => {
+      let foundItem: AgentQueueItem | null = null
+      set((state) => {
+        const currentQueue = state.queues[subChatId] || []
+        foundItem = currentQueue.find((i) => i.id === itemId) || null
+        if (!foundItem) return state
+        return {
+          queues: {
+            ...state.queues,
+            [subChatId]: currentQueue.filter((i) => i.id !== itemId),
+          },
+        }
+      })
+      return foundItem
+    },
 
-  triggerQueueSent: (subChatId) => {
-    set((state) => ({
-      queueSentTriggers: {
-        ...state.queueSentTriggers,
-        [subChatId]: (state.queueSentTriggers[subChatId] || 0) + 1,
-      },
-    }))
-  },
-})))
+    // Add item to front of queue (used for error recovery - requeue failed items)
+    prependItem: (subChatId, item) => {
+      set((state) => ({
+        queues: {
+          ...state.queues,
+          [subChatId]: [item, ...(state.queues[subChatId] || [])],
+        },
+      }))
+    },
+
+    triggerQueueSent: (subChatId) => {
+      set((state) => ({
+        queueSentTriggers: {
+          ...state.queueSentTriggers,
+          [subChatId]: (state.queueSentTriggers[subChatId] || 0) + 1,
+        },
+      }))
+    },
+  })),
+)

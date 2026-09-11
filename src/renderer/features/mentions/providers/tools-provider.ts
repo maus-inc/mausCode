@@ -46,8 +46,7 @@ function getServersFromContext(context: ToolsSearchContext): ToolData[] {
     return []
   }
 
-  const connectedServers = context.mcpServers
-    .filter((server) => server.status === "connected")
+  const connectedServers = context.mcpServers.filter((server) => server.status === "connected")
 
   // Count tools per server
   const toolCountByServer = new Map<string, number>()
@@ -180,7 +179,10 @@ export const toolsProvider = createMentionProvider<ToolData>({
 
   isAvailable(context) {
     const toolsContext = context as { mcpServers?: MCPServerInfo[] }
-    return Array.isArray(toolsContext.mcpServers) && toolsContext.mcpServers.some(s => s.status === "connected")
+    return (
+      Array.isArray(toolsContext.mcpServers) &&
+      toolsContext.mcpServers.some((s) => s.status === "connected")
+    )
   },
 })
 

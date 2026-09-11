@@ -61,12 +61,7 @@ export const KanbanColumn = memo(function KanbanColumn({
     <div className="flex flex-col min-w-[140px] max-w-[240px] flex-1 h-full">
       {/* Column header */}
       <div className="flex items-center gap-2 px-2 py-2 mb-2">
-        <span
-          className={cn(
-            "w-2 h-2 rounded-full flex-shrink-0",
-            STATUS_COLORS[status]
-          )}
-        />
+        <span className={cn("w-2 h-2 rounded-full flex-shrink-0", STATUS_COLORS[status])} />
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
         <span className="text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded-full">
           {cards.length}

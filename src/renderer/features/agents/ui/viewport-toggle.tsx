@@ -10,11 +10,7 @@ interface ViewportToggleProps {
   className?: string
 }
 
-export function ViewportToggle({
-  value,
-  onChange,
-  className,
-}: ViewportToggleProps) {
+export function ViewportToggle({ value, onChange, className }: ViewportToggleProps) {
   return (
     <motion.div
       layout
@@ -26,10 +22,7 @@ export function ViewportToggle({
         },
       }}
     >
-      <motion.div
-        layout
-        className="relative bg-muted rounded-lg h-7 p-0.5 flex"
-      >
+      <motion.div layout className="relative bg-muted rounded-lg h-7 p-0.5 flex">
         {/* Animated selector */}
         <motion.div
           className="absolute inset-y-0.5 rounded-md bg-background shadow transition-all duration-200 ease-in-out"
@@ -88,4 +81,3 @@ export function ViewportToggle({
     </motion.div>
   )
 }
-

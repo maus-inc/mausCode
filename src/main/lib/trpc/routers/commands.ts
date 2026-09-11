@@ -29,12 +29,8 @@ function parseCommandMd(content: string): {
   try {
     const { data } = matter(content)
     return {
-      description:
-        typeof data.description === "string" ? data.description : undefined,
-      argumentHint:
-        typeof data["argument-hint"] === "string"
-          ? data["argument-hint"]
-          : undefined,
+      description: typeof data.description === "string" ? data.description : undefined,
+      argumentHint: typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined,
       name: typeof data.name === "string" ? data.name : undefined,
     }
   } catch (err) {
@@ -134,7 +130,12 @@ async function scanCommandsDirectory(
 /**
  * Generate command .md content from name, description, and body
  */
-function generateCommandMd(command: { name: string; description: string; content: string; argumentHint?: string }): string {
+function generateCommandMd(command: {
+  name: string
+  description: string
+  content: string
+  argumentHint?: string
+}): string {
   const frontmatter: string[] = []
   if (command.description) {
     frontmatter.push(`description: ${command.description}`)
@@ -181,11 +182,7 @@ export const commandsRouter = router({
 
       let projectCommandsPromise = Promise.resolve<FileCommand[]>([])
       if (input?.projectPath) {
-        const projectCommandsDir = path.join(
-          input.projectPath,
-          ".claude",
-          "commands",
-        )
+        const projectCommandsDir = path.join(input.projectPath, ".claude", "commands")
         projectCommandsPromise = scanCommandsDirectory(
           projectCommandsDir,
           "project",
@@ -199,9 +196,7 @@ export const commandsRouter = router({
         getEnabledPlugins(),
         discoverInstalledPlugins(),
       ])
-      const enabledPlugins = installedPlugins.filter(
-        (p) => enabledPluginSources.includes(p.source),
-      )
+      const enabledPlugins = installedPlugins.filter((p) => enabledPluginSources.includes(p.source))
       const pluginCommandsPromises = enabledPlugins.map(async (plugin) => {
         const paths = getPluginComponentPaths(plugin)
         try {
@@ -213,12 +208,11 @@ export const commandsRouter = router({
       })
 
       // Scan all directories in parallel
-      const [userCommands, projectCommands, ...pluginCommandsArrays] =
-        await Promise.all([
-          userCommandsPromise,
-          projectCommandsPromise,
-          ...pluginCommandsPromises,
-        ])
+      const [userCommands, projectCommands, ...pluginCommandsArrays] = await Promise.all([
+        userCommandsPromise,
+        projectCommandsPromise,
+        ...pluginCommandsPromises,
+      ])
       const pluginCommands = pluginCommandsArrays.flat()
 
       // Project commands first (more specific), then user commands, then plugin commands
@@ -256,10 +250,14 @@ export const commandsRouter = router({
         argumentHint: z.string().optional(),
         source: z.enum(["user", "project"]),
         projectPath: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+      const safeName = input.name
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
       if (!safeName) {
         throw new Error("Command name must contain at least one alphanumeric character")
       }
@@ -312,7 +310,7 @@ export const commandsRouter = router({
         content: z.string(),
         argumentHint: z.string().optional(),
         projectPath: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Security: prevent path traversal
@@ -341,7 +339,7 @@ export const commandsRouter = router({
       z.object({
         path: z.string(),
         projectPath: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       if (input.path.includes("..")) {

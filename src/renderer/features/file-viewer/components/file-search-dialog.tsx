@@ -106,10 +106,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
     return items
   }, [recentlyOpenedFiles, projectPath, debouncedQuery])
 
-  const recentPathsSet = useMemo(
-    () => new Set(recentItems.map((f) => f.path)),
-    [recentItems],
-  )
+  const recentPathsSet = useMemo(() => new Set(recentItems.map((f) => f.path)), [recentItems])
 
   // Search results excluding recently opened files
   const otherFiles = useMemo(() => {
@@ -118,10 +115,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
   }, [results, recentPathsSet])
 
   // Flat list for keyboard navigation: recent first, then rest
-  const allItems = useMemo(
-    () => [...recentItems, ...otherFiles],
-    [recentItems, otherFiles],
-  )
+  const allItems = useMemo(() => [...recentItems, ...otherFiles], [recentItems, otherFiles])
 
   // Reset selection when results change
   useEffect(() => {
@@ -175,19 +169,13 @@ export const FileSearchDialog = memo(function FileSearchDialog({
     [allItems, selectedIndex, handleSelect],
   )
 
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setQuery(e.target.value)
-    },
-    [],
-  )
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value)
+  }, [])
 
-  const handleSetRef = useCallback(
-    (index: number, el: HTMLDivElement | null) => {
-      itemRefs.current[index] = el
-    },
-    [],
-  )
+  const handleSetRef = useCallback((index: number, el: HTMLDivElement | null) => {
+    itemRefs.current[index] = el
+  }, [])
 
   const recentCount = recentItems.length
 
@@ -341,7 +329,9 @@ const FileSearchItem = memo(function FileSearchItem({
           {query
             ? highlightMatches(label, query).map((seg, i) =>
                 seg.highlight ? (
-                  <mark key={i} className="bg-transparent text-foreground font-semibold">{seg.text}</mark>
+                  <mark key={i} className="bg-transparent text-foreground font-semibold">
+                    {seg.text}
+                  </mark>
                 ) : (
                   <span key={i}>{seg.text}</span>
                 ),
@@ -361,7 +351,9 @@ const FileSearchItem = memo(function FileSearchItem({
               {query
                 ? highlightMatches(dirPath, query).map((seg, i) =>
                     seg.highlight ? (
-                      <mark key={i} className="bg-transparent text-foreground font-semibold">{seg.text}</mark>
+                      <mark key={i} className="bg-transparent text-foreground font-semibold">
+                        {seg.text}
+                      </mark>
                     ) : (
                       <span key={i}>{seg.text}</span>
                     ),

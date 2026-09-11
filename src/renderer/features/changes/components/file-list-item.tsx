@@ -107,9 +107,7 @@ export const FileListItem = memo(function FileListItem({
             {dirPath}/
           </span>
         )}
-        <span className="text-xs font-medium flex-shrink-0 whitespace-nowrap">
-          {fileName}
-        </span>
+        <span className="text-xs font-medium flex-shrink-0 whitespace-nowrap">{fileName}</span>
       </div>
       <div className="shrink-0 flex items-center gap-1.5">
         {isViewed && (
@@ -130,29 +128,17 @@ export const FileListItem = memo(function FileListItem({
     <ContextMenu>
       <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
       <ContextMenuContent className="w-52">
-        {onCopyPath && (
-          <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>
-        )}
+        {onCopyPath && <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>}
         {onCopyRelativePath && (
-          <ContextMenuItem onClick={onCopyRelativePath}>
-            Copy Relative Path
-          </ContextMenuItem>
+          <ContextMenuItem onClick={onCopyRelativePath}>Copy Relative Path</ContextMenuItem>
         )}
-        {(onCopyPath || onCopyRelativePath) && onRevealInFinder && (
-          <ContextMenuSeparator />
-        )}
+        {(onCopyPath || onCopyRelativePath) && onRevealInFinder && <ContextMenuSeparator />}
         {onRevealInFinder && (
-          <ContextMenuItem onClick={onRevealInFinder}>
-            Reveal in Finder
-          </ContextMenuItem>
+          <ContextMenuItem onClick={onRevealInFinder}>Reveal in Finder</ContextMenuItem>
         )}
-        {(onOpenInFilePreview || onOpenInEditor) && (
-          <ContextMenuSeparator />
-        )}
+        {(onOpenInFilePreview || onOpenInEditor) && <ContextMenuSeparator />}
         {onOpenInFilePreview && (
-          <ContextMenuItem onClick={onOpenInFilePreview}>
-            Open in File Preview
-          </ContextMenuItem>
+          <ContextMenuItem onClick={onOpenInFilePreview}>Open in File Preview</ContextMenuItem>
         )}
         {onOpenInEditor && (
           <ContextMenuItem onClick={onOpenInEditor}>

@@ -50,9 +50,7 @@ export const getPerChatMessageKey = (subChatId: string, messageId: string) =>
   `${subChatId}:::${messageId}`
 
 // This is the key optimization: updating one message doesn't affect others.
-export const messageAtomFamily = atomFamily((_messageKey: string) =>
-  atom<Message | null>(null)
-)
+export const messageAtomFamily = atomFamily((_messageKey: string) => atom<Message | null>(null))
 
 // Track active message IDs per subChat for cleanup
 const activeMessageIdsByChat = new Map<string, Set<string>>()
@@ -65,12 +63,10 @@ export const messageIdsAtom = atom<string[]>([])
 const messageRolesAtom = atom<Map<string, "user" | "assistant" | "system">>(new Map())
 
 // Per-subChat atoms for split-pane rendering. Each pane reads only its own IDs/roles.
-export const messageIdsPerChatAtom = atomFamily((_subChatId: string) =>
-  atom<string[]>([])
-)
+export const messageIdsPerChatAtom = atomFamily((_subChatId: string) => atom<string[]>([]))
 
 const messageRolesPerChatAtom = atomFamily((_subChatId: string) =>
-  atom<Map<string, "user" | "assistant" | "system">>(new Map())
+  atom<Map<string, "user" | "assistant" | "system">>(new Map()),
 )
 
 // Currently streaming message ID (null if not streaming)
@@ -97,7 +93,7 @@ export const lastMessageIdAtom = atom((get) => {
 
 // Check if a specific message is the last one
 export const isLastMessageAtomFamily = atomFamily((messageId: string) =>
-  atom((get) => get(lastMessageIdAtom) === messageId)
+  atom((get) => get(lastMessageIdAtom) === messageId),
 )
 
 // Per-subchat version for split panes.
@@ -119,7 +115,7 @@ export const isMessageStreamingAtomFamily = atomFamily((messageId: string) =>
     const lastId = get(lastMessageIdAtom)
     // A message is streaming if it's the last message and there's active streaming
     return messageId === lastId && streamingId === messageId
-  })
+  }),
 )
 
 // ============================================================================
@@ -147,7 +143,7 @@ export const textPartAtomFamily = atomFamily((key: string) => {
     const message = get(messageAtomFamily(messageKey))
     const parts = message?.parts || []
     const part = parts[partIndex]
-    const text = part?.type === "text" ? (part.text || "") : ""
+    const text = part?.type === "text" ? part.text || "" : ""
 
     // Return cached value if text hasn't changed (stable reference)
     const cached = textPartCache.get(key)
@@ -255,7 +251,7 @@ export const messageStructureAtomFamily = atomFamily((messageKey: string) =>
 
     messageStructureCache.set(messageKey, newStructure)
     return newStructure
-  })
+  }),
 )
 
 // ============================================================================
@@ -304,7 +300,7 @@ export const userMessageIdsPerChatAtom = atomFamily((subChatId: string) =>
 
     userMessageIdsPerChatCache.set(subChatId, newUserIds)
     return newUserIds
-  })
+  }),
 )
 
 // ============================================================================
@@ -415,7 +411,7 @@ const messageGroupsPerChatAtom = atomFamily((subChatId: string) =>
 
     messageGroupsPerChatCache.set(subChatId, groups)
     return groups
-  })
+  }),
 )
 
 // ============================================================================
@@ -435,11 +431,7 @@ export const assistantIdsPerChatAtomFamily = atomFamily((key: string) => {
     const newIds = group?.assistantMsgIds ?? []
     const cached = assistantIdsPerChatCache.get(key)
 
-    if (
-      cached &&
-      cached.length === newIds.length &&
-      cached.every((id, i) => id === newIds[i])
-    ) {
+    if (cached && cached.length === newIds.length && cached.every((id, i) => id === newIds[i])) {
       return cached
     }
 
@@ -470,17 +462,13 @@ export const assistantIdsForUserMsgAtomFamily = atomFamily((userMsgId: string) =
     // Return cached array if content is the same
     const cacheKey = `${subChatId}:${userMsgId}`
     const cached = assistantIdsCacheByChat.get(cacheKey)
-    if (
-      cached &&
-      cached.length === newIds.length &&
-      cached.every((id, i) => id === newIds[i])
-    ) {
+    if (cached && cached.length === newIds.length && cached.every((id, i) => id === newIds[i])) {
       return cached
     }
 
     assistantIdsCacheByChat.set(cacheKey, newIds)
     return newIds
-  })
+  }),
 )
 
 // Is this user message the last one?
@@ -488,7 +476,7 @@ export const isLastUserMessageAtomFamily = atomFamily((userMsgId: string) =>
   atom((get) => {
     const userIds = get(userMessageIdsAtom)
     return userIds[userIds.length - 1] === userMsgId
-  })
+  }),
 )
 
 // Is this user message the first one? (used to hide rollback button on first message)
@@ -496,7 +484,7 @@ export const isFirstUserMessageAtomFamily = atomFamily((userMsgId: string) =>
   atom((get) => {
     const userIds = get(userMessageIdsAtom)
     return userIds[0] === userMsgId
-  })
+  }),
 )
 
 type RollbackLookupMessage = {
@@ -598,7 +586,7 @@ export const rollbackTargetSdkUuidForUserMsgAtomFamily = atomFamily((userMsgId: 
       const subChatId = get(currentSubChatIdAtom)
       return get(messageAtomFamily(getPerChatMessageKey(subChatId, messageId)))
     })
-  })
+  }),
 )
 
 // ============================================================================
@@ -707,7 +695,9 @@ export const messageTokenDataAtom = atom((get) => {
   const lastMsg = lastId ? get(messageAtomFamily(getPerChatMessageKey(subChatId, lastId))) : null
   // Note: metadata has flat structure (metadata.outputTokens), not nested (metadata.usage.outputTokens)
   const lastMsgOutputTokens = (lastMsg?.metadata as any)?.outputTokens || 0
-  const lastMsgParts = (lastMsg as any)?.parts as Array<{ type?: string; state?: string }> | undefined
+  const lastMsgParts = (lastMsg as any)?.parts as
+    | Array<{ type?: string; state?: string }>
+    | undefined
   const lastPart = lastMsgParts?.[lastMsgParts.length - 1]
   const lastMsgPartsKey = `${lastMsgParts?.length ?? 0}:${lastPart?.type ?? ""}:${(lastPart as any)?.state ?? ""}`
 
@@ -799,13 +789,16 @@ export const messageTokenDataAtom = atom((get) => {
 // more comprehensive but slightly slower. Both are correct for their use cases:
 // - This (message-store): Jotai atom updates during high-frequency streaming
 // - messages-list.tsx: External store subscription for React render triggering
-const previousMessageState = new Map<string, {
-  partsLength: number
-  lastPartText: string | undefined
-  lastPartState: string | undefined
-  lastPartInputJson: string | undefined
-  metadataJson: string | undefined
-}>()
+const previousMessageState = new Map<
+  string,
+  {
+    partsLength: number
+    lastPartText: string | undefined
+    lastPartState: string | undefined
+    lastPartInputJson: string | undefined
+    metadataJson: string | undefined
+  }
+>()
 
 function hasMessageChanged(subChatId: string, msgId: string, msg: Message): boolean {
   const cacheKey = `${subChatId}:${msgId}`
@@ -844,7 +837,11 @@ function hasMessageChanged(subChatId: string, msgId: string, msg: Message): bool
 
 export const syncMessagesWithStatusAtom = atom(
   null,
-  (get, set, payload: { messages: Message[]; status: string; subChatId?: string; updateGlobal?: boolean }) => {
+  (
+    get,
+    set,
+    payload: { messages: Message[]; status: string; subChatId?: string; updateGlobal?: boolean },
+  ) => {
     const { messages, status, subChatId, updateGlobal = true } = payload
 
     const prevSubChatId = get(currentSubChatIdAtom)
@@ -881,8 +878,7 @@ export const syncMessagesWithStatusAtom = atom(
 
       // Check if IDs changed (new message added or removed)
       globalIdsChanged =
-        newIds.length !== currentIds.length ||
-        newIds.some((id, i) => id !== currentIds[i])
+        newIds.length !== currentIds.length || newIds.some((id, i) => id !== currentIds[i])
 
       if (globalIdsChanged) {
         set(messageIdsAtom, newIds)
@@ -907,8 +903,7 @@ export const syncMessagesWithStatusAtom = atom(
     // Always update per-subchat atoms so split panes can render independently.
     const perChatIds = get(messageIdsPerChatAtom(currentSubChatId))
     const perChatIdsChanged =
-      newIds.length !== perChatIds.length ||
-      newIds.some((id, i) => id !== perChatIds[i])
+      newIds.length !== perChatIds.length || newIds.some((id, i) => id !== perChatIds[i])
 
     if (perChatIdsChanged) {
       set(messageIdsPerChatAtom(currentSubChatId), newIds)
@@ -951,7 +946,10 @@ export const syncMessagesWithStatusAtom = atom(
         // Deep clone message with new parts array and new part objects
         const clonedMsg = {
           ...msg,
-          parts: msg.parts?.map((part: any) => ({ ...part, input: part.input ? { ...part.input } : undefined })),
+          parts: msg.parts?.map((part: any) => ({
+            ...part,
+            input: part.input ? { ...part.input } : undefined,
+          })),
         }
         set(messageAtomFamily(messageKey), clonedMsg)
       }
@@ -986,17 +984,13 @@ export const syncMessagesWithStatusAtom = atom(
         set(streamingMessageIdAtom, null)
       }
     }
-
-  }
+  },
 )
 
 // Legacy sync atom (not used, but kept for compatibility)
-export const syncMessagesAtom = atom(
-  null,
-  (get, set, messages: Message[]) => {
-    set(syncMessagesWithStatusAtom, { messages, status: get(chatStatusAtom) })
-  }
-)
+export const syncMessagesAtom = atom(null, (get, set, messages: Message[]) => {
+  set(syncMessagesWithStatusAtom, { messages, status: get(chatStatusAtom) })
+})
 
 // ============================================================================
 // CLEANUP - For clearing store when switching chats
@@ -1105,16 +1099,13 @@ export const ttsPlaybackRateAtom = atom<PlaybackSpeed>(
       }
     }
     return 1
-  })()
+  })(),
 )
 
 // Write atom that also persists to localStorage
-export const setTtsPlaybackRateAtom = atom(
-  null,
-  (_get, set, rate: PlaybackSpeed) => {
-    set(ttsPlaybackRateAtom, rate)
-    if (typeof window !== "undefined") {
-      localStorage.setItem("tts-playback-rate", String(rate))
-    }
+export const setTtsPlaybackRateAtom = atom(null, (_get, set, rate: PlaybackSpeed) => {
+  set(ttsPlaybackRateAtom, rate)
+  if (typeof window !== "undefined") {
+    localStorage.setItem("tts-playback-rate", String(rate))
   }
-)
+})

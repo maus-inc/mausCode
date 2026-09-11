@@ -26,9 +26,7 @@ interface SearchComboboxProps<T> {
   side?: "top" | "right" | "bottom" | "left"
   sideOffset?: number
   alignOffset?: number
-  collisionPadding?:
-    | number
-    | { top?: number; right?: number; bottom?: number; left?: number }
+  collisionPadding?: number | { top?: number; right?: number; bottom?: number; left?: number }
   maxHeight?: string
 }
 
@@ -56,9 +54,7 @@ export function SearchCombobox<T>({
   const filteredItems = useMemo(() => {
     if (!search.trim()) return items
     const lowerSearch = search.toLowerCase()
-    return items.filter((item) =>
-      getItemValue(item).toLowerCase().includes(lowerSearch),
-    )
+    return items.filter((item) => getItemValue(item).toLowerCase().includes(lowerSearch))
   }, [items, search, getItemValue])
 
   // Reset search when popover closes
@@ -79,22 +75,12 @@ export function SearchCombobox<T>({
         collisionPadding={collisionPadding}
       >
         <Command shouldFilter={false}>
-          <CommandInput
-            placeholder={placeholder}
-            value={search}
-            onValueChange={setSearch}
-          />
+          <CommandInput placeholder={placeholder} value={search} onValueChange={setSearch} />
           <CommandList className={`${maxHeight} overflow-y-auto`}>
-            {filteredItems.length === 0 && (
-              <CommandEmpty>{emptyMessage}</CommandEmpty>
-            )}
+            {filteredItems.length === 0 && <CommandEmpty>{emptyMessage}</CommandEmpty>}
             <CommandGroup>
               {filteredItems.map((item, index) => (
-                <CommandItem
-                  key={index}
-                  value={getItemValue(item)}
-                  onSelect={() => onSelect(item)}
-                >
+                <CommandItem key={index} value={getItemValue(item)} onSelect={() => onSelect(item)}>
                   {renderItem(item)}
                 </CommandItem>
               ))}

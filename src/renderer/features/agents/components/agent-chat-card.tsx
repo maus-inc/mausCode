@@ -2,10 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { cn } from "../../../lib/utils"
-import {
-  GitHubLogo,
-  IconSpinner,
-} from "../../../components/ui/canvas-icons"
+import { GitHubLogo, IconSpinner } from "../../../components/ui/canvas-icons"
 import { useAtomValue } from "jotai"
 import { agentsUnseenChangesAtom, lastChatModesAtom } from "../atoms"
 import { getModeIcon } from "../lib/mode-display"
@@ -31,13 +28,15 @@ function GitHubAvatar({
   return (
     <div className={cn(className, "relative flex-shrink-0")}>
       {/* Placeholder background while loading */}
-      {!isLoaded && (
-        <div className="absolute inset-0 rounded-sm bg-muted" />
-      )}
+      {!isLoaded && <div className="absolute inset-0 rounded-sm bg-muted" />}
       <img
         src={`https://github.com/${gitOwner}.png?size=64`}
         alt={gitOwner}
-        className={cn(className, "rounded-sm flex-shrink-0", isLoaded ? 'opacity-100' : 'opacity-0')}
+        className={cn(
+          className,
+          "rounded-sm flex-shrink-0",
+          isLoaded ? "opacity-100" : "opacity-0",
+        )}
         onLoad={handleLoad}
         onError={handleError}
       />
@@ -87,9 +86,7 @@ function ChatIconWithBadge({
       return <GitHubAvatar gitOwner={gitOwner} />
     }
 
-    return (
-      <GitHubLogo className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-    )
+    return <GitHubLogo className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
   }
 
   return (
@@ -148,9 +145,7 @@ export function AgentChatCard({
     // Desktop: use branch from chat and repo name from project
     const branch = chat.branch
     const displayRepoName = repoName || "Local project"
-    const displayText = branch
-      ? `${displayRepoName} • ${branch}`
-      : displayRepoName
+    const displayText = branch ? `${displayRepoName} • ${branch}` : displayRepoName
 
     return (
       <div
@@ -186,9 +181,7 @@ export function AgentChatCard({
             <span
               className={cn(
                 "text-[11px] truncate",
-                isSelected
-                  ? "text-primary-foreground/60"
-                  : "text-muted-foreground/60",
+                isSelected ? "text-primary-foreground/60" : "text-muted-foreground/60",
               )}
             >
               {displayText}

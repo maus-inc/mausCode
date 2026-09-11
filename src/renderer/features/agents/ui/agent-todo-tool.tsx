@@ -58,10 +58,7 @@ interface DetectedChanges {
 }
 
 // Detect what changed between old and new todos
-function detectChanges(
-  oldTodos: TodoItem[],
-  newTodos: TodoItem[],
-): DetectedChanges {
+function detectChanges(oldTodos: TodoItem[], newTodos: TodoItem[]): DetectedChanges {
   // If no old todos, this is a creation - show full list ONCE
   if (!oldTodos || oldTodos.length === 0) {
     return {
@@ -316,10 +313,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
 
   // Synced todos state - scoped per subChatId to prevent cross-chat conflicts
   // Uses a stable key to ensure proper isolation between different sub-chats
-  const todosAtom = useMemo(
-    () => currentTodosAtomFamily(subChatId || "default"),
-    [subChatId],
-  )
+  const todosAtom = useMemo(() => currentTodosAtomFamily(subChatId || "default"), [subChatId])
   const [todoState, setTodoState] = useAtom(todosAtom)
   const syncedTodos = todoState.todos
   const creationToolCallId = todoState.creationToolCallId
@@ -350,16 +344,19 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   //    - this is a different tool call than the stored creation one
   // IMPORTANT: Check if output.oldTodos is explicitly an empty array, not just missing
   // If output doesn't exist yet or oldTodos is undefined, we can't determine if it's new generation
-  const hasOutputWithEmptyOldTodos = part.output !== undefined &&
-    'oldTodos' in part.output &&
+  const hasOutputWithEmptyOldTodos =
+    part.output !== undefined &&
+    "oldTodos" in part.output &&
     Array.isArray(part.output.oldTodos) &&
     part.output.oldTodos.length === 0
-  const isNewGeneration = hasOutputWithEmptyOldTodos &&
+  const isNewGeneration =
+    hasOutputWithEmptyOldTodos &&
     newTodos.length > 0 &&
     syncedTodos.length > 0 &&
     creationToolCallId !== null &&
     creationToolCallId !== part.toolCallId
-  const isCreationToolCall = creationToolCallId === null || creationToolCallId === part.toolCallId || isNewGeneration
+  const isCreationToolCall =
+    creationToolCallId === null || creationToolCallId === part.toolCallId || isNewGeneration
 
   // Use syncedTodos as fallback for oldTodos when output hasn't arrived yet
   // This prevents flickering: without this, when a new tool call arrives with
@@ -381,10 +378,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   }, [rawOldTodos, syncedTodos, isCreationToolCall])
 
   // Detect what changed - memoize to avoid recalculation
-  const changes = useMemo(
-    () => detectChanges(oldTodos, newTodos),
-    [oldTodos, newTodos],
-  )
+  const changes = useMemo(() => detectChanges(oldTodos, newTodos), [oldTodos, newTodos])
 
   // State for expanded/collapsed - initialize based on user preference
   const [isExpanded, setIsExpanded] = useState(alwaysExpandTodoList)
@@ -400,7 +394,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
 
   // Memoized click handlers to prevent inline function re-creation
   const handleToggleExpand = useCallback(() => {
-    setIsExpanded(prev => !prev)
+    setIsExpanded((prev) => !prev)
   }, [])
 
   const handleExpand = useCallback(() => {
@@ -414,7 +408,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault()
-      setIsExpanded(prev => !prev)
+      setIsExpanded((prev) => !prev)
     }
   }, [])
 
@@ -429,18 +423,21 @@ export const AgentTodoTool = memo(function AgentTodoTool({
 
       // Compute these inside the effect to avoid dependency issues
       // These values depend on syncedTodos/creationToolCallId which change when we call setTodoState
-      const hasOutputWithEmptyOldTodos = part.output !== undefined &&
-        'oldTodos' in part.output &&
+      const hasOutputWithEmptyOldTodos =
+        part.output !== undefined &&
+        "oldTodos" in part.output &&
         Array.isArray(part.output.oldTodos) &&
         part.output.oldTodos.length === 0
 
-      const isNewGenerationLocal = hasOutputWithEmptyOldTodos &&
+      const isNewGenerationLocal =
+        hasOutputWithEmptyOldTodos &&
         newTodos.length > 0 &&
         currentSyncedTodos.length > 0 &&
         currentCreationToolCallId !== null &&
         currentCreationToolCallId !== part.toolCallId
 
-      const isCreationToolCallLocal = currentCreationToolCallId === null ||
+      const isCreationToolCallLocal =
+        currentCreationToolCallId === null ||
         currentCreationToolCallId === part.toolCallId ||
         isNewGenerationLocal
 
@@ -453,7 +450,9 @@ export const AgentTodoTool = memo(function AgentTodoTool({
       // If this is a new generation, reset the creationToolCallId to this tool call
       const newCreationId = isNewGenerationLocal
         ? part.toolCallId
-        : (currentCreationToolCallId === null ? part.toolCallId : currentCreationToolCallId)
+        : currentCreationToolCallId === null
+          ? part.toolCallId
+          : currentCreationToolCallId
 
       if (shouldUpdate) {
         // Prevent infinite loop: check if todos actually changed before updating
@@ -492,10 +491,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   }
 
   // Early streaming state - show placeholder for CREATION only
-  if (
-    newTodos.length === 0 ||
-    (isStreaming && !part.input?.todos)
-  ) {
+  if (newTodos.length === 0 || (isStreaming && !part.input?.todos)) {
     // For update tool calls (not creation), return null to avoid showing placeholder
     // Note: This branch is only reached when !isStreaming (update streaming handled above)
     if (!isCreationToolCall) {
@@ -507,7 +503,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
     return (
       <div
         className="mx-2 sticky z-[5] bg-background"
-        style={{ top: 'calc(var(--user-message-height, 28px) - 29px)' }}
+        style={{ top: "calc(var(--user-message-height, 28px) - 29px)" }}
       >
         <div className="rounded-lg border border-border bg-muted/30 px-2.5 py-1.5">
           <div className="flex items-center gap-1.5">
@@ -558,12 +554,8 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   // COMPACT MODE: Multiple updates - render as custom component with icons
   // Skip compact mode if user prefers always expanded and this is the creation tool call
   if (changes.type === "multiple" && !(alwaysExpandTodoList && isCreationToolCall)) {
-    const completedChanges = changes.items.filter(
-      (c) => c.newStatus === "completed",
-    ).length
-    const startedChanges = changes.items.filter(
-      (c) => c.newStatus === "in_progress",
-    ).length
+    const completedChanges = changes.items.filter((c) => c.newStatus === "completed").length
+    const startedChanges = changes.items.filter((c) => c.newStatus === "in_progress").length
 
     // Build summary title
     let summaryTitle = "Updated to-dos"
@@ -620,12 +612,8 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   // FULL MODE: Creation - render as expandable list
   // Use syncedTodos to show the current state (synced with all updates)
   const displayTodos = syncedTodos.length > 0 ? syncedTodos : newTodos
-  const completedCount = displayTodos.filter(
-    (t) => t.status === "completed",
-  ).length
-  const inProgressCount = displayTodos.filter(
-    (t) => t.status === "in_progress",
-  ).length
+  const completedCount = displayTodos.filter((t) => t.status === "completed").length
+  const inProgressCount = displayTodos.filter((t) => t.status === "in_progress").length
   const totalTodos = displayTodos.length
 
   // For visual progress, count completed + in_progress tasks
@@ -633,8 +621,9 @@ export const AgentTodoTool = memo(function AgentTodoTool({
   const visualProgress = completedCount + inProgressCount
 
   // Find current task (first in_progress, or first pending if none in progress)
-  const currentTask = displayTodos.find((t) => t.status === "in_progress")
-    || displayTodos.find((t) => t.status === "pending")
+  const currentTask =
+    displayTodos.find((t) => t.status === "in_progress") ||
+    displayTodos.find((t) => t.status === "pending")
 
   // Find current task index for progress display
   const currentTaskIndex = currentTask
@@ -647,13 +636,17 @@ export const AgentTodoTool = memo(function AgentTodoTool({
         "mx-2",
         // Make entire creation todo sticky
         // z-[5] ensures todo stays below user message (z-10) when both are sticky
-        isCreationToolCall && "sticky z-[5] bg-background"
+        isCreationToolCall && "sticky z-[5] bg-background",
       )}
-      style={isCreationToolCall ? {
-        // Offset so TOP BLOCK (title) goes fully under user message
-        // TOP BLOCK height: py-1.5 (12px) + text-xs (~16px) + border (1px) = ~29px
-        top: 'calc(var(--user-message-height, 28px) - 29px)'
-      } : undefined}
+      style={
+        isCreationToolCall
+          ? {
+              // Offset so TOP BLOCK (title) goes fully under user message
+              // TOP BLOCK height: py-1.5 (12px) + text-xs (~16px) + border (1px) = ~29px
+              top: "calc(var(--user-message-height, 28px) - 29px)",
+            }
+          : undefined
+      }
     >
       {/* TOP BLOCK - Plan title with expand/collapse button */}
       <div
@@ -667,9 +660,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
       >
         <div className="flex items-center gap-1.5">
           <PlanIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-          <span className="text-xs font-medium text-foreground">
-            To-dos
-          </span>
+          <span className="text-xs font-medium text-foreground">To-dos</span>
           <span className="text-xs text-muted-foreground truncate flex-1">
             {displayTodos[0]?.content || "To-do list"}
           </span>
@@ -701,7 +692,10 @@ export const AgentTodoTool = memo(function AgentTodoTool({
           >
             {/* Progress circle or checkmark when all completed */}
             {completedCount === totalTodos && totalTodos > 0 ? (
-              <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center flex-shrink-0" style={{ border: "0.5px solid hsl(var(--border))" }}>
+              <div
+                className="w-4 h-4 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
+                style={{ border: "0.5px solid hsl(var(--border))" }}
+              >
                 <CheckIcon className="w-2.5 h-2.5 text-muted-foreground" />
               </div>
             ) : (
@@ -738,10 +732,7 @@ export const AgentTodoTool = memo(function AgentTodoTool({
 
         {/* Expanded content - full todo list */}
         {isExpanded && (
-          <div
-            className="max-h-[300px] overflow-y-auto cursor-pointer"
-            onClick={handleCollapse}
-          >
+          <div className="max-h-[300px] overflow-y-auto cursor-pointer" onClick={handleCollapse}>
             {displayTodos.map((todo, idx) => (
               <TodoListItem
                 key={idx}

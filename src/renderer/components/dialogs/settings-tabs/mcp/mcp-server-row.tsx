@@ -79,13 +79,9 @@ export function McpServerRow({
         />
         <StatusDot status={server.status} />
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium text-foreground truncate block">
-            {server.name}
-          </span>
+          <span className="text-sm font-medium text-foreground truncate block">{server.name}</span>
           {server.serverInfo?.version && (
-            <span className="text-[10px] text-muted-foreground">
-              v{server.serverInfo.version}
-            </span>
+            <span className="text-[10px] text-muted-foreground">v{server.serverInfo.version}</span>
           )}
         </div>
         <span className="text-xs text-muted-foreground shrink-0">
@@ -177,9 +173,7 @@ export function McpServerRow({
           >
             <div className="px-3 pb-2.5">
               <div className="rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-2">
-                <p className="text-[11px] text-red-400 font-mono break-all">
-                  {server.error}
-                </p>
+                <p className="text-[11px] text-red-400 font-mono break-all">{server.error}</p>
               </div>
             </div>
           </motion.div>

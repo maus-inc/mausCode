@@ -82,8 +82,14 @@ test("stubbed turn streams text_delta through the translator", async () => {
       }
     }
     assert.equal(sawDone, true, "turn should complete")
-    assert.ok(sawText.includes("Hello from stub"), `stub text should stream (got ${JSON.stringify(sawText)})`)
-    assert.ok(hits.some((h) => h === "POST /responses"), `daemon should POST to the stub (hits: ${hits})`)
+    assert.ok(
+      sawText.includes("Hello from stub"),
+      `stub text should stream (got ${JSON.stringify(sawText)})`,
+    )
+    assert.ok(
+      hits.some((h) => h === "POST /responses"),
+      `daemon should POST to the stub (hits: ${hits})`,
+    )
     assert.ok(chunks.includes("text-delta"), `translator should emit text-delta (got ${chunks})`)
     assert.ok(chunks.includes("finish"), `translator should emit finish (got ${chunks})`)
   } finally {

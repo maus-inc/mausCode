@@ -97,24 +97,28 @@ export function SubChatContextMenu({
 }: SubChatContextMenuProps) {
   const closeTabShortcut = useCloseTabShortcut()
 
-  const handleExport = useCallback((format: ExportFormat) => {
-    if (!chatId) return
-    exportChat({ chatId, subChatId: subChat.id, format })
-  }, [chatId, subChat.id])
+  const handleExport = useCallback(
+    (format: ExportFormat) => {
+      if (!chatId) return
+      exportChat({ chatId, subChatId: subChat.id, format })
+    },
+    [chatId, subChat.id],
+  )
 
-  const handleCopy = useCallback((format: ExportFormat) => {
-    if (!chatId) return
-    copyChat({ chatId, subChatId: subChat.id, format })
-  }, [chatId, subChat.id])
+  const handleCopy = useCallback(
+    (format: ExportFormat) => {
+      if (!chatId) return
+      copyChat({ chatId, subChatId: subChat.id, format })
+    },
+    [chatId, subChat.id],
+  )
 
   return (
     <ContextMenuContent className="w-48">
       <ContextMenuItem onClick={() => onTogglePin(subChat.id)}>
         {isPinned ? "Unpin chat" : "Pin chat"}
       </ContextMenuItem>
-      <ContextMenuItem onClick={() => onRename(subChat)}>
-        Rename chat
-      </ContextMenuItem>
+      <ContextMenuItem onClick={() => onRename(subChat)}>Rename chat</ContextMenuItem>
       {chatId && (
         <ContextMenuSub>
           <ContextMenuSubTrigger>Export chat</ContextMenuSubTrigger>
@@ -122,22 +126,14 @@ export function SubChatContextMenu({
             <ContextMenuItem onClick={() => handleExport("markdown")}>
               Download as Markdown
             </ContextMenuItem>
-            <ContextMenuItem onClick={() => handleExport("json")}>
-              Download as JSON
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => handleExport("text")}>
-              Download as Text
-            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleExport("json")}>Download as JSON</ContextMenuItem>
+            <ContextMenuItem onClick={() => handleExport("text")}>Download as Text</ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => handleCopy("markdown")}>
               Copy as Markdown
             </ContextMenuItem>
-            <ContextMenuItem onClick={() => handleCopy("json")}>
-              Copy as JSON
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => handleCopy("text")}>
-              Copy as Text
-            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleCopy("json")}>Copy as JSON</ContextMenuItem>
+            <ContextMenuItem onClick={() => handleCopy("text")}>Copy as Text</ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
       )}
@@ -153,11 +149,7 @@ export function SubChatContextMenu({
               Remove from split
             </ContextMenuItem>
           )}
-          {onCloseSplit && (
-            <ContextMenuItem onClick={onCloseSplit}>
-              Separate chats
-            </ContextMenuItem>
-          )}
+          {onCloseSplit && <ContextMenuItem onClick={onCloseSplit}>Separate chats</ContextMenuItem>}
         </>
       ) : onOpenInSplit ? (
         <ContextMenuItem
@@ -204,17 +196,11 @@ export function SubChatContextMenu({
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => onArchiveAllBelow?.(subChat.id)}
-            disabled={
-              currentIndex === undefined ||
-              currentIndex >= (totalCount || 0) - 1
-            }
+            disabled={currentIndex === undefined || currentIndex >= (totalCount || 0) - 1}
           >
             Archive chats below
           </ContextMenuItem>
-          <ContextMenuItem
-            onClick={() => onArchiveOthers(subChat.id)}
-            disabled={isOnlyChat}
-          >
+          <ContextMenuItem onClick={() => onArchiveOthers(subChat.id)} disabled={isOnlyChat}>
             Archive other chats
           </ContextMenuItem>
         </>

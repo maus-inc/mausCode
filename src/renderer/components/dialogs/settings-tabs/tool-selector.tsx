@@ -7,11 +7,21 @@ export const AVAILABLE_TOOLS = [
   { id: "Edit", name: "Edit File", category: "file", description: "Make precise edits" },
   { id: "Glob", name: "Glob Pattern", category: "file", description: "Find files by pattern" },
   { id: "Grep", name: "Search Content", category: "file", description: "Search in file contents" },
-  { id: "NotebookEdit", name: "Notebook Edit", category: "file", description: "Edit Jupyter notebooks" },
+  {
+    id: "NotebookEdit",
+    name: "Notebook Edit",
+    category: "file",
+    description: "Edit Jupyter notebooks",
+  },
 
   // System
   { id: "Bash", name: "Bash Commands", category: "system", description: "Execute shell commands" },
-  { id: "Task", name: "Launch Subagent", category: "system", description: "Launch specialized agents" },
+  {
+    id: "Task",
+    name: "Launch Subagent",
+    category: "system",
+    description: "Launch specialized agents",
+  },
 
   // Web
   { id: "WebSearch", name: "Web Search", category: "web", description: "Search the internet" },
@@ -19,7 +29,12 @@ export const AVAILABLE_TOOLS = [
 
   // Planning & Interaction
   { id: "TodoWrite", name: "Todo List", category: "planning", description: "Manage task list" },
-  { id: "AskUserQuestion", name: "Ask User", category: "planning", description: "Ask clarifying questions" },
+  {
+    id: "AskUserQuestion",
+    name: "Ask User",
+    category: "planning",
+    description: "Ask clarifying questions",
+  },
 ]
 
 const CATEGORIES = [
@@ -72,9 +87,7 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
           Clear
         </button>
         <span className="flex-1" />
-        <span className="text-xs text-muted-foreground">
-          {selectedTools.length} selected
-        </span>
+        <span className="text-xs text-muted-foreground">{selectedTools.length} selected</span>
       </div>
 
       {/* Tools by category */}
@@ -102,7 +115,7 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
                           ? mode === "allowlist"
                             ? "border-green-500/30 bg-green-500/10"
                             : "border-red-500/30 bg-red-500/10"
-                          : "border-transparent bg-background hover:bg-foreground/5"
+                          : "border-transparent bg-background hover:bg-foreground/5",
                       )}
                     >
                       <div
@@ -112,7 +125,7 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
                             ? mode === "allowlist"
                               ? "border-green-500 bg-green-500"
                               : "border-red-500 bg-red-500"
-                            : "border-muted-foreground/30"
+                            : "border-muted-foreground/30",
                         )}
                       >
                         {isSelected && (
@@ -123,11 +136,7 @@ export function ToolSelector({ selectedTools, onChange, mode }: ToolSelectorProp
                             stroke="currentColor"
                             strokeWidth={3}
                           >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M5 13l4 4L19 7"
-                            />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
                         )}
                       </div>

@@ -63,15 +63,21 @@ export function AgentImageItem({
     setIsFullscreen(false)
   }, [])
 
-  const goToPrevious = useCallback((e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setCurrentIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
-  }, [images.length])
+  const goToPrevious = useCallback(
+    (e?: React.MouseEvent) => {
+      e?.stopPropagation()
+      setCurrentIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
+    },
+    [images.length],
+  )
 
-  const goToNext = useCallback((e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
-  }, [images.length])
+  const goToNext = useCallback(
+    (e?: React.MouseEvent) => {
+      e?.stopPropagation()
+      setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
+    },
+    [images.length],
+  )
 
   const handleCopyImage = useCallback(async () => {
     try {
@@ -98,9 +104,7 @@ export function AgentImageItem({
           "image/png",
         )
       })
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
-      ])
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
     } catch (err) {
       console.error("[AgentImageItem] Failed to copy image:", err)
     }
@@ -180,7 +184,10 @@ export function AgentImageItem({
             <IconSpinner className="size-4 text-muted-foreground" />
           </div>
         ) : hasError ? (
-          <div className="w-full h-full flex items-center justify-center bg-muted/50 rounded border border-destructive/20" title="Failed to load image">
+          <div
+            className="w-full h-full flex items-center justify-center bg-muted/50 rounded border border-destructive/20"
+            title="Failed to load image"
+          >
             <ImageOff className="size-4 text-destructive/50" />
           </div>
         ) : url ? (
@@ -215,100 +222,104 @@ export function AgentImageItem({
       </div>
 
       {/* Fullscreen overlay with gallery navigation - rendered via portal to escape stacking context */}
-      {isFullscreen && currentImage?.url && createPortal(
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
-          onClick={() => { if (!isContextMenuOpen) closeFullscreen() }}
-        >
-          {/* Close button */}
-          <button
-            onClick={closeFullscreen}
-            className="absolute top-4 right-4 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
-            type="button"
-            aria-label="Close fullscreen (Esc)"
+      {isFullscreen &&
+        currentImage?.url &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+            onClick={() => {
+              if (!isContextMenuOpen) closeFullscreen()
+            }}
           >
-            <X className="size-6" />
-          </button>
-
-          {/* Previous button */}
-          {hasMultipleImages && (
+            {/* Close button */}
             <button
-              onClick={goToPrevious}
-              className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
+              onClick={closeFullscreen}
+              className="absolute top-4 right-4 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
               type="button"
-              aria-label="Previous image (←)"
+              aria-label="Close fullscreen (Esc)"
             >
-              <ChevronLeft className="size-8" />
+              <X className="size-6" />
             </button>
-          )}
 
-          {/* Image with context menu */}
-          <ContextMenu onOpenChange={setIsContextMenuOpen}>
-            <ContextMenuTrigger asChild>
-              <img
-                src={currentImage.url}
-                alt={currentImage.filename}
-                className="max-w-[90vw] max-h-[85vh] object-contain"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem onClick={handleCopyImage}>
-                <Copy className="size-4 mr-2" />
-                Copy Image
-              </ContextMenuItem>
-              <ContextMenuItem onClick={handleSaveImage}>
-                <Download className="size-4 mr-2" />
-                Save Image
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
+            {/* Previous button */}
+            {hasMultipleImages && (
+              <button
+                onClick={goToPrevious}
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
+                type="button"
+                aria-label="Previous image (←)"
+              >
+                <ChevronLeft className="size-8" />
+              </button>
+            )}
 
-          {/* Next button */}
-          {hasMultipleImages && (
-            <button
-              onClick={goToNext}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
-              type="button"
-              aria-label="Next image (→)"
-            >
-              <ChevronRight className="size-8" />
-            </button>
-          )}
+            {/* Image with context menu */}
+            <ContextMenu onOpenChange={setIsContextMenuOpen}>
+              <ContextMenuTrigger asChild>
+                <img
+                  src={currentImage.url}
+                  alt={currentImage.filename}
+                  className="max-w-[90vw] max-h-[85vh] object-contain"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onClick={handleCopyImage}>
+                  <Copy className="size-4 mr-2" />
+                  Copy Image
+                </ContextMenuItem>
+                <ContextMenuItem onClick={handleSaveImage}>
+                  <Download className="size-4 mr-2" />
+                  Save Image
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
 
-          {/* Image counter and dots */}
-          {hasMultipleImages && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3">
-              {/* Dots indicator */}
-              <div className="flex gap-2">
-                {images.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setCurrentIndex(idx)
-                    }}
-                    className={`size-2 rounded-full transition-all ${
-                      idx === currentIndex
-                        ? "bg-white scale-125"
-                        : "bg-white/40 hover:bg-white/60"
-                    }`}
-                    type="button"
-                    aria-label={`Go to image ${idx + 1}`}
-                  />
-                ))}
+            {/* Next button */}
+            {hasMultipleImages && (
+              <button
+                onClick={goToNext}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white z-10"
+                type="button"
+                aria-label="Next image (→)"
+              >
+                <ChevronRight className="size-8" />
+              </button>
+            )}
+
+            {/* Image counter and dots */}
+            {hasMultipleImages && (
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3">
+                {/* Dots indicator */}
+                <div className="flex gap-2">
+                  {images.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setCurrentIndex(idx)
+                      }}
+                      className={`size-2 rounded-full transition-all ${
+                        idx === currentIndex
+                          ? "bg-white scale-125"
+                          : "bg-white/40 hover:bg-white/60"
+                      }`}
+                      type="button"
+                      aria-label={`Go to image ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+                {/* Counter text */}
+                <span className="text-white/70 text-sm">
+                  {currentIndex + 1} / {images.length}
+                </span>
               </div>
-              {/* Counter text */}
-              <span className="text-white/70 text-sm">
-                {currentIndex + 1} / {images.length}
-              </span>
-            </div>
-          )}
-        </div>,
-        document.body
-      )}
+            )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 }

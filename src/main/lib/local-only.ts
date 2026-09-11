@@ -5,10 +5,7 @@
  * via the `local-only:set` IPC channel (mirrors the analytics opt-out
  * sync). Default off.
  */
-import {
-  isOfficialCloudUrl,
-  LOCAL_ONLY_BLOCKED_MESSAGE,
-} from "../../shared/local-only"
+import { isOfficialCloudUrl, LOCAL_ONLY_BLOCKED_MESSAGE } from "../../shared/local-only"
 
 export { isOfficialCloudUrl, LOCAL_ONLY_BLOCKED_MESSAGE }
 
@@ -40,10 +37,7 @@ export class LocalOnlyBlockedError extends Error {
  * is treated as hosted (callers that cannot prove a user-owned endpoint
  * must pass the URL they are about to hit).
  */
-export function assertRemoteAllowed(
-  operation: string,
-  url?: string | null,
-): void {
+export function assertRemoteAllowed(operation: string, url?: string | null): void {
   if (!isLocalOnlyMode()) return
   if (!url || isOfficialCloudUrl(url)) {
     let diagnosticUrl = url

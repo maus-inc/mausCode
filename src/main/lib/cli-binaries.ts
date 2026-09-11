@@ -41,9 +41,7 @@ export function resolveCliBinaryPath(options: {
 
   const pathBinary = findExecutableOnPath(options.commandName)
   if (pathBinary) {
-    console.log(
-      `[cli-binary] Bundled ${options.commandName} not found, using PATH: ${pathBinary}`,
-    )
+    console.log(`[cli-binary] Bundled ${options.commandName} not found, using PATH: ${pathBinary}`)
     return pathBinary
   }
 

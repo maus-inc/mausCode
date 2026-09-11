@@ -25,13 +25,19 @@ export const WIDGET_REGISTRY: WidgetConfig[] = [
   { id: "plan", label: "Plan", icon: FileText, canExpand: true, defaultVisible: true },
   { id: "terminal", label: "Terminal", icon: Terminal, canExpand: true, defaultVisible: false },
   { id: "diff", label: "Changes", icon: FileDiff, canExpand: true, defaultVisible: true },
-  { id: "mcp", label: "MCP Servers", icon: OriginalMCPIcon as unknown as LucideIcon, canExpand: false, defaultVisible: true },
+  {
+    id: "mcp",
+    label: "MCP Servers",
+    icon: OriginalMCPIcon as unknown as LucideIcon,
+    canExpand: false,
+    defaultVisible: true,
+  },
 ]
 
 // Helper to get default visible widgets
-const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = WIDGET_REGISTRY
-  .filter((w) => w.defaultVisible)
-  .map((w) => w.id)
+const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = WIDGET_REGISTRY.filter((w) => w.defaultVisible).map(
+  (w) => w.id,
+)
 
 // Default widget order (all widgets)
 const DEFAULT_WIDGET_ORDER: WidgetId[] = WIDGET_REGISTRY.map((w) => w.id)
@@ -49,8 +55,7 @@ const widgetVisibilityStorageAtom = atomWithStorage<Record<string, WidgetId[]>>(
 
 export const widgetVisibilityAtomFamily = atomFamily((workspaceId: string) =>
   atom(
-    (get) =>
-      get(widgetVisibilityStorageAtom)[workspaceId] ?? DEFAULT_VISIBLE_WIDGETS,
+    (get) => get(widgetVisibilityStorageAtom)[workspaceId] ?? DEFAULT_VISIBLE_WIDGETS,
     (get, set, visibleWidgets: WidgetId[]) => {
       const current = get(widgetVisibilityStorageAtom)
       set(widgetVisibilityStorageAtom, {
@@ -74,8 +79,7 @@ const widgetOrderStorageAtom = atomWithStorage<Record<string, WidgetId[]>>(
 
 export const widgetOrderAtomFamily = atomFamily((workspaceId: string) =>
   atom(
-    (get) =>
-      get(widgetOrderStorageAtom)[workspaceId] ?? DEFAULT_WIDGET_ORDER,
+    (get) => get(widgetOrderStorageAtom)[workspaceId] ?? DEFAULT_WIDGET_ORDER,
     (get, set, widgetOrder: WidgetId[]) => {
       const current = get(widgetOrderStorageAtom)
       set(widgetOrderStorageAtom, {
@@ -150,14 +154,16 @@ export type OverviewSection = "info" | "plan" | "terminal" | "diff"
 const DEFAULT_EXPANDED_SECTIONS: OverviewSection[] = ["info", "plan", "terminal"]
 
 // Section expand states (per workspace) - stores array of expanded section IDs
-const sectionExpandStorageAtom = atomWithStorage<
-  Record<string, OverviewSection[]>
->("overview:expandedSections", {}, undefined, { getOnInit: true })
+const sectionExpandStorageAtom = atomWithStorage<Record<string, OverviewSection[]>>(
+  "overview:expandedSections",
+  {},
+  undefined,
+  { getOnInit: true },
+)
 
 export const expandedSectionsAtomFamily = atomFamily((workspaceId: string) =>
   atom(
-    (get) =>
-      get(sectionExpandStorageAtom)[workspaceId] ?? DEFAULT_EXPANDED_SECTIONS,
+    (get) => get(sectionExpandStorageAtom)[workspaceId] ?? DEFAULT_EXPANDED_SECTIONS,
     (get, set, expandedSections: OverviewSection[]) => {
       const current = get(sectionExpandStorageAtom)
       set(sectionExpandStorageAtom, {
@@ -211,9 +217,12 @@ export const planContentCacheAtomFamily = atomFamily((chatId: string) =>
 // File Tree Expanded Paths (per worktree, persisted across reloads)
 // ============================================================================
 
-const fileTreeExpandedStorageAtom = atomWithStorage<
-  Record<string, string[]>
->("overview:fileTreeExpanded", {}, undefined, { getOnInit: true })
+const fileTreeExpandedStorageAtom = atomWithStorage<Record<string, string[]>>(
+  "overview:fileTreeExpanded",
+  {},
+  undefined,
+  { getOnInit: true },
+)
 
 /** null sentinel: first mount for this worktree (no user action yet → auto-expand roots) */
 export const fileTreeExpandedAtomFamily = atomFamily((worktreePath: string) =>

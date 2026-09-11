@@ -91,9 +91,5 @@ export const TypewriterText = memo(function TypewriterText({
   // Typewriter animation in progress
   const visibleText = text.slice(0, typedLength)
 
-  return (
-    <span className={className}>
-      {visibleText}
-    </span>
-  )
+  return <span className={className}>{visibleText}</span>
 })

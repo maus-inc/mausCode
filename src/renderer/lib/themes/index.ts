@@ -1,6 +1,6 @@
 /**
  * Themes module exports
- * 
+ *
  * This module provides full VS Code theme support for the application.
  */
 

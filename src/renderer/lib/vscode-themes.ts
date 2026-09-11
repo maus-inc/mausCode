@@ -26,9 +26,19 @@ export const VSCODE_BUILTIN_THEMES: VSCodeTheme[] = [
   { id: "vitesse-light", name: "Vitesse Light", type: "light", source: "builtin" },
   { id: "material-theme-darker", name: "Material Theme Darker", type: "dark", source: "builtin" },
   { id: "material-theme-default", name: "Material Theme Default", type: "dark", source: "builtin" },
-  { id: "material-theme-lighter", name: "Material Theme Lighter", type: "light", source: "builtin" },
+  {
+    id: "material-theme-lighter",
+    name: "Material Theme Lighter",
+    type: "light",
+    source: "builtin",
+  },
   { id: "material-theme-ocean", name: "Material Theme Ocean", type: "dark", source: "builtin" },
-  { id: "material-theme-palenight", name: "Material Theme Palenight", type: "dark", source: "builtin" },
+  {
+    id: "material-theme-palenight",
+    name: "Material Theme Palenight",
+    type: "dark",
+    source: "builtin",
+  },
   { id: "poimandres", name: "Poimandres", type: "dark", source: "builtin" },
 ]
 

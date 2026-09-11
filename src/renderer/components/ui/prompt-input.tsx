@@ -1,11 +1,7 @@
 "use client"
 
 import { Textarea } from "./textarea"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "./tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip"
 import { cn } from "../../lib/utils"
 import React, {
   createContext,
@@ -105,12 +101,7 @@ export type PromptInputTextareaProps = {
 } & React.ComponentProps<typeof Textarea>
 
 const PromptInputTextareaInner = (
-  {
-    className,
-    onKeyDown,
-    disableAutosize = false,
-    ...props
-  }: PromptInputTextareaProps,
+  { className, onKeyDown, disableAutosize = false, ...props }: PromptInputTextareaProps,
   forwardedRef: React.Ref<HTMLTextAreaElement>,
 ) => {
   const { value, setValue, maxHeight, onSubmit, disabled } = usePromptInput()
@@ -122,9 +113,8 @@ const PromptInputTextareaInner = (
     if (typeof forwardedRef === "function") {
       forwardedRef(textareaRef.current)
     } else if (forwardedRef) {
-      ;(
-        forwardedRef as React.MutableRefObject<HTMLTextAreaElement | null>
-      ).current = textareaRef.current
+      ;(forwardedRef as React.MutableRefObject<HTMLTextAreaElement | null>).current =
+        textareaRef.current
     }
   }, [forwardedRef])
 
@@ -137,9 +127,7 @@ const PromptInputTextareaInner = (
 
     const scrollHeight = textarea.scrollHeight
     const maxHeightPx =
-      typeof maxHeight === "number"
-        ? maxHeight
-        : parseInt(maxHeight as string, 10) || 240
+      typeof maxHeight === "number" ? maxHeight : parseInt(maxHeight as string, 10) || 240
 
     const newHeight = Math.min(scrollHeight, maxHeightPx)
     textarea.style.height = `${newHeight}px`
@@ -148,15 +136,20 @@ const PromptInputTextareaInner = (
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Prevent submission during IME composition (e.g., Chinese/Japanese/Korean input)
-    if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.nativeEvent.isComposing
+    ) {
       e.preventDefault()
       onSubmit?.()
     }
     onKeyDown?.(e)
   }
 
-  const maxHeightStyle =
-    typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight
+  const maxHeightStyle = typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight
 
   return (
     <Textarea
@@ -179,20 +172,15 @@ const PromptInputTextareaInner = (
   )
 }
 
-const PromptInputTextarea = forwardRef<
-  HTMLTextAreaElement,
-  PromptInputTextareaProps
->(PromptInputTextareaInner)
+const PromptInputTextarea = forwardRef<HTMLTextAreaElement, PromptInputTextareaProps>(
+  PromptInputTextareaInner,
+)
 
 PromptInputTextarea.displayName = "PromptInputTextarea"
 
 type PromptInputActionsProps = React.HTMLAttributes<HTMLDivElement>
 
-function PromptInputActions({
-  children,
-  className,
-  ...props
-}: PromptInputActionsProps) {
+function PromptInputActions({ children, className, ...props }: PromptInputActionsProps) {
   return (
     <div className={cn("flex items-center gap-2", className)} {...props}>
       {children}

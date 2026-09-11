@@ -50,7 +50,9 @@ function TextShimmerComponent({
         className,
       )}
       initial={{ backgroundPosition: "100% center" }}
-      animate={shouldAnimate ? { backgroundPosition: "0% center" } : { backgroundPosition: "100% center" }}
+      animate={
+        shouldAnimate ? { backgroundPosition: "0% center" } : { backgroundPosition: "100% center" }
+      }
       transition={{
         repeat: shouldAnimate ? Infinity : 0,
         duration,

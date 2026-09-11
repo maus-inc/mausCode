@@ -28,7 +28,7 @@ import { useEffect, useRef, useState } from "react"
  */
 export function useOverflowDetection(
   contentRef: React.RefObject<HTMLElement | null>,
-  deps: unknown[] = []
+  deps: unknown[] = [],
 ): boolean {
   const [hasOverflow, setHasOverflow] = useState(false)
   const rafIdRef = useRef<number>(0)

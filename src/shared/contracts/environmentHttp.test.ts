@@ -2,7 +2,7 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest"
 
 import {
   EnvironmentAuthInvalidError,
@@ -11,9 +11,9 @@ import {
   EnvironmentRequestInvalidError,
   EnvironmentResourceNotFoundError,
   EnvironmentScopeRequiredError,
-} from "./environmentHttp.ts";
+} from "./environmentHttp.ts"
 
-const traceId = "trace-1";
+const traceId = "trace-1"
 
 describe("environment HTTP errors", () => {
   // A client squashes the cause and shows `message`; an empty one becomes a generic
@@ -50,7 +50,7 @@ describe("environment HTTP errors", () => {
         reason: "orchestration_snapshot_failed",
         traceId,
       }),
-    ] as const;
+    ] as const
     const details = [
       "invalid_command",
       "missing_credential",
@@ -58,9 +58,9 @@ describe("environment HTTP errors", () => {
       "current_session_revoke_not_allowed",
       "thread_not_found",
       "orchestration_snapshot_failed",
-    ];
+    ]
     errors.forEach((error, index) => {
-      expect(error.message).toContain(details[index]);
-    });
-  });
-});
+      expect(error.message).toContain(details[index])
+    })
+  })
+})

@@ -2,11 +2,11 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import { describe, expect, it } from "vitest";
-import * as Exit from "effect/Exit";
-import * as Schema from "effect/Schema";
+import { describe, expect, it } from "vitest"
+import * as Exit from "effect/Exit"
+import * as Schema from "effect/Schema"
 
-import { WsSubscribeServerConfigRpc } from "./rpc.ts";
+import { WsSubscribeServerConfigRpc } from "./rpc.ts"
 
 /**
  * The client always sends `environmentThemes`, including to servers built
@@ -16,20 +16,20 @@ import { WsSubscribeServerConfigRpc } from "./rpc.ts";
  */
 describe("subscribeServerConfig payload compatibility", () => {
   it("is accepted by a server whose schema predates the field", () => {
-    const oldServerPayload = Schema.Struct({});
-    const decoded = Schema.decodeUnknownExit(oldServerPayload)({ environmentThemes: true });
-    expect(Exit.isSuccess(decoded)).toBe(true);
-  });
+    const oldServerPayload = Schema.Struct({})
+    const decoded = Schema.decodeUnknownExit(oldServerPayload)({ environmentThemes: true })
+    expect(Exit.isSuccess(decoded)).toBe(true)
+  })
 
   it("is carried by a server that declares it", () => {
     const decoded = Schema.decodeUnknownSync(WsSubscribeServerConfigRpc.payloadSchema)({
       environmentThemes: true,
-    });
-    expect(decoded).toEqual({ environmentThemes: true });
-  });
+    })
+    expect(decoded).toEqual({ environmentThemes: true })
+  })
 
   it("stays optional, so a client that never sends it still subscribes", () => {
-    const decoded = Schema.decodeUnknownSync(WsSubscribeServerConfigRpc.payloadSchema)({});
-    expect(decoded).toEqual({});
-  });
-});
+    const decoded = Schema.decodeUnknownSync(WsSubscribeServerConfigRpc.payloadSchema)({})
+    expect(decoded).toEqual({})
+  })
+})

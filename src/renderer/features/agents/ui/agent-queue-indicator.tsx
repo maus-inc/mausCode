@@ -3,11 +3,7 @@
 import { memo, useState, useCallback, useEffect } from "react"
 import { ChevronDown, ArrowUp, X } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
 import type { AgentQueueItem } from "../lib/queue-utils"
 import { RenderFileMentions } from "../mentions/render-file-mentions"
@@ -31,7 +27,7 @@ const QueueItemRow = memo(function QueueItemRow({
       e.stopPropagation()
       onRemove?.(item.id)
     },
-    [item.id, onRemove]
+    [item.id, onRemove],
   )
 
   const handleSendNow = useCallback(
@@ -39,7 +35,7 @@ const QueueItemRow = memo(function QueueItemRow({
       e.stopPropagation()
       onSendNow?.(item.id)
     },
-    [item.id, onSendNow]
+    [item.id, onSendNow],
   )
 
   // Build attachment summary parts by type (matching sent message bubble style)
@@ -152,7 +148,7 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
         "border border-border bg-muted/30 overflow-hidden flex flex-col rounded-t-xl",
         // If status card below - no bottom border/radius, no padding
         // If no status card - need pb-6 for input overlap
-        hasStatusCardBelow ? "border-b-0" : "border-b-0 pb-6"
+        hasStatusCardBelow ? "border-b-0" : "border-b-0 pb-6",
       )}
     >
       {/* Header - at top */}
@@ -174,14 +170,11 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
           <ChevronDown
             className={cn(
               "w-4 h-4 text-muted-foreground transition-transform duration-200",
-              !isExpanded && "-rotate-90"
+              !isExpanded && "-rotate-90",
             )}
           />
-          <span className="text-xs text-muted-foreground">
-            {queue.length} in queue
-          </span>
+          <span className="text-xs text-muted-foreground">{queue.length} in queue</span>
         </div>
-
       </div>
 
       {/* Expanded content - queue items */}

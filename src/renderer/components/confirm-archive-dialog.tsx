@@ -122,16 +122,18 @@ export function ConfirmArchiveDialog({
               className="w-[90vw] max-w-[400px] pointer-events-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-background rounded-2xl border shadow-2xl overflow-hidden" data-canvas-dialog>
+              <div
+                className="bg-background rounded-2xl border shadow-2xl overflow-hidden"
+                data-canvas-dialog
+              >
                 <div className="p-6">
-                  <h2 className="text-xl font-semibold mb-4">
-                    Archive Workspace
-                  </h2>
+                  <h2 className="text-xl font-semibold mb-4">Archive Workspace</h2>
 
                   {/* Active processes warning */}
                   {hasProcesses && (
                     <p className="text-sm text-muted-foreground mb-4">
-                      {activeProcessCount} running {activeProcessCount === 1 ? "process" : "processes"} will be stopped.
+                      {activeProcessCount} running{" "}
+                      {activeProcessCount === 1 ? "process" : "processes"} will be stopped.
                     </p>
                   )}
 
@@ -152,7 +154,8 @@ export function ConfirmArchiveDialog({
                       {/* Uncommitted changes warning */}
                       {showWarning && (
                         <p className="text-sm text-amber-600 dark:text-amber-500 ml-7">
-                          {uncommittedCount} uncommitted {uncommittedCount === 1 ? "change" : "changes"} will be lost
+                          {uncommittedCount} uncommitted{" "}
+                          {uncommittedCount === 1 ? "change" : "changes"} will be lost
                         </p>
                       )}
                     </div>
@@ -161,11 +164,7 @@ export function ConfirmArchiveDialog({
 
                 {/* Footer with buttons */}
                 <div className="bg-muted p-4 flex justify-between border-t border-border rounded-b-xl">
-                  <Button
-                    onClick={handleClose}
-                    variant="ghost"
-                    className="rounded-md"
-                  >
+                  <Button onClick={handleClose} variant="ghost" className="rounded-md">
                     Cancel
                   </Button>
                   <Button

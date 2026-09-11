@@ -2,11 +2,7 @@
 
 import { cn } from "../../../lib/utils"
 import { useRef, useState, useEffect } from "react"
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "../../../components/ui/popover"
+import { Popover, PopoverAnchor, PopoverContent } from "../../../components/ui/popover"
 import { AGENTS_PREVIEW_CONSTANTS } from "../constants"
 
 interface ScaleControlProps {
@@ -141,4 +137,3 @@ export function ScaleControl({
     </Popover>
   )
 }
-

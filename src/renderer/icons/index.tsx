@@ -55,7 +55,7 @@ export function IconSpinner(props: IconProps & { color?: string; size?: "default
 export function LoadingDot({
   isLoading,
   className,
-  dotClassName = "bg-[#307BD0]"
+  dotClassName = "bg-[#307BD0]",
 }: {
   isLoading: boolean
   className?: string
@@ -77,7 +77,7 @@ export function LoadingDot({
           isLoading ? "opacity-100 scale-100" : "opacity-0 scale-50"
         }`}
         style={{
-          animation: isLoading ? 'spin 1s linear infinite' : undefined,
+          animation: isLoading ? "spin 1s linear infinite" : undefined,
         }}
       >
         <circle
@@ -318,12 +318,7 @@ export const SearchIcon = (props: LucideProps) => (
 // Expand icon
 export function ExpandIcon(props: IconProps) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      {...props}
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" {...props}>
       <path
         d="M8 8.99989L11.4697 5.53022C11.7626 5.23732 12.2374 5.23732 12.5303 5.53022L16 8.99989M8 14.9999L11.4697 18.4696C11.7626 18.7625 12.2374 18.7625 12.5303 18.4696L16 14.9999"
         stroke="currentColor"
@@ -338,12 +333,7 @@ export function ExpandIcon(props: IconProps) {
 // Collapse icon
 export function CollapseIcon(props: IconProps) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      {...props}
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" {...props}>
       <path
         d="M8 18.4694L11.4697 14.9997C11.7626 14.7068 12.2374 14.7068 12.5303 14.9997L16 18.4694M8.0008 5.5L11.4705 8.96971C11.4705 8.96971 12.2382 9.26261 12.5311 8.96971L16.0008 5.5"
         stroke="currentColor"
@@ -358,13 +348,7 @@ export function CollapseIcon(props: IconProps) {
 // Double chevron icons
 export function IconDoubleChevronRight(props: IconProps) {
   return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      width="20"
-      height="20"
-      {...props}
-    >
+    <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" {...props}>
       <path d="m5.492 4.158 5.4 5.4a.625.625 0 0 1 0 .884l-5.4 5.4a.625.625 0 1 1-.884-.884L9.566 10 4.608 5.042a.625.625 0 1 1 .884-.884" />
       <path d="m16.392 10.442-5.4 5.4a.625.625 0 0 1-.884-.884L15.066 10l-4.958-4.958a.625.625 0 0 1 .884-.884l5.4 5.4a.625.625 0 0 1 0 .884" />
     </svg>
@@ -373,13 +357,7 @@ export function IconDoubleChevronRight(props: IconProps) {
 
 export function IconArrowRight(props: IconProps) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      width="24"
-      height="24"
-      {...props}
-    >
+    <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...props}>
       <path
         d="M14 6L20 12L14 18"
         stroke="currentColor"
@@ -523,12 +501,7 @@ export function FolderIcon(props: IconProps) {
 
 // Discord icon
 export const DiscordIcon = (props: LucideProps) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    {...props}
-  >
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
     <path d="M19.73 4.87a18.2 18.2 0 0 0-4.6-1.44c-.21.4-.4.8-.58 1.21-1.69-.25-3.4-.25-5.1 0-.18-.41-.37-.82-.59-1.2-1.6.27-3.14.75-4.6 1.43A19.04 19.04 0 0 0 .96 17.7a18.43 18.43 0 0 0 5.63 2.87c.46-.62.86-1.28 1.2-1.98-.65-.25-1.29-.55-1.9-.92.17-.12.32-.24.47-.37 3.58 1.7 7.7 1.7 11.28 0l.46.37c-.6.36-1.25.67-1.9.92.35.7.75 1.35 1.2 1.98 2.03-.63 3.94-1.6 5.64-2.87.47-4.87-.78-9.09-3.3-12.83ZM8.3 15.12c-1.1 0-2-1.02-2-2.27 0-1.24.88-2.26 2-2.26s2.02 1.02 2 2.26c0 1.25-.89 2.27-2 2.27Zm7.4 0c-1.1 0-2-1.02-2-2.27 0-1.24.88-2.26 2-2.26s2.02 1.02 2 2.26c0 1.25-.88 2.27-2 2.27Z" />
   </svg>
 )
@@ -788,12 +761,7 @@ export const SlidersFilledIcon = (props: IconProps) => (
 
 // Team/Workspace icon
 export const TeamIcon = (props: IconProps) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    {...props}
-  >
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" {...props}>
     <path
       fillRule="evenodd"
       clipRule="evenodd"
@@ -844,10 +812,7 @@ export const PlusIcon = (props: IconProps) => {
 }
 
 // Profile icon
-export const ProfileIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const ProfileIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width="24"
@@ -870,21 +835,13 @@ export const ProfileIcon = ({
 
 // GitHub logo
 export const GitHubLogo = (props: IconProps) => (
-  <svg
-    fill="currentColor"
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-    {...props}
-  >
+  <svg fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
     <path d="M12 2A10 10 0 0 0 2 12a10 10 0 0 0 6.838 9.488c.5.087.687-.213.687-.476 0-.237-.013-1.024-.013-1.862-2.512.463-3.162-.612-3.362-1.175-.113-.288-.6-1.175-1.025-1.413-.35-.187-.85-.65-.013-.662.788-.013 1.35.725 1.538 1.025.9 1.512 2.338 1.087 2.912.825.088-.65.35-1.087.638-1.337-2.225-.25-4.55-1.113-4.55-4.938 0-1.088.387-1.987 1.025-2.688-.1-.25-.45-1.275.1-2.65 0 0 .837-.262 2.75 1.026a9.28 9.28 0 0 1 2.5-.338c.85 0 1.7.112 2.5.337 1.912-1.3 2.75-1.025 2.75-1.025.55 1.375.2 2.4.1 2.65.637.7 1.025 1.587 1.025 2.687 0 3.838-2.337 4.688-4.562 4.938.362.312.675.912.675 1.85 0 1.337-.013 2.412-.013 2.75 0 .262.188.574.688.474A10.016 10.016 0 0 0 22 12 10 10 0 0 0 12 2Z" />
   </svg>
 )
 
 // Blank project icon
-export const BlankProjectIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const BlankProjectIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -912,12 +869,7 @@ export const BlankProjectIcon = ({
 // Archive icon
 export function ArchiveIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <g transform="translate(12, 12) scale(1.05) translate(-12, -12.5)">
         <path
           d="M20 16.8V8H4V16.8C4 17.9201 4 18.4802 4.21799 18.908C4.40973 19.2843 4.71569 19.5903 5.09202 19.782C5.51984 20 6.0799 20 7.2 20H16.8C17.9201 20 18.4802 20 18.908 19.782C19.2843 19.5903 19.5903 19.2843 19.782 18.908C20 18.4802 20 17.9201 20 16.8Z"
@@ -1007,12 +959,7 @@ export const TicketIcon = ({ className }: { className?: string }) => (
 // Roadmap icon
 export function RoadmapIcon(props: IconProps) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      {...props}
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" {...props}>
       <path
         d="M12.0013 9V4H18.54C19.1476 4 19.7222 4.27618 20.1017 4.75061L20.5017 5.25061C21.0861 5.98105 21.0861 7.01895 20.5017 7.74939L20.1017 8.24939C19.7222 8.72382 19.1476 9 18.54 9H12.0013ZM12.0013 9V14M12.0013 9H5.4625C4.85493 9 4.28031 9.27618 3.90076 9.75061L3.50076 10.2506C2.91641 10.981 2.91641 12.019 3.50076 12.7494L3.90076 13.2494C4.28031 13.7238 4.85493 14 5.4625 14H12.0013M12.0013 14V20M12.0013 20H8.00125M12.0013 20H16.0013"
         stroke="currentColor"

@@ -8,11 +8,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import type { McpServerConfig } from "./claude-config"
 import { getDatabase, projects as projectsTable } from "./db"
-import {
-  fetchMcpTools,
-  fetchMcpToolsStdio,
-  type McpToolInfo,
-} from "./mcp-auth"
+import { fetchMcpTools, fetchMcpToolsStdio, type McpToolInfo } from "./mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "./oauth"
 
 const MCP_FETCH_TIMEOUT_MS = 40_000
@@ -88,8 +84,7 @@ function expandMcpServerEnvVars(
       const envObj = expanded.env as Record<string, string>
       const expandedEnv: Record<string, string> = {}
       for (const [key, value] of Object.entries(envObj)) {
-        expandedEnv[key] =
-          typeof value === "string" ? expandEnvVars(value, projectPath) : value
+        expandedEnv[key] = typeof value === "string" ? expandEnvVars(value, projectPath) : value
       }
       expanded.env = expandedEnv
     }
@@ -97,8 +92,7 @@ function expandMcpServerEnvVars(
       const headersObj = expanded.headers as Record<string, string>
       const expandedHeaders: Record<string, string> = {}
       for (const [key, value] of Object.entries(headersObj)) {
-        expandedHeaders[key] =
-          typeof value === "string" ? expandEnvVars(value, projectPath) : value
+        expandedHeaders[key] = typeof value === "string" ? expandEnvVars(value, projectPath) : value
       }
       expanded.headers = expandedHeaders
     }
@@ -123,12 +117,7 @@ function parseMcpJsonContent(
   } else {
     servers = {}
     for (const [key, value] of Object.entries(record)) {
-      if (
-        value &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        key !== "mcpServers"
-      ) {
+      if (value && typeof value === "object" && !Array.isArray(value) && key !== "mcpServers") {
         servers[key] = value as McpServerConfig
       }
     }
@@ -159,18 +148,13 @@ export async function readCursorProjectMcpJson(
     return servers
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.error(
-        `[cursor-mcp] Failed to read .cursor/mcp.json from ${projectPath}:`,
-        error,
-      )
+      console.error(`[cursor-mcp] Failed to read .cursor/mcp.json from ${projectPath}:`, error)
     }
     return {}
   }
 }
 
-export async function readCursorGlobalMcpJson(): Promise<
-  Record<string, McpServerConfig>
-> {
+export async function readCursorGlobalMcpJson(): Promise<Record<string, McpServerConfig>> {
   try {
     const mcpJsonPath = path.join(homedir(), ".cursor", "mcp.json")
     const stats = await fs.stat(mcpJsonPath).catch(() => null)
@@ -191,10 +175,7 @@ export async function readCursorGlobalMcpJson(): Promise<
     return servers
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.error(
-        `[cursor-mcp] Failed to read ~/.cursor/mcp.json:`,
-        error,
-      )
+      console.error(`[cursor-mcp] Failed to read ~/.cursor/mcp.json:`, error)
     }
     return {}
   }
@@ -230,9 +211,7 @@ function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
   return "failed"
 }
 
-async function fetchToolsForServer(
-  serverConfig: McpServerConfig,
-): Promise<McpToolInfo[]> {
+async function fetchToolsForServer(serverConfig: McpServerConfig): Promise<McpToolInfo[]> {
   const timeoutPromise = new Promise<McpToolInfo[]>((_, reject) =>
     setTimeout(() => reject(new Error("Timeout")), MCP_FETCH_TIMEOUT_MS),
   )
@@ -328,10 +307,7 @@ async function getKnownProjectPaths(): Promise<string[]> {
 
   try {
     const db = getDatabase()
-    const dbProjects = db
-      .select({ path: projectsTable.path })
-      .from(projectsTable)
-      .all()
+    const dbProjects = db.select({ path: projectsTable.path }).from(projectsTable).all()
     for (const project of dbProjects) {
       if (typeof project.path === "string" && project.path.trim().length > 0) {
         projectPathSet.add(project.path)

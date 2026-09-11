@@ -39,9 +39,7 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
   return (
     <div className="rounded-lg border border-border p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold text-foreground">
-          {capability.displayName}
-        </h3>
+        <h3 className="text-base font-semibold text-foreground">{capability.displayName}</h3>
         <Pill tone="mute">{capability.kind}</Pill>
         {probeQuery.isLoading ? (
           <Pill tone="mute">probing…</Pill>
@@ -86,9 +84,7 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
                 : "yes"
               : "no"}
           </Row>
-          <Row label="Parallel tools">
-            {capability.performance.parallelTools ? "yes" : "no"}
-          </Row>
+          <Row label="Parallel tools">{capability.performance.parallelTools ? "yes" : "no"}</Row>
           <Row label="Context">
             {capability.performance.contextWindow
               ? `${capability.performance.contextWindow.toLocaleString()} tokens`
@@ -127,9 +123,8 @@ export function AgentsBackendsTab() {
       <div>
         <h2 className="text-lg font-semibold text-foreground">Backends</h2>
         <p className="text-sm text-muted-foreground">
-          Every backend self-reports its security posture and performance
-          capabilities. Only policy violations surface in chat; everything
-          else lives here.
+          Every backend self-reports its security posture and performance capabilities. Only policy
+          violations surface in chat; everything else lives here.
         </p>
       </div>
 

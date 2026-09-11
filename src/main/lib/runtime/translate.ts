@@ -51,9 +51,7 @@ export class NativeTranslator {
       case "text_delta":
         return this.translateTextDelta(event.text)
       case "reasoning_delta":
-        return [
-          { type: "reasoning-delta", id: `reas-${this.turn}`, delta: event.text },
-        ]
+        return [{ type: "reasoning-delta", id: `reas-${this.turn}`, delta: event.text }]
       case "reasoning_done":
         return []
       case "tool_start": {
@@ -88,13 +86,9 @@ export class NativeTranslator {
         ]
       case "tool_done": {
         if (event.error) {
-          return [
-            { type: "tool-output-error", toolCallId: event.call_id, errorText: event.error },
-          ]
+          return [{ type: "tool-output-error", toolCallId: event.call_id, errorText: event.error }]
         }
-        return [
-          { type: "tool-output-available", toolCallId: event.call_id, output: event.output },
-        ]
+        return [{ type: "tool-output-available", toolCallId: event.call_id, output: event.output }]
       }
       case "token_usage":
         return [

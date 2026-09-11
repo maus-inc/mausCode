@@ -7,8 +7,7 @@
  * credentials, local Ollama, git remotes) untouched. Fully offline use
  * should run through Ollama.
  */
-export const LOCAL_ONLY_BLOCKED_MESSAGE =
-  "Local-only mode blocks hosted upstream services"
+export const LOCAL_ONLY_BLOCKED_MESSAGE = "Local-only mode blocks hosted upstream services"
 
 const BLOCKED_ROOTS = [
   // mausCode/1Code hosted app services.
@@ -23,9 +22,7 @@ const BLOCKED_ROOTS = [
 
 export function isOfficialCloudHostname(hostname: string): boolean {
   const host = hostname.toLowerCase()
-  return BLOCKED_ROOTS.some(
-    (root) => host === root || host.endsWith(`.${root}`),
-  )
+  return BLOCKED_ROOTS.some((root) => host === root || host.endsWith(`.${root}`))
 }
 
 export function isOfficialCloudUrl(url: string): boolean {

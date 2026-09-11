@@ -8,11 +8,7 @@ interface TerminalSearchProps {
   onClose: () => void
 }
 
-export function TerminalSearch({
-  searchAddon,
-  isOpen,
-  onClose,
-}: TerminalSearchProps) {
+export function TerminalSearch({ searchAddon, isOpen, onClose }: TerminalSearchProps) {
   const [query, setQuery] = useState("")
   const [matchCount, setMatchCount] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -36,7 +32,7 @@ export function TerminalSearch({
         searchAddon.findPrevious(query, { caseSensitive: false, regex: false })
       }
     },
-    [searchAddon, query]
+    [searchAddon, query],
   )
 
   // Search on query change
@@ -64,7 +60,7 @@ export function TerminalSearch({
         }
       }
     },
-    [onClose, handleSearch]
+    [onClose, handleSearch],
   )
 
   // Clear search when closed
@@ -88,9 +84,7 @@ export function TerminalSearch({
         className="w-40 bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted-foreground"
       />
       {matchCount !== null && (
-        <span className="px-1 text-xs text-muted-foreground">
-          {matchCount} matches
-        </span>
+        <span className="px-1 text-xs text-muted-foreground">{matchCount} matches</span>
       )}
       <button
         onClick={() => handleSearch("prev")}
@@ -106,11 +100,7 @@ export function TerminalSearch({
       >
         <ChevronDown className="h-4 w-4 text-muted-foreground" />
       </button>
-      <button
-        onClick={onClose}
-        className="rounded p-1 hover:bg-muted"
-        title="Close (Escape)"
-      >
+      <button onClick={onClose} className="rounded p-1 hover:bg-muted" title="Close (Escape)">
         <X className="h-4 w-4 text-muted-foreground" />
       </button>
     </div>

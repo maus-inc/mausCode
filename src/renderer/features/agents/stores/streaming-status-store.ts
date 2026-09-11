@@ -53,5 +53,5 @@ export const useStreamingStatusStore = create<StreamingStatusState>()(
         .filter(([_, status]) => status === "ready")
         .map(([subChatId]) => subChatId)
     },
-  }))
+  })),
 )

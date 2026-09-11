@@ -6,12 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { trpc, trpcClient } from "../../../lib/trpc"
 
-export type CursorLoginFlowState =
-  | "idle"
-  | "running"
-  | "success"
-  | "error"
-  | "cancelled"
+export type CursorLoginFlowState = "idle" | "running" | "success" | "error" | "cancelled"
 
 const VERIFY_ATTEMPTS = 6
 const VERIFY_DELAY_MS = 400
@@ -102,10 +97,7 @@ export function useCursorLoginFlow() {
       }
 
       const message = lastVerifyError
-        ? toErrorMessage(
-            lastVerifyError,
-            "Failed to verify Cursor login status. Please retry.",
-          )
+        ? toErrorMessage(lastVerifyError, "Failed to verify Cursor login status. Please retry.")
         : "Cursor login completed, but credentials were not detected. Please retry."
 
       setState("error")
@@ -121,8 +113,7 @@ export function useCursorLoginFlow() {
     activeStartRequestRef.current = requestId
     cancelledStartRequestsRef.current.delete(requestId)
 
-    const wasCancelled = () =>
-      cancelledStartRequestsRef.current.has(requestId)
+    const wasCancelled = () => cancelledStartRequestsRef.current.has(requestId)
 
     setError(null)
     setSessionId(null)
@@ -160,11 +151,9 @@ export function useCursorLoginFlow() {
 
       if (wasCancelled()) {
         if (session.sessionId) {
-          await cancelLoginMutation
-            .mutateAsync({ sessionId: session.sessionId })
-            .catch(() => {
-              // No-op
-            })
+          await cancelLoginMutation.mutateAsync({ sessionId: session.sessionId }).catch(() => {
+            // No-op
+          })
         }
         return
       }
@@ -180,10 +169,7 @@ export function useCursorLoginFlow() {
         return
       }
 
-      const message = toErrorMessage(
-        startError,
-        "Failed to start Cursor login. Please try again.",
-      )
+      const message = toErrorMessage(startError, "Failed to start Cursor login. Please try again.")
       setState("error")
       setError(message)
       notifyError(message)

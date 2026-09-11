@@ -23,10 +23,7 @@ interface ErrorBoundaryState {
   error: Error | null
 }
 
-export class RenderErrorBoundary extends Component<
-  RenderErrorBoundaryProps,
-  ErrorBoundaryState
-> {
+export class RenderErrorBoundary extends Component<RenderErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: RenderErrorBoundaryProps) {
     super(props)
     this.state = { hasError: false, error: null }
@@ -45,10 +42,7 @@ export class RenderErrorBoundary extends Component<
   }
 
   componentDidUpdate(prevProps: RenderErrorBoundaryProps) {
-    if (
-      this.state.hasError &&
-      prevProps.resetKey !== this.props.resetKey
-    ) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
       this.setState({ hasError: false, error: null })
     }
   }
@@ -106,11 +100,7 @@ export class RenderErrorBoundary extends Component<
   }
 }
 
-export function ViewerErrorBoundary({
-  children,
-  viewerType,
-  onReset,
-}: ErrorBoundaryProps) {
+export function ViewerErrorBoundary({ children, viewerType, onReset }: ErrorBoundaryProps) {
   return (
     <RenderErrorBoundary
       title={`Failed to render ${viewerType || "file"}`}

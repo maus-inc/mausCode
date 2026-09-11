@@ -6,21 +6,17 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ArrowUpRight } from "lucide-react"
 import { DiffIcon } from "@/components/ui/icons"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Kbd } from "@/components/ui/kbd"
 import { cn } from "@/lib/utils"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { viewedFilesAtomFamily, fileViewerOpenAtomFamily, diffSidebarOpenAtomFamily } from "@/features/agents/atoms"
-import { getSyncActionKind } from "@/features/changes/utils"
 import {
-  FileListItem,
-  getFileName,
-  getFileDir,
-} from "@/features/changes/components/file-list-item"
+  viewedFilesAtomFamily,
+  fileViewerOpenAtomFamily,
+  diffSidebarOpenAtomFamily,
+} from "@/features/agents/atoms"
+import { getSyncActionKind } from "@/features/changes/utils"
+import { FileListItem, getFileName, getFileDir } from "@/features/changes/components/file-list-item"
 import { trpc } from "@/lib/trpc"
 import { preferredEditorAtom } from "@/lib/atoms"
 import { APP_META } from "../../../../shared/external-apps"
@@ -95,11 +91,12 @@ export const ChangesWidget = memo(function ChangesWidget({
   const hasChanges = displayStats && displayStats.fileCount > 0
 
   // Get tooltip text based on diff display mode
-  const expandTooltip = diffDisplayMode === "side-peek"
-    ? "Open in sidebar"
-    : diffDisplayMode === "center-peek"
-      ? "Open in dialog"
-      : "Open fullscreen"
+  const expandTooltip =
+    diffDisplayMode === "side-peek"
+      ? "Open in sidebar"
+      : diffDisplayMode === "center-peek"
+        ? "Open in dialog"
+        : "Open fullscreen"
 
   // Resolved hotkey for tooltip
   const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
@@ -118,23 +115,22 @@ export const ChangesWidget = memo(function ChangesWidget({
     isSyncStatusLoading,
   })
 
-  const shouldCommitAndPush = !!worktreePath && !!onCommitAndPush && !isSyncStatusLoading && syncActionKind !== "pull" && syncActionKind !== "loading"
+  const shouldCommitAndPush =
+    !!worktreePath &&
+    !!onCommitAndPush &&
+    !isSyncStatusLoading &&
+    syncActionKind !== "pull" &&
+    syncActionKind !== "loading"
 
   // Preferred editor
   const preferredEditor = useAtomValue(preferredEditorAtom)
   const editorMeta = APP_META[preferredEditor]
   // File viewer (file preview sidebar)
-  const fileViewerAtom = useMemo(
-    () => fileViewerOpenAtomFamily(chatId),
-    [chatId],
-  )
+  const fileViewerAtom = useMemo(() => fileViewerOpenAtomFamily(chatId), [chatId])
   const setFileViewerPath = useSetAtom(fileViewerAtom)
 
   // Diff sidebar state (to close dialog/fullscreen when opening file preview)
-  const diffSidebarAtom = useMemo(
-    () => diffSidebarOpenAtomFamily(chatId),
-    [chatId],
-  )
+  const diffSidebarAtom = useMemo(() => diffSidebarOpenAtomFamily(chatId), [chatId])
   const setDiffSidebarOpen = useSetAtom(diffSidebarAtom)
 
   // Selection state - all files selected by default
@@ -221,14 +217,11 @@ export const ChangesWidget = memo(function ChangesWidget({
   }, [])
 
   // Selection stats - use getDisplayPath consistently for all path operations
-  const selectedCount = displayFiles.filter((f) =>
-    selectedForCommit.has(getDisplayPath(f)),
-  ).length
+  const selectedCount = displayFiles.filter((f) => selectedForCommit.has(getDisplayPath(f))).length
   const allSelected = displayFiles.length > 0 && selectedCount === displayFiles.length
   const someSelected = selectedCount > 0 && selectedCount < displayFiles.length
-  const commitLabelSuffix = selectedCount > 0
-    ? ` ${selectedCount} file${selectedCount !== 1 ? "s" : ""}`
-    : ""
+  const commitLabelSuffix =
+    selectedCount > 0 ? ` ${selectedCount} file${selectedCount !== 1 ? "s" : ""}` : ""
 
   // Toggle all files selection
   const handleSelectAllChange = useCallback(() => {
@@ -250,7 +243,14 @@ export const ChangesWidget = memo(function ChangesWidget({
     } else {
       onCommit?.(selectedPaths)
     }
-  }, [displayFiles, selectedForCommit, onCommit, onCommitAndPush, getDisplayPath, shouldCommitAndPush])
+  }, [
+    displayFiles,
+    selectedForCommit,
+    onCommit,
+    onCommitAndPush,
+    getDisplayPath,
+    shouldCommitAndPush,
+  ])
 
   return (
     <div className="mx-2 mb-2">
@@ -266,9 +266,7 @@ export const ChangesWidget = memo(function ChangesWidget({
             {currentBranch && (
               <span className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
                 <span className="shrink-0">on</span>
-                <span className="truncate max-w-[120px] text-foreground">
-                  {currentBranch}
-                </span>
+                <span className="truncate max-w-[120px] text-foreground">{currentBranch}</span>
               </span>
             )}
           </div>
@@ -276,8 +274,7 @@ export const ChangesWidget = memo(function ChangesWidget({
           {/* Stats in header - total lines changed */}
           {hasChanges && displayStats && (
             <span className="text-xs text-muted-foreground">
-              <span className="text-green-500">+{displayStats.additions}</span>
-              {" "}
+              <span className="text-green-500">+{displayStats.additions}</span>{" "}
               <span className="text-red-500">-{displayStats.deletions}</span>
             </span>
           )}
@@ -348,24 +345,40 @@ export const ChangesWidget = memo(function ChangesWidget({
                       }
                     }}
                     onCheckboxChange={() => handleCheckboxChange(filePath)}
-                    onCopyPath={absolutePath ? async () => {
-                      await navigator.clipboard.writeText(absolutePath)
-                    } : undefined}
+                    onCopyPath={
+                      absolutePath
+                        ? async () => {
+                            await navigator.clipboard.writeText(absolutePath)
+                          }
+                        : undefined
+                    }
                     onCopyRelativePath={async () => {
                       await navigator.clipboard.writeText(filePath)
                     }}
-                    onRevealInFinder={absolutePath ? () => {
-                      openInFinderMutation.mutate(absolutePath)
-                    } : undefined}
-                    onOpenInFilePreview={absolutePath ? () => {
-                      setFileViewerPath(absolutePath)
-                      if (diffDisplayMode !== "side-peek") {
-                        setDiffSidebarOpen(false)
-                      }
-                    } : undefined}
-                    onOpenInEditor={absolutePath ? () => {
-                      openInAppMutation.mutate({ path: absolutePath, app: preferredEditor })
-                    } : undefined}
+                    onRevealInFinder={
+                      absolutePath
+                        ? () => {
+                            openInFinderMutation.mutate(absolutePath)
+                          }
+                        : undefined
+                    }
+                    onOpenInFilePreview={
+                      absolutePath
+                        ? () => {
+                            setFileViewerPath(absolutePath)
+                            if (diffDisplayMode !== "side-peek") {
+                              setDiffSidebarOpen(false)
+                            }
+                          }
+                        : undefined
+                    }
+                    onOpenInEditor={
+                      absolutePath
+                        ? () => {
+                            openInAppMutation.mutate({ path: absolutePath, app: preferredEditor })
+                          }
+                        : undefined
+                    }
                     editorLabel={editorMeta.label}
                   />
                 )
@@ -384,10 +397,12 @@ export const ChangesWidget = memo(function ChangesWidget({
                   disabled={isCommitting || selectedCount === 0}
                 >
                   {isCommitting
-                    ? (shouldCommitAndPush ? "Committing & pushing..." : "Committing...")
-                    : (shouldCommitAndPush
+                    ? shouldCommitAndPush
+                      ? "Committing & pushing..."
+                      : "Committing..."
+                    : shouldCommitAndPush
                       ? `Commit & Push${commitLabelSuffix}`
-                      : `Commit${commitLabelSuffix}`)}
+                      : `Commit${commitLabelSuffix}`}
                 </Button>
               )}
 
@@ -403,9 +418,7 @@ export const ChangesWidget = memo(function ChangesWidget({
             </div>
           </>
         ) : (
-          <div className="text-xs text-muted-foreground px-2 py-2">
-            No changes
-          </div>
+          <div className="text-xs text-muted-foreground px-2 py-2">No changes</div>
         )}
       </div>
     </div>

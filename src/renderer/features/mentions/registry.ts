@@ -42,9 +42,7 @@ class MentionProviderRegistry {
    */
   register(provider: MentionProvider): () => void {
     if (this.providers.has(provider.id)) {
-      console.warn(
-        `[MentionRegistry] Provider "${provider.id}" already registered, replacing`
-      )
+      console.warn(`[MentionRegistry] Provider "${provider.id}" already registered, replacing`)
       // Deactivate existing provider
       const existing = this.providers.get(provider.id)
       existing?.deactivate?.()
@@ -55,10 +53,7 @@ class MentionProviderRegistry {
     // Activate provider asynchronously
     if (provider.activate) {
       const activationPromise = provider.activate().catch((error) => {
-        console.error(
-          `[MentionRegistry] Failed to activate provider "${provider.id}":`,
-          error
-        )
+        console.error(`[MentionRegistry] Failed to activate provider "${provider.id}":`, error)
       })
       this.activationPromises.set(provider.id, activationPromise)
     }
@@ -100,7 +95,7 @@ class MentionProviderRegistry {
     }
 
     this.cachedProviders = Array.from(this.providers.values()).sort(
-      (a, b) => b.priority - a.priority
+      (a, b) => b.priority - a.priority,
     )
     return this.cachedProviders
   }
@@ -137,13 +132,8 @@ class MentionProviderRegistry {
   /**
    * Get available providers for a context
    */
-  getAvailable(context: {
-    projectPath?: string
-    sessionId?: string
-  }): MentionProvider[] {
-    return this.getAll().filter(
-      (p) => p.isAvailable?.(context) ?? true
-    )
+  getAvailable(context: { projectPath?: string; sessionId?: string }): MentionProvider[] {
+    return this.getAll().filter((p) => p.isAvailable?.(context) ?? true)
   }
 
   /**
@@ -166,10 +156,7 @@ class MentionProviderRegistry {
       return this.cachedCategories
     }
 
-    const categories = new Map<
-      string,
-      { id: string; label: string; priority: number }
-    >()
+    const categories = new Map<string, { id: string; label: string; priority: number }>()
 
     Array.from(this.providers.values()).forEach((provider) => {
       if (!categories.has(provider.category.id)) {
@@ -181,9 +168,7 @@ class MentionProviderRegistry {
       }
     })
 
-    this.cachedCategories = Array.from(categories.values()).sort(
-      (a, b) => b.priority - a.priority
-    )
+    this.cachedCategories = Array.from(categories.values()).sort((a, b) => b.priority - a.priority)
     return this.cachedCategories
   }
 
@@ -266,7 +251,7 @@ export const syncedMentionProvidersAtom = atom(
   (_, set) => {
     // Increment version to trigger re-read
     set(registryVersionAtom, (v) => v + 1)
-  }
+  },
 )
 
 /**
@@ -287,12 +272,8 @@ export function useMentionProviders(): MentionProvider[] {
 /**
  * Hook to get providers by trigger (reactive)
  */
-export function useMentionProvidersByTrigger(
-  trigger: string
-): MentionProvider[] {
-  const [providers, setProviders] = useState(() =>
-    mentionRegistry.getByTrigger(trigger)
-  )
+export function useMentionProvidersByTrigger(trigger: string): MentionProvider[] {
+  const [providers, setProviders] = useState(() => mentionRegistry.getByTrigger(trigger))
 
   useEffect(() => {
     return mentionRegistry.subscribe(() => {
@@ -323,9 +304,7 @@ export function useMentionCategories(): Array<{
   label: string
   priority: number
 }> {
-  const [categories, setCategories] = useState(() =>
-    mentionRegistry.getCategories()
-  )
+  const [categories, setCategories] = useState(() => mentionRegistry.getCategories())
 
   useEffect(() => {
     return mentionRegistry.subscribe(() => {
@@ -340,16 +319,14 @@ export function useMentionCategories(): Array<{
  * Hook to get a specific provider by ID
  * Uses memoized atom to prevent re-subscriptions on every render
  */
-export function useMentionProvider(
-  id: MentionProviderId
-): MentionProvider | undefined {
+export function useMentionProvider(id: MentionProviderId): MentionProvider | undefined {
   const derivedAtom = useMemo(
     () =>
       atom((get) => {
         get(registryVersionAtom)
         return mentionRegistry.get(id)
       }),
-    [id]
+    [id],
   )
 
   return useAtomValue(derivedAtom)

@@ -79,9 +79,7 @@ export function DiffSection({
                 </span>
               )}
               {diffStats.deletions > 0 && (
-                <span className="text-red-600 dark:text-red-400">
-                  -{diffStats.deletions}
-                </span>
+                <span className="text-red-600 dark:text-red-400">-{diffStats.deletions}</span>
               )}
             </span>
           </div>
@@ -109,16 +107,12 @@ export function DiffSection({
                   >
                     {/* File icon */}
                     <div className="relative w-3.5 h-3.5 shrink-0">
-                      {FileIcon && (
-                        <FileIcon className="w-3.5 h-3.5 text-muted-foreground" />
-                      )}
+                      {FileIcon && <FileIcon className="w-3.5 h-3.5 text-muted-foreground" />}
                     </div>
 
                     {/* File name + path + status - same layout as agent-diff-view */}
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="font-medium text-foreground shrink-0">
-                        {fileName}
-                      </span>
+                      <span className="font-medium text-foreground shrink-0">{fileName}</span>
                       {dirPath && (
                         <span className="text-muted-foreground truncate text-[11px] min-w-0">
                           {dirPath}
@@ -144,9 +138,7 @@ export function DiffSection({
                         </span>
                       )}
                       {file.deletions > 0 && (
-                        <span className="text-red-600 dark:text-red-400">
-                          -{file.deletions}
-                        </span>
+                        <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
                       )}
                     </span>
                   </div>

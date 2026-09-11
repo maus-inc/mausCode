@@ -2,11 +2,11 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import { assert, it } from "@effect/vitest";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import * as Schema from "effect/Schema";
-import { CommandId, ProjectId, ThreadId } from "./baseSchemas.ts";
+import { assert, it } from "@effect/vitest"
+import * as Effect from "effect/Effect"
+import * as Exit from "effect/Exit"
+import * as Schema from "effect/Schema"
+import { CommandId, ProjectId, ThreadId } from "./baseSchemas.ts"
 
 import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -38,41 +38,41 @@ import {
   SnapShotAccessibility,
   isProviderSendTurnSupportedImageMimeType,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
-} from "./orchestration.ts";
-import { ProviderInstanceId } from "./providerInstance.ts";
+} from "./orchestration.ts"
+import { ProviderInstanceId } from "./providerInstance.ts"
 
-const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffInput);
-const decodeFullThreadDiffInput = Schema.decodeUnknownEffect(OrchestrationGetFullThreadDiffInput);
-const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff);
-const decodeProjectCreateCommand = Schema.decodeUnknownEffect(ProjectCreateCommand);
-const decodeProjectCreatedPayload = Schema.decodeUnknownEffect(ProjectCreatedPayload);
-const decodeProjectMetaUpdatedPayload = Schema.decodeUnknownEffect(ProjectMetaUpdatedPayload);
-const decodeThreadTurnStartCommand = Schema.decodeUnknownEffect(ThreadTurnStartCommand);
-const decodeClientOrchestrationCommand = Schema.decodeUnknownEffect(ClientOrchestrationCommand);
-const decodeOrchestrationMessage = Schema.decodeUnknownEffect(OrchestrationMessage);
-const decodeThreadMessageSentPayload = Schema.decodeUnknownEffect(ThreadMessageSentPayload);
+const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffInput)
+const decodeFullThreadDiffInput = Schema.decodeUnknownEffect(OrchestrationGetFullThreadDiffInput)
+const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff)
+const decodeProjectCreateCommand = Schema.decodeUnknownEffect(ProjectCreateCommand)
+const decodeProjectCreatedPayload = Schema.decodeUnknownEffect(ProjectCreatedPayload)
+const decodeProjectMetaUpdatedPayload = Schema.decodeUnknownEffect(ProjectMetaUpdatedPayload)
+const decodeThreadTurnStartCommand = Schema.decodeUnknownEffect(ThreadTurnStartCommand)
+const decodeClientOrchestrationCommand = Schema.decodeUnknownEffect(ClientOrchestrationCommand)
+const decodeOrchestrationMessage = Schema.decodeUnknownEffect(OrchestrationMessage)
+const decodeThreadMessageSentPayload = Schema.decodeUnknownEffect(ThreadMessageSentPayload)
 const decodeThreadTurnStartRequestedPayload = Schema.decodeUnknownEffect(
   ThreadTurnStartRequestedPayload,
-);
-const decodeOrchestrationLatestTurn = Schema.decodeUnknownEffect(OrchestrationLatestTurn);
-const decodeOrchestrationProposedPlan = Schema.decodeUnknownEffect(OrchestrationProposedPlan);
-const decodeOrchestrationSession = Schema.decodeUnknownEffect(OrchestrationSession);
-const decodeOrchestrationThread = Schema.decodeUnknownEffect(OrchestrationThread);
-const decodeOrchestrationThreadShell = Schema.decodeUnknownEffect(OrchestrationThreadShell);
-const encodeThreadCreatedPayload = Schema.encodeEffect(ThreadCreatedPayload);
+)
+const decodeOrchestrationLatestTurn = Schema.decodeUnknownEffect(OrchestrationLatestTurn)
+const decodeOrchestrationProposedPlan = Schema.decodeUnknownEffect(OrchestrationProposedPlan)
+const decodeOrchestrationSession = Schema.decodeUnknownEffect(OrchestrationSession)
+const decodeOrchestrationThread = Schema.decodeUnknownEffect(OrchestrationThread)
+const decodeOrchestrationThreadShell = Schema.decodeUnknownEffect(OrchestrationThreadShell)
+const encodeThreadCreatedPayload = Schema.encodeEffect(ThreadCreatedPayload)
 
 function getOptionValue(
   options: ReadonlyArray<{ id: string; value: unknown }> | undefined,
   id: string,
 ): unknown {
-  return options?.find((option) => option.id === id)?.value;
+  return options?.find((option) => option.id === id)?.value
 }
-const decodeThreadCreatedPayload = Schema.decodeUnknownEffect(ThreadCreatedPayload);
-const decodeOrchestrationCommand = Schema.decodeUnknownEffect(OrchestrationCommand);
-const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
-const decodeThreadMetaUpdatedPayload = Schema.decodeUnknownEffect(ThreadMetaUpdatedPayload);
-const decodeDispatchCommandError = Schema.decodeUnknownEffect(OrchestrationDispatchCommandError);
-const decodeSnapShotAccessibility = Schema.decodeUnknownEffect(SnapShotAccessibility);
+const decodeThreadCreatedPayload = Schema.decodeUnknownEffect(ThreadCreatedPayload)
+const decodeOrchestrationCommand = Schema.decodeUnknownEffect(OrchestrationCommand)
+const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent)
+const decodeThreadMetaUpdatedPayload = Schema.decodeUnknownEffect(ThreadMetaUpdatedPayload)
+const decodeDispatchCommandError = Schema.decodeUnknownEffect(OrchestrationDispatchCommandError)
+const decodeSnapShotAccessibility = Schema.decodeUnknownEffect(SnapShotAccessibility)
 
 it.effect("decodes a dispatch error after its bootstrap thread was deleted", () =>
   Effect.gen(function* () {
@@ -80,11 +80,11 @@ it.effect("decodes a dispatch error after its bootstrap thread was deleted", () 
       _tag: "OrchestrationDispatchCommandError",
       message: "Failed to create worktree.",
       bootstrapThreadDisposition: "deleted",
-    });
+    })
 
-    assert.strictEqual(error.bootstrapThreadDisposition, "deleted");
+    assert.strictEqual(error.bootstrapThreadDisposition, "deleted")
   }),
-);
+)
 
 it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
   Effect.gen(function* () {
@@ -92,11 +92,11 @@ it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
       threadId: "thread-1",
       fromTurnCount: 1,
       toTurnCount: 2,
-    });
-    assert.strictEqual(parsed.fromTurnCount, 1);
-    assert.strictEqual(parsed.toTurnCount, 2);
+    })
+    assert.strictEqual(parsed.fromTurnCount, 1)
+    assert.strictEqual(parsed.toTurnCount, 2)
   }),
-);
+)
 
 it.effect("parses turn diff input with whitespace ignoring enabled", () =>
   Effect.gen(function* () {
@@ -105,10 +105,10 @@ it.effect("parses turn diff input with whitespace ignoring enabled", () =>
       fromTurnCount: 1,
       toTurnCount: 2,
       ignoreWhitespace: true,
-    });
-    assert.strictEqual(parsed.ignoreWhitespace, true);
+    })
+    assert.strictEqual(parsed.ignoreWhitespace, true)
   }),
-);
+)
 
 it.effect("parses full thread diff input with whitespace ignoring enabled", () =>
   Effect.gen(function* () {
@@ -116,10 +116,10 @@ it.effect("parses full thread diff input with whitespace ignoring enabled", () =
       threadId: "thread-1",
       toTurnCount: 2,
       ignoreWhitespace: true,
-    });
-    assert.strictEqual(parsed.ignoreWhitespace, true);
+    })
+    assert.strictEqual(parsed.ignoreWhitespace, true)
   }),
-);
+)
 
 it.effect("rejects turn diff input when fromTurnCount > toTurnCount", () =>
   Effect.gen(function* () {
@@ -129,10 +129,10 @@ it.effect("rejects turn diff input when fromTurnCount > toTurnCount", () =>
         fromTurnCount: 3,
         toTurnCount: 2,
       }),
-    );
-    assert.strictEqual(result._tag, "Failure");
+    )
+    assert.strictEqual(result._tag, "Failure")
   }),
-);
+)
 
 it.effect("rejects thread turn diff when fromTurnCount > toTurnCount", () =>
   Effect.gen(function* () {
@@ -143,10 +143,10 @@ it.effect("rejects thread turn diff when fromTurnCount > toTurnCount", () =>
         toTurnCount: 2,
         diff: "patch",
       }),
-    );
-    assert.strictEqual(result._tag, "Failure");
+    )
+    assert.strictEqual(result._tag, "Failure")
   }),
-);
+)
 
 it.effect("trims branded ids and command string fields at decode boundaries", () =>
   Effect.gen(function* () {
@@ -161,18 +161,18 @@ it.effect("trims branded ids and command string fields at decode boundaries", ()
         model: " gpt-5.2 ",
       },
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.commandId, "cmd-1");
-    assert.strictEqual(parsed.projectId, "project-1");
-    assert.strictEqual(parsed.title, "Project Title");
-    assert.strictEqual(parsed.workspaceRoot, "/tmp/workspace");
-    assert.strictEqual(parsed.createWorkspaceRootIfMissing, undefined);
+    })
+    assert.strictEqual(parsed.commandId, "cmd-1")
+    assert.strictEqual(parsed.projectId, "project-1")
+    assert.strictEqual(parsed.title, "Project Title")
+    assert.strictEqual(parsed.workspaceRoot, "/tmp/workspace")
+    assert.strictEqual(parsed.createWorkspaceRootIfMissing, undefined)
     assert.deepStrictEqual(parsed.defaultModelSelection, {
       instanceId: ProviderInstanceId.make("codex"),
       model: "gpt-5.2",
-    });
+    })
   }),
-);
+)
 
 it.effect("decodes project.create with createWorkspaceRootIfMissing enabled", () =>
   Effect.gen(function* () {
@@ -184,11 +184,11 @@ it.effect("decodes project.create with createWorkspaceRootIfMissing enabled", ()
       workspaceRoot: "/tmp/workspace",
       createWorkspaceRootIfMissing: true,
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
+    })
 
-    assert.strictEqual(parsed.createWorkspaceRootIfMissing, true);
+    assert.strictEqual(parsed.createWorkspaceRootIfMissing, true)
   }),
-);
+)
 
 it.effect("decodes historical project.created payloads with a default provider", () =>
   Effect.gen(function* () {
@@ -203,10 +203,10 @@ it.effect("decodes historical project.created payloads with a default provider",
       scripts: [],
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.defaultModelSelection?.instanceId, "codex");
+    })
+    assert.strictEqual(parsed.defaultModelSelection?.instanceId, "codex")
   }),
-);
+)
 
 it.effect("decodes project.meta-updated payloads with explicit default provider", () =>
   Effect.gen(function* () {
@@ -217,10 +217,10 @@ it.effect("decodes project.meta-updated payloads with explicit default provider"
         model: "claude-opus-4-6",
       },
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.defaultModelSelection?.instanceId, "claudeAgent");
+    })
+    assert.strictEqual(parsed.defaultModelSelection?.instanceId, "claudeAgent")
   }),
-);
+)
 
 it.effect("rejects command fields that become empty after trim", () =>
   Effect.gen(function* () {
@@ -233,10 +233,10 @@ it.effect("rejects command fields that become empty after trim", () =>
         workspaceRoot: "/tmp/workspace",
         createdAt: "2026-01-01T00:00:00.000Z",
       }),
-    );
-    assert.strictEqual(result._tag, "Failure");
+    )
+    assert.strictEqual(result._tag, "Failure")
   }),
-);
+)
 
 it.effect("decodes thread.turn.start defaults for provider and runtime mode", () =>
   Effect.gen(function* () {
@@ -251,12 +251,12 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
         attachments: [],
       },
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.modelSelection, undefined);
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-    assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    })
+    assert.strictEqual(parsed.modelSelection, undefined)
+    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE)
+    assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE)
   }),
-);
+)
 
 it.effect("accepts inline images, uploaded images, and uploaded files from clients", () =>
   Effect.gen(function* () {
@@ -295,17 +295,17 @@ it.effect("accepts inline images, uploaded images, and uploaded files from clien
       runtimeMode: "full-access",
       interactionMode: "default",
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
+    })
 
     if (command.type !== "thread.turn.start") {
-      assert.fail(`Expected thread.turn.start, received ${command.type}.`);
+      assert.fail(`Expected thread.turn.start, received ${command.type}.`)
     }
-    assert.strictEqual(command.message.attachments.length, 3);
-    assert.strictEqual("dataUrl" in command.message.attachments[0]!, true);
-    assert.strictEqual("id" in command.message.attachments[1]!, true);
-    assert.strictEqual(command.message.attachments[2]!.type, "file");
+    assert.strictEqual(command.message.attachments.length, 3)
+    assert.strictEqual("dataUrl" in command.message.attachments[0]!, true)
+    assert.strictEqual("id" in command.message.attachments[1]!, true)
+    assert.strictEqual(command.message.attachments[2]!.type, "file")
   }),
-);
+)
 
 // Attachments ride on persisted events and thread streams with no client
 // version negotiation. A type this build does not know must decode instead of
@@ -318,7 +318,7 @@ it.effect("tolerates attachment types from newer builds when decoding messages",
       name: "scene.glb",
       mimeType: "model/gltf-binary",
       sizeBytes: 12,
-    };
+    }
 
     const message = yield* decodeOrchestrationMessage({
       id: "message-1",
@@ -329,9 +329,9 @@ it.effect("tolerates attachment types from newer builds when decoding messages",
       streaming: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(message.attachments?.length, 1);
-    assert.strictEqual(message.attachments?.[0]!.type, "somethingnew");
+    })
+    assert.strictEqual(message.attachments?.length, 1)
+    assert.strictEqual(message.attachments?.[0]!.type, "somethingnew")
 
     const payload = yield* decodeThreadMessageSentPayload({
       threadId: "thread-1",
@@ -343,10 +343,10 @@ it.effect("tolerates attachment types from newer builds when decoding messages",
       streaming: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(payload.attachments?.[0]!.type, "somethingnew");
+    })
+    assert.strictEqual(payload.attachments?.[0]!.type, "somethingnew")
   }),
-);
+)
 
 // The tolerant member must not catch malformed known attachments: a file over
 // the size cap or an image with a bad mime has to fail its own schema, not
@@ -357,7 +357,7 @@ it.effect("rejects malformed known attachment types instead of tolerating them",
       id: "thread-1-00000000-0000-4000-8000-000000000003-pdf",
       name: "report.pdf",
       mimeType: "application/pdf",
-    };
+    }
     const decode = (attachment: unknown) =>
       decodeOrchestrationMessage({
         id: "message-1",
@@ -368,19 +368,19 @@ it.effect("rejects malformed known attachment types instead of tolerating them",
         streaming: false,
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
-      });
+      })
 
     const oversizedFile = yield* Effect.exit(
       decode({ ...base, type: "file", sizeBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES + 1 }),
-    );
-    assert.strictEqual(Exit.isFailure(oversizedFile), true);
+    )
+    assert.strictEqual(Exit.isFailure(oversizedFile), true)
 
     const badMimeImage = yield* Effect.exit(
       decode({ ...base, type: "image", mimeType: "application/pdf", sizeBytes: 12 }),
-    );
-    assert.strictEqual(Exit.isFailure(badMimeImage), true);
+    )
+    assert.strictEqual(Exit.isFailure(badMimeImage), true)
   }),
-);
+)
 
 it.effect("preserves window capture metadata in thread.turn.start", () =>
   Effect.gen(function* () {
@@ -431,10 +431,10 @@ it.effect("preserves window capture metadata in thread.turn.start", () =>
         ],
       },
       createdAt: "2026-08-24T11:00:00.000Z",
-    });
+    })
 
-    const attachment = parsed.message.attachments[0];
-    assert.strictEqual(attachment?.type, "image");
+    const attachment = parsed.message.attachments[0]
+    assert.strictEqual(attachment?.type, "image")
     assert.deepStrictEqual((attachment as ChatImageAttachment).source, {
       kind: "snap-shot",
       capturedAt: "2026-08-24T11:00:00.000Z",
@@ -462,9 +462,9 @@ it.effect("preserves window capture metadata in thread.turn.start", () =>
       },
       appIdentifier: "com.example.editor",
       appIconDataUrl: "data:image/png;base64,iVBORw==",
-    });
+    })
   }),
-);
+)
 
 it.effect("rejects accessibility trees above the serialized payload limit", () =>
   Effect.gen(function* () {
@@ -485,11 +485,11 @@ it.effect("rejects accessibility trees above the serialized payload limit", () =
           })),
         },
       }),
-    );
+    )
 
-    assert.strictEqual(Exit.isFailure(result), true);
+    assert.strictEqual(Exit.isFailure(result), true)
   }),
-);
+)
 
 it.effect("preserves explicit provider and runtime mode in thread.turn.start", () =>
   Effect.gen(function* () {
@@ -509,12 +509,12 @@ it.effect("preserves explicit provider and runtime mode in thread.turn.start", (
       },
       runtimeMode: "full-access",
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.modelSelection?.instanceId, "codex");
-    assert.strictEqual(parsed.runtimeMode, "full-access");
-    assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    })
+    assert.strictEqual(parsed.modelSelection?.instanceId, "codex")
+    assert.strictEqual(parsed.runtimeMode, "full-access")
+    assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE)
   }),
-);
+)
 
 it.effect("accepts bootstrap metadata in thread.turn.start", () =>
   Effect.gen(function* () {
@@ -551,13 +551,13 @@ it.effect("accepts bootstrap metadata in thread.turn.start", () =>
         runSetupScript: true,
       },
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.bootstrap?.createThread?.projectId, "project-1");
-    assert.strictEqual(parsed.bootstrap?.prepareWorktree?.baseBranch, "main");
-    assert.strictEqual(parsed.bootstrap?.prepareWorktree?.startFromOrigin, true);
-    assert.strictEqual(parsed.bootstrap?.runSetupScript, true);
+    })
+    assert.strictEqual(parsed.bootstrap?.createThread?.projectId, "project-1")
+    assert.strictEqual(parsed.bootstrap?.prepareWorktree?.baseBranch, "main")
+    assert.strictEqual(parsed.bootstrap?.prepareWorktree?.startFromOrigin, true)
+    assert.strictEqual(parsed.bootstrap?.runSetupScript, true)
   }),
-);
+)
 
 it.effect("decodes thread.created runtime mode for historical events", () =>
   Effect.gen(function* () {
@@ -574,12 +574,12 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
       worktreePath: null,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
+    })
 
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-    assert.strictEqual(parsed.modelSelection.instanceId, "codex");
+    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE)
+    assert.strictEqual(parsed.modelSelection.instanceId, "codex")
   }),
-);
+)
 
 it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
   Effect.gen(function* () {
@@ -596,12 +596,12 @@ it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
         model: "claude-opus-4-6",
       },
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.previousTitle, "Previous title");
-    assert.strictEqual(parsed.titleRegeneration?.requestId, "cmd-title-regenerate");
-    assert.strictEqual(parsed.modelSelection?.instanceId, "claudeAgent");
+    })
+    assert.strictEqual(parsed.previousTitle, "Previous title")
+    assert.strictEqual(parsed.titleRegeneration?.requestId, "cmd-title-regenerate")
+    assert.strictEqual(parsed.modelSelection?.instanceId, "claudeAgent")
   }),
-);
+)
 
 it.effect("decodes thread archive and unarchive commands", () =>
   Effect.gen(function* () {
@@ -609,17 +609,17 @@ it.effect("decodes thread archive and unarchive commands", () =>
       type: "thread.archive",
       commandId: "cmd-archive-1",
       threadId: "thread-1",
-    });
+    })
     const unarchive = yield* decodeOrchestrationCommand({
       type: "thread.unarchive",
       commandId: "cmd-unarchive-1",
       threadId: "thread-1",
-    });
+    })
 
-    assert.strictEqual(archive.type, "thread.archive");
-    assert.strictEqual(unarchive.type, "thread.unarchive");
+    assert.strictEqual(archive.type, "thread.archive")
+    assert.strictEqual(unarchive.type, "thread.unarchive")
   }),
-);
+)
 
 it.effect("decodes thread settle and unsettle commands", () =>
   Effect.gen(function* () {
@@ -627,16 +627,16 @@ it.effect("decodes thread settle and unsettle commands", () =>
       type: "thread.settle",
       commandId: "cmd-settle-1",
       threadId: "thread-1",
-    });
+    })
     const unsettle = yield* decodeOrchestrationCommand({
       type: "thread.unsettle",
       commandId: "cmd-unsettle-1",
       threadId: "thread-1",
       reason: "user",
-    });
+    })
 
-    assert.strictEqual(settle.type, "thread.settle");
-    assert.strictEqual(unsettle.type, "thread.unsettle");
+    assert.strictEqual(settle.type, "thread.settle")
+    assert.strictEqual(unsettle.type, "thread.unsettle")
 
     // "activity" is server-owned: it exists on the event, never on the
     // command, so a client cannot forge the neutral reset.
@@ -645,10 +645,10 @@ it.effect("decodes thread settle and unsettle commands", () =>
       commandId: "cmd-unsettle-2",
       threadId: "thread-1",
       reason: "activity",
-    }).pipe(Effect.flip);
-    assert.ok(forged);
+    }).pipe(Effect.flip)
+    assert.ok(forged)
   }),
-);
+)
 
 it.effect("defaults settled fields when decoding historical thread data", () =>
   Effect.gen(function* () {
@@ -666,7 +666,7 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
       updatedAt: "2026-01-01T00:00:00.000Z",
       archivedAt: null,
       session: null,
-    };
+    }
     const thread = yield* decodeOrchestrationThread({
       ...common,
       deletedAt: null,
@@ -674,29 +674,29 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
       proposedPlans: [],
       activities: [],
       checkpoints: [],
-    });
+    })
     const shell = yield* decodeOrchestrationThreadShell({
       ...common,
       latestUserMessageAt: null,
       hasPendingApprovals: false,
       hasPendingUserInput: false,
       hasActionableProposedPlan: false,
-    });
+    })
 
-    assert.strictEqual(thread.settledOverride, null);
-    assert.strictEqual(thread.settledAt, null);
-    assert.strictEqual(shell.settledOverride, null);
-    assert.strictEqual(shell.settledAt, null);
+    assert.strictEqual(thread.settledOverride, null)
+    assert.strictEqual(thread.settledAt, null)
+    assert.strictEqual(shell.settledOverride, null)
+    assert.strictEqual(shell.settledAt, null)
     // Pre-link servers omit the array entirely.
-    assert.deepStrictEqual(thread.pullRequests, []);
-    assert.deepStrictEqual(shell.pullRequests, []);
+    assert.deepStrictEqual(thread.pullRequests, [])
+    assert.deepStrictEqual(shell.pullRequests, [])
 
     const legacyLink = {
       projectId: ProjectId.make("project-1"),
       repository: "acme/web",
       number: 42,
       url: "https://github.com/acme/web/pull/42",
-    };
+    }
     const oldServerShell = yield* decodeOrchestrationThreadShell({
       ...common,
       latestUserMessageAt: null,
@@ -704,15 +704,15 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
       hasPendingUserInput: false,
       hasActionableProposedPlan: false,
       linkedPullRequest: legacyLink,
-    });
-    assert.deepStrictEqual(oldServerShell.pullRequests, []);
-    assert.deepStrictEqual(oldServerShell.linkedPullRequest, legacyLink);
+    })
+    assert.deepStrictEqual(oldServerShell.pullRequests, [])
+    assert.deepStrictEqual(oldServerShell.linkedPullRequest, legacyLink)
 
     // A decoder from before the array must still read its single-link field
     // after a new server encodes the expanded snapshot.
     const oldLinkFields = Schema.Struct({
       linkedPullRequest: Schema.optional(ThreadLinkedPullRequest),
-    });
+    })
     const newServerWire = yield* Schema.encodeEffect(OrchestrationThreadShell)({
       ...oldServerShell,
       pullRequests: [
@@ -727,11 +727,11 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
           stack: null,
         },
       ],
-    });
-    const oldClientFields = yield* Schema.decodeUnknownEffect(oldLinkFields)(newServerWire);
-    assert.deepStrictEqual(oldClientFields.linkedPullRequest, legacyLink);
+    })
+    const oldClientFields = yield* Schema.decodeUnknownEffect(oldLinkFields)(newServerWire)
+    assert.deepStrictEqual(oldClientFields.linkedPullRequest, legacyLink)
   }),
-);
+)
 
 it.effect("decodes thread pull request links with snapshot and stack", () =>
   Effect.gen(function* () {
@@ -792,13 +792,13 @@ it.effect("decodes thread pull request links with snapshot and stack", () =>
           },
         },
       ],
-    });
+    })
 
-    assert.strictEqual(shell.pullRequests.length, 2);
-    assert.strictEqual(shell.pullRequests[1]?.stack?.layers.length, 2);
-    assert.strictEqual(shell.pullRequests[1]?.snapshot?.state, "open");
+    assert.strictEqual(shell.pullRequests.length, 2)
+    assert.strictEqual(shell.pullRequests[1]?.stack?.layers.length, 2)
+    assert.strictEqual(shell.pullRequests[1]?.snapshot?.state, "open")
   }),
-);
+)
 
 it.effect("decodes thread archived and unarchived events", () =>
   Effect.gen(function* () {
@@ -818,7 +818,7 @@ it.effect("decodes thread archived and unarchived events", () =>
         archivedAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
-    });
+    })
     const unarchived = yield* decodeOrchestrationEvent({
       sequence: 2,
       eventId: "event-unarchive-1",
@@ -834,15 +834,15 @@ it.effect("decodes thread archived and unarchived events", () =>
         threadId: "thread-1",
         updatedAt: "2026-01-02T00:00:00.000Z",
       },
-    });
+    })
 
     if (archived.type !== "thread.archived") {
-      assert.fail(`Expected thread.archived event, received ${archived.type}.`);
+      assert.fail(`Expected thread.archived event, received ${archived.type}.`)
     }
-    assert.strictEqual(archived.payload.archivedAt, "2026-01-01T00:00:00.000Z");
-    assert.strictEqual(unarchived.type, "thread.unarchived");
+    assert.strictEqual(archived.payload.archivedAt, "2026-01-01T00:00:00.000Z")
+    assert.strictEqual(unarchived.type, "thread.unarchived")
   }),
-);
+)
 
 it.effect("decodes thread settled and unsettled events", () =>
   Effect.gen(function* () {
@@ -862,7 +862,7 @@ it.effect("decodes thread settled and unsettled events", () =>
         settledAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
-    });
+    })
     const unsettled = yield* decodeOrchestrationEvent({
       sequence: 2,
       eventId: "event-unsettle-1",
@@ -879,12 +879,12 @@ it.effect("decodes thread settled and unsettled events", () =>
         reason: "user",
         updatedAt: "2026-01-02T00:00:00.000Z",
       },
-    });
+    })
 
-    assert.strictEqual(settled.type, "thread.settled");
-    assert.strictEqual(unsettled.type, "thread.unsettled");
+    assert.strictEqual(settled.type, "thread.settled")
+    assert.strictEqual(unsettled.type, "thread.unsettled")
   }),
-);
+)
 
 it.effect("accepts provider-scoped model options in thread.turn.start", () =>
   Effect.gen(function* () {
@@ -907,12 +907,12 @@ it.effect("accepts provider-scoped model options in thread.turn.start", () =>
         ],
       },
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.modelSelection?.instanceId, "codex");
-    assert.strictEqual(getOptionValue(parsed.modelSelection?.options, "reasoningEffort"), "high");
-    assert.strictEqual(getOptionValue(parsed.modelSelection?.options, "fastMode"), true);
+    })
+    assert.strictEqual(parsed.modelSelection?.instanceId, "codex")
+    assert.strictEqual(getOptionValue(parsed.modelSelection?.options, "reasoningEffort"), "high")
+    assert.strictEqual(getOptionValue(parsed.modelSelection?.options, "fastMode"), true)
   }),
-);
+)
 
 it.effect("normalizes legacy object-shaped modelSelection.options on decode", () =>
   Effect.gen(function* () {
@@ -936,15 +936,15 @@ it.effect("normalizes legacy object-shaped modelSelection.options on decode", ()
       worktreePath: null,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
+    })
 
-    assert.strictEqual(parsed.modelSelection.instanceId, ProviderInstanceId.make("claudeAgent"));
+    assert.strictEqual(parsed.modelSelection.instanceId, ProviderInstanceId.make("claudeAgent"))
     assert.deepStrictEqual(parsed.modelSelection.options, [
       { id: "effort", value: "max" },
       { id: "fastMode", value: true },
-    ]);
+    ])
   }),
-);
+)
 
 it.effect("normalizes legacy object-shaped defaultModelSelection.options on decode", () =>
   Effect.gen(function* () {
@@ -960,13 +960,13 @@ it.effect("normalizes legacy object-shaped defaultModelSelection.options on deco
       scripts: [],
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
+    })
 
     assert.deepStrictEqual(parsed.defaultModelSelection?.options, [
       { id: "reasoningEffort", value: "low" },
-    ]);
+    ])
   }),
-);
+)
 
 it.effect(
   "normalizes legacy object-shaped options on decode and re-encodes as canonical array",
@@ -985,12 +985,12 @@ it.effect(
         worktreePath: null,
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
-      });
+      })
 
-      const encoded = yield* encodeThreadCreatedPayload(decoded);
-      assert.deepStrictEqual(encoded.modelSelection.options, [{ id: "fastMode", value: true }]);
+      const encoded = yield* encodeThreadCreatedPayload(decoded)
+      assert.deepStrictEqual(encoded.modelSelection.options, [{ id: "fastMode", value: true }])
     }),
-);
+)
 
 it.effect("accepts a title seed in thread.turn.start", () =>
   Effect.gen(function* () {
@@ -1006,10 +1006,10 @@ it.effect("accepts a title seed in thread.turn.start", () =>
       },
       titleSeed: "Investigate reconnect failures",
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
+    })
+    assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures")
   }),
-);
+)
 
 it.effect("decodes active reorder commands through client and orchestration boundaries", () =>
   Effect.gen(function* () {
@@ -1018,33 +1018,33 @@ it.effect("decodes active reorder commands through client and orchestration boun
       commandId: "cmd-active-reorder",
       threadId: "thread-1",
       orderKey: "gm",
-    };
-    const clientCommand = yield* decodeClientOrchestrationCommand(input);
-    const command = yield* decodeOrchestrationCommand(input);
+    }
+    const clientCommand = yield* decodeClientOrchestrationCommand(input)
+    const command = yield* decodeOrchestrationCommand(input)
     for (const decoded of [clientCommand, command]) {
-      assert.strictEqual(decoded.type, "thread.active.reorder");
+      assert.strictEqual(decoded.type, "thread.active.reorder")
       if (decoded.type === "thread.active.reorder") {
-        assert.strictEqual(decoded.threadId, "thread-1");
-        assert.strictEqual(decoded.orderKey, "gm");
+        assert.strictEqual(decoded.threadId, "thread-1")
+        assert.strictEqual(decoded.orderKey, "gm")
       }
     }
     const emptyKey = yield* Effect.exit(
       decodeClientOrchestrationCommand({ ...input, orderKey: " " }),
-    );
-    assert.isTrue(Exit.isFailure(emptyKey));
+    )
+    assert.isTrue(Exit.isFailure(emptyKey))
   }),
-);
+)
 
 it.effect("decodes active placement on existing metadata events while accepting old payloads", () =>
   Effect.gen(function* () {
-    const payload = { threadId: "thread-1", updatedAt: "2026-01-01T00:00:00.000Z" };
-    const oldPayload = yield* decodeThreadMetaUpdatedPayload(payload);
-    assert.strictEqual(oldPayload.activeOrderKey, undefined);
+    const payload = { threadId: "thread-1", updatedAt: "2026-01-01T00:00:00.000Z" }
+    const oldPayload = yield* decodeThreadMetaUpdatedPayload(payload)
+    assert.strictEqual(oldPayload.activeOrderKey, undefined)
     const resetPayload = yield* decodeThreadMetaUpdatedPayload({
       ...payload,
       activeOrderKey: null,
-    });
-    assert.strictEqual(resetPayload.activeOrderKey, null);
+    })
+    assert.strictEqual(resetPayload.activeOrderKey, null)
     const event = yield* decodeOrchestrationEvent({
       type: "thread.meta-updated",
       sequence: 1,
@@ -1057,14 +1057,14 @@ it.effect("decodes active placement on existing metadata events while accepting 
       correlationId: null,
       metadata: {},
       payload: { ...payload, activeOrderKey: "gm" },
-    });
-    assert.strictEqual(event.type, "thread.meta-updated");
+    })
+    assert.strictEqual(event.type, "thread.meta-updated")
     if (event.type === "thread.meta-updated") {
-      assert.strictEqual(event.payload.activeOrderKey, "gm");
-      assert.strictEqual(event.payload.updatedAt, payload.updatedAt);
+      assert.strictEqual(event.payload.activeOrderKey, "gm")
+      assert.strictEqual(event.payload.updatedAt, payload.updatedAt)
     }
   }),
-);
+)
 
 it.effect("accepts a title regeneration intent in thread.meta.update", () =>
   Effect.gen(function* () {
@@ -1073,13 +1073,13 @@ it.effect("accepts a title regeneration intent in thread.meta.update", () =>
       commandId: "cmd-title-regenerate",
       threadId: "thread-1",
       regenerateTitle: true,
-    });
-    assert.strictEqual(parsed.type, "thread.meta.update");
+    })
+    assert.strictEqual(parsed.type, "thread.meta.update")
     if (parsed.type === "thread.meta.update") {
-      assert.strictEqual(parsed.regenerateTitle, true);
+      assert.strictEqual(parsed.regenerateTitle, true)
     }
   }),
-);
+)
 
 it.effect("accepts thread.pull-request.link and .unlink commands", () =>
   Effect.gen(function* () {
@@ -1092,11 +1092,11 @@ it.effect("accepts thread.pull-request.link and .unlink commands", () =>
       number: 42,
       url: "https://github.com/pingdotgg/t3code/pull/42",
       source: "manual",
-    });
-    assert.strictEqual(link.type, "thread.pull-request.link");
+    })
+    assert.strictEqual(link.type, "thread.pull-request.link")
     if (link.type === "thread.pull-request.link") {
-      assert.strictEqual(link.source, "manual");
-      assert.strictEqual(link.number, 42);
+      assert.strictEqual(link.source, "manual")
+      assert.strictEqual(link.number, 42)
     }
 
     const unlink = yield* decodeOrchestrationCommand({
@@ -1106,10 +1106,10 @@ it.effect("accepts thread.pull-request.link and .unlink commands", () =>
       host: "github.com",
       repository: "pingdotgg/t3code",
       number: 42,
-    });
-    assert.strictEqual(unlink.type, "thread.pull-request.unlink");
+    })
+    assert.strictEqual(unlink.type, "thread.pull-request.unlink")
   }),
-);
+)
 
 it.effect("still decodes a persisted thread.meta-updated event carrying linkedPullRequest", () =>
   Effect.gen(function* () {
@@ -1134,13 +1134,13 @@ it.effect("still decodes a persisted thread.meta-updated event carrying linkedPu
         },
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
-    });
+    })
     if (event.type !== "thread.meta-updated") {
-      assert.fail(`Expected thread.meta-updated event, received ${event.type}.`);
+      assert.fail(`Expected thread.meta-updated event, received ${event.type}.`)
     }
-    assert.strictEqual(event.payload.linkedPullRequest?.number, 42);
+    assert.strictEqual(event.payload.linkedPullRequest?.number, 42)
   }),
-);
+)
 
 it.effect("accepts an internal title regeneration completion", () =>
   Effect.gen(function* () {
@@ -1150,14 +1150,14 @@ it.effect("accepts an internal title regeneration completion", () =>
       threadId: "thread-1",
       requestId: "cmd-title-regenerate",
       title: "Updated title",
-    });
-    assert.strictEqual(parsed.type, "thread.title.regeneration.complete");
+    })
+    assert.strictEqual(parsed.type, "thread.title.regeneration.complete")
     if (parsed.type === "thread.title.regeneration.complete") {
-      assert.strictEqual(parsed.requestId, "cmd-title-regenerate");
-      assert.strictEqual(parsed.title, "Updated title");
+      assert.strictEqual(parsed.requestId, "cmd-title-regenerate")
+      assert.strictEqual(parsed.title, "Updated title")
     }
   }),
-);
+)
 
 it.effect("accepts pull request synchronization only as an internal command", () =>
   Effect.gen(function* () {
@@ -1166,7 +1166,7 @@ it.effect("accepts pull request synchronization only as an internal command", ()
       repository: "pingdotgg/t3code",
       number: 42,
       url: "https://github.com/pingdotgg/t3code/pull/42",
-    };
+    }
     const command = {
       type: "thread.pull-request.sync" as const,
       commandId: CommandId.make("cmd-pull-request-sync"),
@@ -1182,23 +1182,23 @@ it.effect("accepts pull request synchronization only as an internal command", ()
       },
       branchPullRequest: pullRequest,
       linkedPullRequest: pullRequest,
-    };
+    }
 
-    assert.deepStrictEqual(yield* decodeOrchestrationCommand(command), command);
-    assert.ok(yield* decodeClientOrchestrationCommand(command).pipe(Effect.flip));
+    assert.deepStrictEqual(yield* decodeOrchestrationCommand(command), command)
+    assert.ok(yield* decodeClientOrchestrationCommand(command).pipe(Effect.flip))
 
-    const cleared = { ...command, branchPullRequest: null };
-    assert.deepStrictEqual(yield* decodeOrchestrationCommand(cleared), cleared);
+    const cleared = { ...command, branchPullRequest: null }
+    assert.deepStrictEqual(yield* decodeOrchestrationCommand(cleared), cleared)
 
     const metadata = yield* decodeClientOrchestrationCommand({
       type: "thread.meta.update",
       commandId: "cmd-forged-branch-pull-request",
       threadId: "thread-1",
       branchPullRequest: pullRequest,
-    });
-    assert.isFalse("branchPullRequest" in metadata);
+    })
+    assert.isFalse("branchPullRequest" in metadata)
   }),
-);
+)
 
 it.effect("rejects an explicit title combined with title regeneration", () =>
   Effect.gen(function* () {
@@ -1210,10 +1210,10 @@ it.effect("rejects an explicit title combined with title regeneration", () =>
         title: "Explicit title",
         regenerateTitle: true,
       }),
-    );
-    assert.strictEqual(result._tag, "Failure");
+    )
+    assert.strictEqual(result._tag, "Failure")
   }),
-);
+)
 
 it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
   Effect.gen(function* () {
@@ -1232,13 +1232,13 @@ it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
         planId: "plan-1",
       },
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
+    })
     assert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",
-    });
+    })
   }),
-);
+)
 
 it.effect(
   "decodes thread.turn-start-requested defaults for provider, runtime mode, and interaction mode",
@@ -1248,13 +1248,13 @@ it.effect(
         threadId: "thread-1",
         messageId: "msg-1",
         createdAt: "2026-01-01T00:00:00.000Z",
-      });
-      assert.strictEqual(parsed.modelSelection, undefined);
-      assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-      assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
-      assert.strictEqual(parsed.sourceProposedPlan, undefined);
+      })
+      assert.strictEqual(parsed.modelSelection, undefined)
+      assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE)
+      assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE)
+      assert.strictEqual(parsed.sourceProposedPlan, undefined)
     }),
-);
+)
 
 it.effect("decodes thread.turn-start-requested source proposed plan metadata when present", () =>
   Effect.gen(function* () {
@@ -1266,13 +1266,13 @@ it.effect("decodes thread.turn-start-requested source proposed plan metadata whe
         planId: "plan-1",
       },
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
+    })
     assert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",
-    });
+    })
   }),
-);
+)
 
 it.effect("decodes thread.turn-start-requested title seed when present", () =>
   Effect.gen(function* () {
@@ -1281,10 +1281,10 @@ it.effect("decodes thread.turn-start-requested title seed when present", () =>
       messageId: "msg-2",
       titleSeed: "Investigate reconnect failures",
       createdAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
+    })
+    assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures")
   }),
-);
+)
 
 it.effect("decodes latest turn source proposed plan metadata when present", () =>
   Effect.gen(function* () {
@@ -1299,13 +1299,13 @@ it.effect("decodes latest turn source proposed plan metadata when present", () =
         threadId: "thread-1",
         planId: "plan-1",
       },
-    });
+    })
     assert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",
-    });
+    })
   }),
-);
+)
 
 it.effect("decodes orchestration session runtime mode defaults", () =>
   Effect.gen(function* () {
@@ -1318,10 +1318,10 @@ it.effect("decodes orchestration session runtime mode defaults", () =>
       activeTurnId: null,
       lastError: null,
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+    })
+    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE)
   }),
-);
+)
 
 it.effect("defaults proposed plan implementation metadata for historical rows", () =>
   Effect.gen(function* () {
@@ -1331,11 +1331,11 @@ it.effect("defaults proposed plan implementation metadata for historical rows", 
       planMarkdown: "# Plan",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.implementedAt, null);
-    assert.strictEqual(parsed.implementationThreadId, null);
+    })
+    assert.strictEqual(parsed.implementedAt, null)
+    assert.strictEqual(parsed.implementationThreadId, null)
   }),
-);
+)
 
 it.effect("preserves proposed plan implementation metadata when present", () =>
   Effect.gen(function* () {
@@ -1347,11 +1347,11 @@ it.effect("preserves proposed plan implementation metadata when present", () =>
       implementationThreadId: "thread-2",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.implementedAt, "2026-01-02T00:00:00.000Z");
-    assert.strictEqual(parsed.implementationThreadId, "thread-2");
+    })
+    assert.strictEqual(parsed.implementedAt, "2026-01-02T00:00:00.000Z")
+    assert.strictEqual(parsed.implementationThreadId, "thread-2")
   }),
-);
+)
 
 // ── ModelSelection: instance-keyed wire shape + legacy decoder ────────
 //
@@ -1367,8 +1367,8 @@ it.effect("preserves proposed plan implementation metadata when present", () =>
 // decode cleanly for fork-provided drivers, and the decoded form uses
 // `instanceId` uniformly regardless of origin.
 
-const decodeModelSelection = Schema.decodeUnknownEffect(ModelSelection);
-const encodeModelSelection = Schema.encodeUnknownEffect(ModelSelection);
+const decodeModelSelection = Schema.decodeUnknownEffect(ModelSelection)
+const encodeModelSelection = Schema.encodeUnknownEffect(ModelSelection)
 
 it.effect("ModelSelection migrates legacy `provider` field to `instanceId`", () =>
   Effect.gen(function* () {
@@ -1376,22 +1376,22 @@ it.effect("ModelSelection migrates legacy `provider` field to `instanceId`", () 
       provider: "codex",
       model: "gpt-5-codex",
       options: [{ id: "reasoningEffort", value: "high" }],
-    });
-    assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex"));
-    assert.strictEqual(parsed.model, "gpt-5-codex");
-    assert.deepStrictEqual(parsed.options, [{ id: "reasoningEffort", value: "high" }]);
+    })
+    assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex"))
+    assert.strictEqual(parsed.model, "gpt-5-codex")
+    assert.deepStrictEqual(parsed.options, [{ id: "reasoningEffort", value: "high" }])
   }),
-);
+)
 
 it.effect("ModelSelection accepts an explicit instanceId routing key", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeModelSelection({
       instanceId: "codex_personal",
       model: "gpt-5-codex",
-    });
-    assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex_personal"));
+    })
+    assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex_personal"))
   }),
-);
+)
 
 it.effect("ModelSelection prefers explicit instanceId over legacy provider", () =>
   Effect.gen(function* () {
@@ -1399,10 +1399,10 @@ it.effect("ModelSelection prefers explicit instanceId over legacy provider", () 
       provider: "codex",
       instanceId: "codex_personal",
       model: "gpt-5-codex",
-    });
-    assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex_personal"));
+    })
+    assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("codex_personal"))
   }),
-);
+)
 
 it.effect(
   "ModelSelection decodes unknown driver kinds via legacy provider (rollback / fork invariant)",
@@ -1412,11 +1412,11 @@ it.effect(
         provider: "ollama",
         model: "llama3:70b",
         options: [{ id: "temperature", value: "0.4" }],
-      });
-      assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("ollama"));
-      assert.strictEqual(parsed.model, "llama3:70b");
+      })
+      assert.strictEqual(parsed.instanceId, ProviderInstanceId.make("ollama"))
+      assert.strictEqual(parsed.model, "llama3:70b")
     }),
-);
+)
 
 it.effect("ModelSelection encodes to the canonical instanceId wire form", () =>
   Effect.gen(function* () {
@@ -1424,15 +1424,15 @@ it.effect("ModelSelection encodes to the canonical instanceId wire form", () =>
       provider: "ollama",
       model: "llama3:70b",
       options: [{ id: "temperature", value: "0.4" }],
-    });
-    const encoded = yield* encodeModelSelection(decoded);
+    })
+    const encoded = yield* encodeModelSelection(decoded)
     assert.deepStrictEqual(encoded, {
       instanceId: "ollama",
       model: "llama3:70b",
       options: [{ id: "temperature", value: "0.4" }],
-    });
+    })
   }),
-);
+)
 
 it.effect("ModelSelection rejects malformed instance ids", () =>
   Effect.gen(function* () {
@@ -1441,10 +1441,10 @@ it.effect("ModelSelection rejects malformed instance ids", () =>
         instanceId: "1invalid", // must start with a letter
         model: "x",
       }),
-    );
-    assert.strictEqual(result._tag, "Failure");
+    )
+    assert.strictEqual(result._tag, "Failure")
   }),
-);
+)
 
 it.effect("project favicon overrides accept only supported image files", () =>
   Effect.gen(function* () {
@@ -1453,8 +1453,8 @@ it.effect("project favicon overrides accept only supported image files", () =>
       commandId: "cmd-project-favicon",
       projectId: "project-1",
       faviconPath: "brand/icon.svg",
-    });
-    assert.strictEqual(valid.type, "project.meta.update");
+    })
+    assert.strictEqual(valid.type, "project.meta.update")
 
     const invalid = yield* Effect.exit(
       decodeOrchestrationCommand({
@@ -1463,10 +1463,10 @@ it.effect("project favicon overrides accept only supported image files", () =>
         projectId: "project-1",
         faviconPath: ".env",
       }),
-    );
-    assert.strictEqual(invalid._tag, "Failure");
+    )
+    assert.strictEqual(invalid._tag, "Failure")
   }),
-);
+)
 
 it.effect("project icon overrides accept Lucide icons, colors, and emoji", () =>
   Effect.gen(function* () {
@@ -1475,16 +1475,16 @@ it.effect("project icon overrides accept Lucide icons, colors, and emoji", () =>
       commandId: "cmd-project-lucide-icon",
       projectId: "project-1",
       projectIcon: { kind: "lucide", name: "alarm-clock", color: "violet" },
-    });
-    assert.strictEqual(lucide.type, "project.meta.update");
+    })
+    assert.strictEqual(lucide.type, "project.meta.update")
 
     const emoji = yield* decodeOrchestrationCommand({
       type: "project.meta.update",
       commandId: "cmd-project-emoji-icon",
       projectId: "project-1",
       projectIcon: { kind: "emoji", emoji: "👩🏽‍💻" },
-    });
-    assert.strictEqual(emoji.type, "project.meta.update");
+    })
+    assert.strictEqual(emoji.type, "project.meta.update")
 
     const invalid = yield* Effect.exit(
       decodeOrchestrationCommand({
@@ -1493,10 +1493,10 @@ it.effect("project icon overrides accept Lucide icons, colors, and emoji", () =>
         projectId: "project-1",
         projectIcon: { kind: "lucide", name: "Alarm Clock", color: "ultraviolet" },
       }),
-    );
-    assert.strictEqual(invalid._tag, "Failure");
+    )
+    assert.strictEqual(invalid._tag, "Failure")
   }),
-);
+)
 
 it.effect("rejects thread history imports without messages", () =>
   Effect.gen(function* () {
@@ -1507,14 +1507,14 @@ it.effect("rejects thread history imports without messages", () =>
         threadId: "thread-1",
         messages: [],
       }),
-    );
+    )
 
-    assert.strictEqual(result._tag, "Failure");
+    assert.strictEqual(result._tag, "Failure")
   }),
-);
+)
 
 it("isProviderSendTurnSupportedImageMimeType accepts raster formats and rejects svg", () => {
-  assert.strictEqual(isProviderSendTurnSupportedImageMimeType("image/png"), true);
-  assert.strictEqual(isProviderSendTurnSupportedImageMimeType("IMAGE/JPEG"), true);
-  assert.strictEqual(isProviderSendTurnSupportedImageMimeType("image/svg+xml"), false);
-});
+  assert.strictEqual(isProviderSendTurnSupportedImageMimeType("image/png"), true)
+  assert.strictEqual(isProviderSendTurnSupportedImageMimeType("IMAGE/JPEG"), true)
+  assert.strictEqual(isProviderSendTurnSupportedImageMimeType("image/svg+xml"), false)
+})

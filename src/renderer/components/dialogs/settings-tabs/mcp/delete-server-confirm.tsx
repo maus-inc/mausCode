@@ -30,8 +30,8 @@ export function DeleteServerConfirm({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete MCP Server</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete <strong>{serverName}</strong>? This
-            will remove the server configuration and cannot be undone.
+            Are you sure you want to delete <strong>{serverName}</strong>? This will remove the
+            server configuration and cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -73,7 +73,7 @@ export function useAgentsFileUpload() {
         const filename = file.name || `screenshot-${Date.now()}.png`
         const mediaType = file.type || "image/png"
         const url = URL.createObjectURL(file)
-        
+
         // Convert to base64 for API
         let base64Data: string | undefined
         try {
@@ -90,7 +90,7 @@ export function useAgentsFileUpload() {
           isLoading: false,
           mediaType,
         }
-      })
+      }),
     )
 
     const newFiles: UploadedFile[] = otherFiles.map((file) => ({

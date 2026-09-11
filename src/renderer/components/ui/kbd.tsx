@@ -34,22 +34,20 @@ function renderShortcut(children: React.ReactNode): React.ReactNode {
   return parts
 }
 
-const Kbd = React.forwardRef<HTMLElement, KbdProps>(
-  ({ className, children, ...props }, ref) => {
-    return (
-      <kbd
-        ref={ref}
-        className={cn(
-          "pointer-events-none inline-flex items-center gap-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground/60",
-          className,
-        )}
-        {...props}
-      >
-        {renderShortcut(children)}
-      </kbd>
-    )
-  },
-)
+const Kbd = React.forwardRef<HTMLElement, KbdProps>(({ className, children, ...props }, ref) => {
+  return (
+    <kbd
+      ref={ref}
+      className={cn(
+        "pointer-events-none inline-flex items-center gap-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground/60",
+        className,
+      )}
+      {...props}
+    >
+      {renderShortcut(children)}
+    </kbd>
+  )
+})
 Kbd.displayName = "Kbd"
 
 export { Kbd }

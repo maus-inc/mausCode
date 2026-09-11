@@ -45,9 +45,7 @@ export function useFileContent(
 ): FileContentResult {
   const absolutePath = useMemo(() => {
     if (!projectPath || !filePath) return null
-    return filePath.startsWith("/")
-      ? filePath
-      : `${projectPath}/${filePath}`
+    return filePath.startsWith("/") ? filePath : `${projectPath}/${filePath}`
   }, [projectPath, filePath])
 
   const enabled = !!absolutePath
@@ -102,9 +100,10 @@ export function useFileContent(
 
     if (error) {
       const errorMessage = error.message?.toLowerCase() || ""
-      const isNotFound = errorMessage.includes("enoent") ||
-                         errorMessage.includes("not found") ||
-                         errorMessage.includes("no such file")
+      const isNotFound =
+        errorMessage.includes("enoent") ||
+        errorMessage.includes("not found") ||
+        errorMessage.includes("no such file")
       return {
         content: null,
         isLoading: false,
@@ -119,7 +118,13 @@ export function useFileContent(
     }
 
     if (data.ok) {
-      return { content: data.content, isLoading: false, error: null, byteLength: data.byteLength, refetch }
+      return {
+        content: data.content,
+        isLoading: false,
+        error: null,
+        byteLength: data.byteLength,
+        refetch,
+      }
     }
 
     return {

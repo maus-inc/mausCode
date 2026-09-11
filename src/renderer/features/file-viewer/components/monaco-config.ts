@@ -72,10 +72,11 @@ export const defaultEditorOptions: editor.IStandaloneEditorConstructionOptions =
 
 // Map app theme to Monaco base theme
 export function getMonacoTheme(appTheme: string): string {
-  const isDark = appTheme.includes("dark") ||
-                 appTheme === "vesper" ||
-                 appTheme === "min-dark" ||
-                 appTheme === "vitesse-dark"
+  const isDark =
+    appTheme.includes("dark") ||
+    appTheme === "vesper" ||
+    appTheme === "min-dark" ||
+    appTheme === "vitesse-dark"
 
   return isDark ? "vs-dark" : "vs"
 }
@@ -115,20 +116,19 @@ function normalizeHex(color: string): string {
  * This function extracts foreground colors from the TextMate tokenColors and
  * creates matching Monarch token rules so syntax highlighting works correctly.
  */
-function buildMonarchRules(
-  tokenColors: any[],
-): editor.ITokenThemeRule[] {
+function buildMonarchRules(tokenColors: any[]): editor.ITokenThemeRule[] {
   const rules: editor.ITokenThemeRule[] = []
 
   // Build a scope-to-color map from tokenColors
   const scopeColorMap = new Map<string, { foreground?: string; fontStyle?: string }>()
   for (const tc of tokenColors) {
     if (!tc.settings) continue
-    const scopes = typeof tc.scope === "string"
-      ? tc.scope.split(",").map((s: string) => s.trim())
-      : Array.isArray(tc.scope)
-        ? tc.scope
-        : []
+    const scopes =
+      typeof tc.scope === "string"
+        ? tc.scope.split(",").map((s: string) => s.trim())
+        : Array.isArray(tc.scope)
+          ? tc.scope
+          : []
     for (const scope of scopes) {
       scopeColorMap.set(scope, tc.settings)
     }
@@ -155,7 +155,10 @@ function buildMonarchRules(
   // These are the tokens produced by Monaco's built-in language tokenizers
   const monarchMappings: Array<{ token: string; scopes: string[] }> = [
     // Keywords (if, else, return, const, let, var, function, class, etc.)
-    { token: "keyword", scopes: ["keyword", "keyword.control", "storage.type", "storage.modifier"] },
+    {
+      token: "keyword",
+      scopes: ["keyword", "keyword.control", "storage.type", "storage.modifier"],
+    },
     // Identifiers (variable names — Monaco's Monarch doesn't distinguish function calls)
     { token: "identifier", scopes: ["variable"] },
     // Type identifiers (type names, class names, interface names)
@@ -242,7 +245,12 @@ function buildMonarchRules(
  */
 export function registerMonacoTheme(
   monacoInstance: typeof monaco,
-  theme: { id: string; type: "light" | "dark"; colors: Record<string, string>; tokenColors?: any[] },
+  theme: {
+    id: string
+    type: "light" | "dark"
+    colors: Record<string, string>
+    tokenColors?: any[]
+  },
 ): string {
   const themeName = `custom-${theme.id}`
 
@@ -267,11 +275,12 @@ export function registerMonacoTheme(
   if (theme.tokenColors) {
     for (const tc of theme.tokenColors) {
       if (!tc.settings) continue
-      const scopes = typeof tc.scope === "string"
-        ? tc.scope.split(",").map((s: string) => s.trim())
-        : Array.isArray(tc.scope)
-          ? tc.scope
-          : [""]
+      const scopes =
+        typeof tc.scope === "string"
+          ? tc.scope.split(",").map((s: string) => s.trim())
+          : Array.isArray(tc.scope)
+            ? tc.scope
+            : [""]
 
       for (const scope of scopes) {
         const rule: editor.ITokenThemeRule = { token: scope }

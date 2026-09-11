@@ -2,21 +2,10 @@ import { useState, useCallback, useMemo } from "react"
 import { Button } from "../../../ui/button"
 import { Input } from "../../../ui/input"
 import { Label } from "../../../ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../../ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../ui/select"
 import { cn } from "../../../../lib/utils"
 import { trpc } from "../../../../lib/trpc"
-import type {
-  McpServerFormData,
-  TransportType,
-  AuthType,
-  ScopeType,
-} from "./types"
+import type { McpServerFormData, TransportType, AuthType, ScopeType } from "./types"
 import { Eye, EyeOff } from "lucide-react"
 
 interface McpServerFormProps {
@@ -39,13 +28,9 @@ export function McpServerForm({
   const [name, setName] = useState(initialData?.name ?? "")
   const [scope, setScope] = useState<ScopeType>(initialData?.scope ?? "global")
   const [projectPath, setProjectPath] = useState(initialData?.projectPath ?? "")
-  const [transport, setTransport] = useState<TransportType>(
-    initialData?.transport ?? "stdio",
-  )
+  const [transport, setTransport] = useState<TransportType>(initialData?.transport ?? "stdio")
   const [command, setCommand] = useState(initialData?.command ?? "")
-  const [argsText, setArgsText] = useState(
-    initialData?.args?.join("\n") ?? "",
-  )
+  const [argsText, setArgsText] = useState(initialData?.args?.join("\n") ?? "")
   const [envText, setEnvText] = useState(
     initialData?.env
       ? Object.entries(initialData.env)
@@ -54,12 +39,8 @@ export function McpServerForm({
       : "",
   )
   const [url, setUrl] = useState(initialData?.url ?? "")
-  const [authType, setAuthType] = useState<AuthType>(
-    initialData?.authType ?? "none",
-  )
-  const [bearerToken, setBearerToken] = useState(
-    initialData?.bearerToken ?? "",
-  )
+  const [authType, setAuthType] = useState<AuthType>(initialData?.authType ?? "none")
+  const [bearerToken, setBearerToken] = useState(initialData?.bearerToken ?? "")
   const [showToken, setShowToken] = useState(false)
 
   const { data: projectsList } = trpc.projects.list.useQuery()
@@ -71,23 +52,20 @@ export function McpServerForm({
       .filter(Boolean)
   }, [])
 
-  const parseEnv = useCallback(
-    (text: string): Record<string, string> => {
-      const result: Record<string, string> = {}
-      for (const line of text.split("\n")) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        const eqIndex = trimmed.indexOf("=")
-        if (eqIndex > 0) {
-          const key = trimmed.slice(0, eqIndex).trim()
-          const value = trimmed.slice(eqIndex + 1).trim()
-          if (key) result[key] = value
-        }
+  const parseEnv = useCallback((text: string): Record<string, string> => {
+    const result: Record<string, string> = {}
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      const eqIndex = trimmed.indexOf("=")
+      if (eqIndex > 0) {
+        const key = trimmed.slice(0, eqIndex).trim()
+        const value = trimmed.slice(eqIndex + 1).trim()
+        if (key) result[key] = value
       }
-      return result
-    },
-    [],
-  )
+    }
+    return result
+  }, [])
 
   const canSubmit = useMemo(() => {
     if (!name.trim()) return false
@@ -247,9 +225,7 @@ export function McpServerForm({
               rows={3}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
             />
-            <p className="text-[11px] text-muted-foreground">
-              One argument per line
-            </p>
+            <p className="text-[11px] text-muted-foreground">One argument per line</p>
           </div>
           <div className="space-y-1.5">
             <Label>Environment Variables</Label>
@@ -260,9 +236,7 @@ export function McpServerForm({
               rows={3}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
             />
-            <p className="text-[11px] text-muted-foreground">
-              KEY=value format, one per line
-            </p>
+            <p className="text-[11px] text-muted-foreground">KEY=value format, one per line</p>
           </div>
         </>
       )}
@@ -317,11 +291,7 @@ export function McpServerForm({
                   onClick={() => setShowToken(!showToken)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {showToken ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -334,11 +304,7 @@ export function McpServerForm({
         <Button variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button
-          size="sm"
-          onClick={handleSubmit}
-          disabled={!canSubmit || isSubmitting}
-        >
+        <Button size="sm" onClick={handleSubmit} disabled={!canSubmit || isSubmitting}>
           {isSubmitting ? "Saving..." : submitLabel}
         </Button>
       </div>

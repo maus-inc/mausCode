@@ -83,8 +83,7 @@ function parseExtraUsage(value: unknown): OAuthExtraUsage | null {
 }
 
 function parseUsageResponse(raw: unknown): ClaudeOAuthUsage {
-  const source =
-    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
+  const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
   return {
     fiveHour: parseFirstWindow(source, ["five_hour"]),
     sevenDay: parseFirstWindow(source, ["seven_day"]),

@@ -89,9 +89,7 @@ export const McpWidget = memo(function McpWidget() {
   if (!sessionInfo?.mcpServers || sessionInfo.mcpServers.length === 0) {
     return (
       <div className="px-2 py-2 flex flex-col gap-1">
-        <div className="text-xs text-muted-foreground">
-          No MCP servers configured
-        </div>
+        <div className="text-xs text-muted-foreground">No MCP servers configured</div>
         {sessionInfo?.toolsUnknown === true && (
           <div className="text-[11px] text-muted-foreground/70">
             Native engine: servers resolve from local MCP config files; the full tool list is
@@ -153,9 +151,7 @@ export const McpWidget = memo(function McpWidget() {
               onClick={() => hasTools && toggleServer(server.name)}
               className={cn(
                 "w-full flex items-center gap-1.5 min-h-[28px] rounded px-1.5 py-0.5 -ml-0.5 transition-colors",
-                hasTools
-                  ? "hover:bg-accent cursor-pointer"
-                  : "cursor-default",
+                hasTools ? "hover:bg-accent cursor-pointer" : "cursor-default",
               )}
             >
               <ServerIcon server={server} />

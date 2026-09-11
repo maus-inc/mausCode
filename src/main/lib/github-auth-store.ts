@@ -2,13 +2,7 @@
  * Transplanted from erenbertr/1code (Apache-2.0, (c) the 1Code contributors)
  * — file-level port, not a merge. See .dump/ci/research/fork-network-harvest-catalog.md.
  */
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { app, safeStorage } from "electron"
 

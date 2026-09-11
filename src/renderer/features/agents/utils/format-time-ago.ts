@@ -24,6 +24,3 @@ export function formatTimeAgo(timestamp: Date | string | undefined): string {
   if (minutes > 0) return `${minutes}m`
   return "now"
 }
-
-
-

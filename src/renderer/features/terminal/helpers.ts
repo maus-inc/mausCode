@@ -5,9 +5,21 @@ import { CanvasAddon } from "@xterm/addon-canvas"
 import { SerializeAddon } from "@xterm/addon-serialize"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import type { ITheme } from "xterm"
-import { TERMINAL_OPTIONS, TERMINAL_THEME_DARK, TERMINAL_THEME_LIGHT, getTerminalTheme, getTerminalLineHeight, RESIZE_DEBOUNCE_MS } from "./config"
+import {
+  TERMINAL_OPTIONS,
+  TERMINAL_THEME_DARK,
+  TERMINAL_THEME_LIGHT,
+  getTerminalTheme,
+  getTerminalLineHeight,
+  RESIZE_DEBOUNCE_MS,
+} from "./config"
 import { FilePathLinkProvider } from "./link-providers"
-import { isMac, isModifierPressed, showLinkPopup, removeLinkPopup } from "./link-providers/link-popup"
+import {
+  isMac,
+  isModifierPressed,
+  showLinkPopup,
+  removeLinkPopup,
+} from "./link-providers/link-popup"
 import { suppressQueryResponses } from "./suppressQueryResponses"
 import { debounce } from "./utils"
 
@@ -88,7 +100,7 @@ export interface TerminalInstance {
  */
 export function createTerminalInstance(
   container: HTMLDivElement,
-  options: CreateTerminalOptions = {}
+  options: CreateTerminalOptions = {},
 ): TerminalInstance {
   const { initialTheme, isDark = true, fontSize, onFileLinkClick, onUrlClick } = options
 
@@ -137,8 +149,12 @@ export function createTerminalInstance(
   const renderer = loadRenderer(xterm)
 
   // Debug: Check dimensions after renderer
-  const coreAfter = (xterm as unknown as { _core?: { _renderService?: { dimensions?: unknown } } })._core
-  console.log("[Terminal:create] After renderer - dimensions:", coreAfter?._renderService?.dimensions)
+  const coreAfter = (xterm as unknown as { _core?: { _renderService?: { dimensions?: unknown } } })
+    ._core
+  console.log(
+    "[Terminal:create] After renderer - dimensions:",
+    coreAfter?._renderService?.dimensions,
+  )
 
   // 6. Set up query response suppression
   console.log("[Terminal:create] Step 6: Setting up query suppression")
@@ -161,7 +177,7 @@ export function createTerminalInstance(
         leave: () => {
           removeLinkPopup()
         },
-      }
+      },
     )
     xterm.loadAddon(webLinksAddon)
   }
@@ -169,13 +185,10 @@ export function createTerminalInstance(
   // 8. Set up file path link provider
   if (onFileLinkClick) {
     console.log("[Terminal:create] Step 8: Registering file path link provider")
-    const filePathLinkProvider = new FilePathLinkProvider(
-      xterm,
-      (_event, path, line, column) => {
-        console.log("[Terminal:create] File path link clicked:", path, line, column)
-        onFileLinkClick(path, line, column)
-      }
-    )
+    const filePathLinkProvider = new FilePathLinkProvider(xterm, (_event, path, line, column) => {
+      console.log("[Terminal:create] File path link clicked:", path, line, column)
+      onFileLinkClick(path, line, column)
+    })
     xterm.registerLinkProvider(filePathLinkProvider)
   }
 
@@ -218,16 +231,12 @@ export interface KeyboardHandlerOptions {
  */
 export function setupKeyboardHandler(
   xterm: XTerm,
-  options: KeyboardHandlerOptions = {}
+  options: KeyboardHandlerOptions = {},
 ): () => void {
   const handler = (event: KeyboardEvent): boolean => {
     // Shift+Enter - line continuation
     const isShiftEnter =
-      event.key === "Enter" &&
-      event.shiftKey &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey
+      event.key === "Enter" && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey
 
     if (isShiftEnter) {
       if (event.type === "keydown" && options.onShiftEnter) {
@@ -237,8 +246,7 @@ export function setupKeyboardHandler(
     }
 
     // Cmd+K - clear terminal (macOS)
-    const isClearShortcut =
-      event.key === "k" && event.metaKey && !event.shiftKey && !event.altKey
+    const isClearShortcut = event.key === "k" && event.metaKey && !event.shiftKey && !event.altKey
 
     if (isClearShortcut) {
       if (event.type === "keydown" && options.onClear) {
@@ -283,10 +291,7 @@ export interface PasteHandlerOptions {
  *
  * Returns a cleanup function to remove the handler.
  */
-export function setupPasteHandler(
-  xterm: XTerm,
-  options: PasteHandlerOptions = {}
-): () => void {
+export function setupPasteHandler(xterm: XTerm, options: PasteHandlerOptions = {}): () => void {
   const textarea = xterm.textarea
   if (!textarea) return () => {}
 
@@ -313,10 +318,7 @@ export function setupPasteHandler(
  *
  * Returns a cleanup function to remove the listener.
  */
-export function setupFocusListener(
-  xterm: XTerm,
-  onFocus: () => void
-): (() => void) | null {
+export function setupFocusListener(xterm: XTerm, onFocus: () => void): (() => void) | null {
   const textarea = xterm.textarea
   if (!textarea) return null
 
@@ -336,7 +338,7 @@ export function setupResizeHandlers(
   container: HTMLDivElement,
   xterm: XTerm,
   fitAddon: FitAddon,
-  onResize: (cols: number, rows: number) => void
+  onResize: (cols: number, rows: number) => void,
 ): () => void {
   const debouncedHandleResize = debounce(() => {
     try {
@@ -368,7 +370,7 @@ export interface ClickToMoveOptions {
  */
 function getTerminalCoordsFromEvent(
   xterm: XTerm,
-  event: MouseEvent
+  event: MouseEvent,
 ): { col: number; row: number } | null {
   const element = xterm.element
   if (!element) return null
@@ -407,10 +409,7 @@ function getTerminalCoordsFromEvent(
  *
  * Returns a cleanup function to remove the handler.
  */
-export function setupClickToMoveCursor(
-  xterm: XTerm,
-  options: ClickToMoveOptions
-): () => void {
+export function setupClickToMoveCursor(xterm: XTerm, options: ClickToMoveOptions): () => void {
   const handleClick = (event: MouseEvent) => {
     // Don't interfere with full-screen apps (vim, less, etc.)
     if (xterm.buffer.active !== xterm.buffer.normal) return
@@ -462,7 +461,7 @@ export interface ContextMenuHandlerOptions {
  */
 export function setupContextMenuHandler(
   xterm: XTerm,
-  options: ContextMenuHandlerOptions = {}
+  options: ContextMenuHandlerOptions = {},
 ): () => void {
   const element = xterm.element
   if (!element) {

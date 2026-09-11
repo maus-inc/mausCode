@@ -18,14 +18,14 @@ const ButtonGroup = React.forwardRef<HTMLDivElement, ButtonGroupProps>(
           "[&>button:first-child]:rounded-l-md",
           "[&>button:last-child]:rounded-r-md",
           "[&>button:not(:first-child)]:-ml-px",
-          className
+          className,
         )}
         {...props}
       >
         {children}
       </div>
     )
-  }
+  },
 )
 ButtonGroup.displayName = "ButtonGroup"
 

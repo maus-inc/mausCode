@@ -54,7 +54,7 @@ export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn 
         console.error("[usePastedTextFiles] Failed to write:", error)
       }
     },
-    [subChatId, writePastedTextMutation]
+    [subChatId, writePastedTextMutation],
   )
 
   const removePastedText = useCallback((id: string) => {

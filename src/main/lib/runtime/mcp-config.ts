@@ -161,7 +161,10 @@ export function resolveNativeMcpConfigs(
     const claudeJson = path.join(homeDir, ".claude.json")
     const { value, error } = readJsonFile(claudeJson)
     if (error) {
-      errors.push({ file: claudeJson, error: `Unparseable MCP config (daemon ignores this file): ${error}` })
+      errors.push({
+        file: claudeJson,
+        error: `Unparseable MCP config (daemon ignores this file): ${error}`,
+      })
     } else if (value !== undefined && isRecord(value)) {
       // Top-level mcpServers...
       mergePreferringRunnable(merged, extractServers(value), claudeJson)
@@ -170,7 +173,11 @@ export function resolveNativeMcpConfigs(
       if (isRecord(projects)) {
         const project = projects[projectDir]
         if (isRecord(project)) {
-          mergePreferringRunnable(merged, extractServers(project), `${claudeJson} (project ${projectDir})`)
+          mergePreferringRunnable(
+            merged,
+            extractServers(project),
+            `${claudeJson} (project ${projectDir})`,
+          )
         }
       }
     }
@@ -207,7 +214,9 @@ export function readMcpSchemaCache(jcodeHome: string): Map<string, string[]> {
     if (!Array.isArray(tools)) continue
     out.set(
       name,
-      tools.filter((t) => isRecord(t) && typeof t["name"] === "string").map((t) => (t as { name: string }).name),
+      tools
+        .filter((t) => isRecord(t) && typeof t["name"] === "string")
+        .map((t) => (t as { name: string }).name),
     )
   }
   return out

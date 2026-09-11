@@ -73,9 +73,7 @@ function toolNameFromCall(toolCall: Record<string, unknown>): {
   name: string
   input: unknown
 } {
-  const functionCall = toolCall.function as
-    | { name?: unknown; arguments?: unknown }
-    | undefined
+  const functionCall = toolCall.function as { name?: unknown; arguments?: unknown } | undefined
   if (functionCall && typeof functionCall === "object") {
     let input: unknown = functionCall.arguments
     if (typeof input === "string") {
@@ -92,17 +90,13 @@ function toolNameFromCall(toolCall: Record<string, unknown>): {
     return { name: canonicalCursorToolName(rawName), input: input ?? {} }
   }
   const key = Object.keys(toolCall).find((candidate) => candidate !== "function")
-  const entry = (key ? toolCall[key] : undefined) as
-    | { args?: unknown }
-    | undefined
+  const entry = (key ? toolCall[key] : undefined) as { args?: unknown } | undefined
   const raw = typeof key === "string" ? key.replace(/ToolCall$/, "") : ""
   return { name: canonicalCursorToolName(raw), input: entry?.args ?? {} }
 }
 
 function toolOutputFromCall(toolCall: Record<string, unknown>): unknown {
-  const functionCall = toolCall.function as
-    | { result?: unknown }
-    | undefined
+  const functionCall = toolCall.function as { result?: unknown } | undefined
   // Cursor tool results come in three shapes: `{success}`, `{error}`,
   // and `{rejected: {reason}}` (policy/approval rejections, e.g. delete).
   const unwrap = (result: unknown): unknown => {
@@ -116,10 +110,7 @@ function toolOutputFromCall(toolCall: Record<string, unknown>): unknown {
       if ("error" in record) return { error: record.error ?? "tool failed" }
       if ("rejected" in record) {
         const rejected = record.rejected as { reason?: unknown } | null
-        const reason =
-          rejected && typeof rejected === "object"
-            ? rejected.reason
-            : undefined
+        const reason = rejected && typeof rejected === "object" ? rejected.reason : undefined
         return {
           error:
             typeof reason === "string" && reason.length > 0
@@ -132,14 +123,10 @@ function toolOutputFromCall(toolCall: Record<string, unknown>): unknown {
     return result ?? ""
   }
   if (functionCall && typeof functionCall === "object" && "result" in functionCall) {
-    return unwrap(
-      (functionCall as { result?: unknown }).result,
-    )
+    return unwrap((functionCall as { result?: unknown }).result)
   }
   const key = Object.keys(toolCall).find((candidate) => candidate !== "function")
-  const entry = (key ? toolCall[key] : undefined) as
-    | { result?: unknown }
-    | undefined
+  const entry = (key ? toolCall[key] : undefined) as { result?: unknown } | undefined
   return unwrap(entry?.result)
 }
 
@@ -259,10 +246,7 @@ export function runCursorPrintTurn(opts: {
           // Complete-message snapshots: repeat flushes are common (before
           // tool calls, at end of turn). Dedupe against the last snapshot.
           if (text === lastAssistantFull) break
-          if (
-            lastAssistantFull.length > 0 &&
-            text.startsWith(lastAssistantFull)
-          ) {
+          if (lastAssistantFull.length > 0 && text.startsWith(lastAssistantFull)) {
             emitDelta(text.slice(lastAssistantFull.length))
           } else {
             // Fresh message after a tool call (no shared prefix): append.
@@ -282,8 +266,7 @@ export function runCursorPrintTurn(opts: {
         // Documented subtypes are started/completed; treat any other
         // defined subtype (failed/error/...) as completion so a failed
         // tool never fabricates a phantom tool-input event.
-        const isCompletion =
-          event.subtype !== undefined && event.subtype !== "started"
+        const isCompletion = event.subtype !== undefined && event.subtype !== "started"
         if (isCompletion) {
           const callId = hasCallId
             ? (event.call_id as string)
@@ -298,9 +281,7 @@ export function runCursorPrintTurn(opts: {
             output: toolOutputFromCall(toolCall),
           })
         } else {
-          const callId = hasCallId
-            ? (event.call_id as string)
-            : randomUUID()
+          const callId = hasCallId ? (event.call_id as string) : randomUUID()
           if (!hasCallId) openToolCallIds.push(callId)
           const { name, input } = toolNameFromCall(toolCall)
           emit({ type: "tool-input-start", toolCallId: callId, toolName: name })
@@ -363,9 +344,7 @@ export function runCursorPrintTurn(opts: {
     }
   })
   child.stderr?.on("data", (chunk) => {
-    stderrText = `${stderrText}${chunk.toString("utf8")}`.slice(
-      -MAX_STDERR_CHARS,
-    )
+    stderrText = `${stderrText}${chunk.toString("utf8")}`.slice(-MAX_STDERR_CHARS)
   })
   child.on("error", (error) => {
     if (settled) return
@@ -402,9 +381,7 @@ export function runCursorPrintTurn(opts: {
       return
     }
     const message =
-      stderrText.trim().length > 0
-        ? stderrText.trim()
-        : `cursor exited with code ${code}`
+      stderrText.trim().length > 0 ? stderrText.trim() : `cursor exited with code ${code}`
     emit({ type: "error", errorText: message })
     settle({
       status: "error",

@@ -42,7 +42,10 @@ test("precedence: project overrides global, later project files win", () => {
       path.join(jcodeHome, "mcp.json"),
       JSON.stringify({ mcpServers: { a: { command: "global-a" }, b: { command: "global-b" } } }),
     )
-    fs.writeFileSync(path.join(project, ".mcp.json"), JSON.stringify({ mcpServers: { a: { command: "proj-a" } } }))
+    fs.writeFileSync(
+      path.join(project, ".mcp.json"),
+      JSON.stringify({ mcpServers: { a: { command: "proj-a" } } }),
+    )
     fs.mkdirSync(path.join(project, ".jcode"), { recursive: true })
     fs.writeFileSync(
       path.join(project, ".jcode", "mcp.json"),
@@ -118,10 +121,16 @@ test("schema cache is version-gated and version-tolerant", () => {
   try {
     fs.writeFileSync(
       path.join(jcodeHome, "mcp-schema-cache.json"),
-      JSON.stringify({ version: 1, servers: { mem: { fingerprint: "x", tools: [{ name: "remember" }] } } }),
+      JSON.stringify({
+        version: 1,
+        servers: { mem: { fingerprint: "x", tools: [{ name: "remember" }] } },
+      }),
     )
     assert.deepEqual([...readMcpSchemaCache(jcodeHome).entries()], [["mem", ["remember"]]])
-    fs.writeFileSync(path.join(jcodeHome, "mcp-schema-cache.json"), JSON.stringify({ version: 999, servers: {} }))
+    fs.writeFileSync(
+      path.join(jcodeHome, "mcp-schema-cache.json"),
+      JSON.stringify({ version: 999, servers: {} }),
+    )
     assert.equal(readMcpSchemaCache(jcodeHome).size, 0)
     fs.writeFileSync(path.join(jcodeHome, "mcp-schema-cache.json"), "garbage")
     assert.equal(readMcpSchemaCache(jcodeHome).size, 0)
@@ -145,7 +154,10 @@ test("snapshot: cached tools connect, missing cache pends, disabled omitted", ()
     )
     fs.writeFileSync(
       path.join(jcodeHome, "mcp-schema-cache.json"),
-      JSON.stringify({ version: 1, servers: { mem: { fingerprint: "x", tools: [{ name: "remember" }] } } }),
+      JSON.stringify({
+        version: 1,
+        servers: { mem: { fingerprint: "x", tools: [{ name: "remember" }] } },
+      }),
     )
     const snap = resolveNativeMcpSnapshot(project, jcodeHome, home)
     assert.deepEqual(

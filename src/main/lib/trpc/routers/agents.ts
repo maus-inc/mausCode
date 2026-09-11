@@ -37,9 +37,7 @@ const listAgentsProcedure = publicProcedure
       getEnabledPlugins(),
       discoverInstalledPlugins(),
     ])
-    const enabledPlugins = installedPlugins.filter(
-      (p) => enabledPluginSources.includes(p.source),
-    )
+    const enabledPlugins = installedPlugins.filter((p) => enabledPluginSources.includes(p.source))
     const pluginAgentsPromises = enabledPlugins.map(async (plugin) => {
       const paths = getPluginComponentPaths(plugin)
       try {
@@ -51,12 +49,11 @@ const listAgentsProcedure = publicProcedure
     })
 
     // Scan all directories in parallel
-    const [userAgents, projectAgents, ...pluginAgentsArrays] =
-      await Promise.all([
-        userAgentsPromise,
-        projectAgentsPromise,
-        ...pluginAgentsPromises,
-      ])
+    const [userAgents, projectAgents, ...pluginAgentsArrays] = await Promise.all([
+      userAgentsPromise,
+      projectAgentsPromise,
+      ...pluginAgentsPromises,
+    ])
     const pluginAgents = pluginAgentsArrays.flat()
 
     return [...projectAgents, ...userAgents, ...pluginAgents]
@@ -116,9 +113,7 @@ export const agentsRouter = router({
         getEnabledPlugins(),
         discoverInstalledPlugins(),
       ])
-      const enabledPlugins = installedPlugins.filter(
-        (p) => enabledPluginSources.includes(p.source),
-      )
+      const enabledPlugins = installedPlugins.filter((p) => enabledPluginSources.includes(p.source))
       for (const plugin of enabledPlugins) {
         const paths = getPluginComponentPaths(plugin)
         const agentPath = path.join(paths.agents, `${input.name}.md`)
@@ -152,7 +147,7 @@ export const agentsRouter = router({
         model: z.enum(VALID_AGENT_MODELS).optional(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Validate name (kebab-case, no special chars)
@@ -221,7 +216,7 @@ export const agentsRouter = router({
         model: z.enum(VALID_AGENT_MODELS).optional(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Validate names
@@ -297,7 +292,7 @@ export const agentsRouter = router({
         name: z.string(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-")

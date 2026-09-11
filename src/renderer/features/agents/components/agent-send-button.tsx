@@ -2,17 +2,9 @@
 
 import { Button } from "../../../components/ui/button"
 import { ArrowUp, Loader2 } from "lucide-react"
-import {
-  EnterIcon,
-  IconSpinner,
-  MicrophoneIcon,
-} from "../../../components/ui/icons"
+import { EnterIcon, IconSpinner, MicrophoneIcon } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { useResolvedHotkeyDisplayWithAlt, useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { cn } from "../../../lib/utils"
 import type { AgentMode } from "../atoms"
@@ -98,7 +90,7 @@ export function AgentSendButton({
   // Determine if button should be disabled
   // During streaming with content, enable the button for queue
   // In voice mode, button should always be enabled (unless transcribing)
-  const isDisabled = isVoiceMode ? false : (isStreaming ? false : disabled)
+  const isDisabled = isVoiceMode ? false : isStreaming ? false : disabled
 
   // Determine icon to show
   const getIcon = () => {
@@ -109,16 +101,12 @@ export function AgentSendButton({
       }
       if (isRecording) {
         // Show stop icon during recording
-        return (
-          <div className="w-2.5 h-2.5 bg-current rounded-[2px] flex-shrink-0 mx-auto" />
-        )
+        return <div className="w-2.5 h-2.5 bg-current rounded-[2px] flex-shrink-0 mx-auto" />
       }
       return <MicrophoneIcon className="size-4" />
     }
     if (isStreaming && !hasContent) {
-      return (
-        <div className="w-2.5 h-2.5 bg-current rounded-[2px] flex-shrink-0 mx-auto" />
-      )
+      return <div className="w-2.5 h-2.5 bg-current rounded-[2px] flex-shrink-0 mx-auto" />
     }
     if (isSubmitting) {
       return <IconSpinner className="size-4" />
@@ -135,9 +123,7 @@ export function AgentSendButton({
       return (
         <div className="flex flex-col items-start gap-0.5">
           <span>Voice input</span>
-          {voiceHotkey && (
-            <span className="text-muted-foreground">{voiceHotkey}</span>
-          )}
+          {voiceHotkey && <span className="text-muted-foreground">{voiceHotkey}</span>}
         </div>
       )
     }
@@ -148,7 +134,12 @@ export function AgentSendButton({
           {stopHotkey.primary && (
             <span className="flex items-center gap-1.5">
               <Kbd>{stopHotkey.primary}</Kbd>
-              {stopHotkey.alt && <><span className="text-[10px] opacity-50">or</span><Kbd>{stopHotkey.alt}</Kbd></>}
+              {stopHotkey.alt && (
+                <>
+                  <span className="text-[10px] opacity-50">or</span>
+                  <Kbd>{stopHotkey.alt}</Kbd>
+                </>
+              )}
             </span>
           )}
         </div>
@@ -209,8 +200,7 @@ export function AgentSendButton({
   // Apply glow effect when button is active and ready to send/queue
   // Also apply for voice mode when not recording/transcribing
   const shouldShowGlow =
-    ((!isStreaming && !isSubmitting && !disabled) || shouldShowQueueArrow) &&
-    !isRecording
+    ((!isStreaming && !isSubmitting && !disabled) || shouldShowQueueArrow) && !isRecording
 
   const glowClass = shouldShowGlow
     ? "shadow-[0_0_0_2px_white,0_0_0_4px_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_2px_#1a1a1a,0_0_0_4px_rgba(255,255,255,0.08)]"
@@ -218,9 +208,10 @@ export function AgentSendButton({
 
   // Mode-specific styling (agent=foreground, plan=orange)
   // Recording state uses same styling as normal mode (wave indicator shows recording state)
-  const modeClass = mode === "plan"
-    ? "!bg-plan-mode hover:!bg-plan-mode/90 !text-background !shadow-none"
-    : "!bg-foreground hover:!bg-foreground/90 !text-background !shadow-none"
+  const modeClass =
+    mode === "plan"
+      ? "!bg-plan-mode hover:!bg-plan-mode/90 !text-background !shadow-none"
+      : "!bg-foreground hover:!bg-foreground/90 !text-background !shadow-none"
 
   // Handle button interactions for voice mode
   // Supports both hold-to-talk AND click-to-toggle
@@ -277,4 +268,3 @@ export function AgentSendButton({
     </Tooltip>
   )
 }
-

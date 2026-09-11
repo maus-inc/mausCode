@@ -93,8 +93,11 @@ export function OpenLocallyDialog({
     },
   })
 
-  const isAnyLoading = importMutation.isPending || locateMutation.isPending ||
-    pickDestMutation.isPending || cloneMutation.isPending
+  const isAnyLoading =
+    importMutation.isPending ||
+    locateMutation.isPending ||
+    pickDestMutation.isPending ||
+    cloneMutation.isPending
 
   useEffect(() => {
     setMounted(true)

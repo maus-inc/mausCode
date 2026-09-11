@@ -69,8 +69,7 @@ export function AgentsDebugTab() {
   const isDev = import.meta.env.DEV
 
   // Fetch system info
-  const { data: systemInfo, isLoading: isLoadingSystem } =
-    trpc.debug.getSystemInfo.useQuery()
+  const { data: systemInfo, isLoading: isLoadingSystem } = trpc.debug.getSystemInfo.useQuery()
 
   // Offline simulation state
   const { data: offlineSimulation, refetch: refetchOfflineSimulation } =
@@ -81,16 +80,18 @@ export function AgentsDebugTab() {
       toast.success(data.enabled ? "Offline simulation enabled" : "Offline simulation disabled", {
         description: data.enabled
           ? "App will behave as if offline"
-          : "Network detection restored to normal"
+          : "Network detection restored to normal",
       })
     },
     onError: (error) => toast.error(error.message),
   })
 
-
   // Fetch DB stats
-  const { data: dbStats, isLoading: isLoadingDb, refetch: refetchDb } =
-    trpc.debug.getDbStats.useQuery()
+  const {
+    data: dbStats,
+    isLoading: isLoadingDb,
+    refetch: refetchDb,
+  } = trpc.debug.getDbStats.useQuery()
 
   // Mutations
   const clearChatsMutation = trpc.debug.clearChats.useMutation({
@@ -190,9 +191,7 @@ export function AgentsDebugTab() {
       {!isNarrowScreen && (
         <div>
           <h3 className="text-lg font-semibold mb-1">Debug</h3>
-          <p className="text-sm text-muted-foreground">
-            System information and developer tools
-          </p>
+          <p className="text-sm text-muted-foreground">System information and developer tools</p>
         </div>
       )}
 
@@ -267,9 +266,7 @@ export function AgentsDebugTab() {
                 <Scan className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <span className="text-sm">React Scan</span>
-                  <p className="text-xs text-muted-foreground">
-                    Highlight component re-renders
-                  </p>
+                  <p className="text-xs text-muted-foreground">Highlight component re-renders</p>
                 </div>
               </div>
               <Switch
@@ -290,9 +287,7 @@ export function AgentsDebugTab() {
               </div>
               <Switch
                 checked={offlineSimulation?.enabled ?? false}
-                onCheckedChange={(enabled) =>
-                  setOfflineSimulationMutation.mutate({ enabled })
-                }
+                onCheckedChange={(enabled) => setOfflineSimulationMutation.mutate({ enabled })}
                 disabled={setOfflineSimulationMutation.isPending}
               />
             </div>
@@ -306,10 +301,7 @@ export function AgentsDebugTab() {
                   </p>
                 </div>
               </div>
-              <Switch
-                checked={showMessageJson}
-                onCheckedChange={setShowMessageJson}
-              />
+              <Switch checked={showMessageJson} onCheckedChange={setShowMessageJson} />
             </div>
           </div>
         </div>
@@ -334,20 +326,11 @@ export function AgentsDebugTab() {
             <Terminal className="h-4 w-4 mr-2" />
             DevTools
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.location.reload()}
-          >
+          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Reload
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyDebugInfo}
-            disabled={isLoading}
-          >
+          <Button variant="outline" size="sm" onClick={handleCopyDebugInfo} disabled={isLoading}>
             {copiedInfo ? (
               <Check className="h-4 w-4 mr-2 text-green-500" />
             ) : (
@@ -459,11 +442,7 @@ export function AgentsDebugTab() {
             variant="destructive"
             size="sm"
             onClick={() => {
-              if (
-                confirm(
-                  "Reset everything? This will clear all data and log you out.",
-                )
-              ) {
+              if (confirm("Reset everything? This will clear all data and log you out.")) {
                 clearAllDataMutation.mutate()
               }
             }}
@@ -503,7 +482,7 @@ function InfoRow({
                 : ""
         }`}
       >
-        {isLoading ? "..." : value ?? "-"}
+        {isLoading ? "..." : (value ?? "-")}
       </span>
     </div>
   )

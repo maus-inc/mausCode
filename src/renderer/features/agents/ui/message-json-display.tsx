@@ -54,12 +54,7 @@ export const MessageJsonDisplay = memo(function MessageJsonDisplay({
       <div className="flex items-center gap-1">
         <CollapsibleTrigger asChild>
           <button className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors">
-            <ChevronRight
-              className={cn(
-                "h-3 w-3 transition-transform",
-                isOpen && "rotate-90",
-              )}
-            />
+            <ChevronRight className={cn("h-3 w-3 transition-transform", isOpen && "rotate-90")} />
             <span>{label} JSON</span>
           </button>
         </CollapsibleTrigger>

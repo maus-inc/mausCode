@@ -13,10 +13,7 @@ import { publicProcedure, router } from "../index"
  * @param prompt - The prompt to send to Ollama
  * @param model - Optional model to use (if not provided, uses recommended or first available)
  */
-async function generateWithOllama(
-  prompt: string,
-  model?: string | null
-): Promise<string | null> {
+async function generateWithOllama(prompt: string, model?: string | null): Promise<string | null> {
   try {
     const ollamaStatus = await checkOllamaStatus()
     if (!ollamaStatus.available) {
@@ -139,7 +136,7 @@ Title:`
         additions: z.number(),
         deletions: z.number(),
         model: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const prompt = `Generate a conventional commit message for these changes. Use format: type: short description

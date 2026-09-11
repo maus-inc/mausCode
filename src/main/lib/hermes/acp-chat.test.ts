@@ -13,15 +13,8 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { vi } from "vitest"
 import { providerCapabilitySchema } from "../../../shared/provider-capabilities"
-import {
-  resolveHermesAcpLaunch,
-  resolveHermesCli,
-} from "../hermes-binary"
-import {
-  extractHermesError,
-  isHermesAuthError,
-  isHermesReadonlyCommand,
-} from "./policy"
+import { resolveHermesAcpLaunch, resolveHermesCli } from "../hermes-binary"
+import { extractHermesError, isHermesAuthError, isHermesReadonlyCommand } from "./policy"
 
 // The provider registry pulls electron + better-sqlite3 (absent in this
 // node-only env); stub both — the registry test never touches them.
@@ -46,9 +39,7 @@ const MOCK_PATH = join(
 
 async function collectStreamParts(model: any): Promise<any[]> {
   const { stream } = await model.doStream({
-    prompt: [
-      { role: "user", content: [{ type: "text", text: "hi" }] },
-    ],
+    prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
   })
   const parts: any[] = []
   const reader = stream.getReader()
@@ -136,9 +127,7 @@ it("terminates a pending prompt when the consumer aborts", async () => {
     await provider.initSession()
     const controller = new AbortController()
     const { stream } = await provider.languageModel().doStream({
-      prompt: [
-        { role: "user", content: [{ type: "text", text: "hi" }] },
-      ],
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
       abortSignal: controller.signal,
     } as any)
     const reader = stream.getReader()
@@ -171,9 +160,7 @@ it("maps prompt failures through the hermes error classifier", async () => {
     // The provider enqueues {type:"error"} but never closes the stream on
     // prompt failure, so read until the error part (never read-to-close).
     const { stream } = await provider.languageModel().doStream({
-      prompt: [
-        { role: "user", content: [{ type: "text", text: "hi" }] },
-      ],
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
     })
     const reader = stream.getReader()
     let errorPart: any = null
@@ -196,18 +183,9 @@ it("maps prompt failures through the hermes error classifier", async () => {
 })
 
 it("classifies auth errors and passes through plain failures", () => {
-  assert.equal(
-    isHermesAuthError(extractHermesError(new Error("Invalid API key"))),
-    true,
-  )
-  assert.equal(
-    isHermesAuthError(extractHermesError({ message: "boom" })),
-    false,
-  )
-  assert.equal(
-    extractHermesError({ data: { message: "deep" } }).message,
-    "deep",
-  )
+  assert.equal(isHermesAuthError(extractHermesError(new Error("Invalid API key"))), true)
+  assert.equal(isHermesAuthError(extractHermesError({ message: "boom" })), false)
+  assert.equal(extractHermesError({ data: { message: "deep" } }).message, "deep")
 })
 
 it("allowlist admits read-only state and rejects everything else", () => {

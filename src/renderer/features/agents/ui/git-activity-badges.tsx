@@ -4,10 +4,7 @@ import { memo, useCallback, useMemo, useState } from "react"
 import { GitCommit, GitPullRequest } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { AnimatePresence, motion } from "motion/react"
-import {
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
+import { ExpandIcon, CollapseIcon } from "../../../components/ui/icons"
 import {
   extractGitActivity,
   extractChangedFiles,
@@ -51,7 +48,10 @@ export const GitActivityBadges = memo(function GitActivityBadges({
   const [isExpanded, setIsExpanded] = useState(false)
 
   const activity = useMemo(() => extractGitActivity(parts), [parts])
-  const changedFiles = useMemo(() => extractChangedFiles(parts, selectedProject?.path), [parts, selectedProject?.path])
+  const changedFiles = useMemo(
+    () => extractChangedFiles(parts, selectedProject?.path),
+    [parts, selectedProject?.path],
+  )
 
   const totals = useMemo(() => {
     let additions = 0
@@ -70,9 +70,7 @@ export const GitActivityBadges = memo(function GitActivityBadges({
     const owner = selectedProject?.gitOwner
     const repo = selectedProject?.gitRepo
     if (activity.pushed && activity.hash && owner && repo) {
-      window.desktopApi.openExternal(
-        `https://github.com/${owner}/${repo}/commit/${activity.hash}`,
-      )
+      window.desktopApi.openExternal(`https://github.com/${owner}/${repo}/commit/${activity.hash}`)
       return
     }
 
@@ -88,24 +86,46 @@ export const GitActivityBadges = memo(function GitActivityBadges({
     setFilteredSubChatId(subChatId)
     setDiffActiveTab("history")
     setDiffSidebarOpen(true)
-  }, [activity, subChatId, selectedProject, setSelectedCommit, setFilteredDiffFiles, setFilteredSubChatId, setDiffActiveTab, setDiffSidebarOpen])
+  }, [
+    activity,
+    subChatId,
+    selectedProject,
+    setSelectedCommit,
+    setFilteredDiffFiles,
+    setFilteredSubChatId,
+    setDiffActiveTab,
+    setDiffSidebarOpen,
+  ])
 
   const filesCommitted = activity?.type === "commit" || activity?.type === "pr"
 
-  const handleFileClick = useCallback((file: ChangedFileInfo) => {
-    if (filesCommitted) {
-      // Files already committed — open file preview
-      onOpenFile?.(file.filePath)
-    } else {
-      // Files not yet committed — open diff view with this file selected
-      setSelectedFilePath(file.displayPath)
-      setFilteredDiffFiles([file.displayPath])
-      setFocusedDiffFile(file.displayPath)
-      setFilteredSubChatId(subChatId)
-      setDiffActiveTab("changes")
-      setDiffSidebarOpen(true)
-    }
-  }, [filesCommitted, onOpenFile, subChatId, setSelectedFilePath, setFilteredDiffFiles, setFocusedDiffFile, setFilteredSubChatId, setDiffActiveTab, setDiffSidebarOpen])
+  const handleFileClick = useCallback(
+    (file: ChangedFileInfo) => {
+      if (filesCommitted) {
+        // Files already committed — open file preview
+        onOpenFile?.(file.filePath)
+      } else {
+        // Files not yet committed — open diff view with this file selected
+        setSelectedFilePath(file.displayPath)
+        setFilteredDiffFiles([file.displayPath])
+        setFocusedDiffFile(file.displayPath)
+        setFilteredSubChatId(subChatId)
+        setDiffActiveTab("changes")
+        setDiffSidebarOpen(true)
+      }
+    },
+    [
+      filesCommitted,
+      onOpenFile,
+      subChatId,
+      setSelectedFilePath,
+      setFilteredDiffFiles,
+      setFocusedDiffFile,
+      setFilteredSubChatId,
+      setDiffActiveTab,
+      setDiffSidebarOpen,
+    ],
+  )
 
   if (!activity && changedFiles.length === 0) return null
 
@@ -120,7 +140,9 @@ export const GitActivityBadges = memo(function GitActivityBadges({
             className="flex items-center justify-between pl-2.5 pr-0.5 h-7 cursor-pointer hover:bg-muted/50 transition-colors duration-150"
           >
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
-              <span>Edited {changedFiles.length} {changedFiles.length === 1 ? "file" : "files"}</span>
+              <span>
+                Edited {changedFiles.length} {changedFiles.length === 1 ? "file" : "files"}
+              </span>
               {(totals.additions > 0 || totals.deletions > 0) && (
                 <>
                   <span className="text-green-600 dark:text-green-400">+{totals.additions}</span>
@@ -130,7 +152,6 @@ export const GitActivityBadges = memo(function GitActivityBadges({
             </div>
 
             <div className="flex items-center flex-shrink-0 ml-2">
-
               {/* Expand/Collapse button */}
               <div className="w-6 h-6 flex items-center justify-center">
                 <button
@@ -190,8 +211,12 @@ export const GitActivityBadges = memo(function GitActivityBadges({
                           <FileIcon className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
                         )}
                         <span className="truncate flex-1 text-foreground">{file.displayPath}</span>
-                        <span className="flex-shrink-0 text-green-600 dark:text-green-400">+{file.additions}</span>
-                        <span className="flex-shrink-0 text-red-600 dark:text-red-400">-{file.deletions}</span>
+                        <span className="flex-shrink-0 text-green-600 dark:text-green-400">
+                          +{file.additions}
+                        </span>
+                        <span className="flex-shrink-0 text-red-600 dark:text-red-400">
+                          -{file.deletions}
+                        </span>
                       </div>
                     )
                   })}

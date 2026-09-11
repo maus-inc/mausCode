@@ -82,10 +82,7 @@ export const highlightRangesAtomFamily = atomFamily(
 
       // Filter matches for this message/part
       const relevantMatches = matches.filter(
-        (m) =>
-          m.messageId === messageId &&
-          m.partIndex === partIndex &&
-          m.partType === partType
+        (m) => m.messageId === messageId && m.partIndex === partIndex && m.partType === partType,
       )
 
       if (relevantMatches.length === 0) {
@@ -110,7 +107,7 @@ export const highlightRangesAtomFamily = atomFamily(
           (r, i) =>
             r.offset === ranges[i].offset &&
             r.length === ranges[i].length &&
-            r.isCurrent === ranges[i].isCurrent
+            r.isCurrent === ranges[i].isCurrent,
         )
       ) {
         return cached
@@ -119,7 +116,7 @@ export const highlightRangesAtomFamily = atomFamily(
       highlightRangesCache.set(cacheKey, ranges)
       return ranges
     }),
-  (a, b) => a === b
+  (a, b) => a === b,
 )
 
 // ============================================================================

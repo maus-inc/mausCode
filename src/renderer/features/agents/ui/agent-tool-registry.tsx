@@ -29,9 +29,7 @@ import {
   SparklesIcon,
   WriteFileIcon,
 } from "../../../components/ui/icons"
-import {
-  getToolLifecycleState,
-} from "./agent-tool-state"
+import { getToolLifecycleState } from "./agent-tool-state"
 
 export { getToolStatus } from "./agent-tool-state"
 
@@ -64,12 +62,7 @@ export function getDisplayPath(filePath: string, projectPath?: string): string {
     return relative || filePath.split("/").pop() || filePath
   }
 
-  const prefixes = [
-    "/project/sandbox/repo/",
-    "/project/sandbox/",
-    "/project/",
-    "/workspace/",
-  ]
+  const prefixes = ["/project/sandbox/repo/", "/project/sandbox/", "/project/", "/workspace/"]
   for (const prefix of prefixes) {
     if (filePath.startsWith(prefix)) {
       return filePath.slice(prefix.length)
@@ -88,9 +81,7 @@ export function getDisplayPath(filePath: string, projectPath?: string): string {
   if (filePath.startsWith("/")) {
     const parts = filePath.split("/")
     const rootIndicators = ["apps", "packages", "src", "lib", "components"]
-    const rootIndex = parts.findIndex((p: string) =>
-      rootIndicators.includes(p),
-    )
+    const rootIndex = parts.findIndex((p: string) => rootIndicators.includes(p))
     if (rootIndex > 0) {
       return parts.slice(rootIndex).join("/")
     }
@@ -139,9 +130,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       // Don't show subtitle while input is still streaming
       if (isInputStreaming(part)) return ""
       const description = part.input?.description || ""
-      return description.length > 50
-        ? description.slice(0, 47) + "..."
-        : description
+      return description.length > 50 ? description.slice(0, 47) + "..." : description
     },
     variant: "simple",
   },
@@ -254,10 +243,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
 
       // Always show actual line counts if there are any changes (copied from canvas)
       if (oldString !== newString) {
-        const { addedLines, removedLines } = calculateDiffStats(
-          oldString,
-          newString,
-        )
+        const { addedLines, removedLines } = calculateDiffStats(oldString, newString)
         return `<span style="font-size: 11px; color: light-dark(#587C0B, #A3BE8C)">+${addedLines}</span> <span style="font-size: 11px; color: light-dark(#AD0807, #AE5A62)">-${removedLines}</span>`
       }
 
@@ -474,13 +460,9 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       const steps = plan.steps || []
       const completed = steps.filter((s: any) => s.status === "completed").length
       if (plan.title) {
-        return steps.length > 0 
-          ? `${plan.title} (${completed}/${steps.length})`
-          : plan.title
+        return steps.length > 0 ? `${plan.title} (${completed}/${steps.length})` : plan.title
       }
-      return steps.length > 0 
-        ? `${completed}/${steps.length} steps`
-        : ""
+      return steps.length > 0 ? `${completed}/${steps.length} steps` : ""
     },
     variant: "simple",
   },
@@ -586,10 +568,30 @@ export interface McpToolInfo {
 
 // Built-in MCP tools (not prefixed with mcp__<server>__)
 const BUILTIN_MCP_TOOLS: Record<string, McpToolInfo> = {
-  "tool-ListMcpResources": { serverName: "mcp", toolName: "list_resources", displayName: "List Resources", category: "list" },
-  "tool-ListMcpResourcesTool": { serverName: "mcp", toolName: "list_resources", displayName: "List Resources", category: "list" },
-  "tool-ReadMcpResource": { serverName: "mcp", toolName: "read_resource", displayName: "Read Resource", category: "get" },
-  "tool-ReadMcpResourceTool": { serverName: "mcp", toolName: "read_resource", displayName: "Read Resource", category: "get" },
+  "tool-ListMcpResources": {
+    serverName: "mcp",
+    toolName: "list_resources",
+    displayName: "List Resources",
+    category: "list",
+  },
+  "tool-ListMcpResourcesTool": {
+    serverName: "mcp",
+    toolName: "list_resources",
+    displayName: "List Resources",
+    category: "list",
+  },
+  "tool-ReadMcpResource": {
+    serverName: "mcp",
+    toolName: "read_resource",
+    displayName: "Read Resource",
+    category: "get",
+  },
+  "tool-ReadMcpResourceTool": {
+    serverName: "mcp",
+    toolName: "read_resource",
+    displayName: "Read Resource",
+    category: "get",
+  },
 }
 
 export function parseMcpToolType(partType: string): McpToolInfo | null {
@@ -626,9 +628,12 @@ function categorizeMcpTool(toolName: string): McpToolCategory {
   const lower = toolName.toLowerCase()
   if (lower.startsWith("search_") || lower.startsWith("query_")) return "search"
   if (lower.startsWith("list_")) return "list"
-  if (lower.startsWith("get_") || lower.startsWith("fetch_") || lower.startsWith("retrieve_")) return "get"
-  if (lower.startsWith("create_") || lower.startsWith("add_") || lower.startsWith("draft_")) return "create"
-  if (lower.startsWith("update_") || lower.startsWith("modify_") || lower.startsWith("manage_")) return "update"
+  if (lower.startsWith("get_") || lower.startsWith("fetch_") || lower.startsWith("retrieve_"))
+    return "get"
+  if (lower.startsWith("create_") || lower.startsWith("add_") || lower.startsWith("draft_"))
+    return "create"
+  if (lower.startsWith("update_") || lower.startsWith("modify_") || lower.startsWith("manage_"))
+    return "update"
   if (lower.startsWith("delete_") || lower.startsWith("remove_")) return "delete"
   if (lower.startsWith("send_")) return "send"
   if (lower.startsWith("generate_")) return "generate"

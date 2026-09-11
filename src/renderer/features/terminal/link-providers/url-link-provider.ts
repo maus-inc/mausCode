@@ -8,8 +8,7 @@ import { isModifierPressed, showLinkPopup, removeLinkPopup } from "./link-popup"
  */
 
 // URL pattern that matches http, https, and file URLs
-const URL_PATTERN =
-  /https?:\/\/[^\s<>"\])}]+|file:\/\/[^\s<>"\])}]+/gi
+const URL_PATTERN = /https?:\/\/[^\s<>"\])}]+|file:\/\/[^\s<>"\])}]+/gi
 
 /**
  * Get the text content of a buffer line.
@@ -25,13 +24,10 @@ function getLineText(line: IBufferLine): string {
 export class UrlLinkProvider implements ILinkProvider {
   constructor(
     private xterm: XTerm,
-    private onClick: (event: MouseEvent, uri: string) => void
+    private onClick: (event: MouseEvent, uri: string) => void,
   ) {}
 
-  provideLinks(
-    bufferLineNumber: number,
-    callback: (links: ILink[] | undefined) => void
-  ): void {
+  provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
     const buffer = this.xterm.buffer.active
     const line = buffer.getLine(bufferLineNumber)
 

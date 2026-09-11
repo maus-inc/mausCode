@@ -1,11 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "../../../components/ui/hover-card"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "../../../components/ui/hover-card"
 import { cn } from "../../../lib/utils"
 
 export interface AgentMessageMetadata {
@@ -67,8 +63,7 @@ export const AgentMessageUsage = memo(function AgentMessageUsage({
   if (!hasUsage) return null
 
   const normalizedModel = typeof model === "string" ? model.toLowerCase() : ""
-  const isCodexModel =
-    normalizedModel.includes("codex") || normalizedModel.startsWith("gpt-")
+  const isCodexModel = normalizedModel.includes("codex") || normalizedModel.startsWith("gpt-")
   const displayTokens = isCodexModel
     ? inputTokens + outputTokens
     : totalTokens || inputTokens + outputTokens
@@ -108,9 +103,7 @@ export const AgentMessageUsage = memo(function AgentMessageUsage({
               {durationMs !== undefined && durationMs > 0 && (
                 <div className="flex justify-between text-xs gap-4">
                   <span className="text-muted-foreground">Duration:</span>
-                  <span className="font-mono text-foreground">
-                    {formatDuration(durationMs)}
-                  </span>
+                  <span className="font-mono text-foreground">{formatDuration(durationMs)}</span>
                 </div>
               )}
             </div>

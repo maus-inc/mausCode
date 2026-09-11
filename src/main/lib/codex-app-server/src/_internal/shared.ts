@@ -2,24 +2,24 @@
  * Ported from pingdotgg/t3code packages/effect-codex-app-server (MIT, (c) 2026 T3 Tools Inc.).
  * Verbatim except this header. Upstream schema ref 678157ac (2026-07-19); see README.md.
  */
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import * as Effect from "effect/Effect"
+import * as Schema from "effect/Schema"
 
-import * as CodexError from "../errors.ts";
+import * as CodexError from "../errors.ts"
 
-export const JsonRpcId = Schema.Union([Schema.Number, Schema.String]);
+export const JsonRpcId = Schema.Union([Schema.Number, Schema.String])
 
 const JsonRpcError = Schema.Struct({
   code: Schema.Number,
   message: Schema.String,
   data: Schema.optional(Schema.Unknown),
-});
+})
 
 export const JsonRpcResponseEnvelope = Schema.Struct({
   id: JsonRpcId,
   result: Schema.optional(Schema.Unknown),
   error: Schema.optional(JsonRpcError),
-});
+})
 
 export const decodeOptionalPayload = <A, I>(
   method: string,
@@ -28,19 +28,19 @@ export const decodeOptionalPayload = <A, I>(
 ): Effect.Effect<A, CodexError.CodexAppServerRequestError> => {
   if (!schema) {
     if (raw === undefined) {
-      return Effect.sync(() => undefined as A);
+      return Effect.sync(() => undefined as A)
     }
     return Effect.fail(
       CodexError.CodexAppServerRequestError.unexpectedPayload(method, "decode-payload", raw),
-    );
+    )
   }
 
   return Schema.decodeUnknownEffect(schema)(raw).pipe(
     Effect.mapError((error) =>
       CodexError.CodexAppServerRequestError.invalidPayload(method, "decode-payload", error),
     ),
-  );
-};
+  )
+}
 
 export const encodeOptionalPayload = <A, I>(
   method: string,
@@ -49,19 +49,19 @@ export const encodeOptionalPayload = <A, I>(
 ): Effect.Effect<I | undefined, CodexError.CodexAppServerRequestError> => {
   if (!schema) {
     if (payload === undefined) {
-      return Effect.sync(() => undefined);
+      return Effect.sync(() => undefined)
     }
     return Effect.fail(
       CodexError.CodexAppServerRequestError.unexpectedPayload(method, "encode-payload", payload),
-    );
+    )
   }
 
   return Schema.encodeEffect(schema)(payload).pipe(
     Effect.mapError((error) =>
       CodexError.CodexAppServerRequestError.invalidPayload(method, "encode-payload", error),
     ),
-  );
-};
+  )
+}
 
 export const decodeNotificationPayload = <A, I>(
   method: string,
@@ -76,7 +76,7 @@ export const decodeNotificationPayload = <A, I>(
         error,
       ),
     ),
-  );
+  )
 
 export const runHandler = Effect.fnUntraced(function* <A, B>(
   handler: ((payload: A) => Effect.Effect<B, CodexError.CodexAppServerError>) | undefined,
@@ -84,12 +84,12 @@ export const runHandler = Effect.fnUntraced(function* <A, B>(
   method: string,
 ) {
   if (!handler) {
-    return yield* CodexError.CodexAppServerRequestError.methodNotFound(method);
+    return yield* CodexError.CodexAppServerRequestError.methodNotFound(method)
   }
 
   return yield* handler(payload).pipe(
     Effect.mapError((error) =>
       CodexError.CodexAppServerRequestError.fromAppServerError(error, method),
     ),
-  );
-});
+  )
+})

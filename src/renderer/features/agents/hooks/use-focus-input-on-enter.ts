@@ -15,13 +15,7 @@ export function useFocusInputOnEnter(
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle Enter without modifiers
-      if (
-        e.key !== "Enter" ||
-        e.shiftKey ||
-        e.metaKey ||
-        e.ctrlKey ||
-        e.altKey
-      ) {
+      if (e.key !== "Enter" || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) {
         return
       }
 

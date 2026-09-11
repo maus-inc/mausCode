@@ -17,10 +17,7 @@ interface ChatTitleEditorProps {
 }
 
 // Custom comparison to prevent re-renders during streaming
-function areTitlePropsEqual(
-  prev: ChatTitleEditorProps,
-  next: ChatTitleEditorProps,
-): boolean {
+function areTitlePropsEqual(prev: ChatTitleEditorProps, next: ChatTitleEditorProps): boolean {
   return (
     prev.name === next.name &&
     prev.placeholder === next.placeholder &&
@@ -100,10 +97,7 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
     if (!isEditing) return
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         handleSave()
       }
     }
@@ -145,10 +139,7 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
   const heightClass = isMobile ? "h-7" : "h-7"
 
   return (
-    <div
-      ref={containerRef}
-      className={cn("max-w-2xl mx-auto px-4", heightClass)}
-    >
+    <div ref={containerRef} className={cn("max-w-2xl mx-auto px-4", heightClass)}>
       {isEditing ? (
         <input
           ref={inputRef}

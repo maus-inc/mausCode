@@ -6,19 +6,19 @@
  * Newline-delimited JSON-RPC like the ported mock peer.
  */
 const writeMessage = (message: unknown) => {
-  process.stdout.write(`${JSON.stringify(message)}\n`);
-};
+  process.stdout.write(`${JSON.stringify(message)}\n`)
+}
 
 const respond = (id: number | string, result: unknown) => {
-  writeMessage({ id, result });
-};
+  writeMessage({ id, result })
+}
 
 const notify = (method: string, params: unknown) => {
-  writeMessage({ method, params });
-};
+  writeMessage({ method, params })
+}
 
-const THREAD_ID = "thread-mock-1";
-const SESSION_ID = "session-mock-1";
+const THREAD_ID = "thread-mock-1"
+const SESSION_ID = "session-mock-1"
 
 const mockThread = () => ({
   cliVersion: "mock",
@@ -34,7 +34,7 @@ const mockThread = () => ({
   status: { type: "idle" },
   turns: [],
   updatedAt: Math.floor(Date.now() / 1000),
-});
+})
 
 const mockThreadStartResult = () => ({
   approvalPolicy: "never",
@@ -44,14 +44,14 @@ const mockThreadStartResult = () => ({
   modelProvider: "openai",
   sandbox: { type: "readOnly" },
   thread: mockThread(),
-});
+})
 
-let turnCounter = 0;
+let turnCounter = 0
 
 const handleMethod = (message: Record<string, unknown>) => {
-  const method = message.method;
-  if (typeof method !== "string") return;
-  const id = message.id as number | string;
+  const method = message.method
+  if (typeof method !== "string") return
+  const id = message.id as number | string
 
   switch (method) {
     case "initialize": {
@@ -60,83 +60,83 @@ const handleMethod = (message: Record<string, unknown>) => {
         codexHome: process.cwd(),
         platformFamily: "unix",
         platformOs: "linux",
-      });
-      return;
+      })
+      return
     }
     case "initialized": {
-      return;
+      return
     }
     case "thread/start": {
-      respond(id, mockThreadStartResult());
-      return;
+      respond(id, mockThreadStartResult())
+      return
     }
     case "thread/resume": {
-      respond(id, mockThreadStartResult());
-      return;
+      respond(id, mockThreadStartResult())
+      return
     }
     case "thread/list": {
-      respond(id, { data: [mockThread()] });
-      return;
+      respond(id, { data: [mockThread()] })
+      return
     }
     case "turn/start": {
-      turnCounter += 1;
-      const turnId = `turn-mock-${turnCounter}`;
-      respond(id, { turn: { id: turnId, items: [], status: "inProgress" } });
+      turnCounter += 1
+      const turnId = `turn-mock-${turnCounter}`
+      respond(id, { turn: { id: turnId, items: [], status: "inProgress" } })
       // Emit a text delta, a completed agent message, then turn completion.
-      const slow = process.env.MOCK_TURN_SLOW === "1";
+      const slow = process.env.MOCK_TURN_SLOW === "1"
       const emitTurn = () => {
         notify("item/agentMessage/delta", {
           delta: "Hello from mock.",
           itemId: "msg-1",
           threadId: THREAD_ID,
           turnId,
-        });
+        })
         notify("item/completed", {
           completedAtMs: Date.now(),
           item: { id: "msg-1", type: "agentMessage", text: "Hello from mock." },
           threadId: THREAD_ID,
           turnId,
-        });
+        })
         notify("turn/completed", {
           threadId: THREAD_ID,
           turn: { id: turnId, items: [], status: "completed" },
-        });
-      };
-      if (slow) {
-        setTimeout(emitTurn, 5000);
-      } else {
-        setTimeout(emitTurn, 10);
+        })
       }
-      return;
+      if (slow) {
+        setTimeout(emitTurn, 5000)
+      } else {
+        setTimeout(emitTurn, 10)
+      }
+      return
     }
     case "turn/interrupt": {
-      respond(id, {});
-      return;
+      respond(id, {})
+      return
     }
     default: {
       if (message.id !== undefined) {
         writeMessage({
           id,
           error: { code: -32601, message: `Unhandled request: ${method}` },
-        });
+        })
       }
     }
   }
-};
+}
 
-let remainder = "";
-process.stdin.setEncoding("utf8");
+let remainder = ""
+process.stdin.setEncoding("utf8")
 process.stdin.on("data", (chunk) => {
-  remainder += chunk;
-  const lines = remainder.split("\n");
-  remainder = lines.pop() ?? "";
+  remainder += chunk
+  const lines = remainder.split("\n")
+  remainder = lines.pop() ?? ""
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) continue;
-    const message = JSON.parse(trimmed) as Record<string, unknown>;
-    if ("method" in message) handleMethod(message);
+    const trimmed = line.trim()
+    if (trimmed.length === 0) continue
+    const message = JSON.parse(trimmed) as Record<string, unknown>
+    if ("method" in message) handleMethod(message)
   }
-});
+})
 process.stdin.on("end", () => {
-  process.exit(0);
-});
+  process.exit(0)
+})

@@ -20,7 +20,11 @@ export interface FileSkill {
 /**
  * Parse SKILL.md frontmatter to extract name and description
  */
-function parseSkillMd(rawContent: string): { name?: string; description?: string; content: string } {
+function parseSkillMd(rawContent: string): {
+  name?: string
+  description?: string
+  content: string
+} {
   try {
     const { data, content } = matter(rawContent)
     return {
@@ -126,9 +130,7 @@ const listSkillsProcedure = publicProcedure
       getEnabledPlugins(),
       discoverInstalledPlugins(),
     ])
-    const enabledPlugins = installedPlugins.filter(
-      (p) => enabledPluginSources.includes(p.source),
-    )
+    const enabledPlugins = installedPlugins.filter((p) => enabledPluginSources.includes(p.source))
     const pluginSkillsPromises = enabledPlugins.map(async (plugin) => {
       const paths = getPluginComponentPaths(plugin)
       try {
@@ -140,12 +142,11 @@ const listSkillsProcedure = publicProcedure
     })
 
     // Scan all directories in parallel
-    const [userSkills, projectSkills, ...pluginSkillsArrays] =
-      await Promise.all([
-        userSkillsPromise,
-        projectSkillsPromise,
-        ...pluginSkillsPromises,
-      ])
+    const [userSkills, projectSkills, ...pluginSkillsArrays] = await Promise.all([
+      userSkillsPromise,
+      projectSkillsPromise,
+      ...pluginSkillsPromises,
+    ])
     const pluginSkills = pluginSkillsArrays.flat()
 
     return [...projectSkills, ...userSkills, ...pluginSkills]
@@ -197,10 +198,14 @@ export const skillsRouter = router({
         content: z.string(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+      const safeName = input.name
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
       if (!safeName) {
         throw new Error("Skill name must contain at least one alphanumeric character")
       }
@@ -257,12 +262,13 @@ export const skillsRouter = router({
         description: z.string(),
         content: z.string(),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      const absolutePath = input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
-        ? path.join(input.cwd, input.path)
-        : resolveSkillPath(input.path)
+      const absolutePath =
+        input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
+          ? path.join(input.cwd, input.path)
+          : resolveSkillPath(input.path)
 
       // Verify file exists before writing
       await fs.access(absolutePath)
@@ -286,16 +292,17 @@ export const skillsRouter = router({
       z.object({
         path: z.string(),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       if (input.path.includes("..")) {
         throw new Error("Invalid path")
       }
 
-      const absolutePath = input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
-        ? path.join(input.cwd, input.path)
-        : resolveSkillPath(input.path)
+      const absolutePath =
+        input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
+          ? path.join(input.cwd, input.path)
+          : resolveSkillPath(input.path)
 
       // Skills are directories containing SKILL.md — delete the parent directory
       const skillDir = path.dirname(absolutePath)

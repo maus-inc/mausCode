@@ -2,7 +2,7 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema";
+import * as Schema from "effect/Schema"
 
 import {
   AuthSessionId,
@@ -10,11 +10,11 @@ import {
   RpcClientId,
   ThreadId,
   TrimmedNonEmptyString,
-} from "./baseSchemas.ts";
-import { ProviderInstanceId } from "./providerInstance.ts";
+} from "./baseSchemas.ts"
+import { ProviderInstanceId } from "./providerInstance.ts"
 
-export const BackgroundBooleanState = Schema.Literals(["true", "false", "unknown"]);
-export type BackgroundBooleanState = typeof BackgroundBooleanState.Type;
+export const BackgroundBooleanState = Schema.Literals(["true", "false", "unknown"])
+export type BackgroundBooleanState = typeof BackgroundBooleanState.Type
 
 export const HostPowerThermalState = Schema.Literals([
   "unknown",
@@ -22,8 +22,8 @@ export const HostPowerThermalState = Schema.Literals([
   "fair",
   "serious",
   "critical",
-]);
-export type HostPowerThermalState = typeof HostPowerThermalState.Type;
+])
+export type HostPowerThermalState = typeof HostPowerThermalState.Type
 
 export const HostPowerSource = Schema.Literals([
   "unknown",
@@ -32,8 +32,8 @@ export const HostPowerSource = Schema.Literals([
   "node-linux",
   "node-windows",
   "electron-main",
-]);
-export type HostPowerSource = typeof HostPowerSource.Type;
+])
+export type HostPowerSource = typeof HostPowerSource.Type
 
 export const HostPowerSnapshot = Schema.Struct({
   source: HostPowerSource,
@@ -46,8 +46,8 @@ export const HostPowerSnapshot = Schema.Struct({
   thermalState: HostPowerThermalState,
   stale: Schema.Boolean,
   updatedAt: Schema.DateTimeUtc,
-});
-export type HostPowerSnapshot = typeof HostPowerSnapshot.Type;
+})
+export type HostPowerSnapshot = typeof HostPowerSnapshot.Type
 
 export const BackgroundScope = Schema.Union([
   Schema.Struct({ type: Schema.Literal("server-config") }),
@@ -59,14 +59,14 @@ export const BackgroundScope = Schema.Union([
   Schema.Struct({ type: Schema.Literal("git-refs"), cwd: Schema.String }),
   Schema.Struct({ type: Schema.Literal("diagnostics") }),
   Schema.Struct({ type: Schema.Literal("thread"), threadId: ThreadId }),
-]);
-export type BackgroundScope = typeof BackgroundScope.Type;
+])
+export type BackgroundScope = typeof BackgroundScope.Type
 
-export const ClientKind = Schema.Literals(["web", "desktop-renderer", "mobile", "unknown"]);
-export type ClientKind = typeof ClientKind.Type;
+export const ClientKind = Schema.Literals(["web", "desktop-renderer", "mobile", "unknown"])
+export type ClientKind = typeof ClientKind.Type
 
-export const ClientActivityClientId = TrimmedNonEmptyString.check(Schema.isMaxLength(128));
-export type ClientActivityClientId = typeof ClientActivityClientId.Type;
+export const ClientActivityClientId = TrimmedNonEmptyString.check(Schema.isMaxLength(128))
+export type ClientActivityClientId = typeof ClientActivityClientId.Type
 
 export const ClientActivityReportInput = Schema.Struct({
   environmentId: Schema.optionalKey(EnvironmentId),
@@ -82,8 +82,8 @@ export const ClientActivityReportInput = Schema.Struct({
   scopes: Schema.Array(BackgroundScope),
   ttlMs: Schema.optionalKey(Schema.Number),
   observedAt: Schema.DateTimeUtc,
-});
-export type ClientActivityReportInput = typeof ClientActivityReportInput.Type;
+})
+export type ClientActivityReportInput = typeof ClientActivityReportInput.Type
 
 export const ClientActivityLease = Schema.Struct({
   sessionId: AuthSessionId,
@@ -100,8 +100,8 @@ export const ClientActivityLease = Schema.Struct({
   scopes: Schema.Array(BackgroundScope),
   updatedAt: Schema.DateTimeUtc,
   expiresAt: Schema.DateTimeUtc,
-});
-export type ClientActivityLease = typeof ClientActivityLease.Type;
+})
+export type ClientActivityLease = typeof ClientActivityLease.Type
 
 export const BackgroundPolicySnapshot = Schema.Struct({
   hostPower: HostPowerSnapshot,
@@ -110,5 +110,5 @@ export const BackgroundPolicySnapshot = Schema.Struct({
   activeScopeKeys: Schema.Array(Schema.String),
   shouldRunOpportunisticWork: Schema.Boolean,
   updatedAt: Schema.DateTimeUtc,
-});
-export type BackgroundPolicySnapshot = typeof BackgroundPolicySnapshot.Type;
+})
+export type BackgroundPolicySnapshot = typeof BackgroundPolicySnapshot.Type

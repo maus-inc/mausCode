@@ -47,7 +47,7 @@ export class AuthStore {
       }
 
       const jsonData = JSON.stringify(data)
-      
+
       if (this.isEncryptionAvailable()) {
         // Encrypt using OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
         const encrypted = safeStorage.encryptString(jsonData)
@@ -74,33 +74,33 @@ export class AuthStore {
         const decrypted = safeStorage.decryptString(encrypted)
         return JSON.parse(decrypted)
       }
-      
+
       // Fallback: try unencrypted file (for migration or when encryption unavailable)
       const fallbackPath = this.filePath + ".json"
       if (existsSync(fallbackPath)) {
         const content = readFileSync(fallbackPath, "utf-8")
         const data = JSON.parse(content)
-        
+
         // Migrate to encrypted storage if now available
         if (this.isEncryptionAvailable()) {
           this.save(data)
           unlinkSync(fallbackPath) // Remove unencrypted file after migration
         }
-        
+
         return data
       }
-      
+
       // Legacy: check for old auth.json file and migrate
       const legacyPath = join(dirname(this.filePath), "auth.json")
       if (existsSync(legacyPath)) {
         const content = readFileSync(legacyPath, "utf-8")
         const data = JSON.parse(content)
-        
+
         // Migrate to encrypted storage
         this.save(data)
         unlinkSync(legacyPath) // Remove legacy unencrypted file
         console.log("Migrated auth data from plaintext to encrypted storage")
-        
+
         return data
       }
 

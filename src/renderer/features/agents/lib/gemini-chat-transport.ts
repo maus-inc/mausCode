@@ -6,10 +6,7 @@ import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
-import {
-  lastSelectedGeminiModelIdAtom,
-  subChatGeminiModelIdAtomFamily,
-} from "../atoms"
+import { lastSelectedGeminiModelIdAtom, subChatGeminiModelIdAtomFamily } from "../atoms"
 import { GEMINI_MODELS } from "./models"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
 
@@ -44,9 +41,7 @@ export class GeminiChatTransport implements ChatTransport<UIMessage> {
     messages: UIMessage[]
     abortSignal?: AbortSignal
   }): Promise<ReadableStream<UIMessageChunk>> {
-    const lastUser = [...options.messages]
-      .reverse()
-      .find((message) => message.role === "user")
+    const lastUser = [...options.messages].reverse().find((message) => message.role === "user")
 
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
@@ -54,9 +49,7 @@ export class GeminiChatTransport implements ChatTransport<UIMessage> {
     const lastAssistant = [...options.messages]
       .reverse()
       .find((message) => message.role === "assistant")
-    const metadata = lastAssistant?.metadata as
-      | AgentMessageMetadata
-      | undefined
+    const metadata = lastAssistant?.metadata as AgentMessageMetadata | undefined
     const sessionId = metadata?.sessionId
 
     const modelId = getSelectedGeminiModelId(this.config.subChatId)
@@ -88,8 +81,7 @@ export class GeminiChatTransport implements ChatTransport<UIMessage> {
             onData: (chunk: UIMessageChunk) => {
               if (chunk?.type === "error") {
                 toast.error("Gemini error", {
-                  description:
-                    chunk.errorText || "An unexpected Gemini error occurred.",
+                  description: chunk.errorText || "An unexpected Gemini error occurred.",
                 })
               }
 
@@ -155,11 +147,9 @@ export class GeminiChatTransport implements ChatTransport<UIMessage> {
   }
 
   cleanup(): void {
-    void trpcClient.gemini.cleanup
-      .mutate({ subChatId: this.config.subChatId })
-      .catch(() => {
-        // no-op
-      })
+    void trpcClient.gemini.cleanup.mutate({ subChatId: this.config.subChatId }).catch(() => {
+      // no-op
+    })
   }
 
   private extractText(message: UIMessage | undefined): string {
@@ -173,8 +163,7 @@ export class GeminiChatTransport implements ChatTransport<UIMessage> {
         textParts.push((part as any).text)
       } else if ((part as any).type === "file-content") {
         const filePart = part as any
-        const fileName =
-          filePart.filePath?.split("/").pop() || filePart.filePath || "file"
+        const fileName = filePart.filePath?.split("/").pop() || filePart.filePath || "file"
         fileContents.push(`\n--- ${fileName} ---\n${filePart.content}`)
       }
     }

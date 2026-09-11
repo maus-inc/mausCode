@@ -9,10 +9,7 @@ import { DEFAULT_CURSOR_UI_MODEL } from "../../../../shared/cursor-model-id"
 import { sessionInfoAtom, cursorLoginModalOpenAtom } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
-import {
-  pendingAuthRetryMessageAtom,
-  subChatCursorModelIdAtomFamily,
-} from "../atoms"
+import { pendingAuthRetryMessageAtom, subChatCursorModelIdAtomFamily } from "../atoms"
 import { CURSOR_MODELS } from "./models"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
@@ -50,9 +47,7 @@ export class CursorChatTransport implements ChatTransport<UIMessage> {
     messages: UIMessage[]
     abortSignal?: AbortSignal
   }): Promise<ReadableStream<UIMessageChunk>> {
-    const lastUser = [...options.messages]
-      .reverse()
-      .find((message) => message.role === "user")
+    const lastUser = [...options.messages].reverse().find((message) => message.role === "user")
 
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
@@ -66,8 +61,8 @@ export class CursorChatTransport implements ChatTransport<UIMessage> {
     const currentMode =
       useAgentSubChatStore
         .getState()
-        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
-        ?.mode || this.config.mode
+        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)?.mode ||
+      this.config.mode
     const forceNewSession = forceFreshSessionSubChats.has(this.config.subChatId)
     if (forceNewSession) {
       forceFreshSessionSubChats.delete(this.config.subChatId)
@@ -101,9 +96,7 @@ export class CursorChatTransport implements ChatTransport<UIMessage> {
             runId,
             prompt,
             cwd: this.config.cwd,
-            ...(this.config.projectPath
-              ? { projectPath: this.config.projectPath }
-              : {}),
+            ...(this.config.projectPath ? { projectPath: this.config.projectPath } : {}),
             model: selectedModel,
             mode: currentMode,
             ...(sessionId ? { sessionId } : {}),
@@ -127,8 +120,7 @@ export class CursorChatTransport implements ChatTransport<UIMessage> {
                 void (async () => {
                   let isConnected = false
                   try {
-                    const integration =
-                      await trpcClient.cursor.getIntegration.query()
+                    const integration = await trpcClient.cursor.getIntegration.query()
                     isConnected = Boolean(integration.isConnected)
                   } catch {
                     // Open login modal on integration check failure.
@@ -233,11 +225,9 @@ export class CursorChatTransport implements ChatTransport<UIMessage> {
   }
 
   cleanup(): void {
-    void trpcClient.cursor.cleanup
-      .mutate({ subChatId: this.config.subChatId })
-      .catch(() => {
-        // No-op
-      })
+    void trpcClient.cursor.cleanup.mutate({ subChatId: this.config.subChatId }).catch(() => {
+      // No-op
+    })
   }
 
   private extractText(message: UIMessage | undefined): string {
@@ -251,8 +241,7 @@ export class CursorChatTransport implements ChatTransport<UIMessage> {
         textParts.push((part as any).text)
       } else if ((part as any).type === "file-content") {
         const filePart = part as any
-        const fileName =
-          filePart.filePath?.split("/").pop() || filePart.filePath || "file"
+        const fileName = filePart.filePath?.split("/").pop() || filePart.filePath || "file"
         fileContents.push(`\n--- ${fileName} ---\n${filePart.content}`)
       }
     }

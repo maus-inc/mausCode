@@ -4,9 +4,7 @@ import { useAtom, useSetAtom } from "jotai"
 import { X } from "lucide-react"
 import { useEffect, useRef } from "react"
 import { pendingAuthRetryMessageAtom } from "../../features/agents/atoms"
-import {
-  CodexLoginContent,
-} from "../../features/agents/components/codex-login-content"
+import { CodexLoginContent } from "../../features/agents/components/codex-login-content"
 import { useCodexLoginFlow } from "../../features/agents/hooks/use-codex-login-flow"
 import {
   agentsSettingsDialogActiveTabAtom,
@@ -16,11 +14,7 @@ import {
   codexOnboardingCompletedAtom,
   type SettingsTab,
 } from "../../lib/atoms"
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-} from "../ui/alert-dialog"
+import { AlertDialog, AlertDialogCancel, AlertDialogContent } from "../ui/alert-dialog"
 
 type CodexLoginModalProps = {
   autoStart?: boolean
@@ -32,9 +26,7 @@ export function CodexLoginModal({ autoStart = true }: CodexLoginModalProps) {
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const setCodexOnboardingAuthMethod = useSetAtom(codexOnboardingAuthMethodAtom)
-  const [pendingAuthRetry, setPendingAuthRetry] = useAtom(
-    pendingAuthRetryMessageAtom,
-  )
+  const [pendingAuthRetry, setPendingAuthRetry] = useAtom(pendingAuthRetryMessageAtom)
   const didInitForOpenRef = useRef(false)
   const didStartForOpenRef = useRef(false)
   const shouldAutoOpenUrlRef = useRef(false)

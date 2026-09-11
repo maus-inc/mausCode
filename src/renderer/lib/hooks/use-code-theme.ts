@@ -1,15 +1,11 @@
 import { useAtomValue } from "jotai"
 import { useTheme } from "next-themes"
-import {
-  vscodeCodeThemeLightAtom,
-  vscodeCodeThemeDarkAtom,
-  fullThemeDataAtom,
-} from "../atoms"
+import { vscodeCodeThemeLightAtom, vscodeCodeThemeDarkAtom, fullThemeDataAtom } from "../atoms"
 
 /**
  * Hook to get the current code theme based on UI theme
  * Returns the appropriate theme ID for light or dark mode
- * 
+ *
  * Priority:
  * 1. Full VS Code theme (if selected)
  * 2. Fallback to legacy code-only theme atoms

@@ -220,9 +220,7 @@ function getVersionArg(args) {
 }
 
 async function getLatestVersion() {
-  const release = await fetchJson(
-    `https://api.github.com/repos/${RELEASE_REPO}/releases/latest`,
-  )
+  const release = await fetchJson(`https://api.github.com/repos/${RELEASE_REPO}/releases/latest`)
 
   const tagName = typeof release?.tag_name === "string" ? release.tag_name : ""
   if (tagName.startsWith(RELEASE_TAG_PREFIX)) {

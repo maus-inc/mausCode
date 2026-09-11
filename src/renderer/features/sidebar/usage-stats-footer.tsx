@@ -5,11 +5,7 @@
  * -- file-level port, not a merge. See openspec/changes/add-fork-harvest-transplants/tasks.md (Phase 3).
  */
 import { memo } from "react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip"
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
 
@@ -101,21 +97,14 @@ function ProviderRow({
         {available ? (
           <div className="flex flex-col gap-0.5">
             {breakdown.map(({ label: rowLabel, value }) => (
-              <div
-                key={rowLabel}
-                className="flex justify-between gap-4 text-[11px]"
-              >
+              <div key={rowLabel} className="flex justify-between gap-4 text-[11px]">
                 <span className="text-muted-foreground">{rowLabel}</span>
-                <span className="font-mono text-foreground">
-                  {formatNumber(value)}
-                </span>
+                <span className="font-mono text-foreground">{formatNumber(value)}</span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-[11px] text-muted-foreground">
-            No usage data found on disk.
-          </div>
+          <div className="text-[11px] text-muted-foreground">No usage data found on disk.</div>
         )}
       </TooltipContent>
     </Tooltip>
@@ -135,8 +124,7 @@ interface QuotaCell {
 function QuotaChip({ cell }: { cell: QuotaCell }) {
   const resetIn = formatResetIn(cell.resetsAt)
   const isHigh = cell.utilization !== null && cell.utilization >= 80
-  const displayLabel =
-    cell.useResetAsLabel && resetIn ? resetIn : cell.label
+  const displayLabel = cell.useResetAsLabel && resetIn ? resetIn : cell.label
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
@@ -146,9 +134,7 @@ function QuotaChip({ cell }: { cell: QuotaCell }) {
             "hover:bg-foreground/[0.06] transition-colors",
           )}
         >
-          <span className="text-[9px] text-muted-foreground/90 truncate">
-            {displayLabel}
-          </span>
+          <span className="text-[9px] text-muted-foreground/90 truncate">{displayLabel}</span>
           <span
             className={cn(
               "font-mono text-[9px] tabular-nums",
@@ -161,14 +147,10 @@ function QuotaChip({ cell }: { cell: QuotaCell }) {
       </TooltipTrigger>
       <TooltipContent side="top" align="end" className="min-w-[180px]">
         <div className="font-medium text-foreground mb-1">{cell.fullLabel}</div>
-        <div className="text-[11px] text-muted-foreground mb-1">
-          {cell.tooltipDescription}
-        </div>
+        <div className="text-[11px] text-muted-foreground mb-1">{cell.tooltipDescription}</div>
         <div className="flex justify-between gap-4 text-[11px]">
           <span className="text-muted-foreground">Used</span>
-          <span className="font-mono text-foreground">
-            {formatPercent(cell.utilization)}
-          </span>
+          <span className="font-mono text-foreground">{formatPercent(cell.utilization)}</span>
         </div>
         {resetIn && (
           <div className="flex justify-between gap-4 text-[11px]">
@@ -181,19 +163,11 @@ function QuotaChip({ cell }: { cell: QuotaCell }) {
   )
 }
 
-function ProviderQuotaRow({
-  name,
-  cells,
-}: {
-  name: string
-  cells: QuotaCell[]
-}) {
+function ProviderQuotaRow({ name, cells }: { name: string; cells: QuotaCell[] }) {
   if (cells.length === 0) return null
   return (
     <div className="flex items-center gap-2 px-1 py-0.5">
-      <span className="w-12 shrink-0 text-muted-foreground/70 truncate">
-        {name}
-      </span>
+      <span className="w-12 shrink-0 text-muted-foreground/70 truncate">{name}</span>
       <div
         className="flex-1 grid gap-1"
         style={{
@@ -264,21 +238,15 @@ function GithubCommitsRow({
         <div className="flex flex-col gap-0.5">
           <div className="flex justify-between gap-4 text-[11px]">
             <span className="text-muted-foreground">Today</span>
-            <span className="font-mono text-foreground">
-              {formatNumber(today)}
-            </span>
+            <span className="font-mono text-foreground">{formatNumber(today)}</span>
           </div>
           <div className="flex justify-between gap-4 text-[11px]">
             <span className="text-muted-foreground">This week</span>
-            <span className="font-mono text-foreground">
-              {formatNumber(week)}
-            </span>
+            <span className="font-mono text-foreground">{formatNumber(week)}</span>
           </div>
           <div className="flex justify-between gap-4 text-[11px]">
             <span className="text-muted-foreground">This month</span>
-            <span className="font-mono text-foreground">
-              {formatNumber(month)}
-            </span>
+            <span className="font-mono text-foreground">{formatNumber(month)}</span>
           </div>
         </div>
       </TooltipContent>
@@ -287,23 +255,17 @@ function GithubCommitsRow({
 }
 
 export const UsageStatsFooter = memo(function UsageStatsFooter() {
-  const { data: today, isLoading: loadingToday } = trpc.usage.today.useQuery(
-    undefined,
-    {
-      refetchInterval: 30_000,
-      refetchOnWindowFocus: true,
-      staleTime: 15_000,
-    },
-  )
+  const { data: today, isLoading: loadingToday } = trpc.usage.today.useQuery(undefined, {
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    staleTime: 15_000,
+  })
 
-  const { data: plan, isLoading: loadingPlan } = trpc.usage.plan.useQuery(
-    undefined,
-    {
-      refetchInterval: 60_000,
-      refetchOnWindowFocus: true,
-      staleTime: 30_000,
-    },
-  )
+  const { data: plan, isLoading: loadingPlan } = trpc.usage.plan.useQuery(undefined, {
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+  })
 
   const { data: codexPlan } = trpc.usage.codexPlan.useQuery(undefined, {
     refetchInterval: 60_000,
@@ -318,15 +280,12 @@ export const UsageStatsFooter = memo(function UsageStatsFooter() {
     retry: false,
   })
 
-  const { data: openRouterPlan } = trpc.usage.openRouterPlan.useQuery(
-    undefined,
-    {
-      refetchInterval: 60_000,
-      refetchOnWindowFocus: true,
-      staleTime: 30_000,
-      retry: false,
-    },
-  )
+  const { data: openRouterPlan } = trpc.usage.openRouterPlan.useQuery(undefined, {
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+    retry: false,
+  })
 
   const {
     data: githubStats,
@@ -357,9 +316,7 @@ export const UsageStatsFooter = memo(function UsageStatsFooter() {
   const planUsage = plan?.available ? plan.usage : null
   const codexPlanUsage = codexPlan?.available ? codexPlan.usage : null
   const geminiPlanUsage = geminiPlan?.available ? geminiPlan.usage : null
-  const openRouterPlanUsage = openRouterPlan?.available
-    ? openRouterPlan.usage
-    : null
+  const openRouterPlanUsage = openRouterPlan?.available ? openRouterPlan.usage : null
 
   const claudeCells: QuotaCell[] = [
     planUsage?.fiveHour && {
@@ -540,16 +497,12 @@ export const UsageStatsFooter = memo(function UsageStatsFooter() {
               <span className="flex items-center gap-1.5 font-mono text-foreground/80">
                 <span>{formatTokens(openrouter.tokens)}</span>
                 <span className="text-muted-foreground/40">·</span>
-                <span className="text-muted-foreground">
-                  {formatUsd(openrouter.costUsd)}
-                </span>
+                <span className="text-muted-foreground">{formatUsd(openrouter.costUsd)}</span>
               </span>
             </div>
           </TooltipTrigger>
           <TooltipContent side="right" align="end" className="min-w-[180px]">
-            <div className="font-medium text-foreground mb-1">
-              OpenRouter · today
-            </div>
+            <div className="font-medium text-foreground mb-1">OpenRouter · today</div>
             <div className="flex flex-col gap-0.5">
               <div className="flex justify-between gap-4 text-[11px]">
                 <span className="text-muted-foreground">Sessions</span>
@@ -571,15 +524,11 @@ export const UsageStatsFooter = memo(function UsageStatsFooter() {
               </div>
               <div className="flex justify-between gap-4 text-[11px]">
                 <span className="text-muted-foreground">Total tokens</span>
-                <span className="font-mono text-foreground">
-                  {formatNumber(openrouter.tokens)}
-                </span>
+                <span className="font-mono text-foreground">{formatNumber(openrouter.tokens)}</span>
               </div>
               <div className="flex justify-between gap-4 text-[11px] pt-0.5 border-t border-border/40 mt-0.5">
                 <span className="text-muted-foreground">Spend</span>
-                <span className="font-mono text-foreground">
-                  {formatUsd(openrouter.costUsd)}
-                </span>
+                <span className="font-mono text-foreground">{formatUsd(openrouter.costUsd)}</span>
               </div>
             </div>
           </TooltipContent>

@@ -52,8 +52,7 @@ export function getToolLifecycleState(part: any): ToolLifecycleState {
 
 export function getToolStatus(part: any, chatStatus?: string): ToolStatus {
   const lifecycle = getToolLifecycleState(part)
-  const isActivelyStreaming =
-    chatStatus === "streaming" || chatStatus === "submitted"
+  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
   const isInFlight = lifecycle.isInputStreaming || lifecycle.isPendingState
 
   return {

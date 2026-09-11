@@ -4,7 +4,11 @@ import { memo, useMemo, useEffect, useRef, useSyncExternalStore, useCallback } f
 import { useAtomValue } from "jotai"
 import { cn } from "../../../lib/utils"
 import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
-import { getPerChatMessageKey, messageAtomFamily, isMessageStreamingAtomFamily } from "../stores/message-store"
+import {
+  getPerChatMessageKey,
+  messageAtomFamily,
+  isMessageStreamingAtomFamily,
+} from "../stores/message-store"
 import { useSearchHighlight, useSearchQuery } from "../search"
 import { appStore } from "../../../lib/jotai-store"
 
@@ -62,13 +66,18 @@ function getTextPart(subChatId: string, messageId: string, partIndex: number): s
   const message = appStore.get(messageAtomFamily(getPerChatMessageKey(subChatId, messageId)))
   const parts = message?.parts || []
   const part = parts[partIndex]
-  const text = part?.type === "text" ? (part.text || "") : ""
+  const text = part?.type === "text" ? part.text || "" : ""
   textPartStore.set(key, text)
   return text
 }
 
 // Subscribe to changes for a specific part
-function subscribeToTextPart(subChatId: string, messageId: string, partIndex: number, callback: () => void): () => void {
+function subscribeToTextPart(
+  subChatId: string,
+  messageId: string,
+  partIndex: number,
+  callback: () => void,
+): () => void {
   const key = `${subChatId}:${messageId}:${partIndex}`
   const messageKey = getPerChatMessageKey(subChatId, messageId)
 
@@ -83,7 +92,7 @@ function subscribeToTextPart(subChatId: string, messageId: string, partIndex: nu
     const message = appStore.get(messageAtomFamily(messageKey))
     const parts = message?.parts || []
     const part = parts[partIndex]
-    const newText = part?.type === "text" ? (part.text || "") : ""
+    const newText = part?.type === "text" ? part.text || "" : ""
 
     const oldText = textPartStore.get(key)
     if (oldText !== newText) {
@@ -91,7 +100,7 @@ function subscribeToTextPart(subChatId: string, messageId: string, partIndex: nu
       // Only notify THIS part's subscribers
       const subs = textPartSubscribers.get(key)
       if (subs) {
-        subs.forEach(cb => cb())
+        subs.forEach((cb) => cb())
       }
     }
   })
@@ -106,12 +115,12 @@ function subscribeToTextPart(subChatId: string, messageId: string, partIndex: nu
 function useTextPart(subChatId: string, messageId: string, partIndex: number): string {
   const subscribe = useCallback(
     (callback: () => void) => subscribeToTextPart(subChatId, messageId, partIndex, callback),
-    [subChatId, messageId, partIndex]
+    [subChatId, messageId, partIndex],
   )
 
   const getSnapshot = useCallback(
     () => getTextPart(subChatId, messageId, partIndex),
-    [subChatId, messageId, partIndex]
+    [subChatId, messageId, partIndex],
   )
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
@@ -160,13 +169,12 @@ function arePropsEqual(prev: IsolatedTextPartProps, next: IsolatedTextPartProps)
   )
 }
 
-
 // Helper function to highlight text in DOM using TreeWalker
 // currentMatchIndex: which match (0-based) to mark as current, or null if none
 function highlightTextInDom(
   container: HTMLElement,
   searchText: string,
-  currentMatchIndex: number | null = null
+  currentMatchIndex: number | null = null,
 ) {
   // Remove existing highlights first
   const existingHighlights = container.querySelectorAll(".search-highlight")
@@ -181,11 +189,7 @@ function highlightTextInDom(
   if (!searchText) return
 
   const lowerSearch = searchText.toLowerCase()
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null
-  )
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null)
 
   const textNodes: Text[] = []
   let node: Text | null
@@ -270,7 +274,7 @@ export const IsolatedTextPart = memo(function IsolatedTextPart({
   const searchQuery = useSearchQuery()
 
   // Find current highlight (the one marked as current)
-  const currentHighlight = highlights.find(h => h.isCurrent)
+  const currentHighlight = highlights.find((h) => h.isCurrent)
   // Memoize the current index to ensure stable dependency for useEffect
   const currentMatchIndexInPart = currentHighlight?.indexInPart ?? null
 
@@ -280,11 +284,7 @@ export const IsolatedTextPart = memo(function IsolatedTextPart({
     if (!contentRef.current || isTextStreaming) return
 
     // Apply highlighting
-    highlightTextInDom(
-      contentRef.current,
-      searchQuery,
-      currentMatchIndexInPart
-    )
+    highlightTextInDom(contentRef.current, searchQuery, currentMatchIndexInPart)
 
     // Cleanup on unmount or when highlights change
     return () => {
@@ -319,11 +319,7 @@ export const IsolatedTextPart = memo(function IsolatedTextPart({
         </div>
       )}
       <div ref={contentRef}>
-        <MemoizedMarkdown
-          content={text}
-          id={`${messageId}-${partIndex}`}
-          size="sm"
-        />
+        <MemoizedMarkdown content={text} id={`${messageId}-${partIndex}`} size="sm" />
       </div>
     </div>
   )
@@ -340,9 +336,9 @@ interface IsolatedTextPartsProps {
   subChatId: string
   messageId: string
   // For determining which parts to show and how
-  finalTextIndex: number  // Index where "final text" starts (-1 if none)
+  finalTextIndex: number // Index where "final text" starts (-1 if none)
   visibleStepsCount: number
-  showOnlyFinalText?: boolean  // If true, only show parts >= finalTextIndex
+  showOnlyFinalText?: boolean // If true, only show parts >= finalTextIndex
 }
 
 function areListPropsEqual(prev: IsolatedTextPartsProps, next: IsolatedTextPartsProps): boolean {

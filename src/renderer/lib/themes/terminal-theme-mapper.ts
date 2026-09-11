@@ -1,6 +1,6 @@
 /**
  * Terminal theme mapper for VS Code themes
- * 
+ *
  * Extracts terminal colors from VS Code theme and converts to xterm.js ITheme format
  */
 
@@ -17,8 +17,11 @@ const TERMINAL_COLOR_MAP: Partial<Record<keyof ITheme, string[]>> = {
   cursorAccent: ["terminalCursor.background", "terminal.background", "editor.background"],
   selectionBackground: ["terminal.selectionBackground", "editor.selectionBackground"],
   selectionForeground: ["terminal.selectionForeground"],
-  selectionInactiveBackground: ["terminal.inactiveSelectionBackground", "editor.inactiveSelectionBackground"],
-  
+  selectionInactiveBackground: [
+    "terminal.inactiveSelectionBackground",
+    "editor.inactiveSelectionBackground",
+  ],
+
   // Standard ANSI colors
   black: ["terminal.ansiBlack"],
   red: ["terminal.ansiRed"],
@@ -28,7 +31,7 @@ const TERMINAL_COLOR_MAP: Partial<Record<keyof ITheme, string[]>> = {
   magenta: ["terminal.ansiMagenta"],
   cyan: ["terminal.ansiCyan"],
   white: ["terminal.ansiWhite"],
-  
+
   // Bright ANSI colors
   brightBlack: ["terminal.ansiBrightBlack"],
   brightRed: ["terminal.ansiBrightRed"],
@@ -103,11 +106,9 @@ function getColorFromTheme(
 /**
  * Convert VS Code theme colors to xterm.js ITheme
  */
-export function extractTerminalTheme(
-  themeColors: Record<string, string>,
-): ITheme {
+export function extractTerminalTheme(themeColors: Record<string, string>): ITheme {
   const theme: Partial<ITheme> = {}
-  
+
   // Extract each terminal color (excluding extendedAnsi which is a string[])
   for (const [xtermKey, vsCodeKeys] of Object.entries(TERMINAL_COLOR_MAP)) {
     if (!vsCodeKeys) continue
@@ -117,14 +118,14 @@ export function extractTerminalTheme(
       ;(theme as any)[xtermKey] = color
     }
   }
-  
+
   // Determine if this is a light or dark theme based on background
   const bgColor = theme.background || themeColors["editor.background"] || "#000000"
   const isLight = isLightColor(bgColor)
-  
+
   // Apply default ANSI colors for any missing colors
   const defaultAnsi = isLight ? DEFAULT_LIGHT_ANSI : DEFAULT_DARK_ANSI
-  
+
   // Ensure all required colors are present
   const finalTheme: ITheme = {
     background: theme.background || (isLight ? "#fafafa" : "#121212"),
@@ -133,7 +134,7 @@ export function extractTerminalTheme(
     cursorAccent: theme.cursorAccent || theme.background || (isLight ? "#fafafa" : "#121212"),
     selectionBackground: theme.selectionBackground || (isLight ? "#d4d4d8" : "#3f3f46"),
     selectionForeground: theme.selectionForeground,
-    
+
     // ANSI colors with fallbacks
     black: theme.black || defaultAnsi.black,
     red: theme.red || defaultAnsi.red,
@@ -152,7 +153,7 @@ export function extractTerminalTheme(
     brightCyan: theme.brightCyan || defaultAnsi.brightCyan,
     brightWhite: theme.brightWhite || defaultAnsi.brightWhite,
   }
-  
+
   return finalTheme
 }
 

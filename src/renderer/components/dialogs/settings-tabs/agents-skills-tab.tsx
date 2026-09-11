@@ -64,9 +64,7 @@ function ItemDetail({
     setViewMode("rendered")
   }, [item.id, item.description, item.content])
 
-  const hasChanges =
-    description !== item.description ||
-    content !== item.content
+  const hasChanges = description !== item.description || content !== item.content
 
   const handleSave = useCallback(() => {
     if (description !== item.description || content !== item.content) {
@@ -101,12 +99,14 @@ function ItemDetail({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-foreground truncate">{item.name}</h3>
-              <span className={cn(
-                "text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0",
-                item.kind === "skill"
-                  ? "bg-blue-500/10 text-blue-500"
-                  : "bg-orange-500/10 text-orange-500"
-              )}>
+              <span
+                className={cn(
+                  "text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0",
+                  item.kind === "skill"
+                    ? "bg-blue-500/10 text-blue-500"
+                    : "bg-orange-500/10 text-orange-500",
+                )}
+              >
                 {item.kind === "skill" ? "Skill" : "Command"}
               </span>
             </div>
@@ -131,7 +131,9 @@ function ItemDetail({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               onBlur={handleBlur}
-              placeholder={item.kind === "skill" ? "Skill description..." : "Command description..."}
+              placeholder={
+                item.kind === "skill" ? "Skill description..." : "Command description..."
+              }
             />
           )}
         </div>
@@ -204,7 +206,11 @@ function ItemDetail({
               onBlur={handleBlur}
               rows={16}
               className="font-mono resize-y"
-              placeholder={item.kind === "skill" ? "Skill instructions (markdown)..." : "Command prompt (markdown)..."}
+              placeholder={
+                item.kind === "skill"
+                  ? "Skill instructions (markdown)..."
+                  : "Command prompt (markdown)..."
+              }
               autoFocus
             />
           )}
@@ -237,7 +243,13 @@ function CreateItemForm({
   hasProject,
   projectName,
 }: {
-  onCreated: (data: { name: string; description: string; content: string; source: "user" | "project"; kind: "skill" | "command" }) => void
+  onCreated: (data: {
+    name: string
+    description: string
+    content: string
+    source: "user" | "project"
+    kind: "skill" | "command"
+  }) => void
   onCancel: () => void
   isSaving: boolean
   hasProject: boolean
@@ -259,8 +271,14 @@ function CreateItemForm({
             {kind === "skill" ? "New Skill" : "New Command"}
           </h3>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
-            <Button size="sm" onClick={() => onCreated({ name, description, content, source, kind })} disabled={!canSave || isSaving}>
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => onCreated({ name, description, content, source, kind })}
+              disabled={!canSave || isSaving}
+            >
               {isSaving ? "Creating..." : "Create"}
             </Button>
           </div>
@@ -287,7 +305,9 @@ function CreateItemForm({
             placeholder={kind === "skill" ? "my-skill" : "my-command"}
             autoFocus
           />
-          <p className="text-[11px] text-muted-foreground">Will be converted to kebab-case (lowercase letters, numbers, hyphens)</p>
+          <p className="text-[11px] text-muted-foreground">
+            Will be converted to kebab-case (lowercase letters, numbers, hyphens)
+          </p>
         </div>
 
         <div className="space-y-1.5">
@@ -311,7 +331,8 @@ function CreateItemForm({
                   {kind === "skill" ? "User (~/.claude/skills/)" : "User (~/.claude/commands/)"}
                 </SelectItem>
                 <SelectItem value="project">
-                  {projectName ? `Project: ${projectName}` : "Project"} ({kind === "skill" ? ".claude/skills/" : ".claude/commands/"})
+                  {projectName ? `Project: ${projectName}` : "Project"} (
+                  {kind === "skill" ? ".claude/skills/" : ".claude/commands/"})
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -325,7 +346,9 @@ function CreateItemForm({
             onChange={(e) => setContent(e.target.value)}
             rows={12}
             className="font-mono resize-y"
-            placeholder={kind === "skill" ? "Skill instructions (markdown)..." : "Command prompt (markdown)..."}
+            placeholder={
+              kind === "skill" ? "Skill instructions (markdown)..." : "Command prompt (markdown)..."
+            }
           />
         </div>
       </div>
@@ -351,14 +374,16 @@ function SidebarListItem({
         "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
         isSelected
           ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
     >
       <div className="flex items-center gap-1.5">
-        <span className={cn(
-          "text-[10px] font-medium shrink-0 w-3 text-center",
-          item.kind === "command" ? "text-orange-500/70" : "text-blue-500/70"
-        )}>
+        <span
+          className={cn(
+            "text-[10px] font-medium shrink-0 w-3 text-center",
+            item.kind === "command" ? "text-orange-500/70" : "text-blue-500/70",
+          )}
+        >
           {item.kind === "command" ? "/" : "@"}
         </span>
         <span className="text-sm truncate">{item.name}</span>
@@ -396,12 +421,18 @@ export function AgentsSkillsTab() {
   const selectedProject = useAtomValue(selectedProjectAtom)
 
   // Fetch skills
-  const { data: skills = [], isLoading: isLoadingSkills, refetch: refetchSkills } = trpc.skills.list.useQuery(
-    selectedProject?.path ? { cwd: selectedProject.path } : undefined,
-  )
+  const {
+    data: skills = [],
+    isLoading: isLoadingSkills,
+    refetch: refetchSkills,
+  } = trpc.skills.list.useQuery(selectedProject?.path ? { cwd: selectedProject.path } : undefined)
 
   // Fetch commands
-  const { data: commands = [], isLoading: isLoadingCommands, refetch: refetchCommands } = trpc.commands.list.useQuery(
+  const {
+    data: commands = [],
+    isLoading: isLoadingCommands,
+    refetch: refetchCommands,
+  } = trpc.commands.list.useQuery(
     selectedProject?.path ? { projectPath: selectedProject.path } : undefined,
   )
 
@@ -452,8 +483,8 @@ export function AgentsSkillsTab() {
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return allItems
     const q = searchQuery.toLowerCase()
-    return allItems.filter((i) =>
-      i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q)
+    return allItems.filter(
+      (i) => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q),
     )
   }, [allItems, searchQuery])
 
@@ -464,7 +495,7 @@ export function AgentsSkillsTab() {
 
   const allItemIds = useMemo(
     () => [...userItems, ...projectItems, ...pluginItems].map((i) => i.id),
-    [userItems, projectItems, pluginItems]
+    [userItems, projectItems, pluginItems],
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
@@ -481,71 +512,80 @@ export function AgentsSkillsTab() {
     setSelectedItemId(allItems[0]!.id)
   }, [allItems, selectedItemId, isLoading])
 
-  const handleCreate = useCallback(async (data: {
-    name: string; description: string; content: string; source: "user" | "project"; kind: "skill" | "command"
-  }) => {
-    try {
-      if (data.kind === "skill") {
-        const result = await createSkillMutation.mutateAsync({
-          name: data.name,
-          description: data.description,
-          content: data.content,
-          source: data.source,
-          cwd: selectedProject?.path,
-        })
-        toast.success("Skill created", { description: result.name })
-        setShowAddForm(false)
-        await refetchAll()
-        setSelectedItemId(`skill:${data.source}:${result.name}`)
-      } else {
-        const result = await createCommandMutation.mutateAsync({
-          name: data.name,
-          description: data.description,
-          content: data.content,
-          source: data.source,
-          projectPath: selectedProject?.path,
-        })
-        toast.success("Command created", { description: result.name })
-        setShowAddForm(false)
-        await refetchAll()
-        setSelectedItemId(`cmd:${data.source}:${result.name}`)
+  const handleCreate = useCallback(
+    async (data: {
+      name: string
+      description: string
+      content: string
+      source: "user" | "project"
+      kind: "skill" | "command"
+    }) => {
+      try {
+        if (data.kind === "skill") {
+          const result = await createSkillMutation.mutateAsync({
+            name: data.name,
+            description: data.description,
+            content: data.content,
+            source: data.source,
+            cwd: selectedProject?.path,
+          })
+          toast.success("Skill created", { description: result.name })
+          setShowAddForm(false)
+          await refetchAll()
+          setSelectedItemId(`skill:${data.source}:${result.name}`)
+        } else {
+          const result = await createCommandMutation.mutateAsync({
+            name: data.name,
+            description: data.description,
+            content: data.content,
+            source: data.source,
+            projectPath: selectedProject?.path,
+          })
+          toast.success("Command created", { description: result.name })
+          setShowAddForm(false)
+          await refetchAll()
+          setSelectedItemId(`cmd:${data.source}:${result.name}`)
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to create"
+        toast.error("Failed to create", { description: message })
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create"
-      toast.error("Failed to create", { description: message })
-    }
-  }, [createSkillMutation, createCommandMutation, selectedProject?.path, refetchAll])
+    },
+    [createSkillMutation, createCommandMutation, selectedProject?.path, refetchAll],
+  )
 
-  const handleSave = useCallback(async (
-    item: UnifiedItem,
-    data: { description: string; content: string },
-  ) => {
-    try {
-      if (item.kind === "skill") {
-        await updateSkillMutation.mutateAsync({
-          path: item.path,
-          name: item.name,
-          description: data.description,
-          content: data.content,
-          cwd: selectedProject?.path,
+  const handleSave = useCallback(
+    async (item: UnifiedItem, data: { description: string; content: string }) => {
+      try {
+        if (item.kind === "skill") {
+          await updateSkillMutation.mutateAsync({
+            path: item.path,
+            name: item.name,
+            description: data.description,
+            content: data.content,
+            cwd: selectedProject?.path,
+          })
+        } else {
+          await updateCommandMutation.mutateAsync({
+            path: item.path,
+            name: item.name,
+            description: data.description,
+            content: data.content,
+            argumentHint: item.argumentHint,
+            projectPath: selectedProject?.path,
+          })
+        }
+        toast.success(`${item.kind === "skill" ? "Skill" : "Command"} saved`, {
+          description: item.name,
         })
-      } else {
-        await updateCommandMutation.mutateAsync({
-          path: item.path,
-          name: item.name,
-          description: data.description,
-          content: data.content,
-          argumentHint: item.argumentHint,
-          projectPath: selectedProject?.path,
-        })
+        await refetchAll()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to save"
+        toast.error("Failed to save", { description: message })
       }
-      toast.success(`${item.kind === "skill" ? "Skill" : "Command"} saved`, { description: item.name })
-      await refetchAll()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to save"
-      toast.error("Failed to save", { description: message })
-    }
-  }, [updateSkillMutation, updateCommandMutation, selectedProject?.path, refetchAll])
+    },
+    [updateSkillMutation, updateCommandMutation, selectedProject?.path, refetchAll],
+  )
 
   const handleDelete = useCallback(async () => {
     if (!deletingItem) return
@@ -561,7 +601,9 @@ export function AgentsSkillsTab() {
           projectPath: selectedProject?.path,
         })
       }
-      toast.success(`${deletingItem.kind === "skill" ? "Skill" : "Command"} deleted`, { description: deletingItem.name })
+      toast.success(`${deletingItem.kind === "skill" ? "Skill" : "Command"} deleted`, {
+        description: deletingItem.name,
+      })
       setDeletingItem(null)
       setSelectedItemId(null)
       await refetchAll()
@@ -591,7 +633,10 @@ export function AgentsSkillsTab() {
         exitWidth={240}
         disableClickToClose={true}
       >
-        <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
+        <div
+          className="flex flex-col h-full bg-background border-r overflow-hidden"
+          style={{ borderRightWidth: "0.5px" }}
+        >
           {/* Search + Add */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
@@ -603,7 +648,10 @@ export function AgentsSkillsTab() {
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none"
             />
             <button
-              onClick={() => { setShowAddForm(true); setSelectedItemId(null) }}
+              onClick={() => {
+                setShowAddForm(true)
+                setSelectedItemId(null)
+              }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
               title="Create new skill or command"
             >
@@ -611,7 +659,12 @@ export function AgentsSkillsTab() {
             </button>
           </div>
           {/* Item list */}
-          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
+          <div
+            ref={listRef}
+            onKeyDown={listKeyDown}
+            tabIndex={-1}
+            className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none"
+          >
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <p className="text-xs text-muted-foreground">Loading...</p>
@@ -694,7 +747,6 @@ export function AgentsSkillsTab() {
                 )}
               </div>
             )}
-
           </div>
         </div>
       </ResizableSidebar>
@@ -713,16 +765,16 @@ export function AgentsSkillsTab() {
           <ItemDetail
             item={selectedItem}
             onSave={(data) => handleSave(selectedItem, data)}
-            onDelete={selectedItem.source !== "plugin" ? () => setDeletingItem(selectedItem) : undefined}
+            onDelete={
+              selectedItem.source !== "plugin" ? () => setDeletingItem(selectedItem) : undefined
+            }
             isSaving={isSaving}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <SkillIcon className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
-              {totalCount > 0
-                ? "Select an item to view details"
-                : "No skills or commands found"}
+              {totalCount > 0 ? "Select an item to view details" : "No skills or commands found"}
             </p>
             {totalCount === 0 && (
               <Button
@@ -739,15 +791,20 @@ export function AgentsSkillsTab() {
         )}
       </div>
 
-      <AlertDialog open={!!deletingItem} onOpenChange={(open) => { if (!open) setDeletingItem(null) }}>
+      <AlertDialog
+        open={!!deletingItem}
+        onOpenChange={(open) => {
+          if (!open) setDeletingItem(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
               Delete {deletingItem?.kind === "skill" ? "Skill" : "Command"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>{deletingItem?.name}</strong>?
-              This will remove the file from disk and cannot be undone.
+              Are you sure you want to delete <strong>{deletingItem?.name}</strong>? This will
+              remove the file from disk and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

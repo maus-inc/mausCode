@@ -4,17 +4,9 @@ import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
 import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
-import {
-  IconSpinner,
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
+import { IconSpinner, ExpandIcon, CollapseIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { getDisplayPath, getToolStatus } from "./agent-tool-registry"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
@@ -105,9 +97,7 @@ function useBatchHighlight(
   themeId: string,
   isStreaming: boolean = false,
 ): Map<number, string> {
-  const [highlightedMap, setHighlightedMap] = useState<Map<number, string>>(
-    () => new Map(),
-  )
+  const [highlightedMap, setHighlightedMap] = useState<Map<number, string>>(() => new Map())
 
   // Create stable key from lines content to detect changes
   // Only compute when NOT streaming to avoid expensive join during animation
@@ -267,20 +257,23 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Memoized click handlers to prevent inline function re-creation
   const handleHeaderClick = useCallback(() => {
     if (!isPending && !isInputStreaming) {
-      setIsOutputExpanded(prev => !prev)
+      setIsOutputExpanded((prev) => !prev)
     }
   }, [isPending, isInputStreaming])
 
-  const handleFilenameClick = useCallback((e: React.MouseEvent) => {
-    if (filePath && onOpenFile) {
-      e.stopPropagation()
-      onOpenFile(filePath)
-    }
-  }, [filePath, onOpenFile])
+  const handleFilenameClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (filePath && onOpenFile) {
+        e.stopPropagation()
+        onOpenFile(filePath)
+      }
+    },
+    [filePath, onOpenFile],
+  )
 
   const handleExpandButtonClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    setIsOutputExpanded(prev => !prev)
+    setIsOutputExpanded((prev) => !prev)
   }, [])
 
   const handleContentClick = useCallback(() => {
@@ -311,13 +304,7 @@ export const AgentEditTool = memo(function AgentEditTool({
       return { addedLines: newString.split("\n").length, removedLines: 0 }
     }
     return null
-  }, [
-    structuredPatch,
-    isWriteMode,
-    writeContent,
-    part.output?.content,
-    newString,
-  ])
+  }, [structuredPatch, isWriteMode, writeContent, part.output?.content, newString])
 
   // Get diff lines for display (memoized)
   // For Write mode, treat all lines as added
@@ -343,13 +330,7 @@ export const AgentEditTool = memo(function AgentEditTool({
       }))
     }
     return []
-  }, [
-    structuredPatch,
-    isWriteMode,
-    writeContent,
-    part.output?.content,
-    newString,
-  ])
+  }, [structuredPatch, isWriteMode, writeContent, part.output?.content, newString])
 
   // For streaming state, get content being streamed
   const streamingContent = useMemo(() => {
@@ -392,8 +373,7 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Up to 3 lines: show from top; more than 3 lines: show last N lines for autoscroll effect
   const { streamingLines, shouldAlignBottom } = useMemo(() => {
     const content = throttledStreamingContent
-    if (!content)
-      return { streamingLines: [], shouldAlignBottom: false }
+    if (!content) return { streamingLines: [], shouldAlignBottom: false }
     const lines = content.split("\n")
     const totalLines = lines.length
     // If 3 or fewer lines, show all from top
@@ -413,8 +393,8 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Without useMemo, activeLines gets a new reference on every render, which triggers
   // firstChangeIndex -> displayLines -> useBatchHighlight -> setHighlightedMap -> re-render
   const activeLines = useMemo(
-    () => isInputStreaming && streamingLines.length > 0 ? streamingLines : diffLines,
-    [isInputStreaming, streamingLines, diffLines]
+    () => (isInputStreaming && streamingLines.length > 0 ? streamingLines : diffLines),
+    [isInputStreaming, streamingLines, diffLines],
   )
 
   // Find index of first change line (added or removed) to focus on when collapsed
@@ -430,22 +410,14 @@ export const AgentEditTool = memo(function AgentEditTool({
   const displayLines = useMemo(
     () =>
       !isOutputExpanded && firstChangeIndex > 0
-        ? [
-            ...activeLines.slice(firstChangeIndex),
-            ...activeLines.slice(0, firstChangeIndex),
-          ]
+        ? [...activeLines.slice(firstChangeIndex), ...activeLines.slice(0, firstChangeIndex)]
         : activeLines,
     [activeLines, isOutputExpanded, firstChangeIndex],
   )
 
   // Batch highlight all lines at once (instead of N×useEffect)
   // Pass isInputStreaming to use longer debounce during streaming for better FPS
-  const highlightedMap = useBatchHighlight(
-    displayLines,
-    language,
-    codeTheme,
-    isInputStreaming,
-  )
+  const highlightedMap = useBatchHighlight(displayLines, language, codeTheme, isInputStreaming)
 
   // Check if we have VISIBLE content to show
   // For streaming, only show content area if we have some content to display
@@ -497,7 +469,10 @@ export const AgentEditTool = memo(function AgentEditTool({
         onClick={hasVisibleContent ? handleHeaderClick : undefined}
         className={cn(
           "flex items-center justify-between pl-2.5 pr-0.5 h-7",
-          hasVisibleContent && !isPending && !isInputStreaming && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          hasVisibleContent &&
+            !isPending &&
+            !isInputStreaming &&
+            "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
         <div
@@ -507,18 +482,12 @@ export const AgentEditTool = memo(function AgentEditTool({
             displayPath && "cursor-pointer hover:text-foreground",
           )}
         >
-          {FileIcon && (
-            <FileIcon className="w-2.5 h-2.5 flex-shrink-0 text-muted-foreground" />
-          )}
+          {FileIcon && <FileIcon className="w-2.5 h-2.5 flex-shrink-0 text-muted-foreground" />}
           {/* Filename with shimmer during progress */}
           <Tooltip>
             <TooltipTrigger asChild>
               {isPending || isInputStreaming ? (
-                <TextShimmer
-                  as="span"
-                  duration={1.2}
-                  className="truncate"
-                >
+                <TextShimmer as="span" duration={1.2} className="truncate">
                   {filename}
                 </TextShimmer>
               ) : (
@@ -541,13 +510,9 @@ export const AgentEditTool = memo(function AgentEditTool({
           {/* Diff stats - only show when not pending */}
           {!isPending && !isInputStreaming && diffStats && (
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-green-600 dark:text-green-400">
-                +{diffStats.addedLines}
-              </span>
+              <span className="text-green-600 dark:text-green-400">+{diffStats.addedLines}</span>
               {diffStats.removedLines > 0 && (
-                <span className="text-red-600 dark:text-red-400">
-                  -{diffStats.removedLines}
-                </span>
+                <span className="text-red-600 dark:text-red-400">-{diffStats.removedLines}</span>
               )}
             </div>
           )}
@@ -565,17 +530,13 @@ export const AgentEditTool = memo(function AgentEditTool({
                   <ExpandIcon
                     className={cn(
                       "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                      isOutputExpanded
-                        ? "opacity-0 scale-75"
-                        : "opacity-100 scale-100",
+                      isOutputExpanded ? "opacity-0 scale-75" : "opacity-100 scale-100",
                     )}
                   />
                   <CollapseIcon
                     className={cn(
                       "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                      isOutputExpanded
-                        ? "opacity-100 scale-100"
-                        : "opacity-0 scale-75",
+                      isOutputExpanded ? "opacity-100 scale-100" : "opacity-0 scale-75",
                     )}
                   />
                 </div>
@@ -591,26 +552,18 @@ export const AgentEditTool = memo(function AgentEditTool({
           onClick={handleContentClick}
           className={cn(
             "border-t border-border transition-colors duration-150 font-mono text-xs",
-            isOutputExpanded
-              ? "max-h-[200px] overflow-y-auto"
-              : "h-[72px] overflow-hidden", // Fixed height when collapsed
+            isOutputExpanded ? "max-h-[200px] overflow-y-auto" : "h-[72px] overflow-hidden", // Fixed height when collapsed
             !isOutputExpanded &&
               !isPending &&
               !isInputStreaming &&
               "cursor-pointer hover:bg-muted/50",
             // When streaming with > 3 lines, use flex to push content to bottom
-            isInputStreaming &&
-              shouldAlignBottom &&
-              "flex flex-col justify-end",
+            isInputStreaming && shouldAlignBottom && "flex flex-col justify-end",
           )}
         >
           {/* Display lines - either streaming content or completed diff */}
           {displayLines.length > 0 ? (
-            <div
-              className={cn(
-                isInputStreaming && shouldAlignBottom && "flex-shrink-0",
-              )}
-            >
+            <div className={cn(isInputStreaming && shouldAlignBottom && "flex-shrink-0")}>
               {displayLines.map((line: DiffLine, idx: number) => (
                 <DiffLineRow
                   // Stable key: type + index is sufficient during streaming

@@ -20,7 +20,7 @@ interface ExtractedText {
 function extractTextFromPart(
   messageId: string,
   partIndex: number,
-  part: MessagePart
+  part: MessagePart,
 ): ExtractedText[] {
   const results: ExtractedText[] = []
 
@@ -192,7 +192,7 @@ export function extractSearchableText(messages: Message[]): ExtractedText[] {
     if (message.role === "user") {
       const textParts = message.parts.filter(
         (p): p is MessagePart & { type: "text"; text: string } =>
-          p.type === "text" && typeof p.text === "string" && p.text.trim().length > 0
+          p.type === "text" && typeof p.text === "string" && p.text.trim().length > 0,
       )
       if (textParts.length > 0) {
         const combinedText = textParts.map((p) => p.text).join("\n")
@@ -224,10 +224,7 @@ export function extractSearchableText(messages: Message[]): ExtractedText[] {
 /**
  * Find all matches for a query in extracted texts
  */
-export function findMatches(
-  extractedTexts: ExtractedText[],
-  query: string
-): SearchMatch[] {
+export function findMatches(extractedTexts: ExtractedText[], query: string): SearchMatch[] {
   if (!query.trim()) return []
 
   const matches: SearchMatch[] = []
@@ -274,7 +271,7 @@ export interface TextSegment {
  */
 export function splitTextByHighlights(
   text: string,
-  highlights: Array<{ offset: number; length: number; isCurrent: boolean }>
+  highlights: Array<{ offset: number; length: number; isCurrent: boolean }>,
 ): TextSegment[] {
   if (highlights.length === 0) {
     return [{ text, isHighlight: false, isCurrent: false }]
@@ -328,7 +325,7 @@ export function splitTextByHighlights(
 
 export function debounce<T extends (...args: any[]) => void>(
   fn: T,
-  delay: number
+  delay: number,
 ): T & { cancel: () => void } {
   let timeoutId: ReturnType<typeof setTimeout> | null = null
 

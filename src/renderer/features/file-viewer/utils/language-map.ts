@@ -163,16 +163,16 @@ const extensionToMonacoLanguage: Record<string, string> = {
 }
 
 const filenameToMonacoLanguage: Record<string, string> = {
-  "dockerfile": "dockerfile",
-  "Dockerfile": "dockerfile",
-  "makefile": "makefile",
-  "Makefile": "makefile",
-  "GNUmakefile": "makefile",
+  dockerfile: "dockerfile",
+  Dockerfile: "dockerfile",
+  makefile: "makefile",
+  Makefile: "makefile",
+  GNUmakefile: "makefile",
   "CMakeLists.txt": "cmake",
-  "Gemfile": "ruby",
-  "Rakefile": "ruby",
-  "Vagrantfile": "ruby",
-  "Podfile": "ruby",
+  Gemfile: "ruby",
+  Rakefile: "ruby",
+  Vagrantfile: "ruby",
+  Podfile: "ruby",
   ".gitignore": "plaintext",
   ".gitattributes": "plaintext",
   ".dockerignore": "plaintext",
@@ -211,9 +211,18 @@ export function getMonacoLanguage(filePath: string): string {
 export function isDataFile(filePath: string): boolean {
   const ext = filePath.toLowerCase().match(/\.[^.]+$/)?.[0] || ""
   const dataExtensions = [
-    ".csv", ".tsv", ".db", ".sqlite", ".sqlite3",
-    ".parquet", ".pq", ".xlsx", ".xls",
-    ".arrow", ".feather", ".ipc",
+    ".csv",
+    ".tsv",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".parquet",
+    ".pq",
+    ".xlsx",
+    ".xls",
+    ".arrow",
+    ".feather",
+    ".ipc",
   ]
   return dataExtensions.includes(ext)
 }
@@ -226,8 +235,18 @@ export type FileViewerType = "code" | "image" | "markdown" | "unsupported"
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp"]
 
 const UNSUPPORTED_EXTENSIONS = [
-  ".pdf", ".exe", ".dll", ".so", ".dylib", ".bin", ".dat",
-  ".zip", ".tar", ".gz", ".7z", ".rar",
+  ".pdf",
+  ".exe",
+  ".dll",
+  ".so",
+  ".dylib",
+  ".bin",
+  ".dat",
+  ".zip",
+  ".tar",
+  ".gz",
+  ".7z",
+  ".rar",
 ]
 
 /**

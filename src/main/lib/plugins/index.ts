@@ -82,10 +82,7 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
   for (const marketplace of marketplaces) {
     if (marketplace.name.startsWith(".")) continue
 
-    const isMarketplaceDir = await isDirentDirectory(
-      marketplacesDir,
-      marketplace,
-    )
+    const isMarketplaceDir = await isDirentDirectory(marketplacesDir, marketplace)
     if (!isMarketplaceDir) continue
 
     const marketplacePath = path.join(marketplacesDir, marketplace.name)

@@ -47,10 +47,7 @@ export function DevicePresetsBar({
 
     // Apply any valid positive number, clamp to reasonable bounds
     if (!isNaN(value) && value > 0) {
-      const clampedValue = Math.max(
-        AGENTS_PREVIEW_CONSTANTS.MIN_WIDTH,
-        Math.min(maxWidth, value),
-      )
+      const clampedValue = Math.max(AGENTS_PREVIEW_CONSTANTS.MIN_WIDTH, Math.min(maxWidth, value))
       setWidthInputValue(String(clampedValue))
       onWidthChange(clampedValue)
     } else {
@@ -84,11 +81,7 @@ export function DevicePresetsBar({
           </SelectTrigger>
           <SelectContent className="!w-36">
             {DEVICE_PRESETS.map((preset) => (
-              <SelectItem
-                key={preset.name}
-                value={preset.name}
-                className="whitespace-nowrap"
-              >
+              <SelectItem key={preset.name} value={preset.name} className="whitespace-nowrap">
                 {preset.name}
               </SelectItem>
             ))}
@@ -134,4 +127,3 @@ export function DevicePresetsBar({
     </motion.div>
   )
 }
-

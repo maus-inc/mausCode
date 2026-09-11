@@ -16,9 +16,9 @@
  *
  * @module BrowserImport
  */
-import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { BrowserProfileId } from "./browserProfile.ts";
+import * as Schema from "effect/Schema"
+import { TrimmedNonEmptyString } from "./baseSchemas.ts"
+import { BrowserProfileId } from "./browserProfile.ts"
 
 const BROWSER_IMPORT_SOURCE_IDS = [
   "chrome",
@@ -30,10 +30,10 @@ const BROWSER_IMPORT_SOURCE_IDS = [
   "helium",
   "firefox",
   "safari",
-] as const;
+] as const
 
-export const BrowserImportSourceId = Schema.Literals(BROWSER_IMPORT_SOURCE_IDS);
-export type BrowserImportSourceId = typeof BrowserImportSourceId.Type;
+export const BrowserImportSourceId = Schema.Literals(BROWSER_IMPORT_SOURCE_IDS)
+export type BrowserImportSourceId = typeof BrowserImportSourceId.Type
 
 /**
  * Why a detected source cannot be imported right now.
@@ -50,8 +50,8 @@ export const BrowserImportUnavailableReason = Schema.Literals([
   "needsFullDiskAccess",
   "browserRunning",
   "unsupportedPlatform",
-]);
-export type BrowserImportUnavailableReason = typeof BrowserImportUnavailableReason.Type;
+])
+export type BrowserImportUnavailableReason = typeof BrowserImportUnavailableReason.Type
 
 /**
  * Why an import that was actually attempted failed.
@@ -82,8 +82,8 @@ export const BrowserImportFailureReason = Schema.Literals([
   "profileLimitReached",
   /** Anything else: a corrupt database, a failed decrypt, a vanished file. */
   "readFailed",
-]);
-export type BrowserImportFailureReason = typeof BrowserImportFailureReason.Type;
+])
+export type BrowserImportFailureReason = typeof BrowserImportFailureReason.Type
 
 /** A profile inside the source browser, e.g. Chromium's "Default" directory. */
 export const BrowserImportSourceProfile = Schema.Struct({
@@ -97,8 +97,8 @@ export const BrowserImportSourceProfile = Schema.Struct({
    * Disk Access is granted).
    */
   cookieCount: Schema.optional(Schema.Int),
-});
-export type BrowserImportSourceProfile = typeof BrowserImportSourceProfile.Type;
+})
+export type BrowserImportSourceProfile = typeof BrowserImportSourceProfile.Type
 
 export const BrowserImportSource = Schema.Struct({
   id: BrowserImportSourceId,
@@ -106,16 +106,16 @@ export const BrowserImportSource = Schema.Struct({
   profiles: Schema.Array(BrowserImportSourceProfile),
   /** Absent when the source is importable. */
   unavailable: Schema.optional(BrowserImportUnavailableReason),
-});
-export type BrowserImportSource = typeof BrowserImportSource.Type;
+})
+export type BrowserImportSource = typeof BrowserImportSource.Type
 
 export const BrowserImportInput = Schema.Struct({
   sourceId: BrowserImportSourceId,
   sourceProfileDirectory: TrimmedNonEmptyString,
   /** T3 Code profile the cookies are written into. */
   targetProfileId: BrowserProfileId,
-});
-export type BrowserImportInput = typeof BrowserImportInput.Type;
+})
+export type BrowserImportInput = typeof BrowserImportInput.Type
 
 /** IPC payload: the import input plus the environment the partition belongs to. */
 export const DesktopPreviewImportCookiesInputSchema = Schema.Struct({
@@ -123,7 +123,7 @@ export const DesktopPreviewImportCookiesInputSchema = Schema.Struct({
   sourceId: BrowserImportSourceId,
   sourceProfileDirectory: TrimmedNonEmptyString,
   targetProfileId: BrowserProfileId,
-});
+})
 
 export const BrowserImportResult = Schema.Struct({
   /** Cookies successfully written into the target partition. */
@@ -140,8 +140,8 @@ export const BrowserImportResult = Schema.Struct({
    * broken key can skip thousands across many sites.
    */
   skippedDomains: Schema.Array(Schema.String),
-});
-export type BrowserImportResult = typeof BrowserImportResult.Type;
+})
+export type BrowserImportResult = typeof BrowserImportResult.Type
 
 const BROWSER_IMPORT_UNAVAILABLE_COPY: Readonly<Record<BrowserImportUnavailableReason, string>> = {
   notInstalled: "Not installed on this machine.",
@@ -152,7 +152,7 @@ const BROWSER_IMPORT_UNAVAILABLE_COPY: Readonly<Record<BrowserImportUnavailableR
     "Give T3 Code Full Disk Access in System Settings → Privacy & Security, then retry.",
   browserRunning: "Quit the browser first so its cookie database can be read.",
   unsupportedPlatform: "Importing from this browser isn't possible on this platform.",
-};
+}
 
 /** What to tell the user when an attempted import fails. */
 export const BROWSER_IMPORT_FAILURE_COPY: Readonly<Record<BrowserImportFailureReason, string>> = {
@@ -166,4 +166,4 @@ export const BROWSER_IMPORT_FAILURE_COPY: Readonly<Record<BrowserImportFailureRe
   profileLimitReached:
     "You've reached the profile limit. Delete a profile or import into an existing one.",
   readFailed: "The browser's cookie database could not be read.",
-};
+}

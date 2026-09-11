@@ -11,11 +11,7 @@ import { pendingAuthRetryMessageAtom } from "../../features/agents/atoms"
 import { CursorLoginContent } from "../../features/agents/components/cursor-login-content"
 import { useCursorLoginFlow } from "../../features/agents/hooks/use-cursor-login-flow"
 import { cursorLoginModalOpenAtom } from "../../lib/atoms"
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-} from "../ui/alert-dialog"
+import { AlertDialog, AlertDialogCancel, AlertDialogContent } from "../ui/alert-dialog"
 
 type CursorLoginModalProps = {
   autoStart?: boolean
@@ -23,26 +19,15 @@ type CursorLoginModalProps = {
 
 export function CursorLoginModal({ autoStart = true }: CursorLoginModalProps) {
   const [open, setOpen] = useAtom(cursorLoginModalOpenAtom)
-  const [pendingAuthRetry, setPendingAuthRetry] = useAtom(
-    pendingAuthRetryMessageAtom,
-  )
+  const [pendingAuthRetry, setPendingAuthRetry] = useAtom(pendingAuthRetryMessageAtom)
   const didInitForOpenRef = useRef(false)
   const didStartForOpenRef = useRef(false)
   const shouldAutoOpenUrlRef = useRef(false)
   const isAuthRetryFlow = pendingAuthRetry?.provider === "cursor"
   const shouldAutoStartForCurrentFlow = autoStart && !isAuthRetryFlow
 
-  const {
-    state,
-    url,
-    error,
-    isRunning,
-    isOpeningUrl,
-    start,
-    cancel,
-    reset,
-    openUrl,
-  } = useCursorLoginFlow()
+  const { state, url, error, isRunning, isOpeningUrl, start, cancel, reset, openUrl } =
+    useCursorLoginFlow()
 
   const clearPendingRetryIfNeeded = () => {
     if (
@@ -108,13 +93,7 @@ export function CursorLoginModal({ autoStart = true }: CursorLoginModalProps) {
     }
 
     setOpen(false)
-  }, [
-    open,
-    pendingAuthRetry,
-    setOpen,
-    setPendingAuthRetry,
-    state,
-  ])
+  }, [open, pendingAuthRetry, setOpen, setPendingAuthRetry, state])
 
   const handleConnect = () => {
     shouldAutoOpenUrlRef.current = true

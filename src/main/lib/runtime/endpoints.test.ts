@@ -40,7 +40,10 @@ test("isHonoredEndpoint matches ambient env overrides", () => {
   process.env.OPENAI_BASE_URL = "http://localhost:11434/v1"
   try {
     assert.equal(
-      isHonoredEndpoint("http://localhost:11434/v1", { openaiBaseUrl: null, anthropicBaseUrl: null }),
+      isHonoredEndpoint("http://localhost:11434/v1", {
+        openaiBaseUrl: null,
+        anthropicBaseUrl: null,
+      }),
       true,
     )
   } finally {
@@ -54,8 +57,5 @@ test("buildDaemonEndpointEnv uses JCODE_* names and skips unset", () => {
     buildDaemonEndpointEnv({ openaiBaseUrl: "https://proxy.local/v1", anthropicBaseUrl: null }),
     { JCODE_OPENAI_API_BASE: "https://proxy.local/v1" },
   )
-  assert.deepEqual(
-    buildDaemonEndpointEnv({ openaiBaseUrl: null, anthropicBaseUrl: null }),
-    {},
-  )
+  assert.deepEqual(buildDaemonEndpointEnv({ openaiBaseUrl: null, anthropicBaseUrl: null }), {})
 })

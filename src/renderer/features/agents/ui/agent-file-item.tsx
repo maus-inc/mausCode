@@ -23,7 +23,27 @@ function getFileIcon(filename: string) {
   const ext = filename.split(".").pop()?.toLowerCase()
 
   // Code files
-  if (["js", "ts", "jsx", "tsx", "py", "rb", "go", "rs", "java", "kt", "swift", "c", "cpp", "h", "hpp", "cs", "php"].includes(ext || "")) {
+  if (
+    [
+      "js",
+      "ts",
+      "jsx",
+      "tsx",
+      "py",
+      "rb",
+      "go",
+      "rs",
+      "java",
+      "kt",
+      "swift",
+      "c",
+      "cpp",
+      "h",
+      "hpp",
+      "cs",
+      "php",
+    ].includes(ext || "")
+  ) {
     return FileCode
   }
 
@@ -65,9 +85,7 @@ export function AgentFileItem({
           {filename}
         </span>
         {size !== undefined && (
-          <span className="text-[10px] text-muted-foreground">
-            {formatFileSize(size)}
-          </span>
+          <span className="text-[10px] text-muted-foreground">{formatFileSize(size)}</span>
         )}
       </div>
 

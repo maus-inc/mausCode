@@ -1,13 +1,6 @@
 import type { ComponentType, SVGProps } from "react"
-import {
-  PlanIcon,
-  AgentIcon,
-} from "../../../components/ui/icons"
-import {
-  HelpCircle,
-  Pencil,
-  Zap,
-} from "lucide-react"
+import { PlanIcon, AgentIcon } from "../../../components/ui/icons"
+import { HelpCircle, Pencil, Zap } from "lucide-react"
 import type { AgentMode } from "../atoms"
 
 type IconComponent = ComponentType<{ className?: string } & Partial<SVGProps<SVGSVGElement>>>

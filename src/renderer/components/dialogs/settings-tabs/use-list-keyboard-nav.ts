@@ -40,7 +40,7 @@ export function useListKeyboardNav<T extends string>({
       // Focus the item and scroll into view
       requestAnimationFrame(() => {
         const el = containerRef.current?.querySelector<HTMLElement>(
-          `[data-item-id="${CSS.escape(nextItem)}"]`
+          `[data-item-id="${CSS.escape(nextItem)}"]`,
         )
         if (el) {
           el.focus()
@@ -48,7 +48,7 @@ export function useListKeyboardNav<T extends string>({
         }
       })
     },
-    [items, selectedItem, onSelect]
+    [items, selectedItem, onSelect],
   )
 
   return { containerRef, onKeyDown }

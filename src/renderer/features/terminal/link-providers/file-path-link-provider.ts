@@ -74,18 +74,10 @@ function looksLikeFile(path: string): boolean {
 export class FilePathLinkProvider implements ILinkProvider {
   constructor(
     private xterm: XTerm,
-    private onClick: (
-      event: MouseEvent,
-      path: string,
-      line?: number,
-      column?: number
-    ) => void
+    private onClick: (event: MouseEvent, path: string, line?: number, column?: number) => void,
   ) {}
 
-  provideLinks(
-    bufferLineNumber: number,
-    callback: (links: ILink[] | undefined) => void
-  ): void {
+  provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
     const buffer = this.xterm.buffer.active
     const line = buffer.getLine(bufferLineNumber)
 
@@ -112,7 +104,11 @@ export class FilePathLinkProvider implements ILinkProvider {
       }
 
       // Calculate the actual start position (accounting for leading whitespace/quote)
-      const leadingChars = fullMatch.length - path.length - (match[2] ? match[2].length + 1 : 0) - (match[3] ? match[3].length + 1 : 0)
+      const leadingChars =
+        fullMatch.length -
+        path.length -
+        (match[2] ? match[2].length + 1 : 0) -
+        (match[3] ? match[3].length + 1 : 0)
       const startX = match.index + leadingChars
 
       // Build the link text (path with optional :line:col)

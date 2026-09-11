@@ -2,28 +2,28 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
-import * as SchemaTransformation from "effect/SchemaTransformation";
-import { TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { ProviderDriverKind } from "./providerInstance.ts";
+import * as Effect from "effect/Effect"
+import * as Schema from "effect/Schema"
+import * as SchemaTransformation from "effect/SchemaTransformation"
+import { TrimmedNonEmptyString } from "./baseSchemas.ts"
+import { ProviderDriverKind } from "./providerInstance.ts"
 
-export const ProviderOptionDescriptorType = Schema.Literals(["select", "boolean"]);
-export type ProviderOptionDescriptorType = typeof ProviderOptionDescriptorType.Type;
+export const ProviderOptionDescriptorType = Schema.Literals(["select", "boolean"])
+export type ProviderOptionDescriptorType = typeof ProviderOptionDescriptorType.Type
 
 export const ProviderOptionChoice = Schema.Struct({
   id: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
   description: Schema.optional(TrimmedNonEmptyString),
   isDefault: Schema.optional(Schema.Boolean),
-});
-export type ProviderOptionChoice = typeof ProviderOptionChoice.Type;
+})
+export type ProviderOptionChoice = typeof ProviderOptionChoice.Type
 
 const ProviderOptionDescriptorBase = {
   id: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
   description: Schema.optional(TrimmedNonEmptyString),
-} as const;
+} as const
 
 export const SelectProviderOptionDescriptor = Schema.Struct({
   ...ProviderOptionDescriptorBase,
@@ -31,30 +31,30 @@ export const SelectProviderOptionDescriptor = Schema.Struct({
   options: Schema.Array(ProviderOptionChoice),
   currentValue: Schema.optional(TrimmedNonEmptyString),
   promptInjectedValues: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
-});
-export type SelectProviderOptionDescriptor = typeof SelectProviderOptionDescriptor.Type;
+})
+export type SelectProviderOptionDescriptor = typeof SelectProviderOptionDescriptor.Type
 
 export const BooleanProviderOptionDescriptor = Schema.Struct({
   ...ProviderOptionDescriptorBase,
   type: Schema.Literal("boolean"),
   currentValue: Schema.optional(Schema.Boolean),
-});
-export type BooleanProviderOptionDescriptor = typeof BooleanProviderOptionDescriptor.Type;
+})
+export type BooleanProviderOptionDescriptor = typeof BooleanProviderOptionDescriptor.Type
 
 export const ProviderOptionDescriptor = Schema.Union([
   SelectProviderOptionDescriptor,
   BooleanProviderOptionDescriptor,
-]);
-export type ProviderOptionDescriptor = typeof ProviderOptionDescriptor.Type;
+])
+export type ProviderOptionDescriptor = typeof ProviderOptionDescriptor.Type
 
-export const ProviderOptionSelectionValue = Schema.Union([TrimmedNonEmptyString, Schema.Boolean]);
-export type ProviderOptionSelectionValue = typeof ProviderOptionSelectionValue.Type;
+export const ProviderOptionSelectionValue = Schema.Union([TrimmedNonEmptyString, Schema.Boolean])
+export type ProviderOptionSelectionValue = typeof ProviderOptionSelectionValue.Type
 
 export const ProviderOptionSelection = Schema.Struct({
   id: TrimmedNonEmptyString,
   value: ProviderOptionSelectionValue,
-});
-export type ProviderOptionSelection = typeof ProviderOptionSelection.Type;
+})
+export type ProviderOptionSelection = typeof ProviderOptionSelection.Type
 
 /**
  * Legacy on-disk shape for provider option selections, kept readable by the
@@ -67,7 +67,7 @@ export type ProviderOptionSelection = typeof ProviderOptionSelection.Type;
  *   - SQLite databases that have not yet run migration 026,
  *   - any future regression that re-introduces the legacy shape.
  */
-const LegacyProviderOptionSelectionsObject = Schema.Record(Schema.String, Schema.Unknown);
+const LegacyProviderOptionSelectionsObject = Schema.Record(Schema.String, Schema.Unknown)
 
 const ProviderOptionSelectionsFromLegacyObject = LegacyProviderOptionSelectionsObject.pipe(
   Schema.decodeTo(
@@ -77,7 +77,7 @@ const ProviderOptionSelectionsFromLegacyObject = LegacyProviderOptionSelectionsO
       encode: (selections) => Effect.succeed(canonicalSelectionsToLegacyObject(selections)),
     }),
   ),
-);
+)
 
 /**
  * Schema for the `options` field of every `ModelSelection` variant.
@@ -94,42 +94,42 @@ const ProviderOptionSelectionsFromLegacyObject = LegacyProviderOptionSelectionsO
 export const ProviderOptionSelections = Schema.Union([
   Schema.Array(ProviderOptionSelection),
   ProviderOptionSelectionsFromLegacyObject,
-]);
-export type ProviderOptionSelections = typeof ProviderOptionSelections.Type;
+])
+export type ProviderOptionSelections = typeof ProviderOptionSelections.Type
 
 function coerceLegacyOptionsObjectToArray(
   record: Record<string, unknown>,
 ): ReadonlyArray<ProviderOptionSelection> {
-  const entries: Array<ProviderOptionSelection> = [];
+  const entries: Array<ProviderOptionSelection> = []
   for (const [rawKey, rawValue] of Object.entries(record)) {
-    const id = typeof rawKey === "string" ? rawKey.trim() : "";
-    if (id.length === 0) continue;
+    const id = typeof rawKey === "string" ? rawKey.trim() : ""
+    if (id.length === 0) continue
     if (typeof rawValue === "string") {
-      const trimmed = rawValue.trim();
-      if (trimmed.length > 0) entries.push({ id, value: trimmed });
+      const trimmed = rawValue.trim()
+      if (trimmed.length > 0) entries.push({ id, value: trimmed })
     } else if (typeof rawValue === "boolean") {
-      entries.push({ id, value: rawValue });
+      entries.push({ id, value: rawValue })
     }
     // Drop anything else (numbers, null, nested objects/arrays) to match the
     // permissive normalization performed by migration 026.
   }
-  return entries;
+  return entries
 }
 
 function canonicalSelectionsToLegacyObject(
   selections: ReadonlyArray<ProviderOptionSelection>,
 ): Record<string, string | boolean> {
-  const out: Record<string, string | boolean> = {};
+  const out: Record<string, string | boolean> = {}
   for (const { id, value } of selections) {
-    out[id] = value;
+    out[id] = value
   }
-  return out;
+  return out
 }
 
 export const ModelCapabilities = Schema.Struct({
   optionDescriptors: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
-});
-export type ModelCapabilities = typeof ModelCapabilities.Type;
+})
+export type ModelCapabilities = typeof ModelCapabilities.Type
 
 /**
  * A user-authored custom model. `name` and `capabilities` are optional so a
@@ -140,20 +140,20 @@ export const CustomModelEntry = Schema.Struct({
   slug: TrimmedNonEmptyString,
   name: Schema.optional(TrimmedNonEmptyString),
   capabilities: Schema.optional(ModelCapabilities),
-});
-export type CustomModelEntry = typeof CustomModelEntry.Type;
+})
+export type CustomModelEntry = typeof CustomModelEntry.Type
 
 /** On-disk custom model setting: the legacy bare slug, or a full entry. */
-export const CustomModelSetting = Schema.Union([Schema.String, CustomModelEntry]);
-export type CustomModelSetting = typeof CustomModelSetting.Type;
+export const CustomModelSetting = Schema.Union([Schema.String, CustomModelEntry])
+export type CustomModelSetting = typeof CustomModelSetting.Type
 
-const CODEX_DRIVER_KIND = ProviderDriverKind.make("codex");
-const CLAUDE_DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
-const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor");
-const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
-const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
+const CODEX_DRIVER_KIND = ProviderDriverKind.make("codex")
+const CLAUDE_DRIVER_KIND = ProviderDriverKind.make("claudeAgent")
+const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor")
+const GROK_DRIVER_KIND = ProviderDriverKind.make("grok")
+const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode")
 
-export const DEFAULT_MODEL = "gpt-5.6-sol";
+export const DEFAULT_MODEL = "gpt-5.6-sol"
 
 /**
  * Codex default-model preference, most preferred first. The provider snapshot
@@ -163,11 +163,11 @@ export const DEFAULT_MODEL = "gpt-5.6-sol";
 export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
   "gpt-5.6-sol",
   "gpt-5.6-terra",
-];
-export const DEFAULT_TEXT_GENERATION_MODEL = "gpt-5.6-luna";
+]
+export const DEFAULT_TEXT_GENERATION_MODEL = "gpt-5.6-luna"
 /** Keep the official Antigravity session's current model. Never send this ID to ACP. */
-export const ANTIGRAVITY_DEFAULT_MODEL = "antigravity-default";
-export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low";
+export const ANTIGRAVITY_DEFAULT_MODEL = "antigravity-default"
+export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low"
 
 export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
   [CODEX_DRIVER_KIND]: DEFAULT_MODEL,
@@ -177,7 +177,7 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [GROK_DRIVER_KIND]: "grok-build",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [ProviderDriverKind.make("antigravity")]: ANTIGRAVITY_DEFAULT_MODEL,
-};
+}
 
 /** Per-provider text generation model defaults. */
 export const DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER: Partial<
@@ -188,7 +188,7 @@ export const DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER: Partial<
   [CLAUDE_DRIVER_KIND]: "claude-haiku-4-5",
   [CURSOR_DRIVER_KIND]: "composer-2",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
-};
+}
 
 export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
   Record<ProviderDriverKind, Record<string, string>>
@@ -214,7 +214,7 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
     "opus-4.5": "claude-opus-4-5",
   },
   [OPENCODE_DRIVER_KIND]: {},
-};
+}
 
 // ── Provider display names ────────────────────────────────────────────
 
@@ -225,4 +225,4 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [CURSOR_DRIVER_KIND]: "Cursor",
   [GROK_DRIVER_KIND]: "Grok",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
-};
+}

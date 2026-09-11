@@ -4,7 +4,9 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { createPortal } from "react-dom"
 // Desktop: stub for next/image
-const Image = ({ src, alt, width, height, className }: any) => <img src={src} alt={alt} width={width} height={height} className={className} />
+const Image = ({ src, alt, width, height, className }: any) => (
+  <img src={src} alt={alt} width={width} height={height} className={className} />
+)
 import { useTheme } from "next-themes"
 import { X } from "lucide-react"
 import { useAtom } from "jotai"
@@ -111,7 +113,10 @@ export function AgentsOnboardingDialog() {
               className="w-[90vw] max-w-[384px] pointer-events-auto relative"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-background rounded-2xl border shadow-2xl overflow-hidden" data-canvas-dialog>
+              <div
+                className="bg-background rounded-2xl border shadow-2xl overflow-hidden"
+                data-canvas-dialog
+              >
                 {/* Close Button */}
                 <button
                   type="button"
@@ -122,57 +127,47 @@ export function AgentsOnboardingDialog() {
                   <span className="sr-only">Close</span>
                 </button>
 
-                  <div className="flex flex-col">
-                    {/* Images Section */}
-                    <div className="bg-primary px-5 pt-10 flex items-start justify-center">
-                      <div className="relative w-full flex items-start justify-center pt-4">
-                        {/* Container showing only top 70% of image (16/7 aspect ratio = 70% of 16/10) */}
-                        <div
-                          className="relative w-full overflow-hidden rounded-t-lg border"
-                          style={{ aspectRatio: "16/7", maxHeight: "126px" }}
-                        >
-                          <div
-                            className="absolute inset-0"
-                            style={{ height: "142.86%", top: 0 }}
-                          >
-                            <Image
-                              src={
-                                resolvedTheme === "dark"
-                                  ? "/agents-onboarding-dark.webp"
-                                  : "/agents-onboarding-light.webp"
-                              }
-                              alt="Agents interface"
-                              fill
-                              className="object-cover"
-                              style={{ objectPosition: "top" }}
-                            />
-                          </div>
+                <div className="flex flex-col">
+                  {/* Images Section */}
+                  <div className="bg-primary px-5 pt-10 flex items-start justify-center">
+                    <div className="relative w-full flex items-start justify-center pt-4">
+                      {/* Container showing only top 70% of image (16/7 aspect ratio = 70% of 16/10) */}
+                      <div
+                        className="relative w-full overflow-hidden rounded-t-lg border"
+                        style={{ aspectRatio: "16/7", maxHeight: "126px" }}
+                      >
+                        <div className="absolute inset-0" style={{ height: "142.86%", top: 0 }}>
+                          <Image
+                            src={
+                              resolvedTheme === "dark"
+                                ? "/agents-onboarding-dark.webp"
+                                : "/agents-onboarding-light.webp"
+                            }
+                            alt="Agents interface"
+                            fill
+                            className="object-cover"
+                            style={{ objectPosition: "top" }}
+                          />
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Content */}
-                    <div className="p-5 space-y-2">
-                      <h2 className="text-base font-semibold">
-                        Welcome to Agents
-                      </h2>
-                      <p className="text-[13px] text-muted-foreground leading-relaxed">
-                      This tool makes you significantly more productive in your
-                      daily routine.
-                      </p>
+                  {/* Content */}
+                  <div className="p-5 space-y-2">
+                    <h2 className="text-base font-semibold">Welcome to Agents</h2>
+                    <p className="text-[13px] text-muted-foreground leading-relaxed">
+                      This tool makes you significantly more productive in your daily routine.
+                    </p>
 
-                      {/* Button - bottom right */}
-                      <div className="flex justify-end pt-1">
-                        <Button
-                          size="sm"
-                        onClick={handleClose}
-                        className="h-7 text-xs rounded-md"
-                        >
-                          Let's go
-                        </Button>
-                      </div>
+                    {/* Button - bottom right */}
+                    <div className="flex justify-end pt-1">
+                      <Button size="sm" onClick={handleClose} className="h-7 text-xs rounded-md">
+                        Let's go
+                      </Button>
                     </div>
                   </div>
+                </div>
               </div>
             </motion.div>
           </div>

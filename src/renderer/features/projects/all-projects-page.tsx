@@ -6,7 +6,6 @@
  */
 "use client"
 
-
 import { useCallback, useMemo, useRef, useState } from "react"
 import { useSetAtom } from "jotai"
 import { toast } from "sonner"
@@ -90,10 +89,7 @@ function ProjectStatusBadges({
           title={`${inProgressCount} chat${inProgressCount === 1 ? "" : "s"} in progress`}
           className="flex items-center gap-1 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
         >
-          <LoadingDot
-            isLoading={true}
-            className="h-3 w-3 text-muted-foreground"
-          />
+          <LoadingDot isLoading={true} className="h-3 w-3 text-muted-foreground" />
           {inProgressCount}
         </span>
       )}
@@ -202,16 +198,8 @@ function ProjectCard({
             e.stopPropagation()
             onToggleRailVisibility()
           }}
-          aria-label={
-            isHiddenFromRail
-              ? "Show in left rail"
-              : "Hide from left rail"
-          }
-          title={
-            isHiddenFromRail
-              ? "Show in left rail"
-              : "Hide from left rail"
-          }
+          aria-label={isHiddenFromRail ? "Show in left rail" : "Hide from left rail"}
+          title={isHiddenFromRail ? "Show in left rail" : "Hide from left rail"}
           className={cn(
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors",
             isHiddenFromRail
@@ -219,11 +207,7 @@ function ProjectCard({
               : "text-foreground/80 hover:bg-foreground/[0.06] hover:text-foreground",
           )}
         >
-          {isHiddenFromRail ? (
-            <EyeOff className="h-4 w-4" />
-          ) : (
-            <Eye className="h-4 w-4" />
-          )}
+          {isHiddenFromRail ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
 
         <DropdownMenu>
@@ -288,9 +272,7 @@ function ProjectCard({
               {project.gitProvider}
             </span>
           )}
-          {project.gitRemoteUrl && (
-            <span className="truncate">{project.gitRemoteUrl}</span>
-          )}
+          {project.gitRemoteUrl && <span className="truncate">{project.gitRemoteUrl}</span>}
         </div>
       )}
     </div>
@@ -299,15 +281,12 @@ function ProjectCard({
 
 export function AllProjectsPage() {
   const utils = trpc.useUtils()
-  const { data: projects, isLoading } = trpc.projects.listWithStatus.useQuery(
-    undefined,
-    {
-      // Light polling so in-progress / unseen badges stay fresh while the
-      // page is open; cheap query (small JS aggregation over local SQLite).
-      refetchInterval: 5000,
-      refetchOnWindowFocus: true,
-    },
-  )
+  const { data: projects, isLoading } = trpc.projects.listWithStatus.useQuery(undefined, {
+    // Light polling so in-progress / unseen badges stay fresh while the
+    // page is open; cheap query (small JS aggregation over local SQLite).
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
+  })
   const setSelectedProject = useSetAtom(selectedProjectAtom)
   const setSidebarOpen = useSetAtom(agentsSidebarOpenAtom)
 
@@ -337,12 +316,7 @@ export function AllProjectsPage() {
         name: project.name,
         path: project.path,
         gitRemoteUrl: project.gitRemoteUrl ?? null,
-        gitProvider:
-          (project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null) ?? null,
+        gitProvider: (project.gitProvider as "github" | "gitlab" | "bitbucket" | null) ?? null,
         gitOwner: project.gitOwner ?? null,
         gitRepo: project.gitRepo ?? null,
       })
@@ -389,12 +363,7 @@ export function AllProjectsPage() {
         name: project.name,
         path: project.path,
         gitRemoteUrl: project.gitRemoteUrl,
-        gitProvider:
-          (project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null) ?? null,
+        gitProvider: (project.gitProvider as "github" | "gitlab" | "bitbucket" | null) ?? null,
         gitOwner: project.gitOwner,
         gitRepo: project.gitRepo,
       })
@@ -422,9 +391,7 @@ export function AllProjectsPage() {
   const handleCommitRename = useCallback(() => {
     if (!renamingId) return
     const trimmed = draftName.trim()
-    const original = (projects as Project[] | undefined)?.find(
-      (p) => p.id === renamingId,
-    )
+    const original = (projects as Project[] | undefined)?.find((p) => p.id === renamingId)
     setRenamingId(null)
     if (!original || !trimmed || trimmed === original.name) return
     renameProject.mutate({ id: renamingId, name: trimmed })
@@ -546,7 +513,10 @@ export function AllProjectsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this project?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes <span className="font-medium text-foreground">{pendingDelete ? projectLabel(pendingDelete) : ""}</span>{" "}
+              This removes{" "}
+              <span className="font-medium text-foreground">
+                {pendingDelete ? projectLabel(pendingDelete) : ""}
+              </span>{" "}
               and all of its chats from mausCode. The folder on disk is not deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>

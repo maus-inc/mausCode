@@ -2,7 +2,7 @@
  * Offline mode handler - auto-fallback to Ollama when internet is unavailable
  */
 
-import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from '../ollama'
+import { checkInternetConnection, checkOllamaStatus, getOllamaConfig } from "../ollama"
 
 export type CustomClaudeConfig = {
   model: string
@@ -36,7 +36,7 @@ export async function checkOfflineFallback(
 ): Promise<OfflineCheckResult> {
   // If custom config is provided, use it (highest priority)
   if (customConfig) {
-    const isUsingOllama = customConfig.baseUrl.includes('localhost:11434')
+    const isUsingOllama = customConfig.baseUrl.includes("localhost:11434")
     return {
       config: customConfig,
       isUsingOllama,
@@ -53,13 +53,13 @@ export async function checkOfflineFallback(
   }
 
   // Check internet FIRST - if offline, use Ollama regardless of auth
-  console.log('[Offline] Checking internet connectivity...')
+  console.log("[Offline] Checking internet connectivity...")
   const hasInternet = await checkInternetConnection()
-  console.log(`[Offline] Internet check result: ${hasInternet ? 'ONLINE' : 'OFFLINE'}`)
+  console.log(`[Offline] Internet check result: ${hasInternet ? "ONLINE" : "OFFLINE"}`)
 
   if (!hasInternet) {
     // No internet - try Ollama
-    console.log('[Offline] No internet connection, checking Ollama...')
+    console.log("[Offline] No internet connection, checking Ollama...")
 
     const ollamaStatus = await checkOllamaStatus()
 
@@ -67,7 +67,8 @@ export async function checkOfflineFallback(
       return {
         config: undefined,
         isUsingOllama: false,
-        error: 'No internet connection and Ollama is not available. Please install Ollama or connect to internet.',
+        error:
+          "No internet connection and Ollama is not available. Please install Ollama or connect to internet.",
       }
     }
 
@@ -75,12 +76,15 @@ export async function checkOfflineFallback(
       return {
         config: undefined,
         isUsingOllama: false,
-        error: 'Ollama is running but no suitable model found. Please install a coding model like qwen2.5-coder:7b',
+        error:
+          "Ollama is running but no suitable model found. Please install a coding model like qwen2.5-coder:7b",
       }
     }
 
     // Use Ollama with selected model or recommended model
-    console.log(`[Offline] selectedOllamaModel param: ${selectedOllamaModel || "(null/undefined)"}, recommendedModel: ${ollamaStatus.recommendedModel}`)
+    console.log(
+      `[Offline] selectedOllamaModel param: ${selectedOllamaModel || "(null/undefined)"}, recommendedModel: ${ollamaStatus.recommendedModel}`,
+    )
     const modelToUse = selectedOllamaModel || ollamaStatus.recommendedModel
     const config = getOllamaConfig(modelToUse)
 
@@ -94,7 +98,7 @@ export async function checkOfflineFallback(
 
   // Internet is available - use Claude API with auth
   if (claudeCodeToken) {
-    console.log('[Offline] Online with Claude auth - using Claude API')
+    console.log("[Offline] Online with Claude auth - using Claude API")
     return {
       config: undefined,
       isUsingOllama: false,
@@ -102,7 +106,7 @@ export async function checkOfflineFallback(
   }
 
   // Internet available but no auth - let it fail with auth error
-  console.log('[Offline] Online but no Claude auth found')
+  console.log("[Offline] Online but no Claude auth found")
   return {
     config: undefined,
     isUsingOllama: false,

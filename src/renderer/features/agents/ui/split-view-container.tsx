@@ -11,10 +11,7 @@ interface SplitViewContainerProps {
   hiddenTabs?: React.ReactNode
 }
 
-export function SplitViewContainer({
-  panes,
-  hiddenTabs,
-}: SplitViewContainerProps) {
+export function SplitViewContainer({ panes, hiddenTabs }: SplitViewContainerProps) {
   const splitRatios = useAgentSubChatStore((s) => s.splitRatios)
   const setSplitRatios = useAgentSubChatStore((s) => s.setSplitRatios)
   const [localRatios, setLocalRatios] = useState<number[] | null>(null)
@@ -136,8 +133,14 @@ function SplitDivider({
         let newRight = combined - newLeft
 
         // Clamp both panes to minimum
-        if (newLeft < minRatio) { newLeft = minRatio; newRight = combined - minRatio }
-        if (newRight < minRatio) { newRight = minRatio; newLeft = combined - minRatio }
+        if (newLeft < minRatio) {
+          newLeft = minRatio
+          newRight = combined - minRatio
+        }
+        if (newRight < minRatio) {
+          newRight = minRatio
+          newLeft = combined - minRatio
+        }
 
         const newRatios = [...startRatios]
         newRatios[index] = newLeft
@@ -165,10 +168,7 @@ function SplitDivider({
   )
 
   return (
-    <div
-      className="relative flex-shrink-0 z-10"
-      style={{ width: "1px", touchAction: "none" }}
-    >
+    <div className="relative flex-shrink-0 z-10" style={{ width: "1px", touchAction: "none" }}>
       {/* Visible 1px border */}
       <div className="absolute inset-0 transition-colors duration-100 bg-border" />
 

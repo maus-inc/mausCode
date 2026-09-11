@@ -62,9 +62,7 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
     subtitleParts.push(`${fileCount} ${fileCount === 1 ? "file" : "files"}`)
   }
   if (searchCount > 0) {
-    subtitleParts.push(
-      `${searchCount} ${searchCount === 1 ? "search" : "searches"}`,
-    )
+    subtitleParts.push(`${searchCount} ${searchCount === 1 ? "search" : "searches"}`)
   }
   const subtitle = subtitleParts.join(" ")
 
@@ -102,9 +100,7 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
           <div
             className={cn(
               "absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
-              isStreaming && parts.length > MAX_VISIBLE_TOOLS
-                ? "opacity-100"
-                : "opacity-0",
+              isStreaming && parts.length > MAX_VISIBLE_TOOLS ? "opacity-100" : "opacity-0",
             )}
           />
 
@@ -113,8 +109,7 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
             ref={scrollRef}
             className={cn(
               "space-y-1.5",
-              parts.length > MAX_VISIBLE_TOOLS &&
-                "overflow-y-auto scrollbar-hide",
+              parts.length > MAX_VISIBLE_TOOLS && "overflow-y-auto scrollbar-hide",
             )}
             style={
               parts.length > MAX_VISIBLE_TOOLS
@@ -126,18 +121,16 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
               const meta = AgentToolRegistry[part.type]
               if (!meta) {
                 return (
-                  <div
-                    key={idx}
-                    className="text-xs text-muted-foreground py-0.5 px-2"
-                  >
+                  <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
                     {part.type?.replace("tool-", "")}
                   </div>
                 )
               }
               const { isPending, isError } = getToolStatus(part, chatStatus)
-              const handleClick = part.type === "tool-Read" && onOpenFile && part.input?.file_path
-                ? () => onOpenFile(part.input.file_path)
-                : undefined
+              const handleClick =
+                part.type === "tool-Read" && onOpenFile && part.input?.file_path
+                  ? () => onOpenFile(part.input.file_path)
+                  : undefined
               return (
                 <AgentToolCall
                   key={idx}

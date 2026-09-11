@@ -6,10 +6,7 @@ import { atomWithStorage } from "jotai/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
 
 // Track pending notifications count for badge
-const pendingNotificationsAtom = atomWithStorage<number>(
-  "desktop-pending-notifications",
-  0,
-)
+const pendingNotificationsAtom = atomWithStorage<number>("desktop-pending-notifications", 0)
 
 // Track window focus state
 let isWindowFocused = true

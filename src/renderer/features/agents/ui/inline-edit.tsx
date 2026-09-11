@@ -55,10 +55,7 @@ export function InlineEdit({
     if (!isEditing) return
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node)
-      ) {
+      if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
         onSaveRef.current()
       }
     }
@@ -102,4 +99,3 @@ export function InlineEdit({
     />
   )
 }
-

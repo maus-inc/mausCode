@@ -95,10 +95,7 @@ function extractOpencodeError(error: unknown): { message: string; code?: string 
   }
 }
 
-function isOpencodeAuthError(params: {
-  message?: string | null
-  code?: string | null
-}): boolean {
+function isOpencodeAuthError(params: { message?: string | null; code?: string | null }): boolean {
   const searchableText = `${params.code || ""} ${params.message || ""}`.toLowerCase()
   return AUTH_HINTS.some((hint) => searchableText.includes(hint))
 }
@@ -414,12 +411,9 @@ export const opencodeRouter = router({
               await cleanupProvider(input.subChatId)
             }
 
-            const resolvedProjectPathFromCwd =
-              resolveProjectPathFromWorktree(input.cwd)
-            const mcpLookupPath =
-              input.projectPath || resolvedProjectPathFromCwd || input.cwd
-            const mcpFingerprint =
-              await getOpencodeMcpFingerprint(mcpLookupPath)
+            const resolvedProjectPathFromCwd = resolveProjectPathFromWorktree(input.cwd)
+            const mcpLookupPath = input.projectPath || resolvedProjectPathFromCwd || input.cwd
+            const mcpFingerprint = await getOpencodeMcpFingerprint(mcpLookupPath)
 
             // Accumulate the assistant message from opencode chunks while also
             // forwarding chunks to the renderer.
@@ -454,12 +448,8 @@ export const opencodeRouter = router({
                 typeof chunk.id === "string" &&
                 typeof chunk.delta === "string"
               ) {
-                accumulatedText[chunk.id] =
-                  (accumulatedText[chunk.id] ?? "") + chunk.delta
-              } else if (
-                chunk?.type === "text-end" &&
-                typeof chunk.id === "string"
-              ) {
+                accumulatedText[chunk.id] = (accumulatedText[chunk.id] ?? "") + chunk.delta
+              } else if (chunk?.type === "text-end" && typeof chunk.id === "string") {
                 accumulatedParts.push({
                   type: "text",
                   text: accumulatedText[chunk.id] ?? "",
@@ -521,11 +511,11 @@ export const opencodeRouter = router({
               { once: true },
             )
 
-            const turnInput: OpencodeTurnInput[] = [
-              { type: "text", text: input.prompt },
-            ]
-            const { paths: imagePaths, cleanup: cleanupImageFiles } =
-              await writeImageTempFiles(input.images, `opencode-${input.runId}`)
+            const turnInput: OpencodeTurnInput[] = [{ type: "text", text: input.prompt }]
+            const { paths: imagePaths, cleanup: cleanupImageFiles } = await writeImageTempFiles(
+              input.images,
+              `opencode-${input.runId}`,
+            )
             const imageMimes = (input.images ?? [])
               .filter((image) => image.base64Data && image.mediaType)
               .map((image) => ({
@@ -575,8 +565,7 @@ export const opencodeRouter = router({
               ? {
                   inputTokens: latestUsage.inputTokens,
                   outputTokens: latestUsage.outputTokens,
-                  totalTokens:
-                    latestUsage.inputTokens + latestUsage.outputTokens,
+                  totalTokens: latestUsage.inputTokens + latestUsage.outputTokens,
                 }
               : null
             if (usageMetadata) {
@@ -608,16 +597,12 @@ export const opencodeRouter = router({
                   ...(usageMetadata ?? {}),
                 },
               }
-              const cleanedResponseMessage =
-                cleanAssistantMessageForPersistence(responseMessage)
+              const cleanedResponseMessage = cleanAssistantMessageForPersistence(responseMessage)
 
               if (!cleanedResponseMessage) {
                 persistSubChatMessages(messagesForStream)
               } else {
-                persistSubChatMessages([
-                  ...messagesForStream,
-                  cleanedResponseMessage,
-                ])
+                persistSubChatMessages([...messagesForStream, cleanedResponseMessage])
               }
             } catch (error) {
               console.error("[opencode] Failed to persist messages:", error)

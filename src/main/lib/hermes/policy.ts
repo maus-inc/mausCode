@@ -87,7 +87,6 @@ export function isHermesAuthError(params: {
   message?: string | null
   code?: string | null
 }): boolean {
-  const searchableText =
-    `${params.code || ""} ${params.message || ""}`.toLowerCase()
+  const searchableText = `${params.code || ""} ${params.message || ""}`.toLowerCase()
   return AUTH_HINTS.some((hint) => searchableText.includes(hint))
 }

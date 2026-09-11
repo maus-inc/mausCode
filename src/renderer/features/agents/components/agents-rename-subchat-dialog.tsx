@@ -79,7 +79,7 @@ export function AgentsRenameSubChatDialog({
       handleClose()
       return
     }
-    
+
     setIsSaving(true)
     try {
       await onSave(trimmedName)
@@ -129,11 +129,12 @@ export function AgentsRenameSubChatDialog({
               className="w-[90vw] max-w-[400px] pointer-events-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-background rounded-2xl border shadow-2xl overflow-hidden" data-canvas-dialog>
+              <div
+                className="bg-background rounded-2xl border shadow-2xl overflow-hidden"
+                data-canvas-dialog
+              >
                 <div className="p-6">
-                  <h2 className="text-xl font-semibold mb-4">
-                    Rename agent
-                  </h2>
+                  <h2 className="text-xl font-semibold mb-4">Rename agent</h2>
 
                   {/* Input */}
                   <Input
@@ -174,4 +175,3 @@ export function AgentsRenameSubChatDialog({
     portalTarget,
   )
 }
-

@@ -7,10 +7,7 @@ import { toast } from "sonner"
 import { appStore } from "../../../lib/jotai-store"
 import { pinnedOpenRouterModelsAtom } from "../../../lib/atoms"
 import { trpcClient } from "../../../lib/trpc"
-import {
-  lastSelectedOpenRouterModelIdAtom,
-  subChatOpenRouterModelIdAtomFamily,
-} from "../atoms"
+import { lastSelectedOpenRouterModelIdAtom, subChatOpenRouterModelIdAtomFamily } from "../atoms"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
 
 type UIMessageChunk = any
@@ -44,9 +41,7 @@ export class OpenRouterChatTransport implements ChatTransport<UIMessage> {
     messages: UIMessage[]
     abortSignal?: AbortSignal
   }): Promise<ReadableStream<UIMessageChunk>> {
-    const lastUser = [...options.messages]
-      .reverse()
-      .find((message) => message.role === "user")
+    const lastUser = [...options.messages].reverse().find((message) => message.role === "user")
 
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
@@ -54,9 +49,7 @@ export class OpenRouterChatTransport implements ChatTransport<UIMessage> {
     const lastAssistant = [...options.messages]
       .reverse()
       .find((message) => message.role === "assistant")
-    const metadata = lastAssistant?.metadata as
-      | AgentMessageMetadata
-      | undefined
+    const metadata = lastAssistant?.metadata as AgentMessageMetadata | undefined
     const sessionId = metadata?.sessionId
 
     const modelId = getSelectedOpenRouterModelId(this.config.subChatId)
@@ -66,8 +59,7 @@ export class OpenRouterChatTransport implements ChatTransport<UIMessage> {
         start(controller) {
           controller.enqueue({
             type: "error",
-            errorText:
-              "No OpenRouter model selected. Pin a model in Settings → Models.",
+            errorText: "No OpenRouter model selected. Pin a model in Settings → Models.",
           })
           controller.enqueue({ type: "finish" })
           controller.close()
@@ -97,17 +89,13 @@ export class OpenRouterChatTransport implements ChatTransport<UIMessage> {
             ...(sessionId ? { sessionId } : {}),
             ...(images.length > 0 ? { images } : {}),
             ...(this.config.cwd ? { cwd: this.config.cwd } : {}),
-            ...(this.config.projectPath
-              ? { projectPath: this.config.projectPath }
-              : {}),
+            ...(this.config.projectPath ? { projectPath: this.config.projectPath } : {}),
           },
           {
             onData: (chunk: UIMessageChunk) => {
               if (chunk?.type === "error") {
                 toast.error("OpenRouter error", {
-                  description:
-                    chunk.errorText ||
-                    "An unexpected OpenRouter error occurred.",
+                  description: chunk.errorText || "An unexpected OpenRouter error occurred.",
                 })
               }
 
@@ -173,11 +161,9 @@ export class OpenRouterChatTransport implements ChatTransport<UIMessage> {
   }
 
   cleanup(): void {
-    void trpcClient.openrouter.cleanup
-      .mutate({ subChatId: this.config.subChatId })
-      .catch(() => {
-        // no-op
-      })
+    void trpcClient.openrouter.cleanup.mutate({ subChatId: this.config.subChatId }).catch(() => {
+      // no-op
+    })
   }
 
   private extractText(message: UIMessage | undefined): string {
@@ -191,8 +177,7 @@ export class OpenRouterChatTransport implements ChatTransport<UIMessage> {
         textParts.push((part as any).text)
       } else if ((part as any).type === "file-content") {
         const filePart = part as any
-        const fileName =
-          filePart.filePath?.split("/").pop() || filePart.filePath || "file"
+        const fileName = filePart.filePath?.split("/").pop() || filePart.filePath || "file"
         fileContents.push(`\n--- ${fileName} ---\n${filePart.content}`)
       }
     }

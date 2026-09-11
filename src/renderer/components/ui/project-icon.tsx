@@ -4,13 +4,16 @@ import { useProjectIcon } from "../../lib/hooks/use-project-icon"
 import { cn } from "../../lib/utils"
 
 interface ProjectIconProps {
-  project: {
-    id: string
-    iconPath?: string | null
-    updatedAt?: string | Date | null
-    gitOwner?: string | null
-    gitProvider?: string | null
-  } | null | undefined
+  project:
+    | {
+        id: string
+        iconPath?: string | null
+        updatedAt?: string | Date | null
+        gitOwner?: string | null
+        gitProvider?: string | null
+      }
+    | null
+    | undefined
   className?: string
 }
 
@@ -20,11 +23,7 @@ export function ProjectIcon({ project, className }: ProjectIconProps) {
   const handleError = useCallback(() => setImgError(true), [])
 
   if (!project || hasError || !src || imgError) {
-    return (
-      <FolderOpen
-        className={cn("text-muted-foreground flex-shrink-0", className)}
-      />
-    )
+    return <FolderOpen className={cn("text-muted-foreground flex-shrink-0", className)} />
   }
 
   return (

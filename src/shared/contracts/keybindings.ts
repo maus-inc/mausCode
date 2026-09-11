@@ -2,14 +2,14 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import * as Schema from "effect/Schema";
-import { ForwardCompatibleArray, TrimmedString } from "./baseSchemas.ts";
+import * as Schema from "effect/Schema"
+import { ForwardCompatibleArray, TrimmedString } from "./baseSchemas.ts"
 
-export const MAX_KEYBINDING_VALUE_LENGTH = 64;
-const MAX_KEYBINDING_WHEN_LENGTH = 256;
-export const MAX_WHEN_EXPRESSION_DEPTH = 64;
-export const MAX_SCRIPT_ID_LENGTH = 24;
-export const MAX_KEYBINDINGS_COUNT = 256;
+export const MAX_KEYBINDING_VALUE_LENGTH = 64
+const MAX_KEYBINDING_WHEN_LENGTH = 256
+export const MAX_WHEN_EXPRESSION_DEPTH = 64
+export const MAX_SCRIPT_ID_LENGTH = 24
+export const MAX_KEYBINDINGS_COUNT = 256
 
 export const THREAD_JUMP_KEYBINDING_COMMANDS = [
   "thread.jump.1",
@@ -21,8 +21,8 @@ export const THREAD_JUMP_KEYBINDING_COMMANDS = [
   "thread.jump.7",
   "thread.jump.8",
   "thread.jump.9",
-] as const;
-export type ThreadJumpKeybindingCommand = (typeof THREAD_JUMP_KEYBINDING_COMMANDS)[number];
+] as const
+export type ThreadJumpKeybindingCommand = (typeof THREAD_JUMP_KEYBINDING_COMMANDS)[number]
 
 export const MODEL_PICKER_JUMP_KEYBINDING_COMMANDS = [
   "modelPicker.jump.1",
@@ -34,9 +34,9 @@ export const MODEL_PICKER_JUMP_KEYBINDING_COMMANDS = [
   "modelPicker.jump.7",
   "modelPicker.jump.8",
   "modelPicker.jump.9",
-] as const;
+] as const
 export type ModelPickerJumpKeybindingCommand =
-  (typeof MODEL_PICKER_JUMP_KEYBINDING_COMMANDS)[number];
+  (typeof MODEL_PICKER_JUMP_KEYBINDING_COMMANDS)[number]
 
 const THREAD_KEYBINDING_COMMANDS = [
   "thread.stop",
@@ -46,14 +46,14 @@ const THREAD_KEYBINDING_COMMANDS = [
   "thread.settle",
   "thread.pin",
   ...THREAD_JUMP_KEYBINDING_COMMANDS,
-] as const;
-export type ThreadKeybindingCommand = (typeof THREAD_KEYBINDING_COMMANDS)[number];
+] as const
+export type ThreadKeybindingCommand = (typeof THREAD_KEYBINDING_COMMANDS)[number]
 
 const MODEL_PICKER_KEYBINDING_COMMANDS = [
   "modelPicker.toggle",
   ...MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
-] as const;
-export type ModelPickerKeybindingCommand = (typeof MODEL_PICKER_KEYBINDING_COMMANDS)[number];
+] as const
+export type ModelPickerKeybindingCommand = (typeof MODEL_PICKER_KEYBINDING_COMMANDS)[number]
 
 export const STATIC_KEYBINDING_COMMANDS = [
   "sidebar.toggle",
@@ -82,7 +82,7 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "editor.openFavorite",
   ...MODEL_PICKER_KEYBINDING_COMMANDS,
   ...THREAD_KEYBINDING_COMMANDS,
-] as const;
+] as const
 
 export const SCRIPT_RUN_COMMAND_PATTERN = Schema.TemplateLiteral([
   Schema.Literal("script."),
@@ -91,34 +91,34 @@ export const SCRIPT_RUN_COMMAND_PATTERN = Schema.TemplateLiteral([
     Schema.isPattern(/^[a-z0-9][a-z0-9-]*$/),
   ),
   Schema.Literal(".run"),
-]);
+])
 
 export const KeybindingCommand = Schema.Union([
   Schema.Literals(STATIC_KEYBINDING_COMMANDS),
   SCRIPT_RUN_COMMAND_PATTERN,
-]);
-export type KeybindingCommand = typeof KeybindingCommand.Type;
+])
+export type KeybindingCommand = typeof KeybindingCommand.Type
 
 export const KeybindingValue = TrimmedString.check(
   Schema.isMinLength(1),
   Schema.isMaxLength(MAX_KEYBINDING_VALUE_LENGTH),
-);
+)
 
 export const KeybindingWhen = TrimmedString.check(
   Schema.isMinLength(1),
   Schema.isMaxLength(MAX_KEYBINDING_WHEN_LENGTH),
-);
+)
 export const KeybindingRule = Schema.Struct({
   key: KeybindingValue,
   command: KeybindingCommand,
   when: Schema.optional(KeybindingWhen),
-});
-export type KeybindingRule = typeof KeybindingRule.Type;
+})
+export type KeybindingRule = typeof KeybindingRule.Type
 
 export const KeybindingsConfig = Schema.Array(KeybindingRule).check(
   Schema.isMaxLength(MAX_KEYBINDINGS_COUNT),
-);
-export type KeybindingsConfig = typeof KeybindingsConfig.Type;
+)
+export type KeybindingsConfig = typeof KeybindingsConfig.Type
 
 export const KeybindingShortcut = Schema.Struct({
   key: KeybindingValue,
@@ -127,12 +127,12 @@ export const KeybindingShortcut = Schema.Struct({
   shiftKey: Schema.Boolean,
   altKey: Schema.Boolean,
   modKey: Schema.Boolean,
-});
-export type KeybindingShortcut = typeof KeybindingShortcut.Type;
+})
+export type KeybindingShortcut = typeof KeybindingShortcut.Type
 
 const KeybindingWhenNodeRef = Schema.suspend(
   (): Schema.Codec<KeybindingWhenNode> => KeybindingWhenNode,
-);
+)
 export const KeybindingWhenNode = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("identifier"),
@@ -152,19 +152,19 @@ export const KeybindingWhenNode = Schema.Union([
     left: KeybindingWhenNodeRef,
     right: KeybindingWhenNodeRef,
   }),
-]);
+])
 export type KeybindingWhenNode =
   | { type: "identifier"; name: string }
   | { type: "not"; node: KeybindingWhenNode }
   | { type: "and"; left: KeybindingWhenNode; right: KeybindingWhenNode }
-  | { type: "or"; left: KeybindingWhenNode; right: KeybindingWhenNode };
+  | { type: "or"; left: KeybindingWhenNode; right: KeybindingWhenNode }
 
 export const ResolvedKeybindingRule = Schema.Struct({
   command: KeybindingCommand,
   shortcut: KeybindingShortcut,
   whenAst: Schema.optional(KeybindingWhenNode),
-}).annotate({ parseOptions: { onExcessProperty: "ignore" } });
-export type ResolvedKeybindingRule = typeof ResolvedKeybindingRule.Type;
+}).annotate({ parseOptions: { onExcessProperty: "ignore" } })
+export type ResolvedKeybindingRule = typeof ResolvedKeybindingRule.Type
 
 /**
  * The command set grows over time, so a client may receive rules it cannot
@@ -175,8 +175,8 @@ export type ResolvedKeybindingRule = typeof ResolvedKeybindingRule.Type;
  */
 export const ResolvedKeybindingsConfig = ForwardCompatibleArray(ResolvedKeybindingRule).check(
   Schema.isMaxLength(MAX_KEYBINDINGS_COUNT),
-);
-export type ResolvedKeybindingsConfig = typeof ResolvedKeybindingsConfig.Type;
+)
+export type ResolvedKeybindingsConfig = typeof ResolvedKeybindingsConfig.Type
 
 export class KeybindingsConfigError extends Schema.TaggedError<KeybindingsConfigError>()(
   "KeybindingsConfigParseError",
@@ -187,6 +187,6 @@ export class KeybindingsConfigError extends Schema.TaggedError<KeybindingsConfig
   },
 ) {
   override get message(): string {
-    return `Unable to parse keybindings config at ${this.configPath}: ${this.detail}`;
+    return `Unable to parse keybindings config at ${this.configPath}: ${this.detail}`
   }
 }

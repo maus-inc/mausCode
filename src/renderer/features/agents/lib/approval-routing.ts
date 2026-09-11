@@ -19,10 +19,7 @@ export interface ApprovalAnswer {
   updatedInput?: unknown
 }
 
-export async function respondToApproval(
-  subChatId: string,
-  answer: ApprovalAnswer,
-): Promise<void> {
+export async function respondToApproval(subChatId: string, answer: ApprovalAnswer): Promise<void> {
   if (answer.toolUseId.startsWith(NATIVE_QUESTION_PREFIX)) {
     await trpcClient.runtime.respondApproval.mutate({
       subChatId,

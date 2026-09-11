@@ -188,9 +188,7 @@ async function searchCommitCount(
   return { ok: true, count: total }
 }
 
-async function fetchCommitStats(
-  token: string,
-): Promise<GithubCommitStatsResult> {
+async function fetchCommitStats(token: string): Promise<GithubCommitStatsResult> {
   const loginResult = await fetchLogin(token)
   if (!loginResult.ok) return loginResult.result
   const { login } = loginResult
@@ -199,8 +197,7 @@ async function fetchCommitStats(
   const weekFrom = startOfWeekLocal()
   const monthFrom = startOfMonthLocal()
 
-  const buildQuery = (from: Date): string =>
-    `author:${login} author-date:>=${from.toISOString()}`
+  const buildQuery = (from: Date): string => `author:${login} author-date:>=${from.toISOString()}`
 
   const [todayRes, weekRes, monthRes] = await Promise.all([
     searchCommitCount(token, buildQuery(todayFrom)),
@@ -228,12 +225,10 @@ export const githubRouter = router({
   getAuthStatus: publicProcedure.query((): GithubAuthStatus => {
     return getGithubAuthStatus()
   }),
-  setToken: publicProcedure
-    .input(z.object({ token: z.string().min(1) }))
-    .mutation(({ input }) => {
-      saveGithubToken(input.token)
-      return getGithubAuthStatus()
-    }),
+  setToken: publicProcedure.input(z.object({ token: z.string().min(1) })).mutation(({ input }) => {
+    saveGithubToken(input.token)
+    return getGithubAuthStatus()
+  }),
   clearToken: publicProcedure.mutation(() => {
     clearGithubToken()
     return getGithubAuthStatus()
@@ -250,13 +245,11 @@ export const githubRouter = router({
         error: result.message ?? result.reason,
       }
     }),
-  commitStats: publicProcedure.query(
-    async (): Promise<GithubCommitStatsResult> => {
-      const token = loadGithubToken()
-      if (!token) {
-        return { available: false, reason: "no_token" }
-      }
-      return fetchCommitStats(token)
-    },
-  ),
+  commitStats: publicProcedure.query(async (): Promise<GithubCommitStatsResult> => {
+    const token = loadGithubToken()
+    if (!token) {
+      return { available: false, reason: "no_token" }
+    }
+    return fetchCommitStats(token)
+  }),
 })

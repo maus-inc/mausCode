@@ -9,11 +9,7 @@ interface DiffFullPageViewProps {
   children: React.ReactNode
 }
 
-export function DiffFullPageView({
-  isOpen,
-  onClose,
-  children,
-}: DiffFullPageViewProps) {
+export function DiffFullPageView({ isOpen, onClose, children }: DiffFullPageViewProps) {
   // Close on Escape key
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -22,7 +18,7 @@ export function DiffFullPageView({
         onClose()
       }
     },
-    [onClose]
+    [onClose],
   )
 
   useEffect(() => {

@@ -2,8 +2,8 @@
  * Ported from pingdotgg/t3code packages/contracts (MIT, (c) 2026 T3 Tools Inc.).
  * T3 product identifiers kept verbatim so ported tests stay faithful; see README.md.
  */
-import { describe, expect, it } from "vitest";
-import * as Schema from "effect/Schema";
+import { describe, expect, it } from "vitest"
+import * as Schema from "effect/Schema"
 
 import {
   VcsCreateWorktreeInput,
@@ -12,18 +12,18 @@ import {
   GitRunStackedActionResult,
   GitRunStackedActionInput,
   GitResolvePullRequestResult,
-} from "./git.ts";
+} from "./git.ts"
 
-const decodeCreateWorktreeInput = Schema.decodeUnknownSync(VcsCreateWorktreeInput);
+const decodeCreateWorktreeInput = Schema.decodeUnknownSync(VcsCreateWorktreeInput)
 const decodePreparePullRequestThreadInput = Schema.decodeUnknownSync(
   GitPreparePullRequestThreadInput,
-);
+)
 const decodePreparePullRequestThreadResult = Schema.decodeUnknownSync(
   GitPreparePullRequestThreadResult,
-);
-const decodeRunStackedActionInput = Schema.decodeUnknownSync(GitRunStackedActionInput);
-const decodeRunStackedActionResult = Schema.decodeUnknownSync(GitRunStackedActionResult);
-const decodeResolvePullRequestResult = Schema.decodeUnknownSync(GitResolvePullRequestResult);
+)
+const decodeRunStackedActionInput = Schema.decodeUnknownSync(GitRunStackedActionInput)
+const decodeRunStackedActionResult = Schema.decodeUnknownSync(GitRunStackedActionResult)
+const decodeResolvePullRequestResult = Schema.decodeUnknownSync(GitResolvePullRequestResult)
 
 describe("VcsCreateWorktreeInput", () => {
   it("accepts omitted newRefName for existing-refName worktrees", () => {
@@ -31,11 +31,11 @@ describe("VcsCreateWorktreeInput", () => {
       cwd: "/repo",
       refName: "feature/existing",
       path: "/tmp/worktree",
-    });
+    })
 
-    expect(parsed.newRefName).toBeUndefined();
-    expect(parsed.refName).toBe("feature/existing");
-  });
+    expect(parsed.newRefName).toBeUndefined()
+    expect(parsed.refName).toBe("feature/existing")
+  })
 
   it("accepts baseRefName metadata for a new worktree ref", () => {
     const parsed = decodeCreateWorktreeInput({
@@ -44,11 +44,11 @@ describe("VcsCreateWorktreeInput", () => {
       newRefName: "feature/new",
       baseRefName: "origin/main",
       path: "/tmp/worktree",
-    });
+    })
 
-    expect(parsed.baseRefName).toBe("origin/main");
-  });
-});
+    expect(parsed.baseRefName).toBe("origin/main")
+  })
+})
 
 describe("GitPreparePullRequestThreadInput", () => {
   it("accepts pull request references and mode", () => {
@@ -56,12 +56,12 @@ describe("GitPreparePullRequestThreadInput", () => {
       cwd: "/repo",
       reference: "#42",
       mode: "worktree",
-    });
+    })
 
-    expect(parsed.reference).toBe("#42");
-    expect(parsed.mode).toBe("worktree");
-  });
-});
+    expect(parsed.reference).toBe("#42")
+    expect(parsed.mode).toBe("worktree")
+  })
+})
 
 describe("GitPreparePullRequestThreadResult", () => {
   it("defaults legacy responses to the pull request head", () => {
@@ -76,10 +76,10 @@ describe("GitPreparePullRequestThreadResult", () => {
       },
       branch: "feature/pr-threads",
       worktreePath: "/tmp/pr-threads",
-    });
+    })
 
-    expect(parsed.isOnPullRequestHead).toBe(true);
-  });
+    expect(parsed.isOnPullRequestHead).toBe(true)
+  })
 
   it("preserves an explicit stale pull request checkout result", () => {
     const parsed = decodePreparePullRequestThreadResult({
@@ -94,11 +94,11 @@ describe("GitPreparePullRequestThreadResult", () => {
       branch: "feature/pr-threads",
       worktreePath: "/tmp/pr-threads",
       isOnPullRequestHead: false,
-    });
+    })
 
-    expect(parsed.isOnPullRequestHead).toBe(false);
-  });
-});
+    expect(parsed.isOnPullRequestHead).toBe(false)
+  })
+})
 
 describe("GitResolvePullRequestResult", () => {
   it("decodes resolved pull request metadata", () => {
@@ -111,12 +111,12 @@ describe("GitResolvePullRequestResult", () => {
         headBranch: "feature/pr-threads",
         state: "open",
       },
-    });
+    })
 
-    expect(parsed.pullRequest.number).toBe(42);
-    expect(parsed.pullRequest.headBranch).toBe("feature/pr-threads");
-  });
-});
+    expect(parsed.pullRequest.number).toBe(42)
+    expect(parsed.pullRequest.headBranch).toBe("feature/pr-threads")
+  })
+})
 
 describe("GitRunStackedActionInput", () => {
   it("accepts explicit stacked actions and requires a client-provided actionId", () => {
@@ -124,12 +124,12 @@ describe("GitRunStackedActionInput", () => {
       actionId: "action-1",
       cwd: "/repo",
       action: "create_pr",
-    });
+    })
 
-    expect(parsed.actionId).toBe("action-1");
-    expect(parsed.action).toBe("create_pr");
-  });
-});
+    expect(parsed.actionId).toBe("action-1")
+    expect(parsed.action).toBe("create_pr")
+  })
+})
 
 describe("GitRunStackedActionResult", () => {
   it("decodes a server-authored completion toast", () => {
@@ -163,11 +163,11 @@ describe("GitRunStackedActionResult", () => {
           },
         },
       },
-    });
+    })
 
-    expect(parsed.toast.cta.kind).toBe("run_action");
+    expect(parsed.toast.cta.kind).toBe("run_action")
     if (parsed.toast.cta.kind === "run_action") {
-      expect(parsed.toast.cta.action.kind).toBe("create_pr");
+      expect(parsed.toast.cta.action.kind).toBe("create_pr")
     }
-  });
-});
+  })
+})

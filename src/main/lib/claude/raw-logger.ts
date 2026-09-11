@@ -80,10 +80,7 @@ export async function cleanupOldLogs(): Promise<void> {
  * Log a raw Claude message to JSONL file for debugging
  * Includes automatic log rotation and cleanup
  */
-export async function logRawClaudeMessage(
-  sessionId: string,
-  msg: unknown,
-): Promise<void> {
+export async function logRawClaudeMessage(sessionId: string, msg: unknown): Promise<void> {
   if (!isEnabled()) return
 
   try {
@@ -91,8 +88,7 @@ export async function logRawClaudeMessage(
 
     // Create new file for new session OR rotate if current file is too large
     const needsNewFile =
-      sessionId !== currentSessionId ||
-      (currentLogFile && (await shouldRotateLog(currentLogFile)))
+      sessionId !== currentSessionId || (currentLogFile && (await shouldRotateLog(currentLogFile)))
 
     if (needsNewFile) {
       currentSessionId = sessionId

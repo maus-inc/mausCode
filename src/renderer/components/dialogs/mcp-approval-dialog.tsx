@@ -14,21 +14,14 @@ import {
 import { Button } from "../ui/button"
 import { trpc } from "../../lib/trpc"
 import { toast } from "sonner"
-import {
-  mcpApprovalDialogOpenAtom,
-  pendingMcpApprovalsAtom,
-} from "../../lib/atoms"
+import { mcpApprovalDialogOpenAtom, pendingMcpApprovalsAtom } from "../../lib/atoms"
 
 export function McpApprovalDialog() {
   const [isOpen, setIsOpen] = useAtom(mcpApprovalDialogOpenAtom)
-  const [pendingApprovals, setPendingApprovals] = useAtom(
-    pendingMcpApprovalsAtom,
-  )
+  const [pendingApprovals, setPendingApprovals] = useAtom(pendingMcpApprovalsAtom)
 
-  const approveMutation =
-    trpc.claudeSettings.approvePluginMcpServer.useMutation()
-  const approveAllMutation =
-    trpc.claudeSettings.approveAllPluginMcpServers.useMutation()
+  const approveMutation = trpc.claudeSettings.approvePluginMcpServer.useMutation()
+  const approveAllMutation = trpc.claudeSettings.approveAllPluginMcpServers.useMutation()
 
   const currentApproval = pendingApprovals[0]
 
@@ -43,8 +36,7 @@ export function McpApprovalDialog() {
         description: currentApproval.serverName,
       })
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to approve"
+      const message = error instanceof Error ? error.message : "Failed to approve"
       toast.error(message)
     }
 
@@ -68,8 +60,7 @@ export function McpApprovalDialog() {
         description: `${samePlugin.length} server(s) from ${currentApproval.pluginSource}`,
       })
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to approve"
+      const message = error instanceof Error ? error.message : "Failed to approve"
       toast.error(message)
     }
 
@@ -123,26 +114,20 @@ export function McpApprovalDialog() {
           <div className="space-y-3">
             <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
               <div className="flex gap-2">
-                <span className="text-xs text-muted-foreground w-14 shrink-0">
-                  Plugin
-                </span>
+                <span className="text-xs text-muted-foreground w-14 shrink-0">Plugin</span>
                 <span className="text-xs text-foreground font-medium">
                   {currentApproval.pluginSource}
                 </span>
               </div>
               <div className="flex gap-2">
-                <span className="text-xs text-muted-foreground w-14 shrink-0">
-                  Server
-                </span>
+                <span className="text-xs text-muted-foreground w-14 shrink-0">Server</span>
                 <span className="text-xs text-foreground font-mono">
                   {currentApproval.serverName}
                 </span>
               </div>
               {command && (
                 <div className="flex gap-2">
-                  <span className="text-xs text-muted-foreground w-14 shrink-0">
-                    Command
-                  </span>
+                  <span className="text-xs text-muted-foreground w-14 shrink-0">Command</span>
                   <span className="text-xs text-foreground font-mono break-all">
                     {command}
                     {args && args.length > 0 ? ` ${args.join(" ")}` : ""}
@@ -151,12 +136,8 @@ export function McpApprovalDialog() {
               )}
               {url && (
                 <div className="flex gap-2">
-                  <span className="text-xs text-muted-foreground w-14 shrink-0">
-                    URL
-                  </span>
-                  <span className="text-xs text-foreground font-mono break-all">
-                    {url}
-                  </span>
+                  <span className="text-xs text-muted-foreground w-14 shrink-0">URL</span>
+                  <span className="text-xs text-foreground font-mono break-all">{url}</span>
                 </div>
               )}
             </div>

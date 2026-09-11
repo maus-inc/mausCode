@@ -1,10 +1,7 @@
 import * as React from "react"
 import { cn } from "../../lib/utils"
 import { SearchIcon } from "./icons"
-import {
-  overlayItem,
-  overlaySeparator,
-} from "../../lib/overlay-styles"
+import { overlayItem, overlaySeparator } from "../../lib/overlay-styles"
 
 // Context for keyboard navigation
 interface CommandContextValue {
@@ -29,21 +26,18 @@ const Command = React.forwardRef<HTMLDivElement, CommandProps>(
     const itemsRef = React.useRef<Map<string, HTMLDivElement>>(new Map())
     const orderedKeysRef = React.useRef<string[]>([])
 
-    const registerItem = React.useCallback(
-      (value: string, element: HTMLDivElement | null) => {
-        if (element) {
-          itemsRef.current.set(value, element)
-          // Keep track of order based on registration
-          if (!orderedKeysRef.current.includes(value)) {
-            orderedKeysRef.current.push(value)
-          }
-        } else {
-          itemsRef.current.delete(value)
-          orderedKeysRef.current = orderedKeysRef.current.filter(k => k !== value)
+    const registerItem = React.useCallback((value: string, element: HTMLDivElement | null) => {
+      if (element) {
+        itemsRef.current.set(value, element)
+        // Keep track of order based on registration
+        if (!orderedKeysRef.current.includes(value)) {
+          orderedKeysRef.current.push(value)
         }
-      },
-      [],
-    )
+      } else {
+        itemsRef.current.delete(value)
+        orderedKeysRef.current = orderedKeysRef.current.filter((k) => k !== value)
+      }
+    }, [])
 
     const getItems = React.useCallback(() => itemsRef.current, [])
 
@@ -142,8 +136,7 @@ const Command = React.forwardRef<HTMLDivElement, CommandProps>(
 )
 Command.displayName = "Command"
 
-interface CommandInputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+interface CommandInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   onValueChange?: (value: string) => void
   wrapperClassName?: string
 }
@@ -189,28 +182,26 @@ const CommandInput = React.forwardRef<HTMLInputElement, CommandInputProps>(
 )
 CommandInput.displayName = "CommandInput"
 
-const CommandList = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden py-1", className)}
-    {...props}
-  />
-))
+const CommandList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden py-1", className)}
+      {...props}
+    />
+  ),
+)
 CommandList.displayName = "CommandList"
 
-const CommandEmpty = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("py-6 text-center text-sm text-muted-foreground", className)}
-    {...props}
-  />
-))
+const CommandEmpty = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn("py-6 text-center text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  ),
+)
 CommandEmpty.displayName = "CommandEmpty"
 
 interface CommandGroupProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -219,11 +210,7 @@ interface CommandGroupProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const CommandGroup = React.forwardRef<HTMLDivElement, CommandGroupProps>(
   ({ className, heading, children, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn("overflow-hidden text-foreground", className)}
-      {...props}
-    >
+    <div ref={ref} className={cn("overflow-hidden text-foreground", className)} {...props}>
       {heading && (
         <div className="py-1.5 px-1.5 mx-1 text-xs font-medium text-muted-foreground">
           {heading}
@@ -292,12 +279,11 @@ const CommandItem = React.forwardRef<HTMLDivElement, CommandItemProps>(
 )
 CommandItem.displayName = "CommandItem"
 
-const CommandSeparator = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn(overlaySeparator, className)} {...props} />
-))
+const CommandSeparator = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn(overlaySeparator, className)} {...props} />
+  ),
+)
 CommandSeparator.displayName = "CommandSeparator"
 
 export {

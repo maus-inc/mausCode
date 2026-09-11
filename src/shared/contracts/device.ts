@@ -16,18 +16,18 @@
  *
  * @module Device
  */
-import { Schema } from "effect";
+import { Schema } from "effect"
 
-import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts"
 
-export const DevicePlatform = Schema.Literals(["ios", "android"]);
-export type DevicePlatform = typeof DevicePlatform.Type;
+export const DevicePlatform = Schema.Literals(["ios", "android"])
+export type DevicePlatform = typeof DevicePlatform.Type
 
-export const DeviceHostId = TrimmedNonEmptyString.check(Schema.isMaxLength(128));
-export type DeviceHostId = typeof DeviceHostId.Type;
+export const DeviceHostId = TrimmedNonEmptyString.check(Schema.isMaxLength(128))
+export type DeviceHostId = typeof DeviceHostId.Type
 
 /** The server machine. Always present; other host kinds are future work. */
-export const LOCAL_DEVICE_HOST_ID = "local" as DeviceHostId;
+export const LOCAL_DEVICE_HOST_ID = "local" as DeviceHostId
 
 /** SSH aliases and key paths are resolved on the environment server. */
 export const SshDeviceHostConfig = Schema.Struct({
@@ -39,8 +39,8 @@ export const SshDeviceHostConfig = Schema.Struct({
   target: TrimmedNonEmptyString.check(Schema.isPattern(/^[^\s-][^\s]*$/)),
   identityFile: Schema.optional(TrimmedNonEmptyString),
   port: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))),
-});
-export type SshDeviceHostConfig = typeof SshDeviceHostConfig.Type;
+})
+export type SshDeviceHostConfig = typeof SshDeviceHostConfig.Type
 
 export const SshDeviceHostConfigs = Schema.Array(SshDeviceHostConfig).check(
   Schema.makeFilter(
@@ -48,11 +48,11 @@ export const SshDeviceHostConfigs = Schema.Array(SshDeviceHostConfig).check(
       new Set(hosts.map((host) => host.id)).size === hosts.length ||
       "Device host ids must be unique.",
   ),
-);
+)
 
 /** Simulator udid or adb serial (an AVD name while it is not running). */
-export const DeviceId = TrimmedNonEmptyString.check(Schema.isMaxLength(256));
-export type DeviceId = typeof DeviceId.Type;
+export const DeviceId = TrimmedNonEmptyString.check(Schema.isMaxLength(256))
+export type DeviceId = typeof DeviceId.Type
 
 export const DeviceSummary = Schema.Struct({
   hostId: DeviceHostId,
@@ -63,8 +63,8 @@ export const DeviceSummary = Schema.Struct({
   version: Schema.String,
   booted: Schema.Boolean,
   physical: Schema.Boolean,
-});
-export type DeviceSummary = typeof DeviceSummary.Type;
+})
+export type DeviceSummary = typeof DeviceSummary.Type
 
 /**
  * What the host can do right now. Platforms missing their toolchain are
@@ -75,8 +75,8 @@ export const DevicePlatformAvailability = Schema.Struct({
   platform: DevicePlatform,
   available: Schema.Boolean,
   reason: Schema.optional(Schema.String),
-});
-export type DevicePlatformAvailability = typeof DevicePlatformAvailability.Type;
+})
+export type DevicePlatformAvailability = typeof DevicePlatformAvailability.Type
 
 export const DeviceHostSummary = Schema.Struct({
   id: DeviceHostId,
@@ -85,8 +85,8 @@ export const DeviceHostSummary = Schema.Struct({
   platforms: Schema.Array(DevicePlatformAvailability),
   hubInstalled: Schema.Boolean,
   agentDeviceInstalled: Schema.Boolean,
-});
-export type DeviceHostSummary = typeof DeviceHostSummary.Type;
+})
+export type DeviceHostSummary = typeof DeviceHostSummary.Type
 
 /**
  * Lifecycle of the helper processes on a host. Tools are installed on first
@@ -100,8 +100,8 @@ export const DeviceHostStatus = Schema.Literals([
   "starting",
   "ready",
   "failed",
-]);
-export type DeviceHostStatus = typeof DeviceHostStatus.Type;
+])
+export type DeviceHostStatus = typeof DeviceHostStatus.Type
 
 /**
  * A device a thread is looking at. One session per (thread, device); the same
@@ -113,8 +113,8 @@ export const DeviceSession = Schema.Struct({
   deviceId: DeviceId,
   platform: DevicePlatform,
   openedAt: Schema.String,
-});
-export type DeviceSession = typeof DeviceSession.Type;
+})
+export type DeviceSession = typeof DeviceSession.Type
 
 export const DeviceServiceState = Schema.Struct({
   hosts: Schema.Array(DeviceHostSummary),
@@ -137,18 +137,18 @@ export const DeviceServiceState = Schema.Struct({
   /** Origin-relative path the client prefixes to hub routes. */
   hubBasePath: Schema.String,
   revision: Schema.Int,
-});
-export type DeviceServiceState = typeof DeviceServiceState.Type;
+})
+export type DeviceServiceState = typeof DeviceServiceState.Type
 
-export const DeviceListInput = Schema.Struct({});
-export type DeviceListInput = typeof DeviceListInput.Type;
+export const DeviceListInput = Schema.Struct({})
+export type DeviceListInput = typeof DeviceListInput.Type
 
 export const DeviceConfigureInput = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
   agentAccessEnabled: Schema.optional(Schema.Boolean),
   onboardingCompleted: Schema.optional(Schema.Boolean),
-});
-export type DeviceConfigureInput = typeof DeviceConfigureInput.Type;
+})
+export type DeviceConfigureInput = typeof DeviceConfigureInput.Type
 
 export const DeviceOpenInput = Schema.Struct({
   threadId: ThreadId,
@@ -157,8 +157,8 @@ export const DeviceOpenInput = Schema.Struct({
   platform: DevicePlatform,
   /** Boot the simulator or emulator when it is not running. Defaults to true. */
   boot: Schema.optional(Schema.Boolean),
-});
-export type DeviceOpenInput = typeof DeviceOpenInput.Type;
+})
+export type DeviceOpenInput = typeof DeviceOpenInput.Type
 
 export const DeviceCloseInput = Schema.Struct({
   hostId: Schema.optional(DeviceHostId),
@@ -167,30 +167,30 @@ export const DeviceCloseInput = Schema.Struct({
   deviceId: Schema.optional(DeviceId),
   /** Also shut the simulator or emulator down. Defaults to false. */
   shutdown: Schema.optional(Schema.Boolean),
-});
-export type DeviceCloseInput = typeof DeviceCloseInput.Type;
+})
+export type DeviceCloseInput = typeof DeviceCloseInput.Type
 
 export const DeviceShutdownInput = Schema.Struct({
   hostId: Schema.optional(DeviceHostId),
   deviceId: DeviceId,
   platform: DevicePlatform,
-});
-export type DeviceShutdownInput = typeof DeviceShutdownInput.Type;
+})
+export type DeviceShutdownInput = typeof DeviceShutdownInput.Type
 
 // Device settings and actions. Each setting names the platforms that support
 // it; the panel hides the rest. Values are normalized across platforms where
 // both have the concept (appearance, text size) and platform-specific where
 // only one does.
 
-export const DeviceAppearance = Schema.Literals(["light", "dark"]);
-export type DeviceAppearance = typeof DeviceAppearance.Type;
+export const DeviceAppearance = Schema.Literals(["light", "dark"])
+export type DeviceAppearance = typeof DeviceAppearance.Type
 
 /**
  * iOS content-size categories map onto twelve steps; Android `font_scale`
  * is continuous. Four shared steps cover what people actually reach for.
  */
-export const DeviceTextSize = Schema.Literals(["small", "default", "large", "extra-large"]);
-export type DeviceTextSize = typeof DeviceTextSize.Type;
+export const DeviceTextSize = Schema.Literals(["small", "default", "large", "extra-large"])
+export type DeviceTextSize = typeof DeviceTextSize.Type
 
 export const DeviceColorFilter = Schema.Literals([
   "none",
@@ -198,16 +198,16 @@ export const DeviceColorFilter = Schema.Literals([
   "red-green",
   "green-red",
   "blue-yellow",
-]);
-export type DeviceColorFilter = typeof DeviceColorFilter.Type;
+])
+export type DeviceColorFilter = typeof DeviceColorFilter.Type
 
 export const DeviceOrientation = Schema.Literals([
   "portrait",
   "landscape_left",
   "portrait_upside_down",
   "landscape_right",
-]);
-export type DeviceOrientation = typeof DeviceOrientation.Type;
+])
+export type DeviceOrientation = typeof DeviceOrientation.Type
 
 /** Current values as read from the device; `undefined` means unsupported or unread. */
 export const DeviceSettings = Schema.Struct({
@@ -224,16 +224,16 @@ export const DeviceSettings = Schema.Struct({
   location: Schema.optional(
     Schema.NullOr(Schema.Struct({ latitude: Schema.Number, longitude: Schema.Number })),
   ),
-});
-export type DeviceSettings = typeof DeviceSettings.Type;
+})
+export type DeviceSettings = typeof DeviceSettings.Type
 
 /** The app in the foreground, when the platform can tell us. */
 export const DeviceForegroundApp = Schema.Struct({
   id: Schema.String,
   name: Schema.optional(Schema.String),
   version: Schema.optional(Schema.String),
-});
-export type DeviceForegroundApp = typeof DeviceForegroundApp.Type;
+})
+export type DeviceForegroundApp = typeof DeviceForegroundApp.Type
 
 export const DeviceDetail = Schema.Struct({
   hostId: DeviceHostId,
@@ -241,8 +241,8 @@ export const DeviceDetail = Schema.Struct({
   settings: DeviceSettings,
   foregroundApp: Schema.NullOr(DeviceForegroundApp),
   readAt: Schema.String,
-});
-export type DeviceDetail = typeof DeviceDetail.Type;
+})
+export type DeviceDetail = typeof DeviceDetail.Type
 
 export const DevicePermission = Schema.Literals([
   "camera",
@@ -256,13 +256,13 @@ export const DevicePermission = Schema.Literals([
   "motion",
   "media-library",
   "faceid",
-]);
-export type DevicePermission = typeof DevicePermission.Type;
+])
+export type DevicePermission = typeof DevicePermission.Type
 
 const DeviceTarget = {
   hostId: Schema.optional(DeviceHostId),
   deviceId: DeviceId,
-};
+}
 
 export const DeviceActionInput = Schema.Union([
   Schema.Struct({
@@ -332,12 +332,12 @@ export const DeviceActionInput = Schema.Union([
     /** APNs-style payload; a bare string becomes the alert body. */
     payload: Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.Unknown)]),
   }),
-]);
-export type DeviceActionInput = typeof DeviceActionInput.Type;
-export type DeviceActionType = DeviceActionInput["type"];
+])
+export type DeviceActionInput = typeof DeviceActionInput.Type
+export type DeviceActionType = DeviceActionInput["type"]
 
-export const DeviceDetailInput = Schema.Struct(DeviceTarget);
-export type DeviceDetailInput = typeof DeviceDetailInput.Type;
+export const DeviceDetailInput = Schema.Struct(DeviceTarget)
+export type DeviceDetailInput = typeof DeviceDetailInput.Type
 
 export class DeviceHostUnavailableError extends Schema.TaggedError<DeviceHostUnavailableError>()(
   "DeviceHostUnavailableError",
@@ -347,7 +347,7 @@ export class DeviceHostUnavailableError extends Schema.TaggedError<DeviceHostUna
   },
 ) {
   override get message(): string {
-    return `Device host ${this.hostId} is unavailable: ${this.reason}`;
+    return `Device host ${this.hostId} is unavailable: ${this.reason}`
   }
 }
 
@@ -360,7 +360,7 @@ export class DevicePlatformUnavailableError extends Schema.TaggedError<DevicePla
   },
 ) {
   override get message(): string {
-    return `${this.platform} devices are unavailable on host ${this.hostId}: ${this.reason}`;
+    return `${this.platform} devices are unavailable on host ${this.hostId}: ${this.reason}`
   }
 }
 
@@ -372,7 +372,7 @@ export class DeviceNotFoundError extends Schema.TaggedError<DeviceNotFoundError>
   },
 ) {
   override get message(): string {
-    return `Device ${this.deviceId} was not found on host ${this.hostId}.`;
+    return `Device ${this.deviceId} was not found on host ${this.hostId}.`
   }
 }
 
@@ -388,8 +388,8 @@ export class DeviceBootError extends Schema.TaggedError<DeviceBootError>()("Devi
       timeout: "The device did not become ready in time.",
       launch_failed:
         "The simulator or emulator could not start. Check its configuration on the environment server.",
-    }[this.reason];
-    return `Device ${this.deviceId} failed to boot: ${explanation}`;
+    }[this.reason]
+    return `Device ${this.deviceId} failed to boot: ${explanation}`
   }
 }
 
@@ -415,8 +415,8 @@ export class DeviceOperationError extends Schema.TaggedError<DeviceOperationErro
       invalid_payload: "The device request could not be encoded.",
       settings_failed: "Could not read or save device settings.",
       hub_rejected: "The device hub could not complete the request.",
-    }[this.reason];
-    return `Device ${this.operation} failed: ${explanation}`;
+    }[this.reason]
+    return `Device ${this.operation} failed: ${explanation}`
   }
 }
 
@@ -431,7 +431,7 @@ export class DeviceActionUnavailableError extends Schema.TaggedError<DeviceActio
   override get message(): string {
     return this.reason === "helper_missing"
       ? `Device ${this.operation} requires a helper missing from this install. Set up device support again.`
-      : `Device ${this.operation} is not supported on ${this.platform}.`;
+      : `Device ${this.operation} is not supported on ${this.platform}.`
   }
 }
 
@@ -442,8 +442,8 @@ export const DeviceError = Schema.Union([
   DeviceBootError,
   DeviceOperationError,
   DeviceActionUnavailableError,
-]);
-export type DeviceError = typeof DeviceError.Type;
+])
+export type DeviceError = typeof DeviceError.Type
 
 // MCP tool shapes. Kept next to the RPC shapes so the tool surface and the
 // panel describe devices the same way.
@@ -454,8 +454,8 @@ export const DeviceToolListResult = Schema.Struct({
   devices: Schema.Array(DeviceSummary),
   /** Devices already open in this thread's Device panel. */
   open: Schema.Array(Schema.Struct({ hostId: DeviceHostId, deviceId: DeviceId })),
-});
-export type DeviceToolListResult = typeof DeviceToolListResult.Type;
+})
+export type DeviceToolListResult = typeof DeviceToolListResult.Type
 
 export const DeviceToolOpenInput = Schema.Struct({
   deviceId: Schema.optional(
@@ -475,8 +475,8 @@ export const DeviceToolOpenInput = Schema.Struct({
 }).annotate({
   description:
     "Boots the device if needed, starts its live stream, and opens the Device panel so the user can watch. Returns how to drive it with the agent-device CLI.",
-});
-export type DeviceToolOpenInput = typeof DeviceToolOpenInput.Type;
+})
+export type DeviceToolOpenInput = typeof DeviceToolOpenInput.Type
 
 export const DeviceToolOpenResult = Schema.Struct({
   device: DeviceSummary,
@@ -487,8 +487,8 @@ export const DeviceToolOpenResult = Schema.Struct({
     targetArgs: Schema.Array(Schema.String),
   }),
   quickStart: Schema.String,
-});
-export type DeviceToolOpenResult = typeof DeviceToolOpenResult.Type;
+})
+export type DeviceToolOpenResult = typeof DeviceToolOpenResult.Type
 
 export const DeviceToolTargetInput = Schema.Struct({
   deviceId: Schema.optional(
@@ -498,8 +498,8 @@ export const DeviceToolTargetInput = Schema.Struct({
     }),
   ),
   hostId: Schema.optional(DeviceHostId),
-});
-export type DeviceToolTargetInput = typeof DeviceToolTargetInput.Type;
+})
+export type DeviceToolTargetInput = typeof DeviceToolTargetInput.Type
 
 export const DeviceToolScreenshotResult = Schema.Struct({
   device: DeviceSummary,
@@ -509,8 +509,8 @@ export const DeviceToolScreenshotResult = Schema.Struct({
     width: Schema.Int,
     height: Schema.Int,
   }),
-});
-export type DeviceToolScreenshotResult = typeof DeviceToolScreenshotResult.Type;
+})
+export type DeviceToolScreenshotResult = typeof DeviceToolScreenshotResult.Type
 
 export const DeviceToolCloseInput = Schema.Struct({
   deviceId: Schema.optional(
@@ -524,8 +524,8 @@ export const DeviceToolCloseInput = Schema.Struct({
       description: "Also power the simulator or emulator off. Defaults to false.",
     }),
   ),
-});
-export type DeviceToolCloseInput = typeof DeviceToolCloseInput.Type;
+})
+export type DeviceToolCloseInput = typeof DeviceToolCloseInput.Type
 
 export class DeviceToolUnavailableError extends Schema.TaggedError<DeviceToolUnavailableError>()(
   "DeviceToolUnavailableError",
@@ -534,7 +534,7 @@ export class DeviceToolUnavailableError extends Schema.TaggedError<DeviceToolUna
   },
 ) {
   override get message(): string {
-    return this.reason;
+    return this.reason
   }
 }
 
@@ -546,5 +546,5 @@ export const DeviceToolError = Schema.Union([
   DeviceBootError,
   DeviceOperationError,
   DeviceActionUnavailableError,
-]);
-export type DeviceToolError = typeof DeviceToolError.Type;
+])
+export type DeviceToolError = typeof DeviceToolError.Type

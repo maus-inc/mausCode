@@ -17,12 +17,7 @@ export function useToggleFocusOnCmdEsc(
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle Cmd+Esc (or Ctrl+Esc on Windows/Linux)
-      if (
-        e.key !== "Escape" ||
-        !(e.metaKey || e.ctrlKey) ||
-        e.shiftKey ||
-        e.altKey
-      ) {
+      if (e.key !== "Escape" || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) {
         return
       }
 

@@ -75,12 +75,9 @@ export async function fetchOpenRouterPlanUsage(): Promise<FetchResult> {
   const limit = typeof data.limit === "number" ? data.limit : null
   const isFreeTier = data.is_free_tier === true
 
-  const remaining =
-    usage !== null && limit !== null ? Math.max(0, limit - usage) : null
+  const remaining = usage !== null && limit !== null ? Math.max(0, limit - usage) : null
   const utilization =
-    usage !== null && limit !== null && limit > 0
-      ? Math.min(100, (usage / limit) * 100)
-      : null
+    usage !== null && limit !== null && limit > 0 ? Math.min(100, (usage / limit) * 100) : null
 
   return {
     ok: true,

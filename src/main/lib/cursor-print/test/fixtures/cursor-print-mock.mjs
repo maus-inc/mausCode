@@ -312,7 +312,7 @@ if (mode === "never") {
     subtype: "started",
     call_id: "call-2",
     tool_call: {
-      function: { name: "shell", arguments: "{\"command\":\"ls\"}" },
+      function: { name: "shell", arguments: '{"command":"ls"}' },
     },
     session_id: SID,
   })
@@ -323,7 +323,7 @@ if (mode === "never") {
     tool_call: {
       function: {
         name: "shell",
-        arguments: "{\"command\":\"ls\"}",
+        arguments: '{"command":"ls"}',
         result: { success: "a\nb" },
       },
     },

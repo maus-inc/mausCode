@@ -110,10 +110,7 @@ export const runtimeRouter = router({
             }
 
             for (const chunk of translator.beginTurn()) safeEmit(chunk)
-            db.update(subChats)
-              .set({ streamId })
-              .where(eq(subChats.id, input.subChatId))
-              .run()
+            db.update(subChats).set({ streamId }).where(eq(subChats.id, input.subChatId)).run()
 
             const manager = getRuntimeManager()
             let client
@@ -146,9 +143,7 @@ export const runtimeRouter = router({
               const snapshot = resolveNativeMcpSnapshot(input.cwd, manager.jcodeHome)
               safeEmit({
                 type: "session-init",
-                tools: snapshot.servers.flatMap((s) =>
-                  s.tools.map((t) => `mcp__${s.name}__${t}`),
-                ),
+                tools: snapshot.servers.flatMap((s) => s.tools.map((t) => `mcp__${s.name}__${t}`)),
                 mcpServers: snapshot.servers.map((s) => ({
                   name: s.name,
                   status: s.status,
@@ -216,7 +211,9 @@ export const runtimeRouter = router({
               void stream.return?.(undefined)?.catch(() => {})
             }
             await client.sendMessage(sessionId, input.prompt, {
-              images: input.images?.map((img) => [img.mediaType, img.base64Data] as [string, string]),
+              images: input.images?.map(
+                (img) => [img.mediaType, img.base64Data] as [string, string],
+              ),
             })
 
             for await (const event of stream) {
@@ -230,9 +227,7 @@ export const runtimeRouter = router({
           } catch (error) {
             if (!turn.cancelled) {
               console.error(`[Native] M:FAIL sub=${subId}:`, error)
-              fail(
-                `NATIVE_TURN_FAILED: ${error instanceof Error ? error.message : String(error)}`,
-              )
+              fail(`NATIVE_TURN_FAILED: ${error instanceof Error ? error.message : String(error)}`)
             } else {
               safeComplete()
             }
@@ -263,21 +258,19 @@ export const runtimeRouter = router({
       })
     }),
 
-  cancel: publicProcedure
-    .input(z.object({ subChatId: z.string() }))
-    .mutation(({ input }) => {
-      const turn = activeTurns.get(input.subChatId)
-      if (turn) {
-        turn.cancelled = true
-        try {
-          turn.cancelRemote()
-        } catch {
-          // Remote already gone.
-        }
-        activeTurns.delete(input.subChatId)
+  cancel: publicProcedure.input(z.object({ subChatId: z.string() })).mutation(({ input }) => {
+    const turn = activeTurns.get(input.subChatId)
+    if (turn) {
+      turn.cancelled = true
+      try {
+        turn.cancelRemote()
+      } catch {
+        // Remote already gone.
       }
-      return { cancelled: !!turn }
-    }),
+      activeTurns.delete(input.subChatId)
+    }
+    return { cancelled: !!turn }
+  }),
 
   isActive: publicProcedure
     .input(z.object({ subChatId: z.string() }))
@@ -367,15 +360,13 @@ export const runtimeRouter = router({
         return settings
       }),
 
-    probe: publicProcedure
-      .input(z.object({ url: z.string() }))
-      .mutation(async ({ input }) => {
-        try {
-          return await probeEndpoint(input.url)
-        } catch (error) {
-          return { ok: false, detail: error instanceof Error ? error.message : "Invalid URL" }
-        }
-      }),
+    probe: publicProcedure.input(z.object({ url: z.string() })).mutation(async ({ input }) => {
+      try {
+        return await probeEndpoint(input.url)
+      } catch (error) {
+        return { ok: false, detail: error instanceof Error ? error.message : "Invalid URL" }
+      }
+    }),
   }),
 
   status: publicProcedure.query(async () => {

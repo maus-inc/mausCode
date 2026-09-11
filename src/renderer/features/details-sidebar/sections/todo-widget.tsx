@@ -3,7 +3,13 @@
 import { memo, useMemo, useState, useCallback } from "react"
 import { useAtomValue } from "jotai"
 import { cn } from "@/lib/utils"
-import { PlanIcon, CheckIcon, IconArrowRight, ExpandIcon, CollapseIcon } from "@/components/ui/icons"
+import {
+  PlanIcon,
+  CheckIcon,
+  IconArrowRight,
+  ExpandIcon,
+  CollapseIcon,
+} from "@/components/ui/icons"
 import { currentTodosAtomFamily, currentTaskToolsAtomFamily } from "@/features/agents/atoms"
 
 interface TodoItem {
@@ -88,11 +94,7 @@ const ProgressCircle = ({
   )
 }
 
-const TodoStatusIcon = ({
-  status,
-}: {
-  status: TodoItem["status"]
-}) => {
+const TodoStatusIcon = ({ status }: { status: TodoItem["status"] }) => {
   switch (status) {
     case "completed":
       return (
@@ -119,19 +121,10 @@ const TodoStatusIcon = ({
   }
 }
 
-const TodoListItem = ({
-  todo,
-  isLast,
-}: {
-  todo: TodoItem
-  isLast: boolean
-}) => {
+const TodoListItem = ({ todo, isLast }: { todo: TodoItem; isLast: boolean }) => {
   return (
     <div
-      className={cn(
-        "flex items-center gap-2 px-2 py-1.5",
-        !isLast && "border-b border-border/30",
-      )}
+      className={cn("flex items-center gap-2 px-2 py-1.5", !isLast && "border-b border-border/30")}
     >
       <TodoStatusIcon status={todo.status} />
       <span
@@ -144,9 +137,7 @@ const TodoListItem = ({
               : "text-foreground",
         )}
       >
-        {todo.status === "in_progress" && todo.activeForm
-          ? todo.activeForm
-          : todo.content}
+        {todo.status === "in_progress" && todo.activeForm ? todo.activeForm : todo.content}
       </span>
     </div>
   )
@@ -161,10 +152,7 @@ const TodoListItem = ({
  */
 export const TodoWidget = memo(function TodoWidget({ subChatId }: TodoWidgetProps) {
   // Get todos from the legacy TodoWrite tool
-  const todosAtom = useMemo(
-    () => currentTodosAtomFamily(subChatId || "default"),
-    [subChatId],
-  )
+  const todosAtom = useMemo(() => currentTodosAtomFamily(subChatId || "default"), [subChatId])
   const todoState = useAtomValue(todosAtom)
   const legacyTodos = todoState.todos
 
@@ -211,8 +199,7 @@ export const TodoWidget = memo(function TodoWidget({ subChatId }: TodoWidgetProp
 
   // Find current task (first in_progress, or first pending if none in progress)
   const currentTask =
-    todos.find((t) => t.status === "in_progress") ||
-    todos.find((t) => t.status === "pending")
+    todos.find((t) => t.status === "in_progress") || todos.find((t) => t.status === "pending")
 
   // Find current task index for progress display
   const currentTaskIndex = currentTask
@@ -315,11 +302,7 @@ export const TodoWidget = memo(function TodoWidget({ subChatId }: TodoWidgetProp
             onClick={() => setIsExpanded(false)}
           >
             {todos.map((todo, idx) => (
-              <TodoListItem
-                key={idx}
-                todo={todo}
-                isLast={idx === todos.length - 1}
-              />
+              <TodoListItem key={idx} todo={todo} isLast={idx === todos.length - 1} />
             ))}
           </div>
         )}

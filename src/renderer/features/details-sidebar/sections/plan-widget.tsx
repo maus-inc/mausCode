@@ -217,7 +217,7 @@ export const PlanWidget = memo(function PlanWidget({
                 ref={contentRef}
                 className={cn(
                   "px-2 py-2 allow-text-selection",
-                  isExpanded ? "" : "max-h-64 overflow-hidden"
+                  isExpanded ? "" : "max-h-64 overflow-hidden",
                 )}
               >
                 <ChatMarkdownRenderer content={displayContent} size="sm" />

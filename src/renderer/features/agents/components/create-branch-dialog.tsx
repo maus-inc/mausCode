@@ -136,11 +136,7 @@ export function CreateBranchDialog({
               value={branchName}
               onChange={(e) => setBranchName(e.target.value)}
               onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  branchName.trim() &&
-                  !createBranchMutation.isPending
-                ) {
+                if (e.key === "Enter" && branchName.trim() && !createBranchMutation.isPending) {
                   e.preventDefault()
                   handleSubmit(e)
                 }
@@ -155,10 +151,7 @@ export function CreateBranchDialog({
           <div className="space-y-2">
             <Label className="text-sm">Create branch based on...</Label>
             {/* Using Popover WITHOUT Portal so it renders inside Dialog's DOM tree */}
-            <PopoverPrimitive.Root
-              open={baseBranchOpen}
-              onOpenChange={setBaseBranchOpen}
-            >
+            <PopoverPrimitive.Root open={baseBranchOpen} onOpenChange={setBaseBranchOpen}>
               <PopoverPrimitive.Trigger asChild>
                 <button
                   type="button"
@@ -209,9 +202,7 @@ export function CreateBranchDialog({
                                 {formatTimeAgo(branch.committedAt)}
                               </span>
                             )}
-                            {baseBranch === branch.name && (
-                              <Check className="h-4 w-4 shrink-0" />
-                            )}
+                            {baseBranch === branch.name && <Check className="h-4 w-4 shrink-0" />}
                           </CommandItem>
                         ))}
                       </CommandGroup>

@@ -145,9 +145,7 @@ export const PlanSection = memo(function PlanSection({
   if (showError) {
     return (
       <div className="px-3 py-4 text-center">
-        <p className="text-xs text-muted-foreground">
-          Failed to load plan
-        </p>
+        <p className="text-xs text-muted-foreground">Failed to load plan</p>
       </div>
     )
   }
@@ -186,8 +184,7 @@ export const PlanSection = memo(function PlanSection({
           className="absolute bottom-0 left-0 right-0 h-6 pointer-events-none z-10 transition-opacity duration-150"
           style={{
             opacity: 1,
-            background:
-              "linear-gradient(to top, hsl(var(--background)) 0%, transparent 100%)",
+            background: "linear-gradient(to top, hsl(var(--background)) 0%, transparent 100%)",
           }}
         />
       </div>

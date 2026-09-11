@@ -132,7 +132,7 @@ export interface UseMentionSearchResult {
  */
 export function useMentionSearch(
   query: string,
-  options: UseMentionSearchOptions = {}
+  options: UseMentionSearchOptions = {},
 ): UseMentionSearchResult {
   const {
     trigger = "@",
@@ -245,7 +245,7 @@ export function useMentionSearch(
           } as any, // Extended context
           {
             providerIds,
-          }
+          },
         )
 
         // Check if aborted or unmounted

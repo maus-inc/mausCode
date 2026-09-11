@@ -184,7 +184,9 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       let error: Error
       if (err instanceof Error) {
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-          error = new Error("Microphone access denied. Please allow microphone access in System Preferences.")
+          error = new Error(
+            "Microphone access denied. Please allow microphone access in System Preferences.",
+          )
         } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
           error = new Error("No microphone found. Please connect a microphone.")
         } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
@@ -271,9 +273,7 @@ export async function blobToBase64(blob: Blob): Promise<string> {
 /**
  * Get audio format from mime type
  */
-export function getAudioFormat(
-  mimeType: string
-): "webm" | "mp3" | "m4a" | "wav" | "ogg" {
+export function getAudioFormat(mimeType: string): "webm" | "mp3" | "m4a" | "wav" | "ogg" {
   if (mimeType.includes("webm")) return "webm"
   if (mimeType.includes("mp3") || mimeType.includes("mpeg")) return "mp3"
   if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a"

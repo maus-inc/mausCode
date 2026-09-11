@@ -17,11 +17,11 @@
  *
  * @module BrowserProfile
  */
-import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import * as Schema from "effect/Schema"
+import { TrimmedNonEmptyString } from "./baseSchemas.ts"
 
-export const BROWSER_PROFILE_NAME_MAX_LENGTH = 48;
-export const BROWSER_PROFILE_MAX_COUNT = 24;
+export const BROWSER_PROFILE_NAME_MAX_LENGTH = 48
+export const BROWSER_PROFILE_MAX_COUNT = 24
 
 /**
  * Control characters are rejected because ids are folded into delimiter-joined
@@ -31,29 +31,29 @@ export const BROWSER_PROFILE_MAX_COUNT = 24;
 export const BrowserProfileId = TrimmedNonEmptyString.check(
   Schema.isMaxLength(64),
   Schema.isPattern(/^[^\p{Cc}]+$/u),
-);
-export type BrowserProfileId = typeof BrowserProfileId.Type;
+)
+export type BrowserProfileId = typeof BrowserProfileId.Type
 
 export const BrowserProfileName = TrimmedNonEmptyString.check(
   Schema.isMaxLength(BROWSER_PROFILE_NAME_MAX_LENGTH),
-);
+)
 
 /**
  * `persistent` profiles keep cookies on disk across restarts; `incognito`
  * uses an in-memory partition that Chromium discards with the process.
  */
-export const BrowserProfileKind = Schema.Literals(["persistent", "incognito"]);
-export type BrowserProfileKind = typeof BrowserProfileKind.Type;
+export const BrowserProfileKind = Schema.Literals(["persistent", "incognito"])
+export type BrowserProfileKind = typeof BrowserProfileKind.Type
 
 export const BrowserProfile = Schema.Struct({
   id: BrowserProfileId,
   name: BrowserProfileName,
   kind: BrowserProfileKind,
-});
-export type BrowserProfile = typeof BrowserProfile.Type;
+})
+export type BrowserProfile = typeof BrowserProfile.Type
 
-export const DEFAULT_BROWSER_PROFILE_ID: BrowserProfileId = "default";
-export const INCOGNITO_BROWSER_PROFILE_ID: BrowserProfileId = "incognito";
+export const DEFAULT_BROWSER_PROFILE_ID: BrowserProfileId = "default"
+export const INCOGNITO_BROWSER_PROFILE_ID: BrowserProfileId = "incognito"
 
 /**
  * Built-ins are synthesized rather than stored, so they cannot be renamed out
@@ -62,10 +62,10 @@ export const INCOGNITO_BROWSER_PROFILE_ID: BrowserProfileId = "incognito";
 export const BUILT_IN_BROWSER_PROFILES: ReadonlyArray<BrowserProfile> = [
   { id: DEFAULT_BROWSER_PROFILE_ID, name: "Default", kind: "persistent" },
   { id: INCOGNITO_BROWSER_PROFILE_ID, name: "Incognito", kind: "incognito" },
-];
+]
 
 export function isBuiltInBrowserProfileId(id: string): boolean {
-  return BUILT_IN_BROWSER_PROFILES.some((profile) => profile.id === id);
+  return BUILT_IN_BROWSER_PROFILES.some((profile) => profile.id === id)
 }
 
 /**
@@ -85,19 +85,19 @@ export function isBuiltInBrowserProfileId(id: string): boolean {
 export function resolveBrowserProfiles(
   userProfiles: ReadonlyArray<BrowserProfile>,
 ): ReadonlyArray<BrowserProfile> {
-  const seen = new Set(BUILT_IN_BROWSER_PROFILES.map((profile) => profile.id));
-  const resolved = [...BUILT_IN_BROWSER_PROFILES];
+  const seen = new Set(BUILT_IN_BROWSER_PROFILES.map((profile) => profile.id))
+  const resolved = [...BUILT_IN_BROWSER_PROFILES]
   for (const profile of userProfiles) {
-    if (seen.has(profile.id)) continue;
-    seen.add(profile.id);
-    resolved.push(profile.kind === "persistent" ? profile : { ...profile, kind: "persistent" });
+    if (seen.has(profile.id)) continue
+    seen.add(profile.id)
+    resolved.push(profile.kind === "persistent" ? profile : { ...profile, kind: "persistent" })
   }
-  return resolved;
+  return resolved
 }
 
 export function findBrowserProfile(
   profiles: ReadonlyArray<BrowserProfile>,
   id: string | undefined,
 ): BrowserProfile | undefined {
-  return id === undefined ? undefined : profiles.find((profile) => profile.id === id);
+  return id === undefined ? undefined : profiles.find((profile) => profile.id === id)
 }

@@ -1,7 +1,7 @@
-import { createRequire } from "node:module";
-import path from "node:path";
+import { createRequire } from "node:module"
+import path from "node:path"
 
-const require = createRequire(import.meta.url);
+const require = createRequire(import.meta.url)
 
 const PLATFORM_PACKAGES: Record<string, string> = {
   "linux-x64": "@1jehuang/jcode-linux-x64",
@@ -10,14 +10,14 @@ const PLATFORM_PACKAGES: Record<string, string> = {
   "darwin-arm64": "@1jehuang/jcode-darwin-arm64",
   "win32-x64": "@1jehuang/jcode-win32-x64",
   "win32-arm64": "@1jehuang/jcode-win32-arm64",
-};
+}
 
 /** The optional npm package containing the runtime for this machine. */
 export function platformBinaryPackage(
   platform = process.platform,
   arch = process.arch,
 ): string | undefined {
-  return PLATFORM_PACKAGES[`${platform}-${arch}`];
+  return PLATFORM_PACKAGES[`${platform}-${arch}`]
 }
 
 /**
@@ -26,14 +26,18 @@ export function platformBinaryPackage(
  * were deliberately omitted, allowing launch() to fall back to PATH.
  */
 export function bundledJcodeBinary(): string | undefined {
-  const packageName = platformBinaryPackage();
-  if (!packageName) return undefined;
+  const packageName = platformBinaryPackage()
+  if (!packageName) return undefined
   try {
-    const manifest = require.resolve(`${packageName}/package.json`);
-    return path.join(path.dirname(manifest), "bin", process.platform === "win32" ? "jcode.exe" : "jcode");
+    const manifest = require.resolve(`${packageName}/package.json`)
+    return path.join(
+      path.dirname(manifest),
+      "bin",
+      process.platform === "win32" ? "jcode.exe" : "jcode",
+    )
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "MODULE_NOT_FOUND") return undefined;
-    throw error;
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === "MODULE_NOT_FOUND") return undefined
+    throw error
   }
 }

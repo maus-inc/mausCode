@@ -140,8 +140,7 @@ export function ResizableBottomPanel({
       setIsResizing(true)
       setIsHoveringResizeHandle(false)
 
-      const clampHeight = (h: number) =>
-        Math.max(minHeight, Math.min(maxHeight, h))
+      const clampHeight = (h: number) => Math.max(minHeight, Math.min(maxHeight, h))
 
       const handlePointerMove = (e: PointerEvent) => {
         const delta = Math.abs(startY - e.clientY)
@@ -234,9 +233,7 @@ export function ResizableBottomPanel({
           <motion.div
             ref={panelRef}
             initial={
-              !shouldAnimate
-                ? { height: currentHeight, opacity: 1 }
-                : { height: 0, opacity: 0 }
+              !shouldAnimate ? { height: currentHeight, opacity: 1 } : { height: 0, opacity: 0 }
             }
             animate={{ height: currentHeight, opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}

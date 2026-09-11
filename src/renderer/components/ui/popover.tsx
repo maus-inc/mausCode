@@ -20,31 +20,26 @@ const PopoverContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & {
     forceDark?: boolean
   }
->(
-  (
-    { className, align = "center", sideOffset = 4, forceDark = true, ...props },
-    ref,
-  ) => (
-    <PopoverPrimitive.Portal>
-      <PopoverPrimitive.Content
-        ref={ref}
-        align={align}
-        sideOffset={sideOffset}
-        className={cn(
-          overlayContentBase,
-          overlayMaxHeight,
-          overlayAnimation,
-          overlaySlideIn,
-          "min-w-[200px] py-1",
-          forceDark && "dark",
-          className,
-        )}
-        data-popover="true"
-        {...props}
-      />
-    </PopoverPrimitive.Portal>
-  ),
-)
+>(({ className, align = "center", sideOffset = 4, forceDark = true, ...props }, ref) => (
+  <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Content
+      ref={ref}
+      align={align}
+      sideOffset={sideOffset}
+      className={cn(
+        overlayContentBase,
+        overlayMaxHeight,
+        overlayAnimation,
+        overlaySlideIn,
+        "min-w-[200px] py-1",
+        forceDark && "dark",
+        className,
+      )}
+      data-popover="true"
+      {...props}
+    />
+  </PopoverPrimitive.Portal>
+))
 PopoverContent.displayName = PopoverPrimitive.Content.displayName
 
 const PopoverClose = PopoverPrimitive.Close

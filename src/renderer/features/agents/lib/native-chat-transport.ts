@@ -20,11 +20,7 @@ import {
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
-import {
-  MODEL_ID_MAP,
-  pendingAuthRetryMessageAtom,
-  subChatModelIdAtomFamily,
-} from "../atoms"
+import { MODEL_ID_MAP, pendingAuthRetryMessageAtom, subChatModelIdAtomFamily } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import {
   applyCompactingChunks,
@@ -49,7 +45,8 @@ type NativeChatTransportConfig = {
 const NATIVE_ERROR_TOAST_CONFIG: Record<string, { title: string; description: string }> = {
   STARTUP_FAILED: {
     title: "Native runtime failed to start",
-    description: "The local runtime daemon could not start. Try again, or switch back to the legacy engine.",
+    description:
+      "The local runtime daemon could not start. Try again, or switch back to the legacy engine.",
   },
   NO_CREDENTIALS: {
     title: "No provider credentials",
@@ -80,9 +77,7 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
     messages: UIMessage[]
     abortSignal?: AbortSignal
   }): Promise<ReadableStream<UIMessageChunk>> {
-    const lastUser = [...options.messages]
-      .reverse()
-      .find((m) => m.role === "user")
+    const lastUser = [...options.messages].reverse().find((m) => m.role === "user")
     const prompt = extractPromptText(lastUser)
     const images = extractPromptImages(lastUser)
 
@@ -95,7 +90,8 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
     const offlineModeEnabled =
       appStore.get(showOfflineModeFeaturesAtom) && appStore.get(autoOfflineModeAtom)
     if (offlineModeEnabled) {
-      const message = "Offline mode is not supported on the Native engine yet. Switch back to Legacy for offline chats."
+      const message =
+        "Offline mode is not supported on the Native engine yet. Switch back to Legacy for offline chats."
       toast.error("Offline not supported on Native", {
         description: message,
         duration: 12000,
@@ -108,16 +104,14 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
 
     // Custom provider configs ride along so the daemon host can apply the
     // token — or refuse custom endpoints with a clear error.
-    const storedCustomConfig = appStore.get(
-      customClaudeConfigAtom,
-    ) as CustomClaudeConfig
+    const storedCustomConfig = appStore.get(customClaudeConfigAtom) as CustomClaudeConfig
     const customConfig = normalizeCustomClaudeConfig(storedCustomConfig)
 
     const currentMode =
       useAgentSubChatStore
         .getState()
-        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
-        ?.mode || this.config.mode
+        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)?.mode ||
+      this.config.mode
 
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
@@ -198,7 +192,9 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
               try {
                 controller.enqueue(chunk)
               } catch (e) {
-                console.log(`[SD] R:NATIVE_ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`)
+                console.log(
+                  `[SD] R:NATIVE_ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`,
+                )
               }
 
               if (chunk.type === "finish") {
@@ -211,7 +207,9 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
               }
             },
             onError: (err: Error) => {
-              console.log(`[SD] R:NATIVE_ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`)
+              console.log(
+                `[SD] R:NATIVE_ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`,
+              )
               Sentry.captureException(err, {
                 tags: { errorCategory: "NATIVE_TRANSPORT_ERROR", mode: currentMode },
                 extra: {
@@ -223,7 +221,9 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
               controller.error(err)
             },
             onComplete: () => {
-              console.log(`[SD] R:NATIVE_COMPLETE sub=${subId} n=${chunkCount} last=${lastChunkType}`)
+              console.log(
+                `[SD] R:NATIVE_COMPLETE sub=${subId} n=${chunkCount} last=${lastChunkType}`,
+              )
               try {
                 controller.close()
               } catch {

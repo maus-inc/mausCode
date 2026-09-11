@@ -47,7 +47,7 @@ interface IsolatedMessagesSectionProps {
 
 function areSectionPropsEqual(
   prev: IsolatedMessagesSectionProps,
-  next: IsolatedMessagesSectionProps
+  next: IsolatedMessagesSectionProps,
 ): boolean {
   return (
     prev.subChatId === next.subChatId &&

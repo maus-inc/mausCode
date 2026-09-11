@@ -9,11 +9,7 @@ interface DiffCenterPeekDialogProps {
   children: React.ReactNode
 }
 
-export function DiffCenterPeekDialog({
-  isOpen,
-  onClose,
-  children,
-}: DiffCenterPeekDialogProps) {
+export function DiffCenterPeekDialog({ isOpen, onClose, children }: DiffCenterPeekDialogProps) {
   // Close on Escape key
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -22,7 +18,7 @@ export function DiffCenterPeekDialog({
         onClose()
       }
     },
-    [onClose]
+    [onClose],
   )
 
   useEffect(() => {

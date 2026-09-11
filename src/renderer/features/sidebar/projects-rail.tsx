@@ -6,7 +6,6 @@
  */
 "use client"
 
-
 import { useCallback, useMemo, useState } from "react"
 import type { DragEvent } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
@@ -25,11 +24,7 @@ import {
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
 import { LoadingDot } from "../../components/ui/icons"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -53,11 +48,7 @@ import {
   chatsAwaitingAnswerAtom,
   loadingSubChatsAtom,
 } from "../agents/atoms"
-import {
-  agentsSidebarOpenAtom,
-  isDesktopAtom,
-  isFullscreenAtom,
-} from "../../lib/atoms"
+import { agentsSidebarOpenAtom, isDesktopAtom, isFullscreenAtom } from "../../lib/atoms"
 
 const RAIL_WIDTH = 56
 // Reserve space at the top of the rail so the first button clears the
@@ -110,10 +101,7 @@ function StatusDots({
       )}
       {inProgress && (
         <span aria-hidden className={cn(halo, "-bottom-0.5 -right-0.5")}>
-          <LoadingDot
-            isLoading={true}
-            className="h-2.5 w-2.5 text-muted-foreground"
-          />
+          <LoadingDot isLoading={true} className="h-2.5 w-2.5 text-muted-foreground" />
         </span>
       )}
     </>
@@ -285,11 +273,7 @@ export function ProjectsRail() {
         name: project.name,
         path: project.path,
         gitRemoteUrl: project.gitRemoteUrl ?? null,
-        gitProvider: (project.gitProvider as
-          | "github"
-          | "gitlab"
-          | "bitbucket"
-          | null) ?? null,
+        gitProvider: (project.gitProvider as "github" | "gitlab" | "bitbucket" | null) ?? null,
         gitOwner: project.gitOwner ?? null,
         gitRepo: project.gitRepo ?? null,
       })
@@ -304,11 +288,7 @@ export function ProjectsRail() {
         name: project.name,
         path: project.path,
         gitRemoteUrl: project.gitRemoteUrl,
-        gitProvider: (project.gitProvider as
-          | "github"
-          | "gitlab"
-          | "bitbucket"
-          | null) ?? null,
+        gitProvider: (project.gitProvider as "github" | "gitlab" | "bitbucket" | null) ?? null,
         gitOwner: project.gitOwner,
         gitRepo: project.gitRepo,
       })
@@ -359,18 +339,15 @@ export function ProjectsRail() {
     setPendingDelete(null)
   }, [pendingDelete, deleteProject])
 
-  const handleDragStart = useCallback(
-    (e: DragEvent<HTMLDivElement>, id: string) => {
-      setDraggedId(id)
-      e.dataTransfer.effectAllowed = "move"
-      try {
-        e.dataTransfer.setData("text/plain", id)
-      } catch {
-        // noop — some browsers throw on setData during certain drag phases
-      }
-    },
-    [],
-  )
+  const handleDragStart = useCallback((e: DragEvent<HTMLDivElement>, id: string) => {
+    setDraggedId(id)
+    e.dataTransfer.effectAllowed = "move"
+    try {
+      e.dataTransfer.setData("text/plain", id)
+    } catch {
+      // noop — some browsers throw on setData during certain drag phases
+    }
+  }, [])
 
   const handleDragOver = useCallback(
     (e: DragEvent<HTMLDivElement>, id: string) => {
@@ -381,22 +358,17 @@ export function ProjectsRail() {
       const position: "before" | "after" =
         e.clientY - rect.top < rect.height / 2 ? "before" : "after"
       setDropTarget((prev) =>
-        prev && prev.id === id && prev.position === position
-          ? prev
-          : { id, position },
+        prev && prev.id === id && prev.position === position ? prev : { id, position },
       )
     },
     [draggedId],
   )
 
-  const handleDragLeave = useCallback(
-    (e: DragEvent<HTMLDivElement>, id: string) => {
-      // Only clear when leaving the wrapper, not when entering child nodes
-      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-      setDropTarget((prev) => (prev?.id === id ? null : prev))
-    },
-    [],
-  )
+  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>, id: string) => {
+    // Only clear when leaving the wrapper, not when entering child nodes
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    setDropTarget((prev) => (prev?.id === id ? null : prev))
+  }, [])
 
   const handleDragEnd = useCallback(() => {
     setDraggedId(null)
@@ -420,8 +392,7 @@ export function ProjectsRail() {
       const targetIdx = without.findIndex((p) => p.id === targetId)
       if (targetIdx === -1) return
 
-      const insertIdx =
-        target.position === "before" ? targetIdx : targetIdx + 1
+      const insertIdx = target.position === "before" ? targetIdx : targetIdx + 1
       const newOrderIds = [
         ...without.slice(0, insertIdx).map((p) => p.id),
         draggingId,
@@ -429,9 +400,7 @@ export function ProjectsRail() {
       ]
 
       // Compare against current order to avoid no-op mutations
-      const sameAsCurrent = newOrderIds.every(
-        (id, i) => current[i]?.id === id,
-      )
+      const sameAsCurrent = newOrderIds.every((id, i) => current[i]?.id === id)
       if (sameAsCurrent) return
 
       utils.projects.listWithStatus.setData(undefined, (old) => {
@@ -501,13 +470,10 @@ export function ProjectsRail() {
           const initial = projectInitial(project)
           const accent = project.accentColor ?? undefined
           const isDragging = draggedId === project.id
-          const showBefore =
-            dropTarget?.id === project.id && dropTarget.position === "before"
-          const showAfter =
-            dropTarget?.id === project.id && dropTarget.position === "after"
+          const showBefore = dropTarget?.id === project.id && dropTarget.position === "before"
+          const showAfter = dropTarget?.id === project.id && dropTarget.position === "after"
           const inProgress =
-            (project.inProgressCount ?? 0) > 0 ||
-            liveInProgressByProject.has(project.id)
+            (project.inProgressCount ?? 0) > 0 || liveInProgressByProject.has(project.id)
           const unseen = (project.unseenCount ?? 0) > 0
           const awaiting = awaitingByProject.has(project.id)
           return (
@@ -570,11 +536,7 @@ export function ProjectsRail() {
                       className="pointer-events-none absolute -bottom-[3px] left-1 right-1 h-[2px] rounded-full bg-foreground"
                     />
                   )}
-                  <StatusDots
-                    inProgress={inProgress}
-                    unseen={unseen}
-                    awaiting={awaiting}
-                  />
+                  <StatusDots inProgress={inProgress} unseen={unseen} awaiting={awaiting} />
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -590,9 +552,7 @@ export function ProjectsRail() {
                   <FolderOpen className="mr-2 h-4 w-4" />
                   Reveal in Finder
                 </ContextMenuItem>
-                <ContextMenuItem
-                  onSelect={() => refreshGitInfo.mutate({ id: project.id })}
-                >
+                <ContextMenuItem onSelect={() => refreshGitInfo.mutate({ id: project.id })}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Refresh git info
                 </ContextMenuItem>
@@ -629,11 +589,7 @@ export function ProjectsRail() {
       </div>
 
       <div className="flex flex-col items-center gap-1.5">
-        <RailButton
-          onClick={handleOpenSettings}
-          tooltip="Settings"
-          ariaLabel="Open settings"
-        >
+        <RailButton onClick={handleOpenSettings} tooltip="Settings" ariaLabel="Open settings">
           <Settings className="h-[18px] w-[18px]" strokeWidth={1.75} />
         </RailButton>
       </div>

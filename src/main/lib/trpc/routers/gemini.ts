@@ -140,9 +140,7 @@ function getOrCreateProvider(params: {
       cwd: params.cwd,
       mcpServers: [],
     },
-    ...(params.existingSessionId
-      ? { existingSessionId: params.existingSessionId }
-      : {}),
+    ...(params.existingSessionId ? { existingSessionId: params.existingSessionId } : {}),
     persistSession: true,
   })
 
@@ -197,8 +195,7 @@ function extractPromptFromStoredMessage(message: any): string {
     if (part?.type === "text" && typeof part.text === "string") {
       textParts.push(part.text)
     } else if (part?.type === "file-content") {
-      const filePath =
-        typeof part.filePath === "string" ? part.filePath : undefined
+      const filePath = typeof part.filePath === "string" ? part.filePath : undefined
       const fileName = filePath?.split("/").pop() || filePath || "file"
       const content = typeof part.content === "string" ? part.content : ""
       fileContents.push(`\n--- ${fileName} ---\n${content}`)
@@ -282,16 +279,8 @@ function getGeminiFallbackModelIds(modelId: string): string[] {
       "auto-gemini-3",
       "gemini-3-flash-preview",
     ],
-    "gemini-2.5-flash": [
-      "gemini-2.5-flash-lite",
-      "auto-gemini-2.5",
-      "auto-gemini-3",
-    ],
-    "gemini-3-flash-preview": [
-      "gemini-3.1-flash-lite-preview",
-      "auto-gemini-3",
-      "auto-gemini-2.5",
-    ],
+    "gemini-2.5-flash": ["gemini-2.5-flash-lite", "auto-gemini-2.5", "auto-gemini-3"],
+    "gemini-3-flash-preview": ["gemini-3.1-flash-lite-preview", "auto-gemini-3", "auto-gemini-2.5"],
   }
 
   const fallbacks = fallbackByModel[modelId] ?? [
@@ -320,9 +309,7 @@ function humanizeGeminiError(rawMessage: string, triedModels?: string[]): string
   if (isGeminiCapacityError(rawMessage)) {
     const modelMatch = rawMessage.match(/model ([\w.-]+)/i)
     const which = modelMatch ? `"${modelMatch[1]}"` : "this Gemini model"
-    const tried = triedModels?.length
-      ? ` Tried: ${triedModels.join(", ")}.`
-      : ""
+    const tried = triedModels?.length ? ` Tried: ${triedModels.join(", ")}.` : ""
     return `Google is currently at capacity for ${which}.${tried} Try an Auto or Flash Gemini model, or retry in a few minutes.`
   }
 
@@ -339,9 +326,7 @@ function humanizeGeminiError(rawMessage: string, triedModels?: string[]): string
 
 function isGeminiPreludeChunk(chunk: any): boolean {
   return (
-    chunk?.type === "start" ||
-    chunk?.type === "start-step" ||
-    chunk?.type === "message-metadata"
+    chunk?.type === "start" || chunk?.type === "start-step" || chunk?.type === "message-metadata"
   )
 }
 
@@ -427,8 +412,7 @@ export const geminiRouter = router({
       } catch (error) {
         return {
           ok: false as const,
-          error:
-            error instanceof Error ? error.message : "Unable to validate key",
+          error: error instanceof Error ? error.message : "Unable to validate key",
         }
       }
     }),
@@ -509,9 +493,7 @@ export const geminiRouter = router({
               throw new Error("Sub-chat not found")
             }
 
-            const existingMessages = parseStoredMessages(
-              existingSubChat.messages,
-            )
+            const existingMessages = parseStoredMessages(existingSubChat.messages)
 
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
@@ -555,12 +537,10 @@ export const geminiRouter = router({
             const cwd = input.cwd && input.cwd.trim() ? input.cwd : process.cwd()
 
             const startedAt = Date.now()
-            let providerSessionIdForResume =
-              input.forceNewSession
-                ? undefined
-                : input.sessionId ?? getLastSessionId(existingMessages)
-            let latestSessionId =
-              providerSessionIdForResume || randomUUID()
+            let providerSessionIdForResume = input.forceNewSession
+              ? undefined
+              : (input.sessionId ?? getLastSessionId(existingMessages))
+            let latestSessionId = providerSessionIdForResume || randomUUID()
 
             const cleanAssistantMessageForPersistence = (message: any) => {
               if (!message || message.role !== "assistant") return message
@@ -599,10 +579,7 @@ export const geminiRouter = router({
                 messages: [
                   {
                     role: "user",
-                    content: buildModelMessageContent(
-                      input.prompt,
-                      input.images,
-                    ),
+                    content: buildModelMessageContent(input.prompt, input.images),
                   },
                 ],
                 tools: provider.tools,
@@ -619,47 +596,36 @@ export const geminiRouter = router({
                   const baseMetadata = {
                     model: modelId,
                     sessionId,
-                    ...(modelId !== input.modelId
-                      ? { requestedModel: input.modelId }
-                      : {}),
+                    ...(modelId !== input.modelId ? { requestedModel: input.modelId } : {}),
                   }
 
                   if (part.type === "finish") {
                     return {
                       ...baseMetadata,
                       durationMs: Date.now() - startedAt,
-                      resultSubtype:
-                        part.finishReason === "error" ? "error" : "success",
+                      resultSubtype: part.finishReason === "error" ? "error" : "success",
                     }
                   }
                   return baseMetadata
                 },
                 onFinish: async ({ responseMessage, isContinuation }) => {
                   try {
-                    const cleaned =
-                      cleanAssistantMessageForPersistence(responseMessage)
+                    const cleaned = cleanAssistantMessageForPersistence(responseMessage)
                     if (!cleaned) {
                       persistSubChatMessages(messagesForStream)
                       return
                     }
                     const messagesToPersist = [
-                      ...(isContinuation
-                        ? messagesForStream.slice(0, -1)
-                        : messagesForStream),
+                      ...(isContinuation ? messagesForStream.slice(0, -1) : messagesForStream),
                       cleaned,
                     ]
                     persistSubChatMessages(messagesToPersist)
                   } catch (error) {
-                    console.error(
-                      "[gemini] Failed to persist messages:",
-                      error,
-                    )
+                    console.error("[gemini] Failed to persist messages:", error)
                   }
                 },
                 onError: (error) =>
-                  error instanceof Error
-                    ? error.message
-                    : String(error ?? "Stream failed"),
+                  error instanceof Error ? error.message : String(error ?? "Stream failed"),
               })
 
               const reader = uiStream.getReader()
@@ -738,8 +704,7 @@ export const geminiRouter = router({
                 const usage = await result.usage
                 const inputTokens = usage?.inputTokens ?? 0
                 const outputTokens = usage?.outputTokens ?? 0
-                const totalTokens =
-                  usage?.totalTokens ?? inputTokens + outputTokens
+                const totalTokens = usage?.totalTokens ?? inputTokens + outputTokens
 
                 if (inputTokens || outputTokens) {
                   try {
@@ -759,9 +724,7 @@ export const geminiRouter = router({
                     type: "message-metadata",
                     messageMetadata: {
                       model: modelId,
-                      ...(modelId !== input.modelId
-                        ? { requestedModel: input.modelId }
-                        : {}),
+                      ...(modelId !== input.modelId ? { requestedModel: input.modelId } : {}),
                       sessionId: latestSessionId,
                       inputTokens,
                       outputTokens,
@@ -789,12 +752,8 @@ export const geminiRouter = router({
               ...getGeminiFallbackModelIds(input.modelId),
               ...getGeminiFallbackModelIds(primaryModelId),
             ].filter((modelId, index, allModels) => {
-              const isSkippedOriginalModel =
-                modelId === input.modelId && modelId !== primaryModelId
-              return (
-                !isSkippedOriginalModel &&
-                allModels.indexOf(modelId) === index
-              )
+              const isSkippedOriginalModel = modelId === input.modelId && modelId !== primaryModelId
+              return !isSkippedOriginalModel && allModels.indexOf(modelId) === index
             })
             let lastCapacityError: string | undefined
 
@@ -842,8 +801,7 @@ export const geminiRouter = router({
             safeEmit({ type: "finish" })
             safeComplete()
           } catch (error) {
-            const rawMessage =
-              error instanceof Error ? error.message : String(error ?? "")
+            const rawMessage = error instanceof Error ? error.message : String(error ?? "")
             console.error("[gemini] chat stream error:", error)
             safeEmit({
               type: "error",
@@ -854,8 +812,7 @@ export const geminiRouter = router({
           } finally {
             const activeStream = activeStreams.get(input.subChatId)
             if (activeStream?.runId === input.runId) {
-              const shouldCleanup =
-                abortController.signal.aborted || activeStream.cancelRequested
+              const shouldCleanup = abortController.signal.aborted || activeStream.cancelRequested
               if (shouldCleanup) {
                 cleanupProvider(input.subChatId)
               }
@@ -888,15 +845,13 @@ export const geminiRouter = router({
       return { cancelled: true, ignoredStale: false }
     }),
 
-  cleanup: publicProcedure
-    .input(z.object({ subChatId: z.string() }))
-    .mutation(({ input }) => {
-      cleanupProvider(input.subChatId)
-      const activeStream = activeStreams.get(input.subChatId)
-      if (activeStream) {
-        activeStream.controller.abort()
-        activeStreams.delete(input.subChatId)
-      }
-      return { success: true }
-    }),
+  cleanup: publicProcedure.input(z.object({ subChatId: z.string() })).mutation(({ input }) => {
+    cleanupProvider(input.subChatId)
+    const activeStream = activeStreams.get(input.subChatId)
+    if (activeStream) {
+      activeStream.controller.abort()
+      activeStreams.delete(input.subChatId)
+    }
+    return { success: true }
+  }),
 })
