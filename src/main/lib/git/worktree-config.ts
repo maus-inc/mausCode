@@ -11,7 +11,7 @@ export interface WorktreeConfig {
   "setup-worktree"?: string[] | string
 }
 
-export type WorktreeConfigSource = "custom" | "cursor" | "1code" | null
+export type WorktreeConfigSource = "custom" | "cursor" | "mauscode" | "1code" | null
 
 export interface DetectedWorktreeConfig {
   config: WorktreeConfig | null
@@ -20,6 +20,7 @@ export interface DetectedWorktreeConfig {
 }
 
 const CURSOR_CONFIG_PATH = ".cursor/worktrees.json"
+const MAUSCODE_CONFIG_PATH = ".mauscode/worktree.json"
 const ONECODE_CONFIG_PATH = ".1code/worktree.json"
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -41,8 +42,9 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
 }
 
 /**
- * Detect worktree config for a project
- * Priority: custom path > .cursor/worktrees.json > .1code/worktree.json
+ * Detect worktree config for a project.
+ * Priority: custom path > .cursor/worktrees.json > .mauscode/worktree.json
+ * > .1code/worktree.json (legacy 1Code path, still read for compat).
  */
 export async function detectWorktreeConfig(
   projectPath: string,
@@ -68,7 +70,16 @@ export async function detectWorktreeConfig(
     }
   }
 
-  // 3. Check .1code/worktree.json
+  // 3. Check .mauscode/worktree.json
+  const mauscodePath = join(projectPath, MAUSCODE_CONFIG_PATH)
+  if (await fileExists(mauscodePath)) {
+    const config = await readJsonFile<WorktreeConfig>(mauscodePath)
+    if (config) {
+      return { config, path: mauscodePath, source: "mauscode" }
+    }
+  }
+
+  // 4. Check .1code/worktree.json (legacy)
   const onecodePath = join(projectPath, ONECODE_CONFIG_PATH)
   if (await fileExists(onecodePath)) {
     const config = await readJsonFile<WorktreeConfig>(onecodePath)
@@ -88,15 +99,21 @@ export async function getAvailableConfigPaths(
   projectPath: string,
 ): Promise<{
   cursor: { exists: boolean; path: string }
+  mauscode: { exists: boolean; path: string }
   onecode: { exists: boolean; path: string }
 }> {
   const cursorPath = join(projectPath, CURSOR_CONFIG_PATH)
+  const mauscodePath = join(projectPath, MAUSCODE_CONFIG_PATH)
   const onecodePath = join(projectPath, ONECODE_CONFIG_PATH)
 
   return {
     cursor: {
       exists: await fileExists(cursorPath),
       path: cursorPath,
+    },
+    mauscode: {
+      exists: await fileExists(mauscodePath),
+      path: mauscodePath,
     },
     onecode: {
       exists: await fileExists(onecodePath),
@@ -112,13 +129,16 @@ export async function getAvailableConfigPaths(
 export async function saveWorktreeConfig(
   projectPath: string,
   config: WorktreeConfig,
-  target: "cursor" | "1code" | string = "1code",
+  target: "cursor" | "mauscode" | "1code" | string = "mauscode",
 ): Promise<{ success: boolean; path: string; error?: string }> {
   let targetPath: string
 
   if (target === "cursor") {
     targetPath = join(projectPath, CURSOR_CONFIG_PATH)
+  } else if (target === "mauscode") {
+    targetPath = join(projectPath, MAUSCODE_CONFIG_PATH)
   } else if (target === "1code") {
+    // Legacy 1Code path: still writable for compat, no longer offered in UI.
     targetPath = join(projectPath, ONECODE_CONFIG_PATH)
   } else {
     // Custom path

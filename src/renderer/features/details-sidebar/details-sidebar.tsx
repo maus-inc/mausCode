@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ArrowUpRight, TerminalSquare, Box, ListTodo } from "lucide-react"
+import { ArrowUpRight, TerminalSquare, Box, ListTodo, RefreshCw } from "lucide-react"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
 import {
@@ -239,6 +239,7 @@ export function DetailsSidebar({
   // Files tab ref for header actions
   const filesTabRef = useRef<FilesTabHandle>(null)
   const [filesAllExpanded, setFilesAllExpanded] = useState(false)
+  const [filesRefreshing, setFilesRefreshing] = useState(false)
 
   // Current file open in file viewer (for tree highlight sync)
   const fileViewerAtom = useMemo(() => fileViewerOpenAtomFamily(chatId), [chatId])
@@ -376,6 +377,22 @@ export function DetailsSidebar({
             <WidgetSettingsPopup workspaceId={chatId} isRemoteChat={isRemoteChat} />
           ) : (
             <div className="flex items-center gap-0.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => filesTabRef.current?.refresh()}
+                    disabled={filesRefreshing}
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw
+                      className={cn("size-3.5", filesRefreshing && "animate-spin")}
+                    />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Refresh files</TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -533,6 +550,7 @@ export function DetailsSidebar({
           worktreePath={worktreePath}
           onSelectFile={onOpenFile ?? noopSelectFile}
           onExpandedStateChange={setFilesAllExpanded}
+          onRefreshingChange={setFilesRefreshing}
           currentViewerFilePath={fileViewerPath}
           className={cn("flex-1", activeTab !== "files" && "hidden")}
         />

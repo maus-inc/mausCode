@@ -1,9 +1,10 @@
 /**
- * PostHog analytics for 1Code Desktop - Main Process
+ * PostHog analytics for mausCode Desktop - Main Process
  * Uses PostHog Node.js SDK for server-side tracking
  */
 
 import { PostHog } from "posthog-node"
+import { isLocalOnlyMode } from "./local-only"
 import { app } from "electron"
 import * as fs from "fs"
 import * as path from "path"
@@ -139,8 +140,8 @@ export function capture(
   // Skip in development mode
   if (isDev()) return
 
-  // Skip if user opted out
-  if (userOptedOut) return
+  // Skip if user opted out or local-only mode is on
+  if (userOptedOut || isLocalOnlyMode()) return
 
   if (!posthog) return
 
@@ -168,8 +169,8 @@ export function identify(
   // Skip in development mode
   if (isDev()) return
 
-  // Skip if user opted out
-  if (userOptedOut) return
+  // Skip if user opted out or local-only mode is on
+  if (userOptedOut || isLocalOnlyMode()) return
 
   if (!posthog) return
 
@@ -301,7 +302,7 @@ export function trackWorkspaceDeleted(workspaceId: string) {
 export function trackMessageSent(data: {
   workspaceId: string
   subChatId?: string
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
 }) {
   capture("message_sent", {
     workspace_id: data.workspaceId,

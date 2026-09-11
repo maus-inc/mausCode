@@ -1,9 +1,15 @@
+/**
+ * NOTE (transplant): local-credential fallbacks below (system-keychain
+ * detection in hasExistingCliConfig/getIntegration, getValidExistingClaudeToken
+ * swaps) were transplanted from erenbertr/1code (Apache-2.0). Their
+ * encrypt/decrypt re-inline was NOT taken — this tree keeps token-crypto.
+ */
 import { eq, sql } from "drizzle-orm"
-import { safeStorage, shell } from "electron"
+import { shell } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
 import { getClaudeShellEnvironment } from "../../claude"
-import { getExistingClaudeToken } from "../../claude-token"
+import { getValidExistingClaudeToken } from "../../claude-token"
 import { getApiUrl } from "../../config"
 import {
   anthropicAccounts,
@@ -13,6 +19,7 @@ import {
 } from "../../db"
 import { createId } from "../../db/utils"
 import { publicProcedure, router } from "../index"
+import { decryptToken, encryptToken } from "../../token-crypto"
 
 /**
  * Get desktop auth token for server API calls
@@ -20,28 +27,6 @@ import { publicProcedure, router } from "../index"
 async function getDesktopToken(): Promise<string | null> {
   const authManager = getAuthManager()
   return authManager.getValidToken()
-}
-
-/**
- * Encrypt token using Electron's safeStorage
- */
-function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[ClaudeCode] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-  return safeStorage.encryptString(token).toString("base64")
-}
-
-/**
- * Decrypt token using Electron's safeStorage
- */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
 }
 
 /**
@@ -112,12 +97,22 @@ export const claudeCodeRouter = router({
    * If true, user can skip OAuth onboarding
    * Based on PR #29 by @sa4hnd
    */
-  hasExistingCliConfig: publicProcedure.query(() => {
+  hasExistingCliConfig: publicProcedure.query(async () => {
     const shellEnv = getClaudeShellEnvironment()
-    const hasConfig = !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN || shellEnv.ANTHROPIC_BASE_URL)
+    const hasEnvKey = !!(
+      shellEnv.ANTHROPIC_API_KEY ||
+      shellEnv.ANTHROPIC_AUTH_TOKEN ||
+      shellEnv.ANTHROPIC_BASE_URL
+    )
+    // Also detect locally-installed Claude Code subscription credentials
+    // (macOS Keychain "Claude Code-credentials" or ~/.claude/.credentials.json).
+    const hasLocalCreds = !!(await getValidExistingClaudeToken())
+    const hasConfig = hasEnvKey || hasLocalCreds
     return {
       hasConfig,
-      hasApiKey: !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN),
+      hasApiKey:
+        !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN) ||
+        hasLocalCreds,
       baseUrl: shellEnv.ANTHROPIC_BASE_URL || null,
     }
   }),
@@ -126,7 +121,7 @@ export const claudeCodeRouter = router({
    * Check if user has Claude Code connected (local check)
    * Now uses multi-account system - checks for active account
    */
-  getIntegration: publicProcedure.query(() => {
+  getIntegration: publicProcedure.query(async () => {
     const db = getDatabase()
 
     // First try multi-account system
@@ -160,9 +155,30 @@ export const claudeCodeRouter = router({
       .where(eq(claudeCodeCredentials.id, "default"))
       .get()
 
+    if (cred?.oauthToken) {
+      return {
+        isConnected: true,
+        connectedAt: cred.connectedAt?.toISOString() ?? null,
+        accountId: null,
+        displayName: null,
+      }
+    }
+
+    // Final fallback: user's locally-installed Claude Code credentials
+    // (macOS Keychain / ~/.claude/.credentials.json)
+    const localToken = (await getValidExistingClaudeToken())?.trim() ?? null
+    if (localToken) {
+      return {
+        isConnected: true,
+        connectedAt: null,
+        accountId: null,
+        displayName: "Local Claude Code",
+      }
+    }
+
     return {
-      isConnected: !!cred?.oauthToken,
-      connectedAt: cred?.connectedAt?.toISOString() ?? null,
+      isConnected: false,
+      connectedAt: null,
       accountId: null,
       displayName: null,
     }
@@ -308,16 +324,16 @@ export const claudeCodeRouter = router({
   /**
    * Check for existing Claude token in system credentials
    */
-  getSystemToken: publicProcedure.query(() => {
-    const token = getExistingClaudeToken()?.trim() ?? null
+  getSystemToken: publicProcedure.query(async () => {
+    const token = (await getValidExistingClaudeToken())?.trim() ?? null
     return { token }
   }),
 
   /**
    * Import Claude token from system credentials
    */
-  importSystemToken: publicProcedure.mutation(() => {
-    const token = getExistingClaudeToken()?.trim()
+  importSystemToken: publicProcedure.mutation(async () => {
+    const token = (await getValidExistingClaudeToken())?.trim()
     if (!token) {
       throw new Error("No existing Claude token found")
     }

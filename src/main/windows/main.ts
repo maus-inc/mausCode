@@ -1,3 +1,10 @@
+/**
+ * NOTE (transplant): the `app.dock?.setBadge` guard and the
+ * `render-process-gone` auto-recovery handler below were transplanted from
+ * erenbertr/1code (Apache-2.0), as was the `debug:append-mem-log` handler
+ * (mem-trace persistence for the dev memory monitor). Their native-turn
+ * removal, auth bypass, and shell IPC handlers were NOT taken.
+ */
 import {
   BrowserWindow,
   Notification,
@@ -11,13 +18,15 @@ import {
   dialog,
 } from "electron"
 import { join } from "path"
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
+import { readFileSync, existsSync, writeFileSync, mkdirSync, statSync, appendFileSync } from "fs"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/routers/claude"
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
+import { hasActiveCursorStreams, abortAllCursorStreams } from "../lib/trpc/routers/cursor"
+import { hasActiveNativeTurns, abortAllNativeTurns } from "../lib/trpc/routers/runtime"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
 
@@ -47,6 +56,31 @@ function registerIpcHandlers(): void {
   // App info
   ipcMain.handle("app:version", () => app.getVersion())
   ipcMain.handle("app:isPackaged", () => app.isPackaged)
+
+  // Dev-only: append a line to a memory-trace file so memory samples survive
+  // a renderer crash (the devtools console is wiped on reload). Read with
+  // `tail -50 ~/Library/Application\\ Support/mausCode\\ Dev/mem-trace.ndjson`.
+  ipcMain.handle("debug:append-mem-log", (_event, line: string) => {
+    try {
+      const userData = app.getPath("userData")
+      mkdirSync(userData, { recursive: true })
+      const path = join(userData, "mem-trace.ndjson")
+      // Cap the file at ~1MB by truncating when it gets large.
+      try {
+        const stat = statSync(path)
+        if (stat.size > 1_000_000) {
+          writeFileSync(path, "")
+        }
+      } catch {
+        // File doesn't exist yet — fine.
+      }
+      appendFileSync(path, line + "\n")
+      return true
+    } catch (error) {
+      console.error("[Main] Failed to append mem-trace:", error)
+      return false
+    }
+  })
 
   // Windows: Frame preference persistence
   ipcMain.handle("window:set-frame-preference", (_event, useNativeFrame: boolean) => {
@@ -81,13 +115,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle("app:set-badge", (event, count: number | null) => {
     const win = getWindowFromEvent(event)
     if (process.platform === "darwin") {
-      app.dock.setBadge(count ? String(count) : "")
+      app.dock?.setBadge(count ? String(count) : "")
     } else if (process.platform === "win32" && win) {
       // Windows: Update title with count as fallback
       if (count !== null && count > 0) {
-        win.setTitle(`1Code (${count})`)
+        win.setTitle(`mausCode (${count})`)
       } else {
-        win.setTitle("1Code")
+        win.setTitle("mausCode")
         win.setOverlayIcon(null, "")
       }
     }
@@ -254,7 +288,7 @@ function registerIpcHandlers(): void {
     const win = getWindowFromEvent(event)
     if (win) {
       // Show just the title, or default app name if empty
-      win.setTitle(title || "1Code")
+      win.setTitle(title || "mausCode")
     }
   })
 
@@ -284,10 +318,133 @@ function registerIpcHandlers(): void {
     setOptOut(optedOut)
   })
 
+  // Local-only mode (pushed from the renderer's persisted setting)
+  ipcMain.handle("local-only:set", async (_event, enabled: boolean) => {
+    const { setLocalOnlyMode } = await import("../lib/local-only")
+    setLocalOnlyMode(enabled)
+  })
+
   // Shell
-  ipcMain.handle("shell:open-external", (_event, url: string) =>
-    shell.openExternal(url),
-  )
+  ipcMain.handle("shell:open-external", async (_event, url: string) => {
+    try {
+      const { assertRemoteAllowed } = await import("../lib/local-only")
+      assertRemoteAllowed("open-external", url)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.log("[Shell] open-external blocked by local-only mode:", url)
+      return { blocked: true as const, message }
+    }
+    await shell.openExternal(url)
+    return { blocked: false as const }
+  })
+
+  // Open the directory in the OS file manager (Finder / Explorer / Files).
+  // Transplanted from erenbertr/1code (Apache-2.0) for the projects rail.
+  ipcMain.handle("shell:open-folder", async (_event, dirPath: string) => {
+    if (typeof dirPath !== "string" || !dirPath) {
+      return { success: false, error: "Invalid path" }
+    }
+    if (!existsSync(dirPath)) {
+      return { success: false, error: "Path does not exist" }
+    }
+    try {
+      const errorMessage = await shell.openPath(dirPath)
+      if (errorMessage) {
+        return { success: false, error: errorMessage }
+      }
+      return { success: true }
+    } catch (error) {
+      console.error("[Main] Failed to open folder:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }
+    }
+  })
+
+  // Open the directory in Visual Studio Code.
+  // Transplanted from erenbertr/1code (Apache-2.0) for the unified sidebar.
+  ipcMain.handle("shell:open-vscode", async (_event, dirPath: string) => {
+    if (typeof dirPath !== "string" || !dirPath) {
+      return { success: false, error: "Invalid path" }
+    }
+    if (!existsSync(dirPath)) {
+      return { success: false, error: "Path does not exist" }
+    }
+    try {
+      const { spawn } = await import("child_process")
+      if (process.platform === "darwin") {
+        spawn("open", ["-a", "Visual Studio Code", dirPath], {
+          detached: true,
+          stdio: "ignore",
+        }).unref()
+        return { success: true }
+      }
+      // Windows/Linux: rely on `code` CLI being on PATH. Windows spawns
+      // through cmd.exe (`code` is a .cmd shim), so reject quote/control
+      // characters that could break out of the quoted argument.
+      if (
+        process.platform === "win32" &&
+        /["\x00-\x1f\x7f]/.test(dirPath)
+      ) {
+        return { success: false, error: "Invalid path" }
+      }
+      const useShell = process.platform === "win32"
+      spawn("code", [useShell ? `"${dirPath}"` : dirPath], {
+        detached: true,
+        stdio: "ignore",
+        shell: useShell,
+      }).unref()
+      return { success: true }
+    } catch (error) {
+      console.error("[Main] Failed to open VS Code:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }
+    }
+  })
+
+  // Open a native terminal at the given directory.
+  // Transplanted from erenbertr/1code (Apache-2.0) for the unified sidebar.
+  ipcMain.handle("shell:open-terminal", async (_event, dirPath: string) => {
+    if (typeof dirPath !== "string" || !dirPath) {
+      return { success: false, error: "Invalid path" }
+    }
+    if (!existsSync(dirPath)) {
+      return { success: false, error: "Path does not exist" }
+    }
+    try {
+      const { spawn } = await import("child_process")
+      if (process.platform === "darwin") {
+        spawn("open", ["-a", "Terminal", dirPath], {
+          detached: true,
+          stdio: "ignore",
+        }).unref()
+        return { success: true }
+      }
+      if (process.platform === "win32") {
+        spawn("cmd", ["/c", "start", "", "cmd"], {
+          cwd: dirPath,
+          detached: true,
+          stdio: "ignore",
+        }).unref()
+        return { success: true }
+      }
+      spawn("x-terminal-emulator", [], {
+        cwd: dirPath,
+        detached: true,
+        stdio: "ignore",
+      }).unref()
+      return { success: true }
+    } catch (error) {
+      console.error("[Main] Failed to open terminal:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }
+    }
+  })
 
   // Clipboard
   ipcMain.handle("clipboard:write", (_event, text: string) =>
@@ -475,6 +632,18 @@ function registerIpcHandlers(): void {
         return { ok: false, status: 403, error: "Unauthorized sender" }
       }
 
+      try {
+        const { assertRemoteAllowed } = await import("../lib/local-only")
+        assertRemoteAllowed("stream-fetch", url)
+      } catch (error) {
+        console.log("[StreamFetch] Blocked by local-only mode:", url)
+        return {
+          ok: false,
+          status: 451,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+
       const token = await getAuthManager().getValidToken()
       if (!token) {
         return { ok: false, status: 401, error: "Not authenticated" }
@@ -624,7 +793,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     minWidth: 500, // Allow narrow mobile-like mode
     minHeight: 600,
     show: false,
-    title: "1Code",
+    title: "mausCode",
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#09090b" : "#ffffff",
     // hiddenInset shows native traffic lights inset in the window
     // hiddenInset hides the native title bar but keeps traffic lights visible
@@ -645,6 +814,13 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       partition: "persist:main", // Use persistent session for cookies
     },
   })
+  // Track recent recovery attempts so we can keep healing the window after
+  // intermittent renderer crashes (V8 OOM / SIGTRAP). The previous one-shot
+  // behavior left the window dead on the second crash, which felt like the
+  // whole app had failed and forced a manual restart.
+  const rendererRecoveryAttempts: number[] = []
+  const RENDERER_RECOVERY_WINDOW_MS = 60_000
+  const RENDERER_RECOVERY_MAX_ATTEMPTS = 5
 
   // Register window with manager and get stable ID for localStorage namespacing
   const stableWindowId = windowManager.register(window)
@@ -710,7 +886,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       if (!input.shift) {
         // Block Cmd+R entirely
         event.preventDefault()
-      } else if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+      } else if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveNativeTurns() || hasActiveCursorStreams()) {
         // Cmd+Shift+R with active streams — intercept and confirm
         event.preventDefault()
         dialog
@@ -727,7 +903,9 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
           .then(({ response }) => {
             if (response === 1) {
               abortAllClaudeSessions()
+              abortAllNativeTurns()
               abortAllCodexStreams()
+              abortAllCursorStreams()
               window.webContents.reloadIgnoringCache()
             }
           })
@@ -741,6 +919,53 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
     return { action: "deny" }
   })
 
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[Main] Renderer process gone in window", window.id, details)
+
+    if (window.isDestroyed()) {
+      return
+    }
+
+    // Reason "clean-exit" / "killed" means the renderer exited intentionally
+    // (e.g. window close, navigation). Don't try to recover those.
+    if (details.reason === "clean-exit" || details.reason === "killed") {
+      return
+    }
+
+    const now = Date.now()
+    while (
+      rendererRecoveryAttempts.length > 0 &&
+      now - rendererRecoveryAttempts[0]! > RENDERER_RECOVERY_WINDOW_MS
+    ) {
+      rendererRecoveryAttempts.shift()
+    }
+
+    if (rendererRecoveryAttempts.length >= RENDERER_RECOVERY_MAX_ATTEMPTS) {
+      console.error(
+        "[Main] Renderer crashed",
+        rendererRecoveryAttempts.length,
+        "times within",
+        RENDERER_RECOVERY_WINDOW_MS / 1000,
+        "s in window",
+        window.id,
+        "- giving up on auto-recovery",
+      )
+      return
+    }
+
+    rendererRecoveryAttempts.push(now)
+    setTimeout(() => {
+      if (!window.isDestroyed()) {
+        console.log(
+          "[Main] Recovering renderer in window",
+          window.id,
+          `(attempt ${rendererRecoveryAttempts.length}/${RENDERER_RECOVERY_MAX_ATTEMPTS})`,
+        )
+        window.webContents.reloadIgnoringCache()
+      }
+    }, 150)
+  })
+
   // Prevent window close if there are active streaming sessions
   window.on("close", (event) => {
     // Skip confirmation if app quit was already confirmed by the user
@@ -748,10 +973,11 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       // Still abort sessions gracefully so partial state is saved
       abortAllClaudeSessions()
       abortAllCodexStreams()
+      abortAllCursorStreams()
       return
     }
 
-    if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+    if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveCursorStreams()) {
       event.preventDefault()
       dialog
         .showMessageBox(window, {
@@ -767,7 +993,9 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
         .then(({ response }) => {
           if (response === 1) {
             abortAllClaudeSessions()
+            abortAllNativeTurns()
             abortAllCodexStreams()
+            abortAllCursorStreams()
             window.destroy()
           }
         })

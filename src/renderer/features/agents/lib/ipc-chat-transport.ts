@@ -1,3 +1,9 @@
+/**
+ * NOTE (transplant): inlined question/compact chunk handling, stale-question
+ * clearing fix, extractText/extractImages, and log removals were transplanted
+ * from erenbertr/1code (Apache-2.0). Their auth-error toast replacement was
+ * NOT taken — this tree keeps the login-modal retry flow.
+ */
 import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
@@ -127,7 +133,7 @@ type IPCChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string // Original project path for MCP config lookup (when using worktrees)
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
   model?: string
 }
 
@@ -191,11 +197,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
         .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
         ?.mode || this.config.mode
 
-    // Stream debug logging
+    // Stream tracking
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
-    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"} customConfig=${customConfig ? "set" : "not set"}`)
 
     return new ReadableStream({
       start: (controller) => {
@@ -293,14 +298,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle session init - store MCP servers, plugins, tools info
               if (chunk.type === "session-init") {
-                console.log("[MCP] Received session-init:", {
-                  tools: chunk.tools?.length,
-                  mcpServers: chunk.mcpServers,
-                  plugins: chunk.plugins,
-                  skills: chunk.skills?.length,
-                  // Debug: show all tools to check for MCP tools (format: mcp__servername__toolname)
-                  allTools: chunk.tools,
-                })
                 appStore.set(sessionInfoAtom, {
                   tools: chunk.tools,
                   mcpServers: chunk.mcpServers,
@@ -334,6 +331,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
 
               // Handle authentication errors - show Claude login modal
+              // NOTE (mausCode): kept our modal+retry flow; their toast-only
+              // replacement was NOT transplanted.
               if (chunk.type === "auth-error") {
                 // Store the failed message for retry after successful auth
                 // readyToRetry=false prevents immediate retry - modal sets it to true on OAuth success
@@ -448,12 +447,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               try {
                 controller.enqueue(chunk)
               } catch (e) {
-                // CRITICAL: Log when enqueue fails - this could explain missing chunks!
-                console.log(`[SD] R:ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`)
+                // Stream already closed, ignore enqueue failure
               }
 
               if (chunk.type === "finish") {
-                console.log(`[SD] R:FINISH sub=${subId} n=${chunkCount}`)
                 try {
                   controller.close()
                 } catch {
@@ -462,7 +459,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
             },
             onError: (err: Error) => {
-              console.log(`[SD] R:ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`)
               // Track transport errors in Sentry
               Sentry.captureException(err, {
                 tags: {
@@ -479,7 +475,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               controller.error(err)
             },
             onComplete: () => {
-              console.log(`[SD] R:COMPLETE sub=${subId} n=${chunkCount} last=${lastChunkType}`)
               // Note: Don't clear pending questions here - let active-chat.tsx handle it
               // via the stream stop detection effect. Clearing here causes race conditions
               // where sync effect immediately restores from messages.
@@ -494,7 +489,6 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
         // Handle abort
         options.abortSignal?.addEventListener("abort", () => {
-          console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
           sub.unsubscribe()
           // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
           try {

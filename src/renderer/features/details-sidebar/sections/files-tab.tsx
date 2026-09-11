@@ -38,6 +38,7 @@ interface FilesTabProps {
   worktreePath: string | null
   onSelectFile: (filePath: string) => void
   onExpandedStateChange?: (allExpanded: boolean) => void
+  onRefreshingChange?: (isRefreshing: boolean) => void
   /** Absolute path of the file currently open in file viewer (for highlight sync) */
   currentViewerFilePath?: string | null
   className?: string
@@ -46,8 +47,11 @@ interface FilesTabProps {
 export interface FilesTabHandle {
   toggleExpandCollapse: () => void
   openSearch: () => void
+  refresh: () => void
   /** true when all folders are expanded */
   isAllExpanded: boolean
+  /** true while a refresh fetch is in-flight */
+  isRefreshing: boolean
 }
 
 const INDENT_PX = 12
@@ -321,6 +325,7 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
   worktreePath,
   onSelectFile,
   onExpandedStateChange,
+  onRefreshingChange,
   currentViewerFilePath,
   className,
 }, ref) {
@@ -383,10 +388,16 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
   const trpcUtils = trpc.useUtils()
 
   // ---- Data ----
-  const { data: allFiles } = trpc.files.search.useQuery(
+  const { data: allFiles, isFetching: isFilesFetching } = trpc.files.search.useQuery(
     { projectPath: worktreePath || "", query: "", limit: 5000, typeFilter: "file" },
     { enabled: !!worktreePath, staleTime: 10000 },
   )
+
+  // Tracks whether the spinner should be shown for an explicit refresh
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  useEffect(() => {
+    if (!isFilesFetching && isRefreshing) setIsRefreshing(false)
+  }, [isFilesFetching, isRefreshing])
 
   const tree = useMemo(() => {
     if (!allFiles) return []
@@ -456,12 +467,25 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
     onExpandedStateChange?.(isAllExpanded)
   }, [isAllExpanded, onExpandedStateChange])
 
+  // Notify parent of refresh-in-flight state changes
+  useEffect(() => {
+    onRefreshingChange?.(isRefreshing)
+  }, [isRefreshing, onRefreshingChange])
+
+  const refresh = useCallback(() => {
+    if (!worktreePath) return
+    setIsRefreshing(true)
+    trpcUtils.files.search.invalidate()
+  }, [worktreePath, trpcUtils])
+
   // Expose actions to parent
   useImperativeHandle(ref, () => ({
     toggleExpandCollapse,
     openSearch,
+    refresh,
     isAllExpanded,
-  }), [toggleExpandCollapse, openSearch, isAllExpanded])
+    isRefreshing,
+  }), [toggleExpandCollapse, openSearch, refresh, isAllExpanded, isRefreshing])
 
   // ---- Context Menu Actions ----
 

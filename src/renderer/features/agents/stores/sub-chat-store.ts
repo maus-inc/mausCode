@@ -14,7 +14,7 @@ export interface SubChatMeta {
   name: string
   created_at?: string
   updated_at?: string
-  mode?: "plan" | "agent"
+  mode?: "plan" | "ask" | "edit" | "agent" | "turbo"
 }
 
 interface AgentSubChatStore {
@@ -39,7 +39,7 @@ interface AgentSubChatStore {
   setAllSubChats: (subChats: SubChatMeta[]) => void
   addToAllSubChats: (subChat: SubChatMeta) => void
   updateSubChatName: (subChatId: string, name: string) => void
-  updateSubChatMode: (subChatId: string, mode: "plan" | "agent") => void
+  updateSubChatMode: (subChatId: string, mode: "plan" | "ask" | "edit" | "agent" | "turbo") => void
   updateSubChatTimestamp: (subChatId: string) => void
   addToSplit: (subChatId: string) => void
   removeFromSplit: (subChatId: string) => void
@@ -90,7 +90,6 @@ const findNumericWindowIdValue = (legacyKey: string, targetKey: string): string 
     if (match && match[2] === legacyKey) {
       const value = localStorage.getItem(storageKey)
       if (value !== null) {
-        console.log(`[SubChatStore] Migrated from numeric ID: ${storageKey} to ${targetKey}`)
         return value
       }
     }
@@ -122,7 +121,6 @@ const loadFromLS = <T>(chatId: string, type: "open" | "active" | "pinned" | "spl
         // Migrate to window-scoped key
         localStorage.setItem(key, legacyStored)
         stored = legacyStored
-        console.log(`[SubChatStore] Migrated ${legacyKey} to ${key}`)
       }
     }
 

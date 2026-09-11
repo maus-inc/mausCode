@@ -1,7 +1,15 @@
 "use client"
 
+/**
+ * NOTE (transplant): Gemini/OpenRouter provider wiring (model atoms, auth
+ * queries, selector props, placeholder names) was transplanted from
+ * erenbertr/1code (Apache-2.0). Their engine-toggle removal was NOT taken —
+ * this tree keeps the native/legacy switch (locked to legacy for the new
+ * providers, which the native runtime cannot serve).
+ */
+
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, RefreshCw } from "lucide-react"
+import { ChevronDown, RefreshCw, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
@@ -13,12 +21,10 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
 import {
-  AgentIcon,
   AttachIcon,
   CheckIcon,
   IconSpinner,
   OriginalMCPIcon,
-  PlanIcon,
   SettingsIcon,
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
@@ -49,7 +55,9 @@ import {
   hiddenModelsAtom,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
+  pinnedOpenRouterModelsAtom,
   selectedOllamaModelAtom,
+  sessionInfoAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
@@ -57,19 +65,38 @@ import { cn } from "../../../lib/utils"
 import {
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedCursorModelIdAtom,
+  lastSelectedGeminiModelIdAtom,
   lastSelectedModelIdAtom,
+  lastSelectedOpenRouterModelIdAtom,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
+  subChatCursorModelIdAtomFamily,
+  subChatEngineAtomFamily,
+  type SubChatEngine,
+  subChatGeminiModelIdAtomFamily,
   subChatModelIdAtomFamily,
+  subChatOpenRouterModelIdAtomFamily,
   subChatModeAtomFamily,
+  AGENT_MODES,
   getNextMode,
+  isAgentMode,
   type AgentMode,
   type SubChatFileChange,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import { agentChatStore } from "../stores/agent-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
-import { AgentModelSelector } from "../components/agent-model-selector"
+import {
+  AgentModelSelector,
+  type AgentProviderId,
+} from "../components/agent-model-selector"
 import { AgentSendButton } from "../components/agent-send-button"
+import {
+  getModeIcon,
+  getModeLabel,
+  getModeTooltip,
+} from "../lib/mode-display"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import {
   clearSubChatDraft,
@@ -78,6 +105,9 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  CURSOR_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
+  GEMINI_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
@@ -183,7 +213,7 @@ export interface ChatInputAreaProps {
   // Context
   subChatId: string
   parentChatId: string
-  provider?: "claude-code" | "codex"
+  provider?: AgentProviderId
   teamId?: string
   repository?: string
   sandboxId?: string
@@ -200,9 +230,9 @@ export interface ChatInputAreaProps {
   // Callback to send message with question answer (Enter sends immediately, not to queue)
   onSubmitWithQuestionAnswer?: () => void
   // Callback to switch provider for brand new (empty) sub-chats
-  onProviderChange?: (provider: "claude-code" | "codex") => void
+  onProviderChange?: (provider: AgentProviderId) => void
   // Callback to continue chat with a different provider (creates new sub-chat with history)
-  onContinueWithProvider?: (provider: "claude-code" | "codex") => void
+  onContinueWithProvider?: (provider: AgentProviderId) => void
   // Whether this sub-chat tab is the active/visible one (prevents window-level hotkeys in background tabs)
   isActive?: boolean
 }
@@ -438,7 +468,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: AgentMode
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
@@ -472,9 +502,56 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [selectedSubChatCodexThinking, setSelectedSubChatCodexThinking] = useAtom(
     subChatCodexThinkingAtom,
   )
+  const subChatCursorModelIdAtom = useMemo(
+    () => subChatCursorModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatCursorModelId, setSelectedSubChatCursorModelId] = useAtom(
+    subChatCursorModelIdAtom,
+  )
   const setLastSelectedModelId = useSetAtom(lastSelectedModelIdAtom)
   const setLastSelectedCodexModelId = useSetAtom(lastSelectedCodexModelIdAtom)
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
+  const setLastSelectedCursorModelId = useSetAtom(lastSelectedCursorModelIdAtom)
+  const subChatGeminiModelIdAtom = useMemo(
+    () => subChatGeminiModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatGeminiModelId, setSelectedSubChatGeminiModelId] = useAtom(
+    subChatGeminiModelIdAtom,
+  )
+  const setLastSelectedGeminiModelId = useSetAtom(lastSelectedGeminiModelIdAtom)
+  const { data: geminiAuth } = trpc.gemini.getAuthStatus.useQuery()
+  const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
+  const isGeminiConnected =
+    (geminiAuth?.ok === true && geminiAuth.hasKey === true) ||
+    Boolean(geminiCliStatus?.installed && geminiCliStatus.loggedIn)
+
+  // OpenRouter
+  const subChatOpenRouterModelIdAtom = useMemo(
+    () => subChatOpenRouterModelIdAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [
+    selectedSubChatOpenRouterModelId,
+    setSelectedSubChatOpenRouterModelId,
+  ] = useAtom(subChatOpenRouterModelIdAtom)
+  const setLastSelectedOpenRouterModelId = useSetAtom(
+    lastSelectedOpenRouterModelIdAtom,
+  )
+  const { data: openRouterAuth } = trpc.openrouter.getAuthStatus.useQuery()
+  const isOpenRouterConnected =
+    openRouterAuth?.ok === true && openRouterAuth.hasKey === true
+  const pinnedOpenRouterModels = useAtomValue(pinnedOpenRouterModelsAtom)
+  const { data: openRouterCatalog } = trpc.openrouter.listModels.useQuery(
+    undefined,
+    {
+      enabled: isOpenRouterConnected && pinnedOpenRouterModels.length > 0,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  )
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
   const availableModels = useAvailableModels()
   const [selectedModel, setSelectedModel] = useState(
@@ -499,8 +576,6 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatModelId(selectedModel.id)
   }, [provider, selectedModel?.id, setSelectedSubChatModelId])
 
-  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
-  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
   const hiddenModels = useAtomValue(hiddenModelsAtom)
 
   // Connection status for providers
@@ -509,14 +584,49 @@ export const ChatInputArea = memo(function ChatInputArea({
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const { data: claudeCodeIntegration } =
     trpc.claudeCode.getIntegration.useQuery()
-  const codexUiModels = useMemo(
-    () => {
-      let models = hasAppCodexApiKey
-        ? CODEX_MODELS.filter((model) => model.id !== "gpt-5.3-codex")
-        : CODEX_MODELS
-      return models.filter((model) => !hiddenModels.includes(model.id))
-    },
-    [hasAppCodexApiKey, hiddenModels],
+  const { data: cursorIntegration } = trpc.cursor.getIntegration.useQuery()
+  const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
+  const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
+  const codexUiModels = useMemo(() => {
+    const subscriptionOnly = new Set<string>(CODEX_SUBSCRIPTION_ONLY_MODEL_IDS)
+    const models = hasAppCodexApiKey
+      ? CODEX_MODELS.filter((model) => !subscriptionOnly.has(model.id))
+      : CODEX_MODELS
+    return models.filter((model) => !hiddenModels.includes(model.id))
+  }, [hasAppCodexApiKey, hiddenModels])
+  const geminiUiModels = useMemo(
+    () => GEMINI_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const openRouterUiModels = useMemo(() => {
+    if (!isOpenRouterConnected) return []
+    const catalogIndex = new Map(
+      openRouterCatalog?.available
+        ? openRouterCatalog.models.map((m) => [m.id, m.name] as const)
+        : [],
+    )
+    return pinnedOpenRouterModels
+      .filter((id) => !hiddenModels.includes(id))
+      .map((id) => ({ id, name: catalogIndex.get(id) ?? id }))
+  }, [isOpenRouterConnected, openRouterCatalog, pinnedOpenRouterModels, hiddenModels])
+  const selectedOpenRouterModel = useMemo(() => {
+    if (openRouterUiModels.length === 0) {
+      return { id: "", name: "" }
+    }
+    return (
+      openRouterUiModels.find(
+        (m) => m.id === selectedSubChatOpenRouterModelId,
+      ) ||
+      openRouterUiModels[0] ||
+      { id: "", name: "" }
+    )
+  }, [openRouterUiModels, selectedSubChatOpenRouterModelId])
+  const selectedGeminiModel = useMemo(
+    () =>
+      geminiUiModels.find((m) => m.id === selectedSubChatGeminiModelId) ||
+      geminiUiModels[0] ||
+      GEMINI_MODELS[0]!,
+    [geminiUiModels, selectedSubChatGeminiModelId],
   )
   const selectedCodexModel = useMemo(
     () =>
@@ -524,6 +634,17 @@ export const ChatInputArea = memo(function ChatInputArea({
       codexUiModels[0] ||
       CODEX_MODELS[0]!,
     [codexUiModels, selectedSubChatCodexModelId],
+  )
+  const cursorUiModels = useMemo(
+    () => CURSOR_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedCursorModel = useMemo(
+    () =>
+      cursorUiModels.find((model) => model.id === selectedSubChatCursorModelId) ||
+      cursorUiModels[0] ||
+      CURSOR_MODELS[0]!,
+    [cursorUiModels, selectedSubChatCursorModelId],
   )
 
   const selectedCodexThinking = useMemo<CodexThinkingLevel>(() => {
@@ -575,6 +696,16 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatCodexThinking,
   ])
 
+  useEffect(() => {
+    if (provider !== "cursor") return
+    if (!selectedCursorModel?.id) return
+    setSelectedSubChatCursorModelId(selectedCursorModel.id)
+  }, [
+    provider,
+    selectedCursorModel?.id,
+    setSelectedSubChatCursorModelId,
+  ])
+
   const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
   const normalizedCustomClaudeConfig =
     normalizeCustomClaudeConfig(customClaudeConfig)
@@ -584,16 +715,10 @@ export const ChatInputArea = memo(function ChatInputArea({
     anthropicOnboardingCompleted ||
     apiKeyOnboardingCompleted ||
     hasCustomClaudeConfig
+  const isCursorConnected = Boolean(cursorIntegration?.isConnected)
 
   // Determine current Ollama model (selected or recommended)
   const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
-
-  // Debug: log selected Ollama model
-  useEffect(() => {
-    if (availableModels.isOffline) {
-      console.log(`[Ollama UI] selectedOllamaModel atom value: ${selectedOllamaModel || "(null)"}, currentOllamaModel: ${currentOllamaModel}`)
-    }
-  }, [selectedOllamaModel, currentOllamaModel, availableModels.isOffline])
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
@@ -601,6 +726,18 @@ export const ChatInputArea = memo(function ChatInputArea({
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
       return selectedCodexModel.name
+    }
+
+    if (provider === "cursor") {
+      return selectedCursorModel.name
+    }
+
+    if (provider === "gemini") {
+      return selectedGeminiModel.name
+    }
+
+    if (provider === "openrouter") {
+      return selectedOpenRouterModel.name || "Select model"
     }
 
     if (availableModels.isOffline && availableModels.hasOllama) {
@@ -619,6 +756,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [
     provider,
     selectedCodexModel.name,
+    selectedCursorModel.name,
+    selectedGeminiModel.name,
+    selectedOpenRouterModel.name,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
@@ -633,12 +773,52 @@ export const ChatInputArea = memo(function ChatInputArea({
   const setSettingsTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
 
   const {
-    data: allMcpConfig,
-    isLoading: isMcpLoading,
-    refetch: refetchMcp,
+    data: claudeMcpConfig,
+    isLoading: isClaudeMcpLoading,
+    refetch: refetchClaudeMcp,
   } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "claude-code",
     staleTime: 5 * 60 * 1000,
   })
+
+  const {
+    data: codexMcpConfig,
+    isLoading: isCodexMcpLoading,
+    refetch: refetchCodexMcp,
+  } = trpc.codex.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "codex",
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const {
+    data: cursorMcpConfig,
+    isLoading: isCursorMcpLoading,
+    refetch: refetchCursorMcp,
+  } = trpc.cursor.getAllMcpConfig.useQuery(undefined, {
+    enabled: provider === "cursor",
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const allMcpConfig =
+    provider === "codex"
+      ? codexMcpConfig
+      : provider === "cursor"
+        ? cursorMcpConfig
+        : claudeMcpConfig
+
+  const isMcpLoading =
+    provider === "codex"
+      ? isCodexMcpLoading
+      : provider === "cursor"
+        ? isCursorMcpLoading
+        : isClaudeMcpLoading
+
+  const refetchMcp =
+    provider === "codex"
+      ? refetchCodexMcp
+      : provider === "cursor"
+        ? refetchCursorMcp
+        : refetchClaudeMcp
 
   const [isMcpRefreshing, setIsMcpRefreshing] = useState(false)
   const isMcpBusy = isMcpLoading || isMcpRefreshing
@@ -656,6 +836,16 @@ export const ChatInputArea = memo(function ChatInputArea({
   const mcpGroups = useMemo(() => {
     if (!allMcpConfig?.groups) return { global: [], local: [] }
 
+    if (provider === "cursor") {
+      const localGroup = allMcpConfig.groups.find(
+        (g) => g.projectPath && projectPath && g.projectPath === projectPath,
+      )
+      return {
+        global: [],
+        local: localGroup?.mcpServers || [],
+      }
+    }
+
     const globalGroup = allMcpConfig.groups.find((g) => g.groupName === "Global")
     const localGroup = allMcpConfig.groups.find(
       (g) => g.projectPath && projectPath && g.projectPath === projectPath,
@@ -665,7 +855,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       global: globalGroup?.mcpServers || [],
       local: localGroup?.mcpServers || [],
     }
-  }, [allMcpConfig?.groups, projectPath])
+  }, [allMcpConfig?.groups, projectPath, provider])
 
   const totalMcps = mcpGroups.global.length + mcpGroups.local.length
   const connectedMcps =
@@ -688,6 +878,32 @@ export const ChatInputArea = memo(function ChatInputArea({
   )
   const [subChatMode, setSubChatMode] = useAtom(subChatModeAtom)
 
+  // Execution engine - per-subChat, switchable only on empty chats (mirrors canSwitchProvider)
+  const subChatEngineAtom = useMemo(
+    () => subChatEngineAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [engine, setEngine] = useAtom(subChatEngineAtom)
+  // Native engine supports local claude-code chats only (Codex stays on the
+  // CLI adapter by WONTFIX decision; Gemini/OpenRouter use their own
+  // transports; no remote sandboxes yet)
+  const canSwitchEngine =
+    canSwitchProvider &&
+    provider !== "codex" &&
+    provider !== "gemini" &&
+    provider !== "openrouter"
+
+  const setSessionInfo = useSetAtom(sessionInfoAtom)
+  const switchEngine = useCallback((next: SubChatEngine) => {
+    if (!canSwitchEngine || next === engine) return
+    // Drop the pre-created empty Chat so the next send rebuilds with the new transport
+    agentChatStore.delete(subChatId)
+    // Drop the other engine's snapshot (tools/servers/plugins); the next
+    // send's session-init repopulates it.
+    setSessionInfo(null)
+    setEngine(next)
+  }, [canSwitchEngine, engine, setEngine, setSessionInfo, subChatId])
+
   // Helper to update mode (atomFamily + Zustand store sync)
   const updateMode = useCallback((newMode: AgentMode) => {
     if (onModeChange) {
@@ -697,6 +913,55 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSubChatMode(newMode)
     useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
   }, [onModeChange, setSubChatMode, subChatId])
+
+  // Shared mode-dropdown item handlers (parameterized by mode)
+  const handleModeItemSelect = useCallback(
+    (mode: AgentMode) => {
+      // Clear tooltip before closing dropdown (onMouseLeave won't fire)
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current)
+        tooltipTimeoutRef.current = null
+      }
+      setModeTooltip(null)
+      updateMode(mode)
+      setModeDropdownOpen(false)
+    },
+    [updateMode],
+  )
+  const handleModeItemMouseEnter = useCallback(
+    (e: { currentTarget: HTMLElement }, mode: AgentMode) => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current)
+        tooltipTimeoutRef.current = null
+      }
+      const rect = e.currentTarget.getBoundingClientRect()
+      const showTooltip = () => {
+        setModeTooltip({
+          visible: true,
+          position: {
+            top: rect.top,
+            left: rect.right + 8,
+          },
+          mode,
+        })
+        hasShownTooltipRef.current = true
+        tooltipTimeoutRef.current = null
+      }
+      if (hasShownTooltipRef.current) {
+        showTooltip()
+      } else {
+        tooltipTimeoutRef.current = setTimeout(showTooltip, 1000)
+      }
+    },
+    [],
+  )
+  const handleModeItemMouseLeave = useCallback(() => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current)
+      tooltipTimeoutRef.current = null
+    }
+    setModeTooltip(null)
+  }, [])
 
   // Toggle mode helper
   const toggleMode = useCallback(() => {
@@ -780,7 +1045,6 @@ export const ChatInputArea = memo(function ChatInputArea({
 
       // Don't transcribe very short recordings (likely accidental clicks)
       if (blob.size < 1000) {
-        console.log("[VoiceInput] Recording too short, ignoring")
         if (voiceMountedRef.current) setIsTranscribing(false)
         return
       }
@@ -1050,21 +1314,18 @@ export const ChatInputArea = memo(function ChatInputArea({
 
       // Handle builtin commands that change app state (no text input needed)
       if (command.category === "builtin") {
+        // Mode-switch commands (/plan /ask /edit /agent /turbo)
+        if (isAgentMode(command.name)) {
+          if (subChatMode !== command.name) {
+            updateMode(command.name)
+          }
+          return
+        }
         switch (command.name) {
           case "clear":
             // Create a new sub-chat (fresh conversation)
             if (onCreateNewSubChat) {
               onCreateNewSubChat()
-            }
-            return
-          case "plan":
-            if (subChatMode !== "plan") {
-              updateMode("plan")
-            }
-            return
-          case "agent":
-            if (subChatMode === "plan") {
-              updateMode("agent")
             }
             return
           case "compact":
@@ -1155,8 +1416,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        // @ts-expect-error - Electron's webUtils API
-        const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
+        const filePath: string | undefined = (window as any).webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
 
         let mentionId: string
         let mentionPath: string
@@ -1392,12 +1652,13 @@ export const ChatInputArea = memo(function ChatInputArea({
                   >
                     <DropdownMenuTrigger asChild>
                       <button className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                        {subChatMode === "plan" ? (
-                          <PlanIcon className="h-3.5 w-3.5 shrink-0" />
-                        ) : (
-                          <AgentIcon className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        <span className="truncate">{subChatMode === "plan" ? "Plan" : "Agent"}</span>
+                        {(() => {
+                          const TriggerIcon = getModeIcon(subChatMode)
+                          return (
+                            <TriggerIcon className="h-3.5 w-3.5 shrink-0" />
+                          )
+                        })()}
+                        <span className="truncate">{getModeLabel(subChatMode)}</span>
                         <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                       </button>
                     </DropdownMenuTrigger>
@@ -1407,116 +1668,28 @@ export const ChatInputArea = memo(function ChatInputArea({
                       className="!min-w-[116px] !w-[116px]"
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
-                      <DropdownMenuItem
-                        onClick={() => {
-                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                          updateMode("agent")
-                          setModeDropdownOpen(false)
-                        }}
-                        className="justify-between gap-2"
-                        onMouseEnter={(e) => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          const rect = e.currentTarget.getBoundingClientRect()
-                          const showTooltip = () => {
-                            setModeTooltip({
-                              visible: true,
-                              position: {
-                                top: rect.top,
-                                left: rect.right + 8,
-                              },
-                              mode: "agent",
-                            })
-                            hasShownTooltipRef.current = true
-                            tooltipTimeoutRef.current = null
-                          }
-                          if (hasShownTooltipRef.current) {
-                            showTooltip()
-                          } else {
-                            tooltipTimeoutRef.current = setTimeout(
-                              showTooltip,
-                              1000,
-                            )
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Agent</span>
-                        </div>
-                        {subChatMode !== "plan" && (
-                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                          updateMode("plan")
-                          setModeDropdownOpen(false)
-                        }}
-                        className="justify-between gap-2"
-                        onMouseEnter={(e) => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          const rect = e.currentTarget.getBoundingClientRect()
-                          const showTooltip = () => {
-                            setModeTooltip({
-                              visible: true,
-                              position: {
-                                top: rect.top,
-                                left: rect.right + 8,
-                              },
-                              mode: "plan",
-                            })
-                            hasShownTooltipRef.current = true
-                            tooltipTimeoutRef.current = null
-                          }
-                          if (hasShownTooltipRef.current) {
-                            showTooltip()
-                          } else {
-                            tooltipTimeoutRef.current = setTimeout(
-                              showTooltip,
-                              1000,
-                            )
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (tooltipTimeoutRef.current) {
-                            clearTimeout(tooltipTimeoutRef.current)
-                            tooltipTimeoutRef.current = null
-                          }
-                          setModeTooltip(null)
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                          <span>Plan</span>
-                        </div>
-                        {subChatMode === "plan" && (
-                          <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                        )}
-                      </DropdownMenuItem>
+                      {AGENT_MODES.map((mode) => {
+                        const ItemIcon = getModeIcon(mode)
+                        return (
+                          <DropdownMenuItem
+                            key={mode}
+                            onClick={() => handleModeItemSelect(mode)}
+                            className="justify-between gap-2"
+                            onMouseEnter={(e) =>
+                              handleModeItemMouseEnter(e, mode)
+                            }
+                            onMouseLeave={handleModeItemMouseLeave}
+                          >
+                            <div className="flex items-center gap-2">
+                              <ItemIcon className="w-4 h-4 text-muted-foreground" />
+                              <span>{getModeLabel(mode)}</span>
+                            </div>
+                            {subChatMode === mode && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                        )
+                      })}
                     </DropdownMenuContent>
                     {modeTooltip?.visible &&
                       createPortal(
@@ -1533,15 +1706,29 @@ export const ChatInputArea = memo(function ChatInputArea({
                             className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
                           >
                             <span>
-                              {modeTooltip.mode === "agent"
-                                ? "Apply changes directly without a plan"
-                                : "Create a plan before making changes"}
+                              {getModeTooltip(modeTooltip.mode)}
                             </span>
                           </div>
                         </div>,
                         document.body,
                       )}
                   </DropdownMenu>
+
+                  <button
+                    onClick={() => switchEngine(engine === "native" ? "legacy" : "native")}
+                    disabled={!canSwitchEngine}
+                    title={
+                      provider === "codex"
+                        ? "Engine: Legacy — Codex chats are served by the Codex CLI adapter; the native runtime doesn't serve Codex (subscription OAuth can't be provisioned to it)."
+                        : engine === "native"
+                          ? "Engine: Native (mausCode runtime). Click to switch back to Legacy. Switchable on empty chats only."
+                          : "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
+                    }
+                    className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Zap className={`h-3.5 w-3.5 shrink-0 ${engine === "native" ? "text-amber-500" : ""}`} />
+                    <span className="truncate">{engine === "native" ? "Native" : "Legacy"}</span>
+                  </button>
 
                   <div className="group/model-controls flex items-center gap-0.5">
                     <AgentModelSelector
@@ -1607,6 +1794,39 @@ export const ChatInputArea = memo(function ChatInputArea({
                           setLastSelectedCodexThinking(thinking)
                         },
                         isConnected: codexOnboardingCompleted,
+                      }}
+                      cursor={{
+                        models: cursorUiModels,
+                        selectedModelId: selectedCursorModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = cursorUiModels.find((item) => item.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatCursorModelId(model.id)
+                          setLastSelectedCursorModelId(model.id)
+                        },
+                        isConnected: isCursorConnected,
+                      }}
+                      gemini={{
+                        models: geminiUiModels,
+                        selectedModelId: selectedGeminiModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = geminiUiModels.find((m) => m.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatGeminiModelId(model.id)
+                          setLastSelectedGeminiModelId(model.id)
+                        },
+                        isConnected: isGeminiConnected,
+                      }}
+                      openrouter={{
+                        models: openRouterUiModels,
+                        selectedModelId: selectedOpenRouterModel.id,
+                        onSelectModel: (modelId) => {
+                          const model = openRouterUiModels.find((m) => m.id === modelId)
+                          if (!model) return
+                          setSelectedSubChatOpenRouterModelId(model.id)
+                          setLastSelectedOpenRouterModelId(model.id)
+                        },
+                        isConnected: isOpenRouterConnected,
                       }}
                     />
                   </div>

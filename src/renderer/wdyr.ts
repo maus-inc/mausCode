@@ -5,10 +5,11 @@ import whyDidYouRender from "@welldone-software/why-did-you-render"
 // ============================================================================
 // WDYR (Why Did You Render) - React Re-render Debugging
 // ============================================================================
-// Set to true to enable re-render tracking and infinite loop detection.
+// Enabled via VITE_WDYR=1 (matches the jsxImportSource toggle in
+// electron.vite.config.ts). The hardcoded flag is kept as a safety override.
 // See DEBUG-WDYR.md for usage instructions.
 // ============================================================================
-const WDYR_ENABLED = false
+const WDYR_ENABLED = import.meta.env.VITE_WDYR === "1"
 
 if (import.meta.env.DEV && WDYR_ENABLED) {
   // Track render counts per component to detect infinite loops

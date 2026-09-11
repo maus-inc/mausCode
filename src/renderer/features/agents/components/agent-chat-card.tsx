@@ -5,11 +5,10 @@ import { cn } from "../../../lib/utils"
 import {
   GitHubLogo,
   IconSpinner,
-  PlanIcon,
-  AgentIcon,
 } from "../../../components/ui/canvas-icons"
 import { useAtomValue } from "jotai"
 import { agentsUnseenChangesAtom, lastChatModesAtom } from "../atoms"
+import { getModeIcon } from "../lib/mode-display"
 
 // GitHub avatar with loading placeholder
 function GitHubAvatar({
@@ -49,9 +48,9 @@ function GitHubAvatar({
 interface AgentChatCardProps {
   chat: {
     id: string
-    name: string
-    meta: any
-    sandbox_id: string | null
+    name: string | null
+    meta?: any
+    sandbox_id?: string | null
     branch?: string | null
   }
   isSelected: boolean
@@ -76,11 +75,12 @@ function ChatIconWithBadge({
 }: {
   isLoading: boolean
   hasUnseenChanges: boolean
-  lastMode: "plan" | "agent"
+  lastMode: "plan" | "ask" | "edit" | "agent" | "turbo"
   isSelected?: boolean
   gitOwner?: string | null
   gitProvider?: string | null
 }) {
+  const ModeIcon = getModeIcon(lastMode)
   // Show GitHub avatar if available, otherwise blank project icon
   const renderMainIcon = () => {
     if (gitOwner && gitProvider === "github") {
@@ -111,15 +111,8 @@ function ChatIconWithBadge({
           />
         ) : hasUnseenChanges ? (
           <div className="w-2 h-2 rounded-full bg-[#307BD0]" />
-        ) : lastMode === "plan" ? (
-          <PlanIcon
-            className={cn(
-              "w-2.5 h-2.5",
-              isSelected ? "text-primary-foreground" : "text-muted-foreground",
-            )}
-          />
         ) : (
-          <AgentIcon
+          <ModeIcon
             className={cn(
               "w-2.5 h-2.5",
               isSelected ? "text-primary-foreground" : "text-muted-foreground",

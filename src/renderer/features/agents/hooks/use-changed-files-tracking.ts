@@ -1,8 +1,7 @@
 import { useSetAtom } from "jotai"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { subChatFilesAtom, subChatToChatMapAtom, type SubChatFileChange } from "../atoms"
-// import { REPO_ROOT_PATH } from "@/lib/codesandbox-constants"
-const REPO_ROOT_PATH = "/workspace" // Desktop mock
+const REPO_ROOT_PATH = "/workspace"
 
 interface MessagePart {
   type: string
@@ -130,7 +129,11 @@ export function useChangedFilesTracking(
       for (const msg of inputMessages) {
         if (msg.role !== "assistant") continue
         for (const part of msg.parts || []) {
-          if (part.type === "tool-Edit" || part.type === "tool-Write") {
+          const toolName = (part as any).input?.toolName || (part as any).type?.replace("tool-", "")
+          const isEdit = part.type === "tool-Edit" || toolName === "replace" || toolName === "Edit"
+          const isWrite = part.type === "tool-Write" || toolName === "write_file" || toolName === "Write"
+
+          if (isEdit || isWrite) {
             const filePath = part.input?.file_path
             if (!filePath) continue
 
@@ -148,7 +151,7 @@ export function useChangedFilesTracking(
               // First time seeing this file - record original state
               fileStates.set(filePath, {
                 // For Write (new file), original is null; for Edit, it's the old_string
-                originalContent: part.type === "tool-Write" ? null : oldString,
+                originalContent: isWrite ? null : oldString,
                 currentContent: newString,
                 displayPath: getDisplayPath(filePath),
               })

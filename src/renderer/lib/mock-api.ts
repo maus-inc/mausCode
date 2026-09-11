@@ -321,7 +321,7 @@ export const api = {
           onError: (err) => opts?.onError?.(err),
         })
         return {
-          mutate: (args?: { subChatId: string; mode: "plan" | "agent" }) => {
+          mutate: (args?: { subChatId: string; mode: "plan" | "ask" | "edit" | "agent" | "turbo" }) => {
             if (args?.subChatId && args?.mode) {
               mutation.mutate({ id: args.subChatId, mode: args.mode })
             }
@@ -455,8 +455,18 @@ export const api = {
   },
   // Stubs for features not needed in desktop
   teams: {
-    getUserTeams: { useQuery: () => ({ data: [], isLoading: false }) },
-    getTeam: { useQuery: () => ({ data: null, isLoading: false }) },
+    getUserTeams: {
+      useQuery: (_input?: unknown, _opts?: unknown) => ({
+        data: [],
+        isLoading: false,
+      }),
+    },
+    getTeam: {
+      useQuery: (_input?: unknown, _opts?: unknown) => ({
+        data: null,
+        isLoading: false,
+      }),
+    },
     updateTeam: {
       useMutation: () => ({
         mutate: () => {},

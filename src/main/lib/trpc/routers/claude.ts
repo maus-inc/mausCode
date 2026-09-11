@@ -1,3 +1,9 @@
+/**
+ * NOTE (transplant): async system-first `getClaudeCodeToken` with decrypt
+ * fallbacks, ambient-env precedence rework (OAuth wins over stale shell keys),
+ * the SDK `getOAuthToken` hook, dead-option removal, and `as const` type fixes
+ * were transplanted from erenbertr/1code (Apache-2.0, © the 1Code contributors).
+ */
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
@@ -29,6 +35,7 @@ import {
   type ClaudeConfig,
   type McpServerConfig,
 } from "../../claude-config"
+import { getValidExistingClaudeToken } from "../../claude-token"
 import { anthropicAccounts, anthropicSettings, chats, claudeCodeCredentials, getDatabase, projects as projectsTable, subChats } from "../../db"
 import { createRollbackStash } from "../../git/stash"
 import {
@@ -158,15 +165,30 @@ function decryptToken(encrypted: string): string {
 }
 
 /**
- * Get Claude Code OAuth token from local SQLite
- * Uses multi-account system first (active account), falls back to legacy table
- * Returns null if not connected
+ * Get Claude Code OAuth token.
+ * Order: local Claude Code keychain → in-app multi-account DB → legacy DB table
+ * (`~/.claude/.credentials.json` or OS keychain entry "Claude Code-credentials").
+ * Returns null if no credentials are available anywhere.
  */
-function getClaudeCodeToken(): string | null {
+async function getClaudeCodeToken(): Promise<string | null> {
   try {
     const db = getDatabase()
 
     console.log("[claude-auth] ========== CLAUDE CODE AUTH DEBUG ==========")
+
+    // Prefer the token maintained by the local Claude Code CLI. The CLI refreshes
+    // this credential, while older in-app rows may contain an expired access token.
+    const localToken = await getValidExistingClaudeToken()
+    if (localToken) {
+      console.log("[claude-auth] Using local Claude Code credentials from system")
+      console.log(
+        "[claude-auth] Token preview:",
+        localToken.slice(0, 4) + "...",
+      )
+      console.log("[claude-auth] Token total length:", localToken.length)
+      console.log("[claude-auth] ============================================")
+      return localToken
+    }
 
     // First try multi-account system
     const settings = db
@@ -187,15 +209,22 @@ function getClaudeCodeToken(): string | null {
           "[claude-auth] Using multi-account system, activeAccountId:",
           settings.activeAccountId,
         )
-        const decrypted = decryptToken(account.oauthToken)
-        console.log("[claude-auth] Token decrypted successfully")
-        console.log(
-          "[claude-auth] Token preview:",
-          decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
-        )
-        console.log("[claude-auth] Token total length:", decrypted.length)
-        console.log("[claude-auth] ============================================")
-        return decrypted
+        try {
+          const decrypted = decryptToken(account.oauthToken)
+          console.log("[claude-auth] Token decrypted successfully")
+          console.log(
+            "[claude-auth] Token preview:",
+            decrypted.slice(0, 4) + "...",
+          )
+          console.log("[claude-auth] Token total length:", decrypted.length)
+          console.log("[claude-auth] ============================================")
+          return decrypted
+        } catch (error) {
+          console.warn(
+            "[claude-auth] Active account token could not be decrypted; falling back:",
+            error,
+          )
+        }
       }
 
       console.log(
@@ -223,22 +252,29 @@ function getClaudeCodeToken(): string | null {
         : null,
     )
 
-    if (!cred?.oauthToken) {
-      console.log("[claude-auth] No Claude Code credentials found")
-      console.log("[claude-auth] ============================================")
-      return null
+    if (cred?.oauthToken) {
+      try {
+        const decrypted = decryptToken(cred.oauthToken)
+        console.log("[claude-auth] Token decrypted successfully (legacy)")
+        console.log(
+          "[claude-auth] Token preview:",
+          decrypted.slice(0, 4) + "...",
+        )
+        console.log("[claude-auth] Token total length:", decrypted.length)
+        console.log("[claude-auth] ============================================")
+
+        return decrypted
+      } catch (error) {
+        console.warn(
+          "[claude-auth] Legacy token could not be decrypted; falling back:",
+          error,
+        )
+      }
     }
 
-    const decrypted = decryptToken(cred.oauthToken)
-    console.log("[claude-auth] Token decrypted successfully (legacy)")
-    console.log(
-      "[claude-auth] Token preview:",
-      decrypted.slice(0, 20) + "..." + decrypted.slice(-10),
-    )
-    console.log("[claude-auth] Token total length:", decrypted.length)
+    console.log("[claude-auth] No Claude Code credentials found")
     console.log("[claude-auth] ============================================")
-
-    return decrypted
+    return null
   } catch (error) {
     console.error("[claude-auth] Error getting Claude Code token:", error)
     return null
@@ -348,6 +384,93 @@ const pendingToolApprovals = new Map<
 >()
 
 const PLAN_MODE_BLOCKED_TOOLS = new Set(["Bash", "NotebookEdit"])
+
+// Tools that trigger a user approval prompt in "ask" mode.
+const ASK_MODE_APPROVAL_TOOLS = new Set([
+  "Edit",
+  "Write",
+  "NotebookEdit",
+  "MultiEdit",
+  "Bash",
+])
+
+// In "edit" / "agent" modes, allow almost everything except dangerous
+// deletions. Returns a denial reason if dangerous, null otherwise.
+// (Ported from the 5-mode reference implementation; messages reworded for
+// the mausCode Agent/Turbo naming.)
+function detectDangerousDeletion(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  modeLabel: string,
+): string | null {
+  if (toolName !== "Bash") return null
+  const command =
+    typeof toolInput.command === "string" ? toolInput.command : ""
+  if (!command) return null
+
+  // rm -rf style (any order of flags containing both r and f)
+  if (/\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/.test(command)) {
+    return `rm -rf is blocked in ${modeLabel} mode. Switch to Turbo to allow.`
+  }
+  // Split short flags (rm -r -f), -R variant, and long flags.
+  const rmFlags = command.match(/\brm\s+((?:-[a-zA-Z]+\s*)+)/)
+  if (rmFlags) {
+    const flags = rmFlags[1].replace(/-/g, "")
+    if (
+      (flags.includes("r") || flags.includes("R")) &&
+      flags.includes("f")
+    ) {
+      return `rm -rf is blocked in ${modeLabel} mode. Switch to Turbo to allow.`
+    }
+  }
+  if (
+    /\brm\b[^\n]*--recursive\b/.test(command) &&
+    /\brm\b[^\n]*--force\b/.test(command)
+  ) {
+    return `rm --recursive --force is blocked in ${modeLabel} mode. Switch to Turbo to allow.`
+  }
+
+  // SQL destructive
+  if (/\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i.test(command)) {
+    return `Destructive SQL (DROP/TRUNCATE) is blocked in ${modeLabel} mode.`
+  }
+
+  // git push --force / --force-with-lease
+  if (/\bgit\s+push\b[^\n]*--force\b/.test(command)) {
+    return `git push --force is blocked in ${modeLabel} mode.`
+  }
+
+  // git reset --hard
+  if (/\bgit\s+reset\s+--hard\b/.test(command)) {
+    return `git reset --hard is blocked in ${modeLabel} mode.`
+  }
+
+  // Overwriting sensitive system/user files
+  if (/>\s*(\/etc\/|~\/\.ssh\/|\/usr\/|\/bin\/|\/sbin\/)/.test(command)) {
+    return `Overwriting sensitive system files is blocked in ${modeLabel} mode.`
+  }
+
+  return null
+}
+
+// One-line description of a tool call for ask-mode approval prompts.
+function describeToolCallForApproval(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+): string {
+  if (toolName === "Bash") {
+    const command =
+      typeof toolInput.command === "string" ? toolInput.command : ""
+    const desc =
+      typeof toolInput.description === "string" ? toolInput.description : ""
+    const detail = (desc || command).slice(0, 200)
+    return detail ? `Run command: ${detail}` : "Run a shell command"
+  }
+  const filePath =
+    typeof toolInput.file_path === "string" ? toolInput.file_path : ""
+  if (filePath) return `${toolName} ${filePath}`.slice(0, 200)
+  return `${toolName} (no file path)`
+}
 
 const clearPendingApprovals = (message: string, subChatId?: string) => {
   for (const [toolUseId, pending] of pendingToolApprovals) {
@@ -800,7 +923,7 @@ export const claudeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
         sessionId: z.string().optional(),
         model: z.string().optional(),
         customConfig: z
@@ -979,7 +1102,7 @@ export const claudeRouter = router({
 
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
             // Only check if offline mode is enabled in settings
-            const claudeCodeToken = getClaudeCodeToken()
+            const claudeCodeToken = await getClaudeCodeToken()
             const offlineResult = await checkOfflineFallback(
               input.customConfig,
               claudeCodeToken,
@@ -1034,7 +1157,6 @@ export const claudeRouter = router({
             }
 
             const transform = createTransformer({
-              emitSdkMessageUuid: historyEnabled,
               isUsingOllama,
             })
 
@@ -1384,25 +1506,46 @@ export const claudeRouter = router({
               )
             }
 
-            // Check if user has existing API key or proxy configured in their shell environment
-            // If so, use that instead of OAuth (allows using custom API proxies)
-            // Based on PR #29 by @sa4hnd
-            const hasExistingApiConfig = !!(
-              claudeEnv.ANTHROPIC_API_KEY || claudeEnv.ANTHROPIC_AUTH_TOKEN || claudeEnv.ANTHROPIC_BASE_URL
+            // Explicit custom settings should win. Ambient shell/process Anthropic
+            // variables should not override a working Claude Code login; stale API
+            // keys otherwise make the SDK fail while `claude` works in Terminal.
+            const ambientAnthropicEnvKeys = [
+              "ANTHROPIC_API_KEY",
+              "ANTHROPIC_AUTH_TOKEN",
+              "ANTHROPIC_BASE_URL",
+            ] as const
+            const hasAmbientApiConfig = ambientAnthropicEnvKeys.some(
+              (key) => !!claudeEnv[key],
             )
+            const shouldUseAmbientApiConfig =
+              !finalCustomConfig && !claudeCodeToken && hasAmbientApiConfig
 
-            if (hasExistingApiConfig) {
+            if (claudeCodeToken && !finalCustomConfig) {
+              for (const key of ambientAnthropicEnvKeys) {
+                if (claudeEnv[key]) {
+                  console.log(
+                    `[claude-auth] Ignoring ambient ${key}; using Claude Code OAuth`,
+                  )
+                  delete claudeEnv[key]
+                }
+              }
+            }
+
+            if (shouldUseAmbientApiConfig) {
               console.log(
                 `[claude] Using existing CLI config - API_KEY: ${claudeEnv.ANTHROPIC_API_KEY ? "set" : "not set"}, BASE_URL: ${claudeEnv.ANTHROPIC_BASE_URL || "default"}`,
               )
             }
 
-            // Build final env - only add OAuth token if we have one AND no existing API config
-            // Existing CLI config takes precedence over OAuth
-            const finalEnv = {
+            // Build final env. A valid Claude Code OAuth token takes precedence
+            // over ambient shell API credentials; explicit custom config was
+            // already applied above and remains in claudeEnv.
+            // Typed as Record<string, string> to preserve access to dynamic env vars
+            // like ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN
+            const finalEnv: Record<string, string> = {
               ...claudeEnv,
               ...(claudeCodeToken &&
-                !hasExistingApiConfig && {
+                !finalCustomConfig && {
                   CLAUDE_CODE_OAUTH_TOKEN: claudeCodeToken,
                 }),
               // Re-enable CLAUDE_CONFIG_DIR now that we properly map MCP configs
@@ -1412,8 +1555,8 @@ export const claudeRouter = router({
             // Log auth method being used
             console.log("[claude-auth] ========== AUTH METHOD USED ==========")
             console.log(
-              "[claude-auth] hasExistingApiConfig:",
-              hasExistingApiConfig,
+              "[claude-auth] shouldUseAmbientApiConfig:",
+              shouldUseAmbientApiConfig,
             )
             console.log(
               "[claude-auth] claudeCodeToken available:",
@@ -1760,6 +1903,10 @@ ${prompt}
                     mcpServers: mcpServersFiltered,
                   }),
                 env: finalEnv,
+                ...(claudeCodeToken &&
+                  !finalCustomConfig && {
+                    getOAuthToken: async () => getValidExistingClaudeToken(),
+                  }),
                 permissionMode:
                   input.mode === "plan"
                     ? ("plan" as const)
@@ -1864,23 +2011,129 @@ ${prompt}
                           : ""
                       if (!/\.md$/i.test(filePath)) {
                         return {
-                          behavior: "deny",
+                          behavior: "deny" as const,
                           message:
                             'Only ".md" files can be modified in plan mode.',
                         }
                       }
                     } else if (toolName == "ExitPlanMode") {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `IMPORTANT: DONT IMPLEMENT THE PLAN UNTIL THE EXPLIT COMMAND. THE PLAN WAS **ONLY** PRESENTED TO USER, FINISH CURRENT MESSAGE AS SOON AS POSSIBLE`,
                       }
                     } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `Tool "${toolName}" blocked in plan mode.`,
                       }
                     }
+                  } else if (input.mode === "ask") {
+                    if (ASK_MODE_APPROVAL_TOOLS.has(toolName)) {
+                      const { toolUseID } = options
+                      // Reuse the AskUserQuestion UI as an Allow/Deny prompt
+                      // (same shape as the native runtime permission_request
+                      // translation; no toolUseId prefix routes the answer to
+                      // the legacy respondToolApproval mutation).
+                      safeEmit({
+                        type: "ask-user-question",
+                        toolUseId: toolUseID,
+                        questions: [
+                          {
+                            question: describeToolCallForApproval(
+                              toolName,
+                              toolInput,
+                            ),
+                            header: toolName,
+                            options: [
+                              {
+                                label: "Allow",
+                                description: `Allow ${toolName} this time`,
+                              },
+                              { label: "Deny", description: `Deny ${toolName}` },
+                            ],
+                            multiSelect: false,
+                          },
+                        ],
+                      } as UIMessageChunk)
+
+                      // Wait for response (60s timeout denies)
+                      const approval = await new Promise<{
+                        approved: boolean
+                        message?: string
+                        updatedInput?: unknown
+                      }>((resolve) => {
+                        const timeoutId = setTimeout(() => {
+                          pendingToolApprovals.delete(toolUseID)
+                          safeEmit({
+                            type: "ask-user-question-timeout",
+                            toolUseId: toolUseID,
+                          } as UIMessageChunk)
+                          resolve({
+                            approved: false,
+                            message: "Timed out waiting for approval",
+                          })
+                        }, 60000)
+
+                        pendingToolApprovals.set(toolUseID, {
+                          subChatId: input.subChatId,
+                          resolve: (d) => {
+                            clearTimeout(timeoutId)
+                            resolve(d)
+                          },
+                        })
+                      })
+
+                      // The question dialog submits approved:true with the picked
+                      // option label in answers — a "Deny" pick is a denial.
+                      const approvalAnswers = (
+                        approval.updatedInput as
+                          | { answers?: Record<string, string> }
+                          | undefined
+                      )?.answers
+                      const deniedByAnswer = approvalAnswers
+                        ? Object.values(approvalAnswers).some((a) =>
+                            a
+                              .split(",")
+                              .map((x) => x.trim())
+                              .includes("Deny"),
+                          )
+                        : false
+                      const denied =
+                        !approval.approved || deniedByAnswer
+                      safeEmit({
+                        type: "ask-user-question-result",
+                        toolUseId: toolUseID,
+                        result: denied
+                          ? approval.message || "Denied"
+                          : "Allowed",
+                      } as unknown as UIMessageChunk)
+                      if (denied) {
+                        return {
+                          behavior: "deny" as const,
+                          message:
+                            approval.message ||
+                            `Tool "${toolName}" denied in ask mode.`,
+                        }
+                      }
+                    }
+                  } else if (
+                    input.mode === "edit" ||
+                    input.mode === "agent"
+                  ) {
+                    // File edits (and everything else) auto-allowed except
+                    // dangerous deletions.
+                    const modeLabel =
+                      input.mode === "edit" ? "Edit" : "Agent"
+                    const reason = detectDangerousDeletion(
+                      toolName,
+                      toolInput,
+                      modeLabel,
+                    )
+                    if (reason) {
+                      return { behavior: "deny" as const, message: reason }
+                    }
                   }
+                  // "turbo" / legacy fall through to default allow.
                   if (toolName === "AskUserQuestion") {
                     const { toolUseID } = options
                     // Emit to UI (safely in case observer is closed)
@@ -1931,13 +2184,15 @@ ${prompt}
                         askToolPart.state = "result"
                       }
                       // Emit result to frontend so it updates in real-time
+                      // Cast through unknown because ask-user-question-result is a custom
+                      // extension not in the UIMessageChunk union type
                       safeEmit({
                         type: "ask-user-question-result",
                         toolUseId: toolUseID,
                         result: errorMessage,
-                      } as UIMessageChunk)
+                      } as unknown as UIMessageChunk)
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: errorMessage,
                       }
                     }
@@ -1950,18 +2205,20 @@ ${prompt}
                       askToolPart.state = "result"
                     }
                     // Emit result to frontend so it updates in real-time
+                    // Cast through unknown because ask-user-question-result is a custom
+                    // extension not in the UIMessageChunk union type
                     safeEmit({
                       type: "ask-user-question-result",
                       toolUseId: toolUseID,
                       result: answerResult,
-                    } as UIMessageChunk)
+                    } as unknown as UIMessageChunk)
                     return {
-                      behavior: "allow",
-                      updatedInput: response.updatedInput,
+                      behavior: "allow" as const,
+                      updatedInput: response.updatedInput as Record<string, unknown>,
                     }
                   }
                   return {
-                    behavior: "allow",
+                    behavior: "allow" as const,
                     updatedInput: toolInput,
                   }
                 },
@@ -2180,7 +2437,7 @@ ${prompt}
                       // Show OAuth reconnect only when OAuth auth is actually in use.
                       // If API-key auth is active, treat as API auth failure instead.
                       const isApiKeyAuthMode = Boolean(
-                        finalCustomConfig || hasExistingApiConfig,
+                        finalCustomConfig || shouldUseAmbientApiConfig,
                       )
                       if (isApiKeyAuthMode) {
                         errorCategory = "AUTH_FAILURE"

@@ -11,7 +11,8 @@ import {
   subChatFilesAtom,
   type SubChatFileChange,
 } from "../atoms"
-import { IconSpinner, PlanIcon, AgentIcon } from "../../../components/ui/icons"
+import { IconSpinner } from "../../../components/ui/icons"
+import { getModeIcon } from "../lib/mode-display"
 import type { SubChatMeta } from "../stores/sub-chat-store"
 import { formatTimeAgo } from "../utils/format-time-ago"
 
@@ -39,6 +40,7 @@ function SubChatCard({
   onMouseEnter?: () => void
 }) {
   const mode = subChat.mode || "agent"
+  const ModeIcon = getModeIcon(mode)
   const timeAgo = formatTimeAgo(subChat.updated_at || subChat.created_at)
 
   // Calculate totals from file changes
@@ -64,25 +66,14 @@ function SubChatCard({
       <div className="flex items-start gap-2.5">
         {/* Mode icon with badge */}
         <div className="pt-0.5 relative flex-shrink-0 h-4 w-4">
-          {mode === "plan" ? (
-            <PlanIcon
-              className={cn(
-                "w-4 h-4",
-                isSelected
-                  ? "text-primary-foreground"
-                  : "text-muted-foreground",
-              )}
-            />
-          ) : (
-            <AgentIcon
-              className={cn(
-                "w-4 h-4",
-                isSelected
-                  ? "text-primary-foreground"
-                  : "text-muted-foreground",
-              )}
-            />
-          )}
+          <ModeIcon
+            className={cn(
+              "w-4 h-4",
+              isSelected
+                ? "text-primary-foreground"
+                : "text-muted-foreground",
+            )}
+          />
           {/* Badge in bottom-right corner */}
           {(isLoading || hasUnseenChanges) && (
             <div

@@ -1,5 +1,5 @@
 /**
- * PostHog analytics for 1Code Desktop - Renderer Process
+ * PostHog analytics for mausCode Desktop - Renderer Process
  * Uses PostHog JS SDK for client-side tracking
  */
 
@@ -29,6 +29,18 @@ function isOptedOut(): boolean {
   try {
     const optOut = localStorage.getItem("preferences:analytics-opt-out")
     return optOut === "true"
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Check if local-only mode is on (blocks hosted services incl. analytics).
+ * Reads directly from localStorage to avoid circular dependencies.
+ */
+function isLocalOnly(): boolean {
+  try {
+    return localStorage.getItem("preferences:local-only-mode") === "true"
   } catch {
     return false
   }
@@ -101,8 +113,8 @@ export function capture(
   // Skip in development mode
   if (isDev) return
 
-  // Skip if user opted out
-  if (isOptedOut()) return
+  // Skip if user opted out or local-only mode is on
+  if (isOptedOut() || isLocalOnly()) return
 
   if (!initialized) return
 
@@ -124,8 +136,8 @@ export function identify(
   // Skip in development mode
   if (isDev) return
 
-  // Skip if user opted out
-  if (isOptedOut()) return
+  // Skip if user opted out or local-only mode is on
+  if (isOptedOut() || isLocalOnly()) return
 
   if (!initialized) return
 
@@ -172,7 +184,7 @@ export function shutdown() {
 export function trackMessageSent(data: {
   workspaceId: string
   messageLength: number
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
 }) {
   capture("message_sent", {
     workspace_id: data.workspaceId,

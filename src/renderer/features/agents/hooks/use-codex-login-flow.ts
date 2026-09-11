@@ -308,7 +308,11 @@ export function useCodexLoginFlow() {
     }
 
     try {
-      await openExternalMutation.mutateAsync(url)
+      const result = await openExternalMutation.mutateAsync(url)
+      if (result?.blocked) {
+        setError(result.message || "Opening external URLs is blocked (local-only mode)")
+        return false
+      }
       return true
     } catch (openError) {
       setError(toErrorMessage(openError, "Failed to open auth URL"))

@@ -96,7 +96,10 @@ export function extractGitActivity(parts: any[]): GitActivity | null {
   let hadRebase = false
 
   for (const part of parts) {
-    if (part.type !== "tool-Bash") continue
+    const toolName = part.input?.toolName || part.type?.replace("tool-", "")
+    const isBash = part.type === "tool-Bash" || toolName === "run_shell_command" || toolName === "Bash" || toolName === "Run"
+
+    if (!isBash) continue
     if (!part.output) continue
 
     const command: string = part.input?.command || ""
@@ -180,7 +183,11 @@ export function extractChangedFiles(parts: any[], projectPath?: string): Changed
   const fileMap = new Map<string, ChangedFileInfo>()
 
   for (const part of parts) {
-    if (part.type !== "tool-Edit" && part.type !== "tool-Write") continue
+    const toolName = part.input?.toolName || part.type?.replace("tool-", "")
+    const isEdit = part.type === "tool-Edit" || toolName === "replace" || toolName === "Edit"
+    const isWrite = part.type === "tool-Write" || toolName === "write_file" || toolName === "Write"
+
+    if (!isEdit && !isWrite) continue
     const filePath: string = part.input?.file_path || ""
     if (!filePath) continue
 
@@ -192,7 +199,7 @@ export function extractChangedFiles(parts: any[], projectPath?: string): Changed
 
     const existing = fileMap.get(filePath)
 
-    if (part.type === "tool-Edit") {
+    if (isEdit) {
       const oldLines = countLines(part.input?.old_string || "")
       const newLines = countLines(part.input?.new_string || "")
       if (existing) {

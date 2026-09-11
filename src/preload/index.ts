@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld("desktopApi", {
   getVersion: () => ipcRenderer.invoke("app:version"),
   isPackaged: () => ipcRenderer.invoke("app:isPackaged"),
 
+  // Dev memory monitor → appends to userData/mem-trace.ndjson so the trace
+  // survives a renderer crash.
+  appendMemLog: (line: string) =>
+    ipcRenderer.invoke("debug:append-mem-log", line) as Promise<boolean>,
+
   // Auto-update methods
   checkForUpdates: (force?: boolean) => ipcRenderer.invoke("update:check", force),
   downloadUpdate: () => ipcRenderer.invoke("update:download"),
@@ -124,6 +129,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // Analytics
   setAnalyticsOptOut: (optedOut: boolean) => ipcRenderer.invoke("analytics:set-opt-out", optedOut),
+  setLocalOnlyMode: (enabled: boolean) => ipcRenderer.invoke("local-only:set", enabled),
 
   // Native features
   setBadge: (count: number | null) => ipcRenderer.invoke("app:set-badge", count),
@@ -131,6 +137,21 @@ contextBridge.exposeInMainWorld("desktopApi", {
   showNotification: (options: { title: string; body: string }) =>
     ipcRenderer.invoke("app:show-notification", options),
   openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
+  openFolder: (path: string) =>
+    ipcRenderer.invoke("shell:open-folder", path) as Promise<{
+      success: boolean
+      error?: string
+    }>,
+  openTerminal: (path: string) =>
+    ipcRenderer.invoke("shell:open-terminal", path) as Promise<{
+      success: boolean
+      error?: string
+    }>,
+  openVSCode: (path: string) =>
+    ipcRenderer.invoke("shell:open-vscode", path) as Promise<{
+      success: boolean
+      error?: string
+    }>,
 
   // API base URL (for fetch requests to server)
   getApiBaseUrl: () => ipcRenderer.invoke("app:get-api-base-url"),
@@ -289,6 +310,7 @@ export interface DesktopApi {
   arch: string
   getVersion: () => Promise<string>
   isPackaged: () => Promise<boolean>
+  appendMemLog: (line: string) => Promise<boolean>
   // Auto-update
   checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
   downloadUpdate: () => Promise<boolean>
@@ -329,10 +351,14 @@ export interface DesktopApi {
   toggleDevTools: () => Promise<void>
   unlockDevTools: () => Promise<void>
   setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
+  setLocalOnlyMode: (enabled: boolean) => Promise<void>
   setBadge: (count: number | null) => Promise<void>
   setBadgeIcon: (imageData: string | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
-  openExternal: (url: string) => Promise<void>
+  openExternal: (url: string) => Promise<{ blocked: boolean; message?: string }>
+  openFolder: (path: string) => Promise<{ success: boolean; error?: string }>
+  openTerminal: (path: string) => Promise<{ success: boolean; error?: string }>
+  openVSCode: (path: string) => Promise<{ success: boolean; error?: string }>
   getApiBaseUrl: () => Promise<string>
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>

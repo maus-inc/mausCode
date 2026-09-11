@@ -1,8 +1,16 @@
+/**
+ * NOTE (transplant): fullscreen-poll slowdown, persistent title-bar controls,
+ * TrafficLightSpacer, sidebar animation duration, and new-chat-form reset
+ * wiring were transplanted from erenbertr/1code (Apache-2.0).
+ * Their ProjectsRail render was taken on sidebar-lineage adoption (Batch C).
+ * ClaudeLoginModal removal and kanban removals were NOT taken (ours kept).
+ */
 import { useCallback, useEffect, useState, useMemo, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { toast } from "sonner"
 import { isDesktopApp } from "../../lib/utils/platform"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
+import { DURATION_NORMAL } from "../../lib/motion"
 
 import {
   agentsSidebarOpenAtom,
@@ -19,15 +27,17 @@ import {
   customHotkeysAtom,
   betaKanbanEnabledAtom,
 } from "../../lib/atoms"
-import { selectedAgentChatIdAtom, selectedProjectAtom, selectedDraftIdAtom, showNewChatFormAtom, desktopViewAtom, fileSearchDialogOpenAtom } from "../agents/atoms"
+import { selectedAgentChatIdAtom, selectedProjectAtom, selectedDraftIdAtom, showNewChatFormAtom, desktopViewAtom, fileSearchDialogOpenAtom, requestNewChatFormResetAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
 import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
 import { CodexLoginModal } from "../../components/dialogs/codex-login-modal"
+import { CursorLoginModal } from "../../components/dialogs/cursor-login-modal"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { AgentsSidebar } from "../sidebar/agents-sidebar"
+import { ProjectsRail } from "../sidebar/projects-rail"
 import { AgentsContent } from "../agents/ui/agents-content"
 import { UpdateBanner } from "../../components/update-banner"
 import { WindowsTitleBar } from "../../components/windows-title-bar"
@@ -35,6 +45,10 @@ import { useUpdateChecker } from "../../lib/hooks/use-update-checker"
 import { useAgentSubChatStore } from "../agents/stores/sub-chat-store"
 import { QueueProcessor } from "../agents/components/queue-processor"
 import { SettingsSidebar } from "../settings/settings-sidebar"
+import {
+  TrafficLights,
+  TrafficLightSpacer,
+} from "../agents/components/traffic-light-spacer"
 
 // ============================================================================
 // Constants
@@ -42,7 +56,7 @@ import { SettingsSidebar } from "../settings/settings-sidebar"
 
 const SIDEBAR_MIN_WIDTH = 160
 const SIDEBAR_MAX_WIDTH = 300
-const SIDEBAR_ANIMATION_DURATION = 0
+const SIDEBAR_ANIMATION_DURATION = DURATION_NORMAL
 const SIDEBAR_CLOSE_HOTKEY = "⌘\\"
 
 // ============================================================================
@@ -74,12 +88,14 @@ export function AgentsLayout() {
     // Get initial fullscreen state
     window.desktopApi.windowIsFullscreen().then(setIsFullscreen)
 
-    // In dev mode, HMR breaks IPC event subscriptions, so we poll instead
+    // In dev mode, HMR breaks IPC event subscriptions, so we poll instead.
+    // 300ms was generating thousands of IPC calls per hour and contributing
+    // to renderer memory pressure. Fullscreen state never changes that fast.
     const isDev = import.meta.env.DEV
     if (isDev) {
       const interval = setInterval(() => {
         window.desktopApi?.windowIsFullscreen?.().then(setIsFullscreen)
-      }, 300)
+      }, 1000)
       return () => clearInterval(interval)
     }
 
@@ -102,6 +118,7 @@ export function AgentsLayout() {
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
+  const requestNewChatFormReset = useSetAtom(requestNewChatFormResetAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
   const setAnthropicOnboardingCompleted = useSetAtom(
     anthropicOnboardingCompletedAtom
@@ -159,7 +176,7 @@ export function AgentsLayout() {
     )
       return
 
-    window.desktopApi.setTrafficLightVisibility(sidebarOpen)
+    window.desktopApi.setTrafficLightVisibility(true)
   }, [sidebarOpen, isDesktop, isFullscreen, isSettingsView])
 
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
@@ -286,6 +303,7 @@ export function AgentsLayout() {
     selectedChatId,
     customHotkeysConfig,
     betaKanbanEnabled,
+    requestNewChatFormReset,
   })
 
   const handleCloseSidebar = useCallback(() => {
@@ -303,11 +321,39 @@ export function AgentsLayout() {
         autoStartAuth={claudeLoginModalConfig.autoStartAuth}
       />
       <CodexLoginModal />
+      <CursorLoginModal />
       <div className="flex flex-col w-full h-full relative overflow-hidden bg-background select-none">
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />
+
+        {/* Persistent title bar controls -- always visible regardless of sidebar state */}
+        {isDesktop && !isFullscreen && !isSettingsView && (
+          <div className="absolute top-0 left-0 z-[60]" style={{ pointerEvents: "none" }}>
+            {/* Drag region covering title bar area */}
+            <div
+              className="absolute top-0 left-0 h-[32px]"
+              style={{
+                width: "140px",
+                // @ts-expect-error - WebKit-specific property
+                WebkitAppRegion: "drag",
+                pointerEvents: "auto",
+              }}
+            />
+
+            {/* No-drag zone over native traffic lights */}
+            <TrafficLights
+              isFullscreen={isFullscreen}
+              isDesktop={isDesktop}
+              className="absolute left-[15px] top-[12px]"
+            />
+          </div>
+        )}
+
         <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - switches between chat list and settings nav */}
+          {/* Projects rail — primary nav (projects only). Hidden in settings + mobile. */}
+          {!isMobile && !isSettingsView && <ProjectsRail />}
+
+          {/* Secondary nav — chats grouped per project, or settings nav */}
           <ResizableSidebar
           isOpen={!isMobile && sidebarOpen}
           onClose={handleCloseSidebar}
@@ -320,7 +366,7 @@ export function AgentsLayout() {
           initialWidth={0}
           exitWidth={0}
           showResizeTooltip={!isSettingsView}
-          className="overflow-hidden bg-background border-r"
+          className="overflow-hidden border-r bg-white/[0.03]"
           style={{ borderRightWidth: "0.5px" }}
         >
           {isSettingsView ? (
@@ -335,7 +381,11 @@ export function AgentsLayout() {
         </ResizableSidebar>
 
           {/* Main Content */}
-          <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+          <div className="flex-1 overflow-hidden flex flex-col min-w-0 relative">
+            {/* Spacer for traffic lights when sidebar is closed */}
+            {isDesktop && !isFullscreen && !sidebarOpen && !isSettingsView && (
+              <TrafficLightSpacer isFullscreen={isFullscreen} isDesktop={isDesktop} />
+            )}
             <AgentsContent />
           </div>
         </div>

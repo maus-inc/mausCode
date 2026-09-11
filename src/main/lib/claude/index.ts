@@ -1,4 +1,5 @@
-export { createTransformer } from "./transform"
+export { createTransformer, createChunkCoalescer } from "./transform"
+export type { ChunkCoalescer } from "./transform"
 export type { UIMessageChunk, MessageMetadata } from "./types"
 export {
   logRawClaudeMessage,

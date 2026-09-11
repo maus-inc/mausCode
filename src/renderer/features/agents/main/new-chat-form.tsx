@@ -13,12 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
 import {
-  AgentIcon,
   AttachIcon,
   BranchIcon,
   CheckIcon,
   IconChevronDown,
-  PlanIcon,
   SearchIcon,
 } from "../../../components/ui/icons"
 import {
@@ -33,6 +31,9 @@ import {
   lastSelectedAgentIdAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedCursorModelIdAtom,
+  lastSelectedGeminiModelIdAtom,
+  lastSelectedOpenRouterModelIdAtom,
   lastSelectedBranchesAtom,
   lastSelectedModelIdAtom,
   lastSelectedRepoAtom,
@@ -41,27 +42,40 @@ import {
   selectedChatIsRemoteAtom,
   selectedDraftIdAtom,
   selectedProjectAtom,
+  subChatCodexModelIdAtomFamily,
+  subChatCodexThinkingAtomFamily,
+  subChatCursorModelIdAtomFamily,
+  subChatGeminiModelIdAtomFamily,
+  subChatOpenRouterModelIdAtomFamily,
+  AGENT_MODES,
   getNextMode,
+  isAgentMode,
   type AgentMode,
 } from "../atoms"
 import { defaultAgentModeAtom } from "../../../lib/atoms"
+import { appStore } from "../../../lib/jotai-store"
 import { ProjectSelector } from "../components/project-selector"
 import { WorkModeSelector } from "../components/work-mode-selector"
-// import { selectedTeamIdAtom } from "@/lib/atoms/team"
+import {
+  getModeIcon,
+  getModeLabel,
+  getModeTooltip,
+} from "../lib/mode-display"
 import { atom } from "jotai"
 const selectedTeamIdAtom = atom<string | null>(null)
 import {
+  codexApiKeyAtom,
+  normalizeCodexApiKey,
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
-  codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
-  normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
+  pinnedOpenRouterModelsAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -98,7 +112,6 @@ import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
-// import { CreateBranchDialog } from "@/app/(alpha)/agents/{components}/create-branch-dialog"
 import {
   PromptInput,
   PromptInputActions,
@@ -106,7 +119,7 @@ import {
 } from "../../../components/ui/prompt-input"
 import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
-import { AgentModelSelector } from "../components/agent-model-selector"
+import { AgentModelSelector, type AgentProviderId } from "../components/agent-model-selector"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
@@ -121,9 +134,12 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
+  CURSOR_MODELS,
+  GEMINI_MODELS,
   type CodexThinkingLevel,
 } from "../lib/models"
-// import type { PlanType } from "@/lib/config/subscription-plans"
+import { isSubChatProvider } from "../../../../shared/sub-chat-provider"
 type PlanType = string
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
@@ -165,10 +181,17 @@ function useAvailableModels() {
 }
 
 // Agent providers
-const agents = [
+const agents: {
+  id: string
+  name: string
+  hasModels?: boolean
+  disabled?: boolean
+}[] = [
   { id: "claude-code", name: "Claude Code", hasModels: true },
-  { id: "cursor", name: "Cursor CLI", disabled: true },
+  { id: "cursor", name: "Cursor CLI", hasModels: true },
   { id: "codex", name: "OpenAI Codex" },
+  { id: "gemini", name: "Google Gemini" },
+  { id: "openrouter", name: "OpenRouter" },
 ]
 
 interface NewChatFormProps {
@@ -216,10 +239,21 @@ export function NewChatForm({
 
   // Clear invalid project from storage
   useEffect(() => {
-    if (selectedProject && projectsList && !validatedProject) {
+    if (
+      selectedProject &&
+      projectsList &&
+      !isLoadingProjects &&
+      !validatedProject
+    ) {
       setSelectedProject(null)
     }
-  }, [selectedProject, projectsList, validatedProject, setSelectedProject])
+  }, [
+    selectedProject,
+    projectsList,
+    isLoadingProjects,
+    validatedProject,
+    setSelectedProject,
+  ])
   const [lastSelectedAgentId, setLastSelectedAgentId] = useAtom(
     lastSelectedAgentIdAtom,
   )
@@ -246,6 +280,7 @@ export function NewChatForm({
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const { data: claudeCodeIntegration } =
     trpc.claudeCode.getIntegration.useQuery()
+  const { data: cursorIntegration } = trpc.cursor.getIntegration.useQuery()
   const isClaudeConnected =
     Boolean(claudeCodeIntegration?.isConnected) ||
     anthropicOnboardingCompleted ||
@@ -327,8 +362,35 @@ export function NewChatForm({
   const [lastSelectedCodexThinking, setLastSelectedCodexThinking] = useAtom(
     lastSelectedCodexThinkingAtom,
   )
+  const [lastSelectedCursorModelId, setLastSelectedCursorModelId] = useAtom(
+    lastSelectedCursorModelIdAtom,
+  )
+  const [lastSelectedGeminiModelId, setLastSelectedGeminiModelId] = useAtom(
+    lastSelectedGeminiModelIdAtom,
+  )
   const [thinkingEnabled, setThinkingEnabled] = useAtom(
     extendedThinkingEnabledAtom,
+  )
+  const { data: geminiAuth } = trpc.gemini.getAuthStatus.useQuery()
+  const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
+  const isGeminiConnected =
+    (geminiAuth?.ok === true && geminiAuth.hasKey === true) ||
+    Boolean(geminiCliStatus?.installed && geminiCliStatus.loggedIn)
+
+  const [lastSelectedOpenRouterModelId, setLastSelectedOpenRouterModelId] =
+    useAtom(lastSelectedOpenRouterModelIdAtom)
+  const pinnedOpenRouterModels = useAtomValue(pinnedOpenRouterModelsAtom)
+  const { data: openRouterAuth } = trpc.openrouter.getAuthStatus.useQuery()
+  const isOpenRouterConnected =
+    openRouterAuth?.ok === true && openRouterAuth.hasKey === true
+  const { data: openRouterCatalog } = trpc.openrouter.listModels.useQuery(
+    undefined,
+    {
+      enabled: isOpenRouterConnected && pinnedOpenRouterModels.length > 0,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
   )
 
   const [selectedModel, setSelectedModel] = useState(
@@ -344,18 +406,16 @@ export function NewChatForm({
     }
   }, [lastSelectedModelId])
 
+  const hiddenModels = useAtomValue(hiddenModelsAtom)
   const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
   const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
-  const hiddenModels = useAtomValue(hiddenModelsAtom)
-  const codexUiModels = useMemo(
-    () => {
-      let models = hasAppCodexApiKey
-        ? CODEX_MODELS.filter((model) => model.id !== "gpt-5.3-codex")
-        : CODEX_MODELS
-      return models.filter((model) => !hiddenModels.includes(model.id))
-    },
-    [hasAppCodexApiKey, hiddenModels],
-  )
+  const codexUiModels = useMemo(() => {
+    const subscriptionOnly = new Set<string>(CODEX_SUBSCRIPTION_ONLY_MODEL_IDS)
+    const models = hasAppCodexApiKey
+      ? CODEX_MODELS.filter((model) => !subscriptionOnly.has(model.id))
+      : CODEX_MODELS
+    return models.filter((model) => !hiddenModels.includes(model.id))
+  }, [hasAppCodexApiKey, hiddenModels])
   const selectedCodexModel = useMemo(
     () =>
       codexUiModels.find((model) => model.id === lastSelectedCodexModelId) ||
@@ -363,6 +423,51 @@ export function NewChatForm({
       CODEX_MODELS[0]!,
     [codexUiModels, lastSelectedCodexModelId],
   )
+  const cursorUiModels = useMemo(
+    () => CURSOR_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedCursorModel = useMemo(
+    () =>
+      cursorUiModels.find((model) => model.id === lastSelectedCursorModelId) ||
+      cursorUiModels[0] ||
+      CURSOR_MODELS[0]!,
+    [cursorUiModels, lastSelectedCursorModelId],
+  )
+
+  const geminiUiModels = useMemo(
+    () => GEMINI_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const selectedGeminiModel = useMemo(
+    () =>
+      geminiUiModels.find((model) => model.id === lastSelectedGeminiModelId) ||
+      geminiUiModels[0] ||
+      GEMINI_MODELS[0]!,
+    [geminiUiModels, lastSelectedGeminiModelId],
+  )
+
+  const openRouterUiModels = useMemo(() => {
+    if (!isOpenRouterConnected) return []
+    const catalogIndex = new Map(
+      openRouterCatalog?.available
+        ? openRouterCatalog.models.map((m) => [m.id, m.name] as const)
+        : [],
+    )
+    return pinnedOpenRouterModels
+      .filter((id) => !hiddenModels.includes(id))
+      .map((id) => ({ id, name: catalogIndex.get(id) ?? id }))
+  }, [isOpenRouterConnected, openRouterCatalog, pinnedOpenRouterModels, hiddenModels])
+  const selectedOpenRouterModel = useMemo(() => {
+    if (openRouterUiModels.length === 0) {
+      return { id: "", name: "" }
+    }
+    return (
+      openRouterUiModels.find((m) => m.id === lastSelectedOpenRouterModelId) ||
+      openRouterUiModels[0] ||
+      { id: "", name: "" }
+    )
+  }, [openRouterUiModels, lastSelectedOpenRouterModelId])
 
   const selectedCodexThinking = useMemo<CodexThinkingLevel>(() => {
     if (
@@ -401,11 +506,23 @@ export function NewChatForm({
     if (selectedAgent.id === "codex") {
       return `${selectedCodexModel.id}/${selectedCodexThinking}`
     }
+    if (selectedAgent.id === "cursor") {
+      return selectedCursorModel.id
+    }
+    if (selectedAgent.id === "gemini") {
+      return selectedGeminiModel.id
+    }
+    if (selectedAgent.id === "openrouter") {
+      return selectedOpenRouterModel.id || (selectedModel?.id ?? "opus")
+    }
     return selectedModel?.id ?? "opus"
   }, [
     selectedAgent.id,
     selectedCodexModel.id,
     selectedCodexThinking,
+    selectedCursorModel.id,
+    selectedGeminiModel.id,
+    selectedOpenRouterModel.id,
     selectedModel?.id,
   ])
 
@@ -416,6 +533,18 @@ export function NewChatForm({
   const selectedModelLabel = useMemo(() => {
     if (selectedAgent.id === "codex") {
       return selectedCodexModel.name
+    }
+
+    if (selectedAgent.id === "cursor") {
+      return selectedCursorModel.name
+    }
+
+    if (selectedAgent.id === "gemini") {
+      return selectedGeminiModel.name
+    }
+
+    if (selectedAgent.id === "openrouter") {
+      return selectedOpenRouterModel.name || "Select model"
     }
 
     if (availableModels.isOffline && availableModels.hasOllama) {
@@ -434,6 +563,9 @@ export function NewChatForm({
   }, [
     selectedAgent.id,
     selectedCodexModel.name,
+    selectedCursorModel.name,
+    selectedGeminiModel.name,
+    selectedOpenRouterModel.name,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
@@ -529,7 +661,7 @@ export function NewChatForm({
   const [modeTooltip, setModeTooltip] = useState<{
     visible: boolean
     position: { top: number; left: number }
-    mode: "agent" | "plan"
+    mode: AgentMode
   } | null>(null)
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasShownTooltipRef = useRef(false)
@@ -573,7 +705,6 @@ export function NewChatForm({
     try {
       const blob = await stopRecording()
       if (blob.size < 1000) {
-        console.log("[NewChatForm] Recording too short, ignoring")
         return
       }
       setIsTranscribing(true)
@@ -712,7 +843,13 @@ export function NewChatForm({
 
   // Fetch repos from team
   // Desktop: no remote repos, we use local projects
-  const reposData = { repositories: [] }
+  const reposData = { repositories: [] as Array<{
+    id: string
+    name: string
+    full_name: string
+    sandbox_status?: "not_setup" | "in_progress" | "ready" | "error"
+    pushed_at?: string | null
+  }> }
   const isLoadingRepos = false
 
   // Memoize repos arrays to prevent useEffect from running on every keystroke
@@ -1031,6 +1168,33 @@ export function NewChatForm({
   const utils = trpc.useUtils()
   const createChatMutation = trpc.chats.create.useMutation({
     onSuccess: (data) => {
+      utils.chats.get.setData({ id: data.id }, data as any)
+
+      const firstSubChatId = data.subChats?.[0]?.id
+      if (firstSubChatId) {
+        if (selectedAgent.id === "codex") {
+          const [modelId, thinking] = selectedChatModel.split("/")
+          appStore.set(subChatCodexModelIdAtomFamily(firstSubChatId), modelId)
+          if (
+            thinking === "low" ||
+            thinking === "medium" ||
+            thinking === "high" ||
+            thinking === "xhigh"
+          ) {
+            appStore.set(subChatCodexThinkingAtomFamily(firstSubChatId), thinking)
+          }
+        } else if (selectedAgent.id === "cursor") {
+          appStore.set(subChatCursorModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "gemini") {
+          appStore.set(subChatGeminiModelIdAtomFamily(firstSubChatId), selectedChatModel)
+        } else if (selectedAgent.id === "openrouter") {
+          appStore.set(
+            subChatOpenRouterModelIdAtomFamily(firstSubChatId),
+            selectedChatModel,
+          )
+        }
+      }
+
       // Clear editor, images, files, pasted texts, and file contents cache only on success
       editorRef.current?.clear()
       clearImages()
@@ -1210,8 +1374,9 @@ export function NewChatForm({
     // Create chat with selected project, branch, and initial message
     createChatMutation.mutate({
       projectId: selectedProject.id,
-      name: message.trim().slice(0, 50), // Use first 50 chars as chat name
+      name: selectedProject.name || message.trim().slice(0, 50), // Use project name as workspace name
       model: selectedChatModel,
+      ...(isSubChatProvider(selectedAgent.id) ? { provider: selectedAgent.id } : {}),
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
         workMode === "worktree" ? selectedBranch || undefined : undefined,
@@ -1368,19 +1533,16 @@ export function NewChatForm({
 
       // Handle builtin commands that change app state (no text input needed)
       if (command.category === "builtin") {
+        // Mode-switch commands (/plan /ask /edit /agent /turbo)
+        if (isAgentMode(command.name)) {
+          if (agentMode !== command.name) {
+            setAgentMode(command.name)
+          }
+          return
+        }
         switch (command.name) {
           case "clear":
             editorRef.current?.clear()
-            return
-          case "plan":
-            if (agentMode !== "plan") {
-              setAgentMode("plan")
-            }
-            return
-          case "agent":
-            if (agentMode === "plan") {
-              setAgentMode("agent")
-            }
             return
         }
       }
@@ -1635,15 +1797,6 @@ export function NewChatForm({
 
       <div className="flex flex-1 items-center justify-center overflow-y-auto relative">
         <div className="w-full max-w-2xl space-y-4 md:space-y-6 relative z-10 px-4">
-          {/* Title - only show when project is selected */}
-          {validatedProject && (
-            <div className="text-center">
-              <h1 className="text-2xl md:text-4xl font-medium tracking-tight">
-                What do you want to get done?
-              </h1>
-            </div>
-          )}
-
           {/* Input Area or Select Repo State */}
           {!validatedProject ? (
             // No project selected - show select repo button (like Sign in button)
@@ -1718,12 +1871,13 @@ export function NewChatForm({
                         }}
                       >
                         <DropdownMenuTrigger className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70">
-                          {agentMode === "plan" ? (
-                            <PlanIcon className="h-3.5 w-3.5" />
-                          ) : (
-                            <AgentIcon className="h-3.5 w-3.5" />
-                          )}
-                          <span>{agentMode === "plan" ? "Plan" : "Agent"}</span>
+                          {(() => {
+                            const TriggerIcon = getModeIcon(agentMode)
+                            return (
+                              <TriggerIcon className="h-3.5 w-3.5" />
+                            )
+                          })()}
+                          <span>{getModeLabel(agentMode)}</span>
                           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
@@ -1732,117 +1886,67 @@ export function NewChatForm({
                           className="!min-w-[116px] !w-[116px]"
                           onCloseAutoFocus={(e) => e.preventDefault()}
                         >
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("agent")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect =
-                                e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "agent",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Agent</span>
-                            </div>
-                            {agentMode !== "plan" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("plan")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect = e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "plan",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>Plan</span>
-                            </div>
-                            {agentMode === "plan" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
+                          {AGENT_MODES.map((mode) => {
+                            const ItemIcon = getModeIcon(mode)
+                            return (
+                              <DropdownMenuItem
+                                key={mode}
+                                onClick={() => {
+                                  if (tooltipTimeoutRef.current) {
+                                    clearTimeout(tooltipTimeoutRef.current)
+                                    tooltipTimeoutRef.current = null
+                                  }
+                                  setModeTooltip(null)
+                                  setAgentMode(mode)
+                                  setModeDropdownOpen(false)
+                                }}
+                                className="justify-between gap-2"
+                                onMouseEnter={(e) => {
+                                  if (tooltipTimeoutRef.current) {
+                                    clearTimeout(tooltipTimeoutRef.current)
+                                    tooltipTimeoutRef.current = null
+                                  }
+                                  const rect =
+                                    e.currentTarget.getBoundingClientRect()
+                                  const showTooltip = () => {
+                                    setModeTooltip({
+                                      visible: true,
+                                      position: {
+                                        top: rect.top,
+                                        left: rect.right + 8,
+                                      },
+                                      mode,
+                                    })
+                                    hasShownTooltipRef.current = true
+                                    tooltipTimeoutRef.current = null
+                                  }
+                                  if (hasShownTooltipRef.current) {
+                                    showTooltip()
+                                  } else {
+                                    tooltipTimeoutRef.current = setTimeout(
+                                      showTooltip,
+                                      1000,
+                                    )
+                                  }
+                                }}
+                                onMouseLeave={() => {
+                                  if (tooltipTimeoutRef.current) {
+                                    clearTimeout(tooltipTimeoutRef.current)
+                                    tooltipTimeoutRef.current = null
+                                  }
+                                  setModeTooltip(null)
+                                }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <ItemIcon className="w-4 h-4 text-muted-foreground" />
+                                  <span>{getModeLabel(mode)}</span>
+                                </div>
+                                {agentMode === mode && (
+                                  <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                                )}
+                              </DropdownMenuItem>
+                            )
+                          })}
                         </DropdownMenuContent>
                         {modeTooltip?.visible &&
                           createPortal(
@@ -1859,9 +1963,7 @@ export function NewChatForm({
                                 className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
                               >
                                 <span>
-                                  {modeTooltip.mode === "agent"
-                                    ? "Apply changes directly without a plan"
-                                    : "Create a plan before making changes"}
+                                  {getModeTooltip(modeTooltip.mode)}
                                 </span>
                               </div>
                             </div>,
@@ -1873,12 +1975,18 @@ export function NewChatForm({
                         <AgentModelSelector
                           open={isModelDropdownOpen}
                           onOpenChange={setIsModelDropdownOpen}
-                          selectedAgentId={selectedAgent.id as "claude-code" | "codex"}
+                          selectedAgentId={selectedAgent.id as AgentProviderId}
                           onSelectedAgentIdChange={(provider) => {
                             if (provider === "claude-code") {
                               setSelectedAgent(claudeAgent)
-                            } else {
+                            } else if (provider === "codex") {
                               setSelectedAgent(enabledAgents.find((agent) => agent.id === "codex") || fallbackAgent)
+                            } else if (provider === "gemini") {
+                              setSelectedAgent(enabledAgents.find((agent) => agent.id === "gemini") || fallbackAgent)
+                            } else if (provider === "openrouter") {
+                              setSelectedAgent(enabledAgents.find((agent) => agent.id === "openrouter") || fallbackAgent)
+                            } else if (provider === "cursor") {
+                              setSelectedAgent(enabledAgents.find((agent) => agent.id === "cursor") || fallbackAgent)
                             }
                             setLastSelectedAgentId(provider)
                           }}
@@ -1928,6 +2036,36 @@ export function NewChatForm({
                             selectedThinking: selectedCodexThinking,
                             onSelectThinking: setLastSelectedCodexThinking,
                             isConnected: codexOnboardingCompleted,
+                          }}
+                          cursor={{
+                            models: cursorUiModels,
+                            selectedModelId: selectedCursorModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = cursorUiModels.find((item) => item.id === modelId)
+                              if (!model) return
+                              setLastSelectedCursorModelId(model.id)
+                            },
+                            isConnected: Boolean(cursorIntegration?.isConnected),
+                          }}
+                          gemini={{
+                            models: geminiUiModels,
+                            selectedModelId: selectedGeminiModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = geminiUiModels.find((m) => m.id === modelId)
+                              if (!model) return
+                              setLastSelectedGeminiModelId(model.id)
+                            },
+                            isConnected: isGeminiConnected,
+                          }}
+                          openrouter={{
+                            models: openRouterUiModels,
+                            selectedModelId: selectedOpenRouterModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = openRouterUiModels.find((m) => m.id === modelId)
+                              if (!model) return
+                              setLastSelectedOpenRouterModelId(model.id)
+                            },
+                            isConnected: isOpenRouterConnected,
                           }}
                         />
                       </div>
@@ -2222,6 +2360,7 @@ export function NewChatForm({
                     projectId: validatedProject.id,
                     name: "Worktree Setup",
                     model: selectedChatModel,
+                    ...(isSubChatProvider(selectedAgent.id) ? { provider: selectedAgent.id } : {}),
                     initialMessageParts: [
                       { type: "text", text: prompt },
                     ],

@@ -120,6 +120,15 @@ export const externalRouter = router({
 	openExternal: publicProcedure
 		.input(z.string())
 		.mutation(async ({ input: url }) => {
+			// Same local-only guard as the shell:open-external IPC handler:
+			// hosted/sandbox URLs stay blocked no matter which surface calls.
+			try {
+				const { assertRemoteAllowed } = await import("../../local-only")
+				assertRemoteAllowed("open-external", url)
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error)
+				return { success: false, blocked: true as const, message }
+			}
 			await shell.openExternal(url);
 			return { success: true };
 		}),

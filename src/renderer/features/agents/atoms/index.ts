@@ -3,16 +3,23 @@ import { atomFamily, atomWithStorage } from "jotai/utils"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { FileMentionOption } from "../mentions/agents-mentions-editor"
 
-// Agent mode type - extensible for future modes like "debug"
-export type AgentMode = "agent" | "plan"
+// Agent mode type - autonomy-ordered: plan < ask < edit < agent < turbo.
+// "agent" is canonical (legacy rows keep working); its semantics are "full
+// agent minus dangerous deletions", full bypass is "turbo".
+export type AgentMode = "plan" | "ask" | "edit" | "agent" | "turbo"
 
-// Ordered list of modes - Shift+Tab cycles through these
-export const AGENT_MODES: AgentMode[] = ["agent", "plan"]
+// Ordered list of modes - Shift+Tab cycles through these (autonomy order)
+export const AGENT_MODES: AgentMode[] = ["plan", "ask", "edit", "agent", "turbo"]
 
 // Get next mode in cycle (for Shift+Tab toggle)
 export function getNextMode(current: AgentMode): AgentMode {
   const idx = AGENT_MODES.indexOf(current)
   return AGENT_MODES[(idx + 1) % AGENT_MODES.length]
+}
+
+// Type guard for validating mode strings (slash commands, stored values)
+export function isAgentMode(value: string): value is AgentMode {
+  return (AGENT_MODES as string[]).includes(value)
 }
 
 // Selected agent chat ID - null means "new chat" view (persisted to restore on reload)
@@ -45,12 +52,34 @@ export const selectedDraftIdAtom = atom<string | null>(null)
 // Set to true when "New Workspace" is clicked
 export const showNewChatFormAtom = atom<boolean>(true)
 
+// Counter that increments every time the user requests a fresh new chat form
+// (e.g. clicks the "+" button or invokes Cmd+N) while already in the new chat view.
+// Used as part of the NewChatForm key to force a remount so the existing draft
+// is preserved (via the unmount cleanup that calls markDraftVisible) and the user
+// gets a clean blank form. Not persisted — resets on reload.
+export const newChatFormResetCounterAtom = atom<number>(0)
+
+// Write-only atom that bumps the reset counter. Use via useSetAtom().
+export const requestNewChatFormResetAtom = atom(null, (get, set) => {
+  set(newChatFormResetCounterAtom, get(newChatFormResetCounterAtom) + 1)
+})
+
 // When true, suppress auto-focus on chat input (e.g. during sidebar keyboard navigation)
 export const suppressInputFocusAtom = atom<boolean>(false)
 
 // Pending mention to insert into the editor from external components (e.g. MCP widget in sidebar)
 // When set, active-chat picks it up, calls editorRef.insertMention(), and resets to null
 export const pendingMentionAtom = atom<FileMentionOption | null>(null)
+
+// Maximum number of sub-chat tabs kept mounted at once.
+//
+// All non-active tabs are rendered with opacity:0 so tab switching is instant.
+// Each mounted tab holds its full message state, tool results, etc. in memory.
+// Under memory pressure the memory-monitor drops this to 1 (active tab only)
+// so finished background tabs release their state. When pressure clears the
+// limit goes back to the default.
+export const DEFAULT_MAX_MOUNTED_TABS = 3
+export const maxMountedTabsAtom = atom<number>(DEFAULT_MAX_MOUNTED_TABS)
 
 // Preview paths storage - stores all preview paths keyed by chatId
 const previewPathsStorageAtom = atomWithStorage<Record<string, string>>(
@@ -138,6 +167,25 @@ export const mobileDeviceAtomFamily = atomFamily((chatId: string) =>
 // Set when generation starts, cleared when onFinish fires
 export const loadingSubChatsAtom = atom<Map<string, string>>(new Map())
 
+// Chats that just completed a Commit + Push from the status card.
+// Persisted to localStorage so the check icon survives app restarts;
+// cleared when the user resumes the chat by sending a message.
+const pushedChatIdsStorageAtom = atomWithStorage<string[]>(
+  "agents:pushedChatIds",
+  [],
+)
+
+type PushedChatIdsUpdate = Set<string> | ((prev: Set<string>) => Set<string>)
+
+export const pushedChatIdsAtom = atom<Set<string>, [PushedChatIdsUpdate], void>(
+  (get) => new Set(get(pushedChatIdsStorageAtom)),
+  (get, set, update) => {
+    const current = new Set(get(pushedChatIdsStorageAtom))
+    const next = typeof update === "function" ? update(current) : update
+    set(pushedChatIdsStorageAtom, Array.from(next))
+  },
+)
+
 // Helper to set loading state
 export const setLoading = (
   setter: (fn: (prev: Map<string, string>) => Map<string, string>) => void,
@@ -204,6 +252,13 @@ export const selectedProjectAtom = atomWithWindowStorage<SelectedProject>(
   { getOnInit: true },
 )
 
+// Per-project last opened chat ID — window-scoped, persisted.
+// Lets us restore the previously focused chat when the user switches back
+// to a project they were working in.
+export const lastChatIdPerProjectAtom = atomWithWindowStorage<
+  Record<string, string>
+>("agents:lastChatIdPerProject", {}, { getOnInit: true })
+
 export const lastSelectedAgentIdAtom = atomWithStorage<string>(
   "agents:lastSelectedAgentId",
   "claude-code",
@@ -220,7 +275,7 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
 
 export const lastSelectedCodexModelIdAtom = atomWithStorage<string>(
   "agents:lastSelectedCodexModelId",
-  "gpt-5.3-codex",
+  "gpt-5.5",
   undefined,
   { getOnInit: true },
 )
@@ -232,6 +287,92 @@ export const lastSelectedCodexThinkingAtom = atomWithStorage<CodexThinkingPrefer
   "high",
   undefined,
   { getOnInit: true },
+)
+
+// NOTE (transplant): Cursor CLI provider model selection (SamSammane/1code-ui, Apache-2.0).
+export const lastSelectedCursorModelIdAtom = atomWithStorage<string>(
+  "agents:lastSelectedCursorModelId",
+  "composer-2.5-fast",
+  undefined,
+  { getOnInit: true },
+)
+
+export const lastSelectedGeminiModelIdAtom = atomWithStorage<string>(
+  "agents:lastSelectedGeminiModelId",
+  "auto-gemini-3",
+  undefined,
+  { getOnInit: true },
+)
+
+const subChatGeminiModelIdsStorageAtom = atomWithStorage<Record<string, string>>(
+  "agents:subChatGeminiModelIds",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const subChatGeminiModelIdAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      if (!subChatId) return get(lastSelectedGeminiModelIdAtom)
+      return (
+        get(subChatGeminiModelIdsStorageAtom)[subChatId] ??
+        get(lastSelectedGeminiModelIdAtom)
+      )
+    },
+    (get, set, newModelId: string) => {
+      if (!subChatId) {
+        set(lastSelectedGeminiModelIdAtom, newModelId)
+        return
+      }
+      const current = get(subChatGeminiModelIdsStorageAtom)
+      if (current[subChatId] === newModelId) return
+      set(subChatGeminiModelIdsStorageAtom, {
+        ...current,
+        [subChatId]: newModelId,
+      })
+    },
+  ),
+)
+
+// ============================================
+// OPENROUTER MODEL SELECTION
+// ============================================
+
+export const lastSelectedOpenRouterModelIdAtom = atomWithStorage<string>(
+  "agents:lastSelectedOpenRouterModelId",
+  "",
+  undefined,
+  { getOnInit: true },
+)
+
+const subChatOpenRouterModelIdsStorageAtom = atomWithStorage<
+  Record<string, string>
+>("agents:subChatOpenRouterModelIds", {}, undefined, { getOnInit: true })
+
+export const subChatOpenRouterModelIdAtomFamily = atomFamily(
+  (subChatId: string) =>
+    atom(
+      (get) => {
+        if (!subChatId) return get(lastSelectedOpenRouterModelIdAtom)
+        return (
+          get(subChatOpenRouterModelIdsStorageAtom)[subChatId] ??
+          get(lastSelectedOpenRouterModelIdAtom)
+        )
+      },
+      (get, set, newModelId: string) => {
+        if (!subChatId) {
+          set(lastSelectedOpenRouterModelIdAtom, newModelId)
+          return
+        }
+        const current = get(subChatOpenRouterModelIdsStorageAtom)
+        if (current[subChatId] === newModelId) return
+        set(subChatOpenRouterModelIdsStorageAtom, {
+          ...current,
+          [subChatId]: newModelId,
+        })
+      },
+    ),
 )
 
 // Storage for per-subChat Claude model selection.
@@ -302,6 +443,36 @@ const subChatCodexThinkingStorageAtom = atomWithStorage<
   { getOnInit: true },
 )
 
+const subChatCursorModelIdsStorageAtom = atomWithStorage<Record<string, string>>(
+  "agents:subChatCursorModelIds",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const subChatCursorModelIdAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      if (!subChatId) return get(lastSelectedCursorModelIdAtom)
+      return (
+        get(subChatCursorModelIdsStorageAtom)[subChatId] ??
+        get(lastSelectedCursorModelIdAtom)
+      )
+    },
+    (get, set, newModelId: string) => {
+      if (!subChatId) {
+        set(lastSelectedCursorModelIdAtom, newModelId)
+        return
+      }
+      const current = get(subChatCursorModelIdsStorageAtom)
+      set(subChatCursorModelIdsStorageAtom, {
+        ...current,
+        [subChatId]: newModelId,
+      })
+    },
+  ),
+)
+
 export const subChatCodexThinkingAtomFamily = atomFamily((subChatId: string) =>
   atom(
     (get) => {
@@ -342,9 +513,34 @@ export const subChatModeAtomFamily = atomFamily((subChatId: string) =>
   ),
 )
 
+// Execution engine per sub-chat: legacy SDK transports ("legacy") or the
+// mausCode native runtime ("native"). Defaults to legacy; the benchmark gate
+// decides any future default change.
+export type SubChatEngine = "legacy" | "native"
+
+// Storage for all sub-chat engines (persisted per subChatId)
+const subChatEnginesStorageAtom = atomWithStorage<Record<string, SubChatEngine>>(
+  "agents:subChatEngines",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+// atomFamily to get/set engine per subChatId
+export const subChatEngineAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => get(subChatEnginesStorageAtom)[subChatId] ?? "legacy",
+    (get, set, newEngine: SubChatEngine) => {
+      const current = get(subChatEnginesStorageAtom)
+      set(subChatEnginesStorageAtom, { ...current, [subChatId]: newEngine })
+    },
+  ),
+)
+
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
   opus: "opus",
+  "opus[1m]": "opus[1m]", // Transplanted from erenbertr/1code (Apache-2.0)
   sonnet: "sonnet",
   haiku: "haiku",
 }
@@ -514,6 +710,14 @@ export const agentsSubChatsSidebarModeAtom = atomWithWindowStorage<
   "tabs" | "sidebar"
 >("agents-subchats-mode", "tabs", { getOnInit: true })
 
+// Track which workspaces are expanded in the unified sidebar tree
+// Persisted per-window so each Electron window has its own expansion state
+export const expandedWorkspaceIdsAtom = atomWithWindowStorage<string[]>(
+  "agents:expandedWorkspaceIds",
+  [],
+  { getOnInit: true },
+)
+
 // Sub-chats sidebar width (left side of chat area)
 export const agentsSubChatsSidebarWidthAtom = atomWithStorage<number>(
   "agents-subchats-sidebar-width",
@@ -525,6 +729,11 @@ export const agentsSubChatsSidebarWidthAtom = atomWithStorage<number>(
 // Track chats with unseen changes (finished streaming but user hasn't opened them)
 // Updated by onFinish callback in Chat instances
 export const agentsUnseenChangesAtom = atom<Set<string>>(new Set<string>())
+
+// Track chats whose latest assistant message ends with a text question (awaiting
+// the user's answer). Persists across views — only cleared when the user sends a
+// new message in that chat. Used for the sidebar orange "question" indicator.
+export const chatsAwaitingAnswerAtom = atom<Set<string>>(new Set<string>())
 
 // Current todos state per sub-chat
 // Syncs the first (creation) todo tool with subsequent updates
@@ -596,9 +805,9 @@ export const archiveSearchQueryAtom = atom<string>("")
 export const archiveRepositoryFilterAtom = atom<string | null>(null)
 
 // Track last used mode (plan/agent) per chat
-// Map<chatId, "plan" | "agent">
-export const lastChatModesAtom = atom<Map<string, "plan" | "agent">>(
-  new Map<string, "plan" | "agent">(),
+// Map<chatId, AgentMode>
+export const lastChatModesAtom = atom<Map<string, AgentMode>>(
+  new Map<string, AgentMode>(),
 )
 
 // Mobile view mode - chat (default, shows NewChatForm), chats list, preview, diff, or terminal
@@ -705,7 +914,7 @@ export const pendingConflictResolutionMessageAtom = atom<{ message: string; subC
 // After successful OAuth flow, this triggers automatic retry of the message
 export type PendingAuthRetryMessage = {
   subChatId: string  // Required: only retry in the correct chat
-  provider: "claude-code" | "codex"
+  provider: "claude-code" | "codex" | "cursor"
   prompt: string
   images?: Array<{
     base64Data: string
@@ -1003,6 +1212,16 @@ export const workspaceDiffCacheAtomFamily = atomFamily((chatId: string) =>
       })
     },
   ),
+)
+
+// Chat font size preference (persisted to localStorage)
+// Controls body text size in assistant responses and user message bubbles
+export type ChatFontSize = 12 | 13 | 14 | 15 | 16
+export const chatFontSizeAtom = atomWithStorage<ChatFontSize>(
+  "preferences:chat-font-size",
+  14, // Default matches previous hardcoded text-sm (14px)
+  undefined,
+  { getOnInit: true },
 )
 
 // Show raw JSON for each message in chat (dev only)

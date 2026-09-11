@@ -2,8 +2,12 @@
 
 import { useAtomValue } from "jotai"
 import { ListTree, MoreHorizontal } from "lucide-react"
-import { memo, useCallback, useContext, useMemo, useState } from "react"
+import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { normalizeCodexToolPart } from "../../../../shared/codex-tool-normalizer"
+import { soundNotificationsEnabledAtom } from "../../../lib/atoms"
+import { appStore } from "../../../lib/jotai-store"
+import { isAssistantMessageQuestion } from "../lib/is-question"
+import { playQuestionSound } from "../lib/play-question-sound"
 
 import {
   DropdownMenu,
@@ -11,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu"
-import { CollapseIcon, ExpandIcon, PlanIcon } from "../../../components/ui/icons"
+import { CollapseIcon, ExpandIcon, PlanIcon, QuestionIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom, showMessageJsonAtom } from "../atoms"
@@ -65,6 +69,14 @@ const ACP_VERB_TO_TOOL_TYPE: Record<string, string> = {
   Write: "Write",
   Thought: "Thinking",
   Fetch: "WebFetch",
+  // Gemini/Codex CLI tool names
+  replace: "Edit",
+  write_file: "Write",
+  run_shell_command: "Bash",
+  read_file: "Read",
+  grep_search: "Grep",
+  glob: "Glob",
+  update_topic: "Thinking",
 }
 
 // Check if a part.type looks like an ACP title-based type (e.g. "tool-Read README.md")
@@ -145,6 +157,11 @@ function normalizeAcpParts(parts: any[]): any[] {
 
     // Enrich input with fields that the tool registry expects for display
     const enrichedInput: Record<string, any> = { ...args, _acpTitle: title, _acpDetail: detail }
+
+    if (canonicalType === "Thinking" && !enrichedInput.text) {
+      enrichedInput.text = enrichedInput.summary || enrichedInput.title || detail
+    }
+
     if (canonicalType === "Read" && !enrichedInput.file_path && detail) {
       enrichedInput.file_path = detail
     }
@@ -377,6 +394,10 @@ interface MessageStateSnapshot {
 }
 const messageStateCache = new Map<string, MessageStateSnapshot>()
 
+// Tracks message IDs we've already played the question chime for, so resume/
+// re-mounts don't replay the sound for old questions in the same session.
+const questionSoundPlayedFor = new Set<string>()
+
 export function clearMessageStateCacheByMessageIds(subChatId: string, messageIds: string[]) {
   for (const id of messageIds) {
     messageStateCache.delete(`${subChatId}:${id}`)
@@ -499,7 +520,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   // Note: no useMemo — AI SDK mutates parts in-place, so the array reference
   // doesn't change and useMemo would return stale results.
   const messageParts = normalizeAcpParts(
-    (message?.parts || []).map((part) => normalizeCodexToolPart(part) as any),
+    (message?.parts || []).map((part: any) => normalizeCodexToolPart(part) as any),
   )
 
   const contentParts = useMemo(() =>
@@ -848,13 +869,49 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     return null
   }, [nestedToolsMap, nestedToolIds, orphanToolCallIds, orphanFirstToolCallIds, orphanTaskGroups, collapseBeforeIndex, visibleStepsCount, status, isLastMessage, isStreaming, subChatId, message.id, planOpsSummary, shouldCollapse, lastCollapsedPlanOp])
 
+  // Detect when the assistant's final text part is a question awaiting user input.
+  // Only treat as "question" once streaming has finished — partial text may not yet
+  // include the trailing question mark.
+  const isQuestion = useMemo(() => {
+    if (isStreaming && isLastMessage) return false
+    return isAssistantMessageQuestion(messageParts)
+  }, [messageParts, isStreaming, isLastMessage])
+
+  // Play a distinct chime exactly once when the latest assistant message
+  // finishes streaming and ends with a question.
+  const wasStreamingRef = useRef(isStreaming && isLastMessage)
+  useEffect(() => {
+    const wasStreaming = wasStreamingRef.current
+    const isStreamingNow = isStreaming && isLastMessage
+    wasStreamingRef.current = isStreamingNow
+
+    if (wasStreaming && !isStreamingNow && isLastMessage && isQuestion) {
+      if (questionSoundPlayedFor.has(message.id)) return
+      questionSoundPlayedFor.add(message.id)
+      const isSoundEnabled = appStore.get(soundNotificationsEnabledAtom)
+      if (isSoundEnabled) {
+        playQuestionSound()
+      }
+    }
+  }, [isStreaming, isLastMessage, isQuestion, message.id])
+
   if (!message) return null
 
   return (
     <div
       data-assistant-message-id={message.id}
-      className="group/message w-full mb-4"
+      data-question={isQuestion ? "true" : undefined}
+      className={cn(
+        "group/message w-full mb-4",
+        isQuestion && "rounded-md border-l-2 border-orange-400 bg-orange-500/5 py-2 pr-2",
+      )}
     >
+      {isQuestion && (
+        <div className="flex items-center gap-1.5 px-2 pb-1 text-xs font-medium text-orange-500">
+          <QuestionIcon className="w-3.5 h-3.5 text-orange-500" />
+          <span>Awaiting your answer</span>
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         {shouldCollapse && visibleStepsCount > 0 && (
           <CollapsibleSteps stepsCount={visibleStepsCount}>

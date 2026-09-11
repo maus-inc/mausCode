@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Server as ServerIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
   EyeOpenFilledIcon,
@@ -72,6 +72,11 @@ const ADVANCED_TABS_BASE = [
     id: "models" as SettingsTab,
     label: "Models",
     icon: BrainFilledIcon,
+  },
+  {
+    id: "backends" as SettingsTab,
+    label: "Backends",
+    icon: ServerIcon,
   },
   {
     id: "skills" as SettingsTab,

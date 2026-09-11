@@ -20,12 +20,18 @@ export function usePushAction({
 		onError: (error) => toast.error(`Push failed: ${error.message}`),
 	});
 
-	const push = useCallback(() => {
+	const push = useCallback(async (): Promise<boolean> => {
 		if (!worktreePath) {
 			toast.error("Worktree path is required");
-			return;
+			return false;
 		}
-		pushMutation.mutate({ worktreePath, setUpstream: !hasUpstream });
+		try {
+			await pushMutation.mutateAsync({ worktreePath, setUpstream: !hasUpstream });
+			return true;
+		} catch {
+			// onError toast already fired; surface failure to the caller
+			return false;
+		}
 	}, [worktreePath, hasUpstream, pushMutation]);
 
 	return { push, isPending: pushMutation.isPending };

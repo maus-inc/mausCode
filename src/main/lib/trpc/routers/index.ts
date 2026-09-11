@@ -4,9 +4,16 @@ import { chatsRouter } from "./chats"
 import { claudeRouter } from "./claude"
 import { claudeCodeRouter } from "./claude-code"
 import { claudeSettingsRouter } from "./claude-settings"
+import { claudeUsageRouter } from "./claude-usage"
 import { anthropicAccountsRouter } from "./anthropic-accounts"
 import { ollamaRouter } from "./ollama"
 import { codexRouter } from "./codex"
+import { cursorRouter } from "./cursor"
+import { devServerRouter } from "./dev-server"
+// Transplanted from erenbertr/1code (Apache-2.0): provider + usage routers
+import { geminiRouter } from "./gemini"
+import { openrouterRouter } from "./openrouter"
+import { githubRouter } from "./github"
 import { terminalRouter } from "./terminal"
 import { externalRouter } from "./external"
 import { filesRouter } from "./files"
@@ -18,6 +25,11 @@ import { sandboxImportRouter } from "./sandbox-import"
 import { commandsRouter } from "./commands"
 import { voiceRouter } from "./voice"
 import { pluginsRouter } from "./plugins"
+import { runtimeRouter } from "./runtime"
+import { usageRouter } from "./usage"
+import { providersRouter } from "./providers"
+import { opencodeRouter } from "./opencode"
+import { hermesRouter } from "./hermes"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -32,9 +44,15 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     claude: claudeRouter,
     claudeCode: claudeCodeRouter,
     claudeSettings: claudeSettingsRouter,
+    claudeUsage: claudeUsageRouter,
     anthropicAccounts: anthropicAccountsRouter,
     ollama: ollamaRouter,
     codex: codexRouter,
+    cursor: cursorRouter,
+    devServer: devServerRouter,
+    gemini: geminiRouter,
+    openrouter: openrouterRouter,
+    github: githubRouter,
     terminal: terminalRouter,
     external: externalRouter,
     files: filesRouter,
@@ -46,6 +64,11 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     commands: commandsRouter,
     voice: voiceRouter,
     plugins: pluginsRouter,
+    runtime: runtimeRouter,
+    usage: usageRouter,
+    providers: providersRouter,
+    opencode: opencodeRouter,
+    hermes: hermesRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })

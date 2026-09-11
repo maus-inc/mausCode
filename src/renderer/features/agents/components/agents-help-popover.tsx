@@ -98,12 +98,12 @@ export function AgentsHelpPopover({
   }
 
   const handleChangelogClick = () => {
-    window.desktopApi.openExternal("https://1code.dev/agents/changelog")
+    window.desktopApi.openExternal("https://github.com/maus-inc/mausCode/releases")
   }
 
   const handleReleaseClick = (version: string) => {
     window.desktopApi.openExternal(
-      `https://1code.dev/agents/changelog#${version}`,
+      `https://github.com/maus-inc/mausCode/releases#${version}`,
     )
   }
 

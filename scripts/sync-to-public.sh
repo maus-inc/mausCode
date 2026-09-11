@@ -1,12 +1,18 @@
 #!/bin/bash
 set -e
 
-# Sync desktop app to public 1code repository
+# DEPRECATED for mausCode: this script assumes the 21st private-monorepo ->
+# public-1code layout and 21st remotes. maus-inc/mausCode is a single repo;
+# do not run without rewriting the release flow. Kept for reference only.
+# (Original purpose: sync desktop app to public 1code repository.)
 # Usage: ./scripts/sync-to-public.sh
 #
 # This script:
 # 1. Syncs code from private repo to public repo
 # 2. Creates a GitHub release in public repo with same notes as private repo
+
+echo "sync-to-public.sh is deprecated for mausCode (21st-monorepo layout) and refuses to run." >&2
+exit 1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$(dirname "$SCRIPT_DIR")"

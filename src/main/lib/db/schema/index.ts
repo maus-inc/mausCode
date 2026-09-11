@@ -22,6 +22,14 @@ export const projects = sqliteTable("projects", {
   gitRepo: text("git_repo"),
   // Custom project icon (absolute path to local image file)
   iconPath: text("icon_path"),
+  // --- Transplanted from erenbertr/1code (Apache-2.0): rail/status features ---
+  // Custom accent color for visual differentiation (hex string e.g. "#ef4444")
+  accentColor: text("accent_color"),
+  // User-defined ordering in the projects rail (lower = earlier). Default 0; ties fall back to updatedAt DESC.
+  sortOrder: integer("sort_order").notNull().default(0),
+  // Whether this project appears in the leftmost rail. Hidden projects still
+  // show on the all-projects page. Default true so existing rows behave as before.
+  showInRail: integer("show_in_rail", { mode: "boolean" }).notNull().default(true),
 })
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -44,6 +52,10 @@ export const chats = sqliteTable("chats", {
     () => new Date(),
   ),
   archivedAt: integer("archived_at", { mode: "timestamp" }),
+  // Last time the user opened/viewed this chat. Used to compute "unseen" status
+  // (chat counts as unseen when subChat activity is newer than this timestamp).
+  // Null = never viewed. Transplanted from erenbertr/1code (Apache-2.0).
+  lastViewedAt: integer("last_viewed_at", { mode: "timestamp" }),
   // Worktree fields (for git isolation per chat)
   worktreePath: text("worktree_path"),
   branch: text("branch"),
@@ -51,6 +63,9 @@ export const chats = sqliteTable("chats", {
   // PR tracking fields
   prUrl: text("pr_url"),
   prNumber: integer("pr_number"),
+  // Custom accent color for visual differentiation (hex string e.g. "#ef4444").
+  // Transplanted from erenbertr/1code (Apache-2.0).
+  accentColor: text("accent_color"),
 }, (table) => [
   index("chats_worktree_path_idx").on(table.worktreePath),
 ])
@@ -74,7 +89,10 @@ export const subChats = sqliteTable("sub_chats", {
     .references(() => chats.id, { onDelete: "cascade" }),
   sessionId: text("session_id"), // Claude SDK session ID for resume
   streamId: text("stream_id"), // Track in-progress streams
-  mode: text("mode").notNull().default("agent"), // "plan" | "agent"
+  mode: text("mode").notNull().default("agent"), // "plan" | "ask" | "edit" | "agent" | "turbo"
+  // Canonical provider binding ("claude-code" | "codex" | "gemini" | "openrouter" | "cursor").
+  // NULL = legacy row: renderer falls back to message-metadata inference + lazy backfill.
+  provider: text("provider"),
   messages: text("messages").notNull().default("[]"), // JSON array
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
@@ -119,6 +137,17 @@ export const anthropicAccounts = sqliteTable("anthropic_accounts", {
   desktopUserId: text("desktop_user_id"), // Reference to 21st.dev user
 })
 
+// Native-engine custom provider endpoints (daemon-level: the stock daemon honors
+// endpoint overrides only via process env, so these are applied at daemon launch)
+export const nativeEndpointSettings = sqliteTable("native_endpoint_settings", {
+  id: text("id").primaryKey().default("singleton"), // Single row
+  openaiBaseUrl: text("openai_base_url"), // Custom OpenAI-compatible endpoint (https?://…)
+  anthropicBaseUrl: text("anthropic_base_url"), // Custom Anthropic endpoint (https?://…)
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+})
+
 // Tracks which Anthropic account is currently active
 export const anthropicSettings = sqliteTable("anthropic_settings", {
   id: text("id").primaryKey().default("singleton"), // Single row
@@ -140,3 +169,4 @@ export type NewClaudeCodeCredential = typeof claudeCodeCredentials.$inferInsert
 export type AnthropicAccount = typeof anthropicAccounts.$inferSelect
 export type NewAnthropicAccount = typeof anthropicAccounts.$inferInsert
 export type AnthropicSettings = typeof anthropicSettings.$inferSelect
+export type NativeEndpointSettings = typeof nativeEndpointSettings.$inferSelect

@@ -9,6 +9,7 @@ import {
   isWindows,
   platform
 } from "../platform"
+import { resolveCliBinaryPath } from "../cli-binaries"
 
 // Cache the shell environment
 let cachedShellEnv: Record<string, string> | null = null
@@ -24,6 +25,11 @@ const STRIPPED_ENV_KEYS_BASE = [
   "OPENAI_API_KEY",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
+  // Strip nested-session markers so the spawned Claude binary doesn't detect
+  // a parent Claude Code session and refuse to start. This happens when the
+  // Electron app itself is launched from inside Claude Code (e.g. Conductor).
+  "CLAUDECODE",
+  "CLAUDE_CODE_SSE_PORT",
 ]
 
 // In dev mode, also strip ANTHROPIC_API_KEY so OAuth token is used instead
@@ -76,32 +82,39 @@ export function getBundledClaudeBinaryPath(): string {
 
   console.log("[claude-binary] binaryPath:", binaryPath)
 
-  // Check if binary exists
-  const exists = fs.existsSync(binaryPath)
+  // NOTE (transplant): PATH fallback via resolveCliBinaryPath from
+  // SamSammane/1code-ui (Apache-2.0) — dev boxes and global installs work
+  // without a bundled binary.
+  try {
+    const resolvedPath = resolveCliBinaryPath({
+      bundledPath: binaryPath,
+      commandName: "claude",
+      downloadHint: "Run 'bun run claude:download' or install Claude Code CLI globally.",
+    })
 
-  if (!exists) {
-    console.error(
-      "[claude-binary] WARNING: Binary not found at path:",
-      binaryPath
-    )
-    console.error(
-      "[claude-binary] Run 'bun run claude:download' to download it"
-    )
-  } else {
-    const stats = fs.statSync(binaryPath)
+    const stats = fs.statSync(resolvedPath)
     const sizeMB = (stats.size / 1024 / 1024).toFixed(1)
     const isExecutable = (stats.mode & fs.constants.X_OK) !== 0
-    console.log("[claude-binary] exists:", exists)
+    console.log("[claude-binary] exists:", true)
     console.log("[claude-binary] size:", sizeMB, "MB")
     console.log("[claude-binary] isExecutable:", isExecutable)
+    console.log("[claude-binary] resolved:", resolvedPath)
+    console.log("[claude-binary] ============================================")
+
+    cachedBinaryPath = resolvedPath
+    binaryPathComputed = true
+    return resolvedPath
+  } catch (error) {
+    console.error(
+      "[claude-binary] WARNING:",
+      error instanceof Error ? error.message : error,
+    )
+    console.log("[claude-binary] ============================================")
+
+    cachedBinaryPath = binaryPath
+    binaryPathComputed = true
+    return binaryPath
   }
-  console.log("[claude-binary] ============================================")
-
-  // Cache the result
-  cachedBinaryPath = binaryPath
-  binaryPathComputed = true
-
-  return binaryPath
 }
 
 /**
