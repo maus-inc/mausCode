@@ -1,6 +1,6 @@
 #!/bin/bash
-# 1code CLI launcher
-# Opens 1Code app with the specified directory
+# mauscode CLI launcher
+# Opens mausCode app with the specified directory
 
 # Resolve the directory argument (default to current directory)
 DIR="${1:-.}"

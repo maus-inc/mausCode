@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-# Sync desktop app to public 1code repository
+# DEPRECATED for mausCode: this script assumes the 21st private-monorepo ->
+# public-1code layout and 21st remotes. maus-inc/mausCode is a single repo;
+# do not run without rewriting the release flow. Kept for reference only.
+# (Original purpose: sync desktop app to public 1code repository.)
 # Usage: ./scripts/sync-to-public.sh
 #
 # This script:

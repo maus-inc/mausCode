@@ -45,7 +45,7 @@ import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
 
 // Deep link protocol (must match package.json build.protocols.schemes)
 // Use different protocol in dev to avoid conflicts with production app
-const PROTOCOL = IS_DEV ? "twentyfirst-agents-dev" : "twentyfirst-agents"
+const PROTOCOL = IS_DEV ? "mauscode-dev" : "mauscode"
 
 // Set dev mode userData path BEFORE requestSingleInstanceLock()
 // This ensures dev and prod have separate instance locks
@@ -194,7 +194,7 @@ function handleDeepLink(url: string): void {
   try {
     const parsed = new URL(url)
 
-    // Handle auth callback: twentyfirst-agents://auth?code=xxx
+    // Handle auth callback: mauscode://auth?code=xxx
     if (parsed.pathname === "/auth" || parsed.host === "auth") {
       const code = parsed.searchParams.get("code")
       if (code) {
@@ -203,7 +203,7 @@ function handleDeepLink(url: string): void {
       }
     }
 
-    // Handle MCP OAuth callback: twentyfirst-agents://mcp-oauth?code=xxx&state=yyy
+    // Handle MCP OAuth callback: mauscode://mcp-oauth?code=xxx&state=yyy
     if (parsed.pathname === "/mcp-oauth" || parsed.host === "mcp-oauth") {
       const code = parsed.searchParams.get("code")
       const state = parsed.searchParams.get("state")
@@ -319,7 +319,7 @@ const server = createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - Authentication</title>
+  <title>mausCode - Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -403,7 +403,7 @@ const server = createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
-  <title>1Code - MCP Authentication</title>
+  <title>mausCode - MCP Authentication</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -573,10 +573,10 @@ if (gotTheLock) {
 
     // Set app user model ID for Windows (different in dev to avoid taskbar conflicts)
     if (process.platform === "win32") {
-      app.setAppUserModelId(IS_DEV ? "dev.21st.1code.dev" : "dev.21st.1code")
+      app.setAppUserModelId(IS_DEV ? "com.maus-inc.mausscode.dev" : "com.maus-inc.mausscode")
     }
 
-    console.log(`[App] Starting 1Code${IS_DEV ? " (DEV)" : ""}...`)
+    console.log(`[App] Starting mausCode${IS_DEV ? " (DEV)" : ""}...`)
 
     // Verify protocol registration after app is ready
     // This helps diagnose first-install issues where the protocol isn't recognized yet
@@ -600,7 +600,7 @@ if (gotTheLock) {
 
     // Set About panel options with Claude Code version
     app.setAboutPanelOptions({
-      applicationName: "1Code",
+      applicationName: "mausCode",
       applicationVersion: app.getVersion(),
       version: `Claude Code ${claudeCodeVersion}`,
       copyright: "Copyright © 2026 21st.dev",
@@ -630,7 +630,7 @@ if (gotTheLock) {
           label: app.name,
           submenu: [
             {
-              label: "About 1Code",
+              label: "About mausCode",
               click: () => app.showAboutPanel(),
             },
             {
@@ -666,8 +666,8 @@ if (gotTheLock) {
             { type: "separator" },
             {
               label: isCliInstalled()
-                ? "Uninstall '1code' Command..."
-                : "Install '1code' Command in PATH...",
+                ? "Uninstall 'mauscode' Command..."
+                : "Install 'mauscode' Command in PATH...",
               ...(terminalMenuIcon && { icon: terminalMenuIcon }),
               click: async () => {
                 const { dialog } = await import("electron")
@@ -677,7 +677,7 @@ if (gotTheLock) {
                     dialog.showMessageBox({
                       type: "info",
                       message: "CLI command uninstalled",
-                      detail: "The '1code' command has been removed from your PATH.",
+                      detail: "The 'mauscode' command has been removed from your PATH.",
                     })
                     buildMenu()
                   } else {
@@ -690,7 +690,7 @@ if (gotTheLock) {
                       type: "info",
                       message: "CLI command installed",
                       detail:
-                        "You can now use '1code .' in any terminal to open 1Code in that directory.",
+                        "You can now use 'mauscode .' in any terminal to open mausCode in that directory.",
                     })
                     buildMenu()
                   } else {
@@ -977,7 +977,7 @@ if (gotTheLock) {
       }
     }, 3000)
 
-    // Handle directory argument from CLI (e.g., `1code /path/to/project`)
+    // Handle directory argument from CLI (e.g., `mauscode /path/to/project`)
     parseLaunchDirectory()
 
     // Handle deep link from app launch (Windows/Linux)

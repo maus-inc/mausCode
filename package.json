@@ -1,12 +1,11 @@
 {
-  "name": "21st-desktop",
+  "name": "mauscode",
   "version": "0.0.72",
   "private": true,
-  "description": "1Code - UI for parallel work with AI agents",
-  "homepage": "https://21st.dev",
+  "description": "mausCode - UI for parallel work with AI agents",
+  "homepage": "https://github.com/maus-inc/mausCode",
   "author": {
-    "name": "21st.dev",
-    "email": "support@21st.dev"
+    "name": "maus-inc"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -146,14 +145,14 @@
     "vite": "^6.3.4"
   },
   "build": {
-    "appId": "dev.21st.agents",
-    "productName": "1Code",
+    "appId": "com.maus-inc.mausscode",
+    "productName": "mausCode",
     "npmRebuild": true,
     "protocols": [
       {
-        "name": "1Code",
+        "name": "mausCode",
         "schemes": [
-          "twentyfirst-agents"
+          "mauscode"
         ]
       }
     ],
@@ -213,7 +212,7 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "1Code needs microphone access for voice dictation"
+        "NSMicrophoneUsageDescription": "mausCode needs microphone access for voice dictation"
       }
     },
     "dmg": {
