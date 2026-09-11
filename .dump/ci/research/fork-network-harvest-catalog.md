@@ -52,7 +52,7 @@ EXCLUDED by user: kanban (5 files)mind-map AI builder (React-Flow build surface,
 - [ ] `ningzhaoxing`: skills install core + tooling-management + security-mining PoC (review for license/paths/zh-only UI; keep concepts/impl carefully)
 - [ ] `sylvaindiv`: sidebar dnd reorder + sub-chat archive + emoji picker (overlaps erenbertr sub-chat work - pick ONE lineage; DB migrations included)
 - [ ] `jhckevin`: standalone `opencodex-backend-route.ts` + `release-config.mjs` + `banner-model`/`changelog-url` (NOT its auth-manager/sandbox-import deletions)
-- [ ] `aadivar`: Claude Code usage-stats widget (approveed earlier}
+- [x] `aadivar`: Claude Code usage-stats widget (approveed earlier) - TRANSPLANTED 2026-09-11 (Phase 1): router adapted to app token store (no keychain exec); fixed the fork's missing render case
 - [ ] `PsyberKadi`: freeze-recovery automation snapshot doc (optional)
 
 ### Category D - Reject (documented why)

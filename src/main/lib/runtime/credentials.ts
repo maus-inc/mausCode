@@ -38,7 +38,8 @@ export class NativeCredentialError extends Error {
   }
 }
 
-function getActiveAnthropicToken(): string | null {
+/** Active Anthropic account's decrypted OAuth/API token, if any. */
+export function getActiveAnthropicToken(): string | null {
   const db = getDatabase()
   const settings = db
     .select()

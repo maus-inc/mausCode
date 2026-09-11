@@ -19,10 +19,10 @@
 
 ## Phase 1 — aadivar usage widget
 
-- [ ] Re-map the 4 files onto arena HEAD; transplant hunk-level
-- [ ] Router registration + widget wiring review (maus branding kept)
-- [ ] Verify: tsc baseline-compare, tests, no-secret scan
-- [ ] Update catalog action log + checkboxes (keep the live ledger live)
+- [x] Re-map the 4 files onto arena HEAD; transplant hunk-level
+- [x] Router registration + widget wiring review (maus branding kept)
+- [x] Verify: tsc 99=99 zero-new, 27/27 runtime tests, no-secret scan
+- [x] Update catalog action log + checkboxes (keep the live ledger live)
 
 ## Phase 2 — erenbertr backend core
 
