@@ -3,7 +3,11 @@
 import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
-import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
+import {
+  highlightCodeTokens,
+  type HighlightedLine,
+} from "../../../lib/themes/shiki-theme-loader"
+import { HighlightedTokens } from "../../../components/highlighted-code"
 import {
   IconSpinner,
   ExpandIcon,
@@ -104,10 +108,10 @@ function useBatchHighlight(
   language: string,
   themeId: string,
   isStreaming: boolean = false,
-): Map<number, string> {
-  const [highlightedMap, setHighlightedMap] = useState<Map<number, string>>(
-    () => new Map(),
-  )
+): Map<number, HighlightedLine[]> {
+  const [highlightedMap, setHighlightedMap] = useState<
+    Map<number, HighlightedLine[]>
+  >(() => new Map())
 
   // Create stable key from lines content to detect changes
   // Only compute when NOT streaming to avoid expensive join during animation
@@ -131,14 +135,18 @@ function useBatchHighlight(
 
     const highlightAll = async () => {
       try {
-        const results = new Map<number, string>()
+        const results = new Map<number, HighlightedLine[]>()
 
         // Highlight all lines in one batch using centralized loader
         for (let i = 0; i < lines.length; i++) {
           // Check if cancelled between iterations to allow early exit
           if (cancelled) return
           const content = lines[i].content || " "
-          const highlighted = await highlightCode(content, language, themeId)
+          const highlighted = await highlightCodeTokens(
+            content,
+            language,
+            themeId,
+          )
           results.set(i, highlighted)
         }
 
@@ -170,10 +178,10 @@ function useBatchHighlight(
 const DiffLineRow = memo(
   function DiffLineRow({
     line,
-    highlightedHtml,
+    highlighted,
   }: {
     line: DiffLine
-    highlightedHtml: string | undefined
+    highlighted: HighlightedLine[] | undefined
   }) {
     return (
       <div
@@ -186,11 +194,10 @@ const DiffLineRow = memo(
           line.type === "context" && "border-l-2 border-transparent",
         )}
       >
-        {highlightedHtml ? (
-          <span
-            className="whitespace-pre-wrap break-all [&_.shiki]:bg-transparent [&_pre]:bg-transparent [&_code]:bg-transparent"
-            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-          />
+        {highlighted ? (
+          <span className="whitespace-pre-wrap break-all">
+            <HighlightedTokens lines={highlighted} />
+          </span>
         ) : (
           <span
             className={cn(
@@ -210,7 +217,7 @@ const DiffLineRow = memo(
   (prevProps, nextProps) =>
     prevProps.line.type === nextProps.line.type &&
     prevProps.line.content === nextProps.line.content &&
-    prevProps.highlightedHtml === nextProps.highlightedHtml,
+    prevProps.highlighted === nextProps.highlighted,
 )
 
 export const AgentEditTool = memo(function AgentEditTool({
@@ -616,7 +623,7 @@ export const AgentEditTool = memo(function AgentEditTool({
                   // Stable key: type + index is sufficient during streaming
                   key={`${line.type}-${idx}`}
                   line={line}
-                  highlightedHtml={highlightedMap.get(idx)}
+                  highlighted={highlightedMap.get(idx)}
                 />
               ))}
             </div>

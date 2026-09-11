@@ -5,7 +5,7 @@ import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
 import { Copy, Check } from "lucide-react"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
-import { highlightCode } from "../lib/themes/shiki-theme-loader"
+import { HighlightedTokens, useHighlightedCode } from "./highlighted-code"
 import { MermaidBlock } from "./mermaid-block"
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
@@ -18,14 +18,6 @@ export function stripEmojis(text: string): string {
     .replace(/[\u{1F900}-\u{1F9FF}]/gu, "") // Supplemental Symbols
     .replace(/[\u{1FA00}-\u{1FAFF}]/gu, "") // Extended-A
     .replace(/[\u{2700}-\u{27BF}]/gu, "") // Dingbats
-}
-
-// Escape HTML special characters for safe rendering
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
 }
 
 // Code block text sizes matching paragraph text sizes
@@ -48,7 +40,6 @@ function CodeBlock({
   size?: "sm" | "md" | "lg"
 }) {
   const [copied, setCopied] = useState(false)
-  const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(children)
@@ -57,36 +48,15 @@ function CodeBlock({
   }, [children])
 
   // Only use Shiki for known programming languages, not for plaintext/ASCII art
-  const shouldHighlight = language && language !== "plaintext" && language !== "text"
+  const shouldHighlight =
+    Boolean(language) && language !== "plaintext" && language !== "text"
 
-  useEffect(() => {
-    if (!shouldHighlight) return
-
-    let cancelled = false
-
-    const highlight = async () => {
-      try {
-        const html = await highlightCode(children, language, themeId)
-        if (!cancelled) {
-          setHighlightedHtml(html)
-        }
-      } catch (error) {
-        console.error("Failed to highlight code:", error)
-      }
-    }
-
-    highlight()
-
-    return () => {
-      cancelled = true
-    }
-  }, [children, language, themeId, shouldHighlight])
-
-  // For plaintext/ASCII art, just escape and render directly (no Shiki)
-  // For code with syntax highlighting, use Shiki output when available
-  const htmlContent = shouldHighlight
-    ? (highlightedHtml ?? escapeHtml(children))
-    : escapeHtml(children)
+  // Plaintext and ASCII art skip Shiki entirely. Highlighted code falls back to
+  // plain text until Shiki finishes, so the block never renders empty.
+  const highlighted = useHighlightedCode(children, language ?? "plaintext", {
+    enabled: shouldHighlight,
+    themeId,
+  })
 
   return (
     <div className="relative mt-2 mb-4 rounded-[10px] bg-muted/50 overflow-hidden">
@@ -130,7 +100,9 @@ function CodeBlock({
           tabSize: 2,
         }}
       >
-        <code dangerouslySetInnerHTML={{ __html: htmlContent }} />
+        <code>
+          {highlighted ? <HighlightedTokens lines={highlighted} /> : children}
+        </code>
       </pre>
     </div>
   )

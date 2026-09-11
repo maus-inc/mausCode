@@ -9,11 +9,26 @@ import type { VSCodeFullTheme } from "../atoms"
  */
 let highlighterPromise: Promise<shiki.Highlighter> | null = null
 
+/**
+ * One styled run of source text.
+ *
+ * Shiki can also emit an HTML string, but that string has to reach the DOM
+ * through dangerouslySetInnerHTML. Tokens let the caller render text nodes
+ * instead, so React escapes the content and there is no HTML sink.
+ */
+export interface HighlightToken {
+  content: string
+  color?: string
+}
+
+/** The tokens of a single source line. */
+export type HighlightedLine = HighlightToken[]
+
 // ============================================================================
 // LRU CACHE FOR HIGHLIGHT RESULTS
 // ============================================================================
 // Prevents re-highlighting the same code when switching tabs.
-// Key: `${themeId}:${language}:${code}` -> Value: highlighted HTML
+// Key: `${themeId}:${language}:${code}` -> Value: tokenised lines
 // Max 500 entries (~5MB assuming 10KB average per entry)
 const HIGHLIGHT_CACHE_MAX_SIZE = 500
 
@@ -54,7 +69,7 @@ class LRUCache<K, V> {
   }
 }
 
-const highlightCache = new LRUCache<string, string>(HIGHLIGHT_CACHE_MAX_SIZE)
+const highlightCache = new LRUCache<string, HighlightedLine[]>(HIGHLIGHT_CACHE_MAX_SIZE)
 
 /**
  * Languages supported by the highlighter
@@ -242,15 +257,15 @@ function isThemeAvailable(themeId: string): boolean {
 }
 
 /**
- * Highlight code with a specific theme
+ * Highlight code into styled tokens for a specific theme.
  * Uses custom themes with tokenColors when available, otherwise maps to bundled themes
  * Results are cached to prevent re-highlighting when switching tabs
  */
-export async function highlightCode(
+export async function highlightCodeTokens(
   code: string,
   language: string,
   themeId: string,
-): Promise<string> {
+): Promise<HighlightedLine[]> {
   // Check cache first - O(1) lookup
   const cacheKey = `${themeId}:${language}:${code}`
   const cached = highlightCache.get(cacheKey)
@@ -271,19 +286,18 @@ export async function highlightCode(
     ? (language as shiki.BundledLanguage)
     : "plaintext"
 
-  const html = highlighter.codeToHtml(code, {
+  const lines = highlighter.codeToTokensBase(code, {
     lang,
-    theme: shikiTheme,
+    // A custom theme id is not in shiki's BundledTheme union, but shiki resolves
+    // it from the themes loaded above, so the narrower type is a lie we tell on
+    // purpose. The same cast is already applied to lang.
+    theme: shikiTheme as shiki.BundledTheme,
   })
 
-  // Extract just the code content from shiki's output (remove wrapper)
-  const match = html.match(/<code[^>]*>([\s\S]*?)<\/code>/)
-  const result = match ? match[1] : code
-
   // Cache the result
-  highlightCache.set(cacheKey, result)
+  highlightCache.set(cacheKey, lines)
 
-  return result
+  return lines
 }
 
 /**

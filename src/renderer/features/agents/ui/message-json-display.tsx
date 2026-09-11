@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect } from "react"
+import { memo, useState, useCallback } from "react"
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -8,8 +8,7 @@ import {
 } from "../../../components/ui/collapsible"
 import { ChevronRight, Copy, Check } from "lucide-react"
 import { cn } from "../../../lib/utils"
-import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
-import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
+import { HighlightedCode } from "../../../components/highlighted-code"
 
 interface MessageJsonDisplayProps {
   message: any
@@ -22,26 +21,8 @@ export const MessageJsonDisplay = memo(function MessageJsonDisplay({
 }: MessageJsonDisplayProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
-  const themeId = useCodeTheme()
 
   const jsonString = JSON.stringify(message, null, 2)
-
-  // Highlight JSON when expanded
-  useEffect(() => {
-    if (!isOpen) return
-
-    let cancelled = false
-    highlightCode(jsonString, "json", themeId)
-      .then((html) => {
-        if (!cancelled) setHighlightedHtml(html)
-      })
-      .catch(console.error)
-
-    return () => {
-      cancelled = true
-    }
-  }, [jsonString, themeId, isOpen])
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(jsonString)
@@ -82,16 +63,13 @@ export const MessageJsonDisplay = memo(function MessageJsonDisplay({
         <div className="mt-1 mx-2 rounded-md border bg-muted/30 overflow-hidden">
           {/* JSON content */}
           <div className="p-3 max-h-[300px] overflow-auto">
-            {highlightedHtml ? (
-              <pre
-                className="text-xs font-mono"
-                dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-              />
-            ) : (
-              <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">
-                {jsonString}
-              </pre>
-            )}
+            <HighlightedCode
+              code={jsonString}
+              language="json"
+              className="text-xs font-mono"
+              fallbackClassName="text-xs font-mono text-muted-foreground whitespace-pre-wrap"
+              enabled={isOpen}
+            />
           </div>
         </div>
       </CollapsibleContent>

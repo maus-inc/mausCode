@@ -3,6 +3,7 @@ import { useTheme } from "next-themes"
 import { Copy, Check, Download, AlertTriangle, RotateCcw, Maximize2, X, ZoomIn, ZoomOut, RotateCcw as ResetZoom } from "lucide-react"
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch"
 import { cn } from "../lib/utils"
+import { getMermaidConfig, SVG_SANITIZE_CONFIG } from "../lib/mermaid-security"
 import {
   Dialog,
   DialogPortal,
@@ -19,6 +20,16 @@ const getMermaid = () => {
   }
   return mermaidPromise
 }
+
+// DOMPurify is lazy-loaded alongside mermaid so neither lands in the main bundle.
+let domPurifyPromise: Promise<typeof import("dompurify")> | null = null
+const getDomPurify = () => {
+  if (!domPurifyPromise) {
+    domPurifyPromise = import("dompurify")
+  }
+  return domPurifyPromise
+}
+
 
 // Clean up mermaid error SVGs that get added to the DOM
 const cleanupMermaidErrors = () => {
@@ -52,86 +63,6 @@ type RenderState =
   | { status: "error"; message: string }
   | { status: "parsing" } // Syntax not yet valid - show "Creating diagram..."
 
-// Mermaid theme configuration based on app theme
-const getMermaidConfig = (isDark: boolean): Record<string, unknown> => ({
-  startOnLoad: false,
-  theme: isDark ? "dark" : "default",
-  themeVariables: isDark
-    ? {
-        // Dark theme variables matching the app's color scheme
-        primaryColor: "#3b82f6",
-        primaryTextColor: "#f4f4f5",
-        primaryBorderColor: "#52525b",
-        lineColor: "#71717a",
-        secondaryColor: "#27272a",
-        tertiaryColor: "#18181b",
-        background: "#18181b",
-        mainBkg: "#27272a",
-        nodeBorder: "#52525b",
-        clusterBkg: "#27272a",
-        defaultLinkColor: "#71717a",
-        titleColor: "#f4f4f5",
-        edgeLabelBackground: "#27272a",
-        actorTextColor: "#f4f4f5",
-        actorBorder: "#52525b",
-        actorBkg: "#27272a",
-        signalColor: "#f4f4f5",
-        signalTextColor: "#18181b",
-        labelBoxBkgColor: "#27272a",
-        labelBoxBorderColor: "#52525b",
-        labelTextColor: "#f4f4f5",
-        loopTextColor: "#f4f4f5",
-        noteBorderColor: "#52525b",
-        noteBkgColor: "#27272a",
-        noteTextColor: "#f4f4f5",
-        sectionBkgColor: "#27272a",
-        altSectionBkgColor: "#18181b",
-        sectionBkgColor2: "#27272a",
-        taskBorderColor: "#52525b",
-        taskBkgColor: "#3b82f6",
-        taskTextColor: "#f4f4f5",
-        taskTextLightColor: "#f4f4f5",
-        taskTextOutsideColor: "#f4f4f5",
-        activeTaskBorderColor: "#3b82f6",
-        gridColor: "#52525b",
-        doneTaskBkgColor: "#27272a",
-        doneTaskBorderColor: "#52525b",
-        critBkgColor: "#dc2626",
-        critBorderColor: "#ef4444",
-        todayLineColor: "#3b82f6",
-        // Sequence diagram
-        sequenceNumberColor: "#f4f4f5",
-        // Class diagram
-        classText: "#f4f4f5",
-        // State diagram
-        labelColor: "#f4f4f5",
-        // ER diagram
-        attributeBackgroundColorOdd: "#27272a",
-        attributeBackgroundColorEven: "#18181b",
-      }
-    : {
-        // Light theme variables
-        primaryColor: "#3b82f6",
-        primaryTextColor: "#18181b",
-        primaryBorderColor: "#d4d4d8",
-        lineColor: "#71717a",
-        secondaryColor: "#f4f4f5",
-        tertiaryColor: "#fafafa",
-        background: "#ffffff",
-        mainBkg: "#fafafa",
-        nodeBorder: "#d4d4d8",
-        clusterBkg: "#f4f4f5",
-        defaultLinkColor: "#71717a",
-        titleColor: "#18181b",
-        edgeLabelBackground: "#fafafa",
-      },
-  // "strict" encodes HTML in diagram text and disables click callbacks.
-  // Diagram source comes from agent-authored markdown (including files read out
-  // of untrusted repositories), so "loose" - which allows raw HTML and
-  // click handlers - is an XSS path into the Electron renderer.
-  securityLevel: "strict" as const,
-  fontFamily: "inherit",
-})
 
 // Zoom controls component for the fullscreen viewer
 function ZoomControls() {
@@ -221,8 +152,12 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
     setRenderState({ status: "loading" })
 
     try {
-      const mermaidModule = await getMermaid()
+      const [mermaidModule, domPurifyModule] = await Promise.all([
+        getMermaid(),
+        getDomPurify(),
+      ])
       const mermaid = mermaidModule.default
+      const DOMPurify = domPurifyModule.default
 
       // Check if this render is still current
       if (currentRenderId !== renderIdRef.current) return
@@ -238,11 +173,13 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
       // Check again if this render is still current
       if (currentRenderId !== renderIdRef.current) return
 
+      const safeSvg = DOMPurify.sanitize(svg, SVG_SANITIZE_CONFIG)
+
       // Cache the result for future remounts
       const cacheKey = `${code}-${isDark ? 'dark' : 'light'}`
-      mermaidCache.set(cacheKey, svg)
+      mermaidCache.set(cacheKey, safeSvg)
 
-      setRenderState({ status: "success", svg })
+      setRenderState({ status: "success", svg: safeSvg })
       lastRenderedCodeRef.current = code
       lastRenderedThemeRef.current = isDark
 
@@ -451,6 +388,11 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
                 "[&_svg]:max-w-full [&_svg]:h-auto [&_svg]:mx-auto",
               )}
               onClick={openFullscreen}
+              // Mermaid only ever returns an SVG string, and React cannot insert one
+              // without this prop. The string was sanitized with DOMPurify before it was
+              // stored in renderState, and mermaid rendered it with securityLevel strict,
+              // pinned against per-diagram override.
+              // skipcq: JS-0440 - renderState.svg is DOMPurify-sanitized
               dangerouslySetInnerHTML={{ __html: renderState.svg }}
             />
           )}
@@ -528,6 +470,11 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
                         "[&_svg]:max-w-none [&_svg]:h-auto",
                         isDark ? "" : "[&_svg]:filter [&_svg]:drop-shadow-lg"
                       )}
+                      // Mermaid only ever returns an SVG string, and React cannot insert one
+                      // without this prop. The string was sanitized with DOMPurify before it was
+                      // stored in renderState, and mermaid rendered it with securityLevel strict,
+                      // pinned against per-diagram override.
+                      // skipcq: JS-0440 - renderState.svg is DOMPurify-sanitized
                       dangerouslySetInnerHTML={{ __html: renderState.svg }}
                     />
                   </TransformComponent>
