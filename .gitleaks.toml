@@ -1,0 +1,11 @@
+title = "Gitleaks config for mausCode"
+
+[allowlist]
+description = "Global allowlist for test fixtures and mock strings"
+files = [
+  '''runtime/jcode/.*''',
+  '''src/main/lib/codex-app-server/src/protocol\.test\.ts'''
+]
+regexes = [
+  '''8ae96ff3-3425-4f4c-8772-b6fd61502868'''
+]

@@ -39,11 +39,11 @@ const MOCK_PATH = join(
   "hermes-acp-mock.mjs",
 )
 
-async function collectStreamParts(model: unknown): Promise<any[]> {
+async function collectStreamParts(model: any): Promise<any[]> {
   const { stream } = await model.doStream({
     prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
   })
-  const parts: unknown[] = []
+  const parts: any[] = []
   const reader = stream.getReader()
   for (;;) {
     const { done, value } = await reader.read()
@@ -104,7 +104,10 @@ it("fails resume against a fresh process (ACP sessions are process-scoped)", asy
   try {
     await second.initSession()
   } catch (error) {
-    failure = String(error)
+    failure =
+      typeof error === "object" && error !== null && "message" in error
+        ? String(error.message)
+        : String(error)
   } finally {
     second.cleanup()
   }
@@ -131,7 +134,7 @@ it("terminates a pending prompt when the consumer aborts", async () => {
     const { stream } = await provider.languageModel().doStream({
       prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
       abortSignal: controller.signal,
-    } as unknown)
+    } as any)
     const reader = stream.getReader()
     const read = reader.read()
     controller.abort()
@@ -165,7 +168,7 @@ it("maps prompt failures through the hermes error classifier", async () => {
       prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
     })
     const reader = stream.getReader()
-    let errorPart: unknown = null
+    let errorPart: any = null
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
