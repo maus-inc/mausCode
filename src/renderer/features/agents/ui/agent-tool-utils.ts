@@ -7,6 +7,8 @@
  * and compare cached values, not object references.
  */
 
+import { getToolLifecycleState, type ToolPartLike } from "./agent-tool-state"
+
 // ============================================================================
 // TOOL STATE CACHE
 // ============================================================================
@@ -16,7 +18,7 @@
 
 interface CachedToolState {
   state: string | undefined
-  inputJson: string  // JSON stringified input for deep comparison
+  inputJson: string // JSON stringified input for deep comparison
   outputJson: string // JSON stringified output for deep comparison
 }
 
@@ -29,15 +31,15 @@ export function clearToolStateCachesByToolCallIds(toolCallIds: string[]) {
   }
 }
 
-function getToolStateSnapshot(part: any): CachedToolState {
+function getToolStateSnapshot(part: ToolPartLike): CachedToolState {
   return {
-    state: part.state,
+    state: typeof part.state === "string" ? part.state : undefined,
     inputJson: JSON.stringify(part.input || {}),
     outputJson: JSON.stringify(part.output || {}),
   }
 }
 
-function hasToolStateChanged(toolCallId: string, part: any): boolean {
+function hasToolStateChanged(toolCallId: string, part: ToolPartLike): boolean {
   const cached = toolStateCache.get(toolCallId)
   const current = getToolStateSnapshot(part)
 
@@ -64,7 +66,7 @@ function hasToolStateChanged(toolCallId: string, part: any): boolean {
  *
  * IMPORTANT: Uses external cache to detect AI SDK in-place mutations.
  */
-function arePartsEqual(prev: any, next: any): boolean {
+function arePartsEqual(prev: ToolPartLike, next: ToolPartLike): boolean {
   // Different toolCallId = different tool
   if (prev.toolCallId !== next.toolCallId) return false
   if (prev.type !== next.type) return false
@@ -89,14 +91,8 @@ function arePartsEqual(prev: any, next: any): boolean {
  * Check if a tool is completed (has output or error state).
  * Completed tools don't need to react to chatStatus changes.
  */
-function isToolCompleted(part: any): boolean {
-  // Has output = completed
-  if (part.output !== undefined && part.output !== null) return true
-  // Error state = completed
-  if (part.state === "error") return true
-  // Result state = completed (for some tools)
-  if (part.state === "result") return true
-  return false
+function isToolCompleted(part: ToolPartLike): boolean {
+  return getToolLifecycleState(part).isTerminal
 }
 
 /**
@@ -111,8 +107,8 @@ function isToolCompleted(part: any): boolean {
  * OPTIMIZATION: Completed tools don't re-render on chatStatus changes.
  */
 export function areToolPropsEqual(
-  prevProps: { part: any; chatStatus?: string },
-  nextProps: { part: any; chatStatus?: string },
+  prevProps: { part: ToolPartLike; chatStatus?: string },
+  nextProps: { part: ToolPartLike; chatStatus?: string },
 ): boolean {
   // First check if the tool data itself changed
   const partsEqual = arePartsEqual(prevProps.part, nextProps.part)
@@ -134,8 +130,8 @@ export function areToolPropsEqual(
  * Compare function for AgentTaskTool which has additional nestedTools prop.
  */
 export function areTaskToolPropsEqual(
-  prevProps: { part: any; nestedTools: any[]; chatStatus?: string },
-  nextProps: { part: any; nestedTools: any[]; chatStatus?: string },
+  prevProps: { part: ToolPartLike; nestedTools: ToolPartLike[]; chatStatus?: string },
+  nextProps: { part: ToolPartLike; nestedTools: ToolPartLike[]; chatStatus?: string },
 ): boolean {
   // Compare main part first
   if (!arePartsEqual(prevProps.part, nextProps.part)) return false
@@ -169,8 +165,8 @@ export function areTaskToolPropsEqual(
  * Compare function for AgentExploringGroup which has parts array.
  */
 export function areExploringGroupPropsEqual(
-  prevProps: { parts: any[]; chatStatus?: string; isStreaming: boolean },
-  nextProps: { parts: any[]; chatStatus?: string; isStreaming: boolean },
+  prevProps: { parts: ToolPartLike[]; chatStatus?: string; isStreaming: boolean },
+  nextProps: { parts: ToolPartLike[]; chatStatus?: string; isStreaming: boolean },
 ): boolean {
   const prevParts = prevProps.parts || []
   const nextParts = nextProps.parts || []
@@ -230,8 +226,8 @@ const askUserStateCache = new Map<string, CachedAskUserState>()
 
 export function areAskUserQuestionPropsEqual(
   prevProps: {
-    input: any
-    result?: any
+    input: unknown
+    result?: unknown
     errorText?: string
     state: string
     isError?: boolean
@@ -239,8 +235,8 @@ export function areAskUserQuestionPropsEqual(
     toolCallId?: string
   },
   nextProps: {
-    input: any
-    result?: any
+    input: unknown
+    result?: unknown
     errorText?: string
     state: string
     isError?: boolean

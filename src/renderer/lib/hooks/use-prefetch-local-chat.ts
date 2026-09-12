@@ -8,6 +8,6 @@ export function usePrefetchLocalChat() {
     (chatId: string) => {
       utils.chats.get.prefetch({ id: chatId }, { staleTime: 5000 })
     },
-    [utils]
+    [utils],
   )
 }

@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react"
-import type { Terminal as XTerm } from "xterm"
 import type { FitAddon } from "@xterm/addon-fit"
 import type { SearchAddon } from "@xterm/addon-search"
 import type { SerializeAddon } from "@xterm/addon-serialize"
+import { useAtomValue, useSetAtom } from "jotai"
 import { useTheme } from "next-themes"
-import { useSetAtom, useAtomValue } from "jotai"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { trpc } from "@/lib/trpc"
-import { terminalCwdAtom } from "./atoms"
+import type { Terminal as XTerm } from "xterm"
 import { fullThemeDataAtom } from "@/lib/atoms"
+import { trpc } from "@/lib/trpc"
+import { terminalCwdAtom, terminalFontSizeAtom } from "./atoms"
+import { sanitizeForTitle } from "./commandBuffer"
+import { getTerminalLineHeight, getTerminalThemeFromVSCode } from "./config"
 import {
   createTerminalInstance,
   getDefaultTerminalBg,
@@ -19,12 +21,10 @@ import {
   setupPasteHandler,
   setupResizeHandlers,
 } from "./helpers"
-import { getTerminalTheme, getTerminalThemeFromVSCode } from "./config"
 import { parseCwd } from "./parseCwd"
-import { sanitizeForTitle } from "./commandBuffer"
-import { shellEscapePaths } from "./utils"
 import { TerminalSearch } from "./TerminalSearch"
 import type { TerminalProps, TerminalStreamEvent } from "./types"
+import { shellEscapePaths } from "./utils"
 import "xterm/css/xterm.css"
 
 export function Terminal({
@@ -45,17 +45,18 @@ export function Terminal({
   const commandBufferRef = useRef("")
 
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [terminalCwd, setTerminalCwd] = useState<string | null>(
-    initialCwd || cwd,
-  )
+  const [terminalCwd, setTerminalCwd] = useState<string | null>(initialCwd || cwd)
   const setGlobalCwds = useSetAtom(terminalCwdAtom)
 
   // Theme detection
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
-  
+
   // VS Code theme data (if a full theme is selected)
   const fullThemeData = useAtomValue(fullThemeDataAtom)
+
+  // Terminal font size preference
+  const terminalFontSize = useAtomValue(terminalFontSizeAtom)
 
   // Ref for terminalCwd to avoid effect re-runs when cwd changes
   const terminalCwdRef = useRef(terminalCwd)
@@ -89,7 +90,6 @@ export function Terminal({
     (data: string) => {
       const parsedCwd = parseCwd(data)
       if (parsedCwd !== null) {
-        console.log("[Terminal] Parsed cwd from OSC-7:", parsedCwd)
         setTerminalCwd(parsedCwd)
         // Also update global atom for the tabs to show
         setGlobalCwds((prev) => ({
@@ -113,9 +113,7 @@ export function Terminal({
       updateCwdRef.current(event.data)
     } else if (event.type === "exit") {
       isExitedRef.current = true
-      xtermRef.current.writeln(
-        `\r\n\r\n[Process exited with code ${event.exitCode}]`,
-      )
+      xtermRef.current.writeln(`\r\n\r\n[Process exited with code ${event.exitCode}]`)
       xtermRef.current.writeln("[Press any key to restart]")
     }
   }, [])
@@ -125,9 +123,7 @@ export function Terminal({
     onData: handleStreamData,
     onError: (err) => {
       console.error("[Terminal] Stream error:", err)
-      xtermRef.current?.write(
-        `\r\n\x1b[31m[Connection error: ${err.message}]\x1b[0m\r\n`,
-      )
+      xtermRef.current?.write(`\r\n\x1b[31m[Connection error: ${err.message}]\x1b[0m\r\n`)
     },
     enabled: true,
   })
@@ -137,33 +133,19 @@ export function Terminal({
     const container = containerRef.current
     if (!container) return
 
-    console.log("[Terminal:useEffect] MOUNT - paneId:", paneId)
-    console.log(
-      "[Terminal:useEffect] Container rect:",
-      container.getBoundingClientRect(),
-    )
-
     let isUnmounted = false
 
-    // Create xterm instance
-    console.log("[Terminal:useEffect] Creating terminal instance...", {
+    const { xterm, fitAddon, serializeAddon, cleanup } = createTerminalInstance(container, {
+      cwd: terminalCwdRef.current || cwd,
       isDark,
-    })
-    const { xterm, fitAddon, serializeAddon, cleanup } = createTerminalInstance(
-      container,
-      {
-        cwd: terminalCwdRef.current || cwd,
-        isDark,
-        onFileLinkClick: (path, line, column) => {
-          console.log("[Terminal] File link clicked:", path, line, column)
-          // TODO: Open file in editor
-        },
-        onUrlClick: (url) => {
-          console.log("[Terminal] URL clicked:", url)
-          window.desktopApi.openExternal(url)
-        },
+      fontSize: terminalFontSize,
+      onFileLinkClick: (_path, _line, _column) => {
+        // TODO: Open file in editor
       },
-    )
+      onUrlClick: (url) => {
+        window.desktopApi.openExternal(url)
+      },
+    })
 
     xtermRef.current = xterm
     fitAddonRef.current = fitAddon
@@ -217,10 +199,7 @@ export function Terminal({
     }
 
     // Key handler for command buffer (tab title)
-    const handleKeyPress = (event: {
-      key: string
-      domEvent: KeyboardEvent
-    }) => {
+    const handleKeyPress = (event: { key: string; domEvent: KeyboardEvent }) => {
       const { domEvent } = event
       if (domEvent.key === "Enter") {
         const title = sanitizeForTitle(commandBufferRef.current)
@@ -232,11 +211,7 @@ export function Terminal({
         commandBufferRef.current = commandBufferRef.current.slice(0, -1)
       } else if (domEvent.key === "c" && domEvent.ctrlKey) {
         commandBufferRef.current = ""
-      } else if (
-        domEvent.key.length === 1 &&
-        !domEvent.ctrlKey &&
-        !domEvent.metaKey
-      ) {
+      } else if (domEvent.key.length === 1 && !domEvent.ctrlKey && !domEvent.metaKey) {
         commandBufferRef.current += domEvent.key
       }
     }
@@ -259,9 +234,7 @@ export function Terminal({
           xterm.focus()
         },
         onError: (err) => {
-          xterm.write(
-            `\x1b[31m[Failed to start terminal: ${err.message}]\x1b[0m\r\n`,
-          )
+          xterm.write(`\x1b[31m[Failed to start terminal: ${err.message}]\x1b[0m\r\n`)
         },
       },
     )
@@ -294,14 +267,9 @@ export function Terminal({
       // TODO: Set focused pane
     })
 
-    const cleanupResize = setupResizeHandlers(
-      container,
-      xterm,
-      fitAddon,
-      (cols, rows) => {
-        resizeRef.current({ paneId, cols, rows })
-      },
-    )
+    const cleanupResize = setupResizeHandlers(container, xterm, fitAddon, (cols, rows) => {
+      resizeRef.current({ paneId, cols, rows })
+    })
 
     const cleanupPaste = setupPasteHandler(xterm, {
       onPaste: (text) => {
@@ -326,7 +294,6 @@ export function Terminal({
 
     // Cleanup on unmount
     return () => {
-      console.log("[Terminal:useEffect] UNMOUNT - paneId:", paneId)
       isUnmounted = true
       inputDisposable.dispose()
       keyDisposable.dispose()
@@ -339,23 +306,30 @@ export function Terminal({
       cleanup()
 
       // Serialize terminal state before detaching
-      console.log("[Terminal:useEffect] Serializing state before detach...")
       const serializedState = serializeAddon.serialize()
 
       // Detach instead of kill - keeps session alive for reattach
       detachRef.current({ paneId, serializedState })
 
-      console.log("[Terminal:useEffect] Disposing xterm...")
       xterm.dispose()
       xtermRef.current = null
       fitAddonRef.current = null
       searchAddonRef.current = null
       serializeAddonRef.current = null
-      console.log("[Terminal:useEffect] UNMOUNT complete")
     }
     // Note: terminalCwd is accessed via ref to avoid remounting on cwd changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paneId, cwd, workspaceId, tabId, initialCwd, initialCommands, isDark])
+  }, [
+    paneId,
+    cwd,
+    workspaceId,
+    tabId,
+    initialCwd,
+    initialCommands,
+    isDark,
+    terminalFontSize,
+    scopeKey,
+  ])
 
   // Update theme when isDark changes or VS Code theme changes (without recreating terminal)
   useEffect(() => {
@@ -364,6 +338,20 @@ export function Terminal({
       xtermRef.current.options.theme = newTheme
     }
   }, [isDark, fullThemeData])
+
+  // Update font size + line height live when the preference changes (without recreating terminal)
+  useEffect(() => {
+    if (xtermRef.current && fitAddonRef.current) {
+      xtermRef.current.options.fontSize = terminalFontSize
+      xtermRef.current.options.lineHeight = getTerminalLineHeight(terminalFontSize)
+      // Refit so column/row counts adjust to the new sizing
+      try {
+        fitAddonRef.current.fit()
+      } catch {
+        // FitAddon can throw if container has zero dimensions
+      }
+    }
+  }, [terminalFontSize])
 
   // Keyboard shortcut for search
   useEffect(() => {
@@ -392,9 +380,11 @@ export function Terminal({
       if (files.length === 0) return
 
       // Get file paths (Electron exposes webUtils)
+      const electronWindow = window as Window & {
+        webUtils?: { getPathForFile?: (file: File) => string }
+      }
       const paths = files.map((file) => {
-        // @ts-expect-error - Electron's webUtils API
-        return window.webUtils?.getPathForFile?.(file) || file.name
+        return electronWindow.webUtils?.getPathForFile?.(file) || file.name
       })
       const text = shellEscapePaths(paths)
 
@@ -429,11 +419,7 @@ export function Terminal({
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
       />
-      <div
-        ref={containerRef}
-        className="h-full w-full"
-        style={{ padding: "8px" }}
-      />
+      <div ref={containerRef} className="h-full w-full" style={{ padding: "8px" }} />
     </div>
   )
 }

@@ -2,20 +2,15 @@
 
 import {
   createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
   type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
 } from "react"
 
-// Chromium 137+ Selection API extension for Shadow DOM support
-declare global {
-  interface Selection {
-    getComposedRanges?(options: { shadowRoots: ShadowRoot[] }): StaticRange[]
-  }
-}
+// Note: getComposedRanges is now part of the standard TypeScript DOM lib (Chromium 137+)
 
 // Discriminated union for selection source
 export type TextSelectionSource =
@@ -37,16 +32,12 @@ interface TextSelectionContextValue extends TextSelectionState {
   selectedMessageId: string | null
 }
 
-const TextSelectionContext = createContext<TextSelectionContextValue | null>(
-  null
-)
+const TextSelectionContext = createContext<TextSelectionContextValue | null>(null)
 
 export function useTextSelection(): TextSelectionContextValue {
   const ctx = useContext(TextSelectionContext)
   if (!ctx) {
-    throw new Error(
-      "useTextSelection must be used within TextSelectionProvider"
-    )
+    throw new Error("useTextSelection must be used within TextSelectionProvider")
   }
   return ctx
 }
@@ -89,24 +80,29 @@ function toLiveRange(staticRange: StaticRange): Range | null {
  * We extract text here because selection.toString() may be empty/incorrect
  * for selections inside Shadow DOM.
  */
-function getSelectionRange(selection: Selection): { range: Range; element: Element | null; text: string } | null {
+function getSelectionRange(
+  selection: Selection,
+): { range: Range; element: Element | null; text: string } | null {
   // Try getComposedRanges first — works across Shadow DOM (Chromium 137+)
   if (typeof selection.getComposedRanges === "function") {
     const shadowRoots = getDiffShadowRoots()
     try {
       const ranges = selection.getComposedRanges({ shadowRoots })
       if (ranges.length > 0) {
-        const staticRange = ranges[0]!
-        if (staticRange.startContainer === staticRange.endContainer && staticRange.startOffset === staticRange.endOffset) {
+        const staticRange = ranges[0]
+        if (staticRange === undefined) return null
+        if (
+          staticRange.startContainer === staticRange.endContainer &&
+          staticRange.startOffset === staticRange.endOffset
+        ) {
           return null
         }
         const liveRange = toLiveRange(staticRange)
         if (!liveRange) return null
 
         const container = staticRange.startContainer
-        const element = container.nodeType === Node.TEXT_NODE
-          ? container.parentElement
-          : (container as Element)
+        const element =
+          container.nodeType === Node.TEXT_NODE ? container.parentElement : (container as Element)
         const text = liveRange.toString()
         return { range: liveRange, element, text }
       }
@@ -119,9 +115,8 @@ function getSelectionRange(selection: Selection): { range: Range; element: Eleme
   if (selection.rangeCount === 0 || selection.isCollapsed) return null
   const range = selection.getRangeAt(0)
   const container = range.commonAncestorContainer
-  const element = container.nodeType === Node.TEXT_NODE
-    ? container.parentElement
-    : (container as Element)
+  const element =
+    container.nodeType === Node.TEXT_NODE ? container.parentElement : (container as Element)
   const text = selection.toString()
   return { range, element, text }
 }
@@ -155,9 +150,7 @@ function extractDiffLineInfo(element: Element): { lineNumber?: number; lineType?
   return { lineNumber, lineType: type }
 }
 
-export function TextSelectionProvider({
-  children,
-}: TextSelectionProviderProps) {
+export function TextSelectionProvider({ children }: TextSelectionProviderProps) {
   const [state, setState] = useState<TextSelectionState>({
     selectedText: null,
     source: null,
@@ -212,22 +205,20 @@ export function TextSelectionProvider({
         if (element) {
           // Check for file viewer content
           const fileViewerElement = element.closest?.(
-            "[data-file-viewer-path]"
+            "[data-file-viewer-path]",
           ) as HTMLElement | null
 
           // Check for plan sidebar content
-          const planElement = element.closest?.(
-            "[data-plan-path]"
-          ) as HTMLElement | null
+          const planElement = element.closest?.("[data-plan-path]") as HTMLElement | null
 
           // Check for assistant message
           const messageElement = element.closest?.(
-            "[data-assistant-message-id]"
+            "[data-assistant-message-id]",
           ) as HTMLElement | null
 
           // Check for tool-edit (Edit/Write tool in chat)
           const toolEditElement = element.closest?.(
-            '[data-part-type="tool-Edit"], [data-part-type="tool-Write"]'
+            '[data-part-type="tool-Edit"], [data-part-type="tool-Write"]',
           ) as HTMLElement | null
 
           // Check for diff — element may be inside Shadow DOM of diffs-container
@@ -343,20 +334,20 @@ export function TextSelectionProvider({
   }, [])
 
   // Compute legacy selectedMessageId for backwards compatibility
-  const selectedMessageId = state.source?.type === "assistant-message"
-    ? state.source.messageId
-    : null
+  const selectedMessageId =
+    state.source?.type === "assistant-message" ? state.source.messageId : null
 
   // Memoize context value to prevent unnecessary re-renders of consumers
-  const contextValue = useMemo<TextSelectionContextValue>(() => ({
-    ...state,
-    clearSelection,
-    selectedMessageId,
-  }), [state, clearSelection, selectedMessageId])
+  const contextValue = useMemo<TextSelectionContextValue>(
+    () => ({
+      ...state,
+      clearSelection,
+      selectedMessageId,
+    }),
+    [state, clearSelection, selectedMessageId],
+  )
 
   return (
-    <TextSelectionContext.Provider value={contextValue}>
-      {children}
-    </TextSelectionContext.Provider>
+    <TextSelectionContext.Provider value={contextValue}>{children}</TextSelectionContext.Provider>
   )
 }

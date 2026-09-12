@@ -4,20 +4,12 @@ import { useAtom } from "jotai"
 import { ChevronRight, Loader2 } from "lucide-react"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "../../../components/ui/button"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../../components/ui/popover"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
-import { sessionInfoAtom, type MCPServerStatus } from "../../../lib/atoms"
-import { cn } from "../../../lib/utils"
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
+import { type MCPServerStatus, sessionInfoAtom } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 
 interface McpServersIndicatorProps {
   projectPath?: string
@@ -39,7 +31,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
 
   // Fetch MCP config on mount if we have projectPath and no session info yet
   const { data: mcpConfig } = trpc.claude.getMcpConfig.useQuery(
-    { projectPath: projectPath! },
+    { projectPath: projectPath ?? "" },
     {
       enabled: !!projectPath && !sessionInfo?.mcpServers?.length,
       staleTime: 5 * 60 * 1000, // 5 minutes
@@ -53,7 +45,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         tools: prev?.tools || [],
         mcpServers: mcpConfig.mcpServers.map((s) => ({
           name: s.name,
-          status: s.status,
+          status: s.status as MCPServerStatus,
         })),
         plugins: prev?.plugins || [],
         skills: prev?.skills || [],
@@ -119,15 +111,13 @@ export const McpServersIndicator = memo(function McpServersIndicator({
     switch (status) {
       case "connected":
         return (
-          <span
-            className="w-2 h-2 rounded-full bg-green-500"
-            aria-label="Connected"
-          />
+          <span className="w-2 h-2 rounded-full bg-green-500" role="img" aria-label="Connected" />
         )
       case "failed":
         return (
           <span
             className="w-2 h-2 rounded-full bg-red-500"
+            role="img"
             aria-label="Connection failed"
           />
         )
@@ -135,6 +125,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         return (
           <span
             className="w-2 h-2 rounded-full bg-yellow-500"
+            role="img"
             aria-label="Needs authentication"
           />
         )
@@ -142,6 +133,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         return (
           <Loader2
             className="w-3 h-3 text-muted-foreground animate-spin"
+            role="img"
             aria-label="Connecting"
           />
         )
@@ -149,6 +141,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
         return (
           <span
             className="w-2 h-2 rounded-full bg-muted-foreground/50"
+            role="img"
             aria-label="Unknown status"
           />
         )
@@ -243,25 +236,20 @@ export const McpServersIndicator = memo(function McpServersIndicator({
           <h4 className="font-medium text-sm" id="mcp-servers-title">
             MCP Servers
           </h4>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Model Context Protocol servers
-          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">Model Context Protocol servers</p>
         </div>
 
-        <div
-          className="max-h-64 overflow-y-auto py-1"
-          role="list"
-          aria-labelledby="mcp-servers-title"
-        >
+        <ul className="max-h-64 overflow-y-auto py-1" aria-labelledby="mcp-servers-title">
           {sessionInfo.mcpServers.map((server, index) => {
             const tools = toolsByServer.get(server.name) || []
             const isExpanded = expandedServers.has(server.name)
             const hasTools = tools.length > 0
 
             return (
-              <div key={server.name} role="listitem">
+              <li key={server.name}>
                 {/* Server row */}
                 <button
+                  type="button"
                   ref={(el) => {
                     serverButtonsRef.current[index] = el
                   }}
@@ -269,9 +257,7 @@ export const McpServersIndicator = memo(function McpServersIndicator({
                   onFocus={() => setFocusedIndex(index)}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
-                    hasTools
-                      ? "hover:bg-muted/50 cursor-pointer"
-                      : "cursor-default",
+                    hasTools ? "hover:bg-muted/50 cursor-pointer" : "cursor-default",
                     focusedIndex === index && "bg-muted/50",
                   )}
                   aria-expanded={hasTools ? isExpanded : undefined}
@@ -312,35 +298,36 @@ export const McpServersIndicator = memo(function McpServersIndicator({
 
                 {/* Error message */}
                 {server.error && (
-                  <div className="pl-10 pr-3 pb-1 text-[10px] text-red-500/80 truncate" title={server.error}>
+                  <div
+                    className="pl-10 pr-3 pb-1 text-[10px] text-red-500/80 truncate"
+                    title={server.error}
+                  >
                     {server.error}
                   </div>
                 )}
 
                 {/* Tools list (expanded) */}
                 {isExpanded && hasTools && (
-                  <div
+                  <ul
                     id={`tools-${server.name}`}
                     className="pl-8 pr-3 py-1 space-y-0.5"
-                    role="list"
                     aria-label={`Tools for ${server.name}`}
                   >
                     {tools.map((tool: string) => (
-                      <div
+                      <li
                         key={tool}
                         className="text-xs text-muted-foreground py-0.5 truncate"
                         title={tool}
-                        role="listitem"
                       >
                         {tool}
-                      </div>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
-              </div>
+              </li>
             )
           })}
-        </div>
+        </ul>
 
         {/* Plugins section */}
         {sessionInfo.plugins && sessionInfo.plugins.length > 0 && (
@@ -350,29 +337,25 @@ export const McpServersIndicator = memo(function McpServersIndicator({
                 Plugins
               </h4>
             </div>
-            <div className="pb-1" role="list" aria-labelledby="plugins-title">
+            <ul className="pb-1" aria-labelledby="plugins-title">
               {sessionInfo.plugins.map((plugin) => (
-                <div
-                  key={plugin.path}
-                  className="px-3 py-1.5 text-sm flex items-center gap-2"
-                  role="listitem"
-                >
+                <li key={plugin.path} className="px-3 py-1.5 text-sm flex items-center gap-2">
                   <span
                     className="w-2 h-2 rounded-full bg-green-500"
+                    role="img"
                     aria-label="Active"
                   />
                   <span className="truncate">{plugin.name}</span>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           </>
         )}
 
         {/* Footer with config hint */}
         <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-          Configure in{" "}
-          <code className="bg-muted px-1 py-0.5 rounded">~/.claude.json</code>{" "}
-          or <code className="bg-muted px-1 py-0.5 rounded">.mcp.json</code>
+          Configure in <code className="bg-muted px-1 py-0.5 rounded">~/.claude.json</code> or{" "}
+          <code className="bg-muted px-1 py-0.5 rounded">.mcp.json</code>
         </div>
       </PopoverContent>
     </Popover>

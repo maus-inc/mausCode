@@ -2,8 +2,8 @@ import { ArrowRight } from "lucide-react"
 import { ClaudeCodeIcon } from "../../../components/ui/icons"
 import { cn } from "../../../lib/utils"
 import { PlatformIcon } from "./platform-icon"
-import { getTriggerLabel } from "./utils"
 import type { AutomationTemplate } from "./types"
+import { getTriggerLabel } from "./utils"
 
 interface TemplateCardProps {
   template: AutomationTemplate
@@ -12,17 +12,32 @@ interface TemplateCardProps {
   disabledReason?: string
 }
 
-export function TemplateCard({ template, onUseTemplate, disabled, disabledReason }: TemplateCardProps) {
+export function TemplateCard({
+  template,
+  onUseTemplate,
+  disabled,
+  disabledReason,
+}: TemplateCardProps) {
   const triggerLabel = getTriggerLabel(template.triggerType, template.platform)
 
   return (
+    /* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */
     <div
       onClick={disabled ? undefined : onUseTemplate}
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && !disabled) {
+          e.preventDefault()
+          onUseTemplate()
+        }
+      }}
       className={cn(
         "bg-background border border-border rounded-[10px] p-4 transition-transform duration-150 ease-out",
         disabled
           ? "opacity-50 cursor-not-allowed"
-          : "cursor-pointer hover:border-border/80 hover:bg-muted/30 active:scale-[0.98]"
+          : "cursor-pointer hover:border-border/80 hover:bg-muted/30 active:scale-[0.98]",
       )}
     >
       <div className="flex items-center gap-1.5 mb-3">
@@ -35,9 +50,7 @@ export function TemplateCard({ template, onUseTemplate, disabled, disabledReason
         </div>
       </div>
       <div className="flex flex-col gap-0">
-        <span className="text-sm font-medium text-foreground line-clamp-2">
-          {template.name}
-        </span>
+        <span className="text-sm font-medium text-foreground line-clamp-2">{template.name}</span>
         <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
           {disabled && disabledReason ? disabledReason : `When ${triggerLabel}, run Claude Code`}
         </p>

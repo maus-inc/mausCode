@@ -1,9 +1,9 @@
 "use client"
 
-import { useMemo } from "react"
-import { AnimatePresence } from "motion/react"
-import { createPortal } from "react-dom"
 import { useAtomValue } from "jotai"
+import { AnimatePresence } from "motion/react"
+import { useMemo } from "react"
+import { createPortal } from "react-dom"
 import { loadingSubChatsAtom } from "../atoms"
 import { AgentChatCard } from "./agent-chat-card"
 
@@ -11,14 +11,17 @@ interface AgentsQuickSwitchDialogProps {
   isOpen: boolean
   chats: Array<{
     id: string
-    name: string
-    meta: any
-    sandbox_id: string | null
-    updated_at: Date
+    name: string | null
+    meta?: unknown
+    sandbox_id?: string | null
+    updatedAt?: Date | null
     projectId: string
   }>
   selectedIndex: number
-  projectsMap: Map<string, { gitOwner?: string | null; gitProvider?: string | null; gitRepo?: string | null; name: string }>
+  projectsMap: Map<
+    string,
+    { gitOwner?: string | null; gitProvider?: string | null; gitRepo?: string | null; name: string }
+  >
   onHover?: (index: number) => void
 }
 
@@ -29,14 +32,11 @@ export function AgentsQuickSwitchDialog({
   projectsMap,
   onHover,
 }: AgentsQuickSwitchDialogProps) {
-  if (typeof window === "undefined") return null
-
   // Derive loading parent chat IDs from loadingSubChats Map
   const loadingSubChats = useAtomValue(loadingSubChatsAtom)
-  const loadingChatIds = useMemo(
-    () => new Set([...loadingSubChats.values()]),
-    [loadingSubChats],
-  )
+  const loadingChatIds = useMemo(() => new Set([...loadingSubChats.values()]), [loadingSubChats])
+
+  if (typeof window === "undefined") return null
 
   return createPortal(
     <AnimatePresence>
@@ -52,9 +52,7 @@ export function AgentsQuickSwitchDialog({
                 {/* Chat List or Empty State */}
                 {chats.length === 0 ? (
                   <div className="px-4 py-12 text-center bg-background rounded-xl border-[0.5px]">
-                    <p className="text-sm text-muted-foreground">
-                      No recent agents
-                    </p>
+                    <p className="text-sm text-muted-foreground">No recent agents</p>
                   </div>
                 ) : (
                   <div

@@ -1,5 +1,5 @@
 import type { IBufferLine, ILink, ILinkProvider, Terminal as XTerm } from "xterm"
-import { isModifierPressed, showLinkPopup, removeLinkPopup } from "./link-popup"
+import { isModifierPressed, removeLinkPopup, showLinkPopup } from "./link-popup"
 
 /**
  * URL link provider for xterm.js.
@@ -8,8 +8,7 @@ import { isModifierPressed, showLinkPopup, removeLinkPopup } from "./link-popup"
  */
 
 // URL pattern that matches http, https, and file URLs
-const URL_PATTERN =
-  /https?:\/\/[^\s<>"\])}]+|file:\/\/[^\s<>"\])}]+/gi
+const URL_PATTERN = /https?:\/\/[^\s<>"\])}]+|file:\/\/[^\s<>"\])}]+/gi
 
 /**
  * Get the text content of a buffer line.
@@ -25,13 +24,10 @@ function getLineText(line: IBufferLine): string {
 export class UrlLinkProvider implements ILinkProvider {
   constructor(
     private xterm: XTerm,
-    private onClick: (event: MouseEvent, uri: string) => void
+    private onClick: (event: MouseEvent, uri: string) => void,
   ) {}
 
-  provideLinks(
-    bufferLineNumber: number,
-    callback: (links: ILink[] | undefined) => void
-  ): void {
+  provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
     const buffer = this.xterm.buffer.active
     const line = buffer.getLine(bufferLineNumber)
 
@@ -46,7 +42,7 @@ export class UrlLinkProvider implements ILinkProvider {
     let match: RegExpExecArray | null
     URL_PATTERN.lastIndex = 0
 
-    while ((match = URL_PATTERN.exec(lineText)) !== null) {
+    for (match = URL_PATTERN.exec(lineText); match !== null; match = URL_PATTERN.exec(lineText)) {
       const startX = match.index
       const url = match[0]
 

@@ -17,9 +17,7 @@ export function generatePrMessage(context: PrContext): string {
       : "All changes are committed.",
     `The current branch is ${branch}.`,
     `The target branch is origin/${baseBranch}.`,
-    hasUpstream
-      ? "The branch is already pushed to remote."
-      : "There is no upstream branch yet.",
+    hasUpstream ? "The branch is already pushed to remote." : "There is no upstream branch yet.",
     "The user requested a PR.",
     "",
     "Follow these exact steps to create a PR:",
@@ -39,7 +37,7 @@ export function generatePrMessage(context: PrContext): string {
 
   steps.push(`Use git diff origin/${baseBranch}... to review the PR diff`)
   steps.push(
-    `Use gh pr create --base ${baseBranch} to create a PR. Keep the title under 80 characters and description under five sentences.`
+    `Use gh pr create --base ${baseBranch} to create a PR. Keep the title under 80 characters and description under five sentences.`,
   )
   steps.push("If any of these steps fail, ask the user for help.")
 

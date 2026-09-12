@@ -1,17 +1,13 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect } from "react"
-import { ChevronDown, ArrowUp, X } from "lucide-react"
-import { motion, AnimatePresence } from "motion/react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
+import { ArrowUp, ChevronDown, X } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
+import { memo, useCallback, useEffect, useState } from "react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
+import { getWindowId } from "../../../contexts/WindowContext"
 import { cn } from "../../../lib/utils"
 import type { AgentQueueItem } from "../lib/queue-utils"
 import { RenderFileMentions } from "../mentions/render-file-mentions"
-import { getWindowId } from "../../../contexts/WindowContext"
 
 // Window-scoped key so each window has its own queue expanded state
 const getQueueExpandedKey = () => `${getWindowId()}:agent-queue-expanded`
@@ -31,7 +27,7 @@ const QueueItemRow = memo(function QueueItemRow({
       e.stopPropagation()
       onRemove?.(item.id)
     },
-    [item.id, onRemove]
+    [item.id, onRemove],
   )
 
   const handleSendNow = useCallback(
@@ -39,7 +35,7 @@ const QueueItemRow = memo(function QueueItemRow({
       e.stopPropagation()
       onSendNow?.(item.id)
     },
-    [item.id, onSendNow]
+    [item.id, onSendNow],
   )
 
   // Build attachment summary parts by type (matching sent message bubble style)
@@ -87,6 +83,7 @@ const QueueItemRow = memo(function QueueItemRow({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                type="button"
                 onClick={handleSendNow}
                 className="flex-shrink-0 p-1 hover:bg-foreground/10 rounded text-muted-foreground hover:text-foreground transition-all"
               >
@@ -100,6 +97,7 @@ const QueueItemRow = memo(function QueueItemRow({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                type="button"
                 onClick={handleRemove}
                 className="flex-shrink-0 p-1 hover:bg-foreground/10 rounded text-muted-foreground hover:text-foreground transition-all"
               >
@@ -127,7 +125,6 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
   queue,
   onRemoveItem,
   onSendNow,
-  isStreaming = false,
   hasStatusCardBelow = false,
 }: AgentQueueIndicatorProps) {
   // Load expanded state from localStorage (window-scoped)
@@ -152,10 +149,11 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
         "border border-border bg-muted/30 overflow-hidden flex flex-col rounded-t-xl",
         // If status card below - no bottom border/radius, no padding
         // If no status card - need pb-6 for input overlap
-        hasStatusCardBelow ? "border-b-0" : "border-b-0 pb-6"
+        hasStatusCardBelow ? "border-b-0" : "border-b-0 pb-6",
       )}
     >
       {/* Header - at top */}
+      {/* biome-ignore lint/a11y/useSemanticElements: block-level header layout cannot be wrapped in a native button; role/tabIndex/Enter-Space/aria pattern implemented */}
       <div
         role="button"
         tabIndex={0}
@@ -174,14 +172,11 @@ export const AgentQueueIndicator = memo(function AgentQueueIndicator({
           <ChevronDown
             className={cn(
               "w-4 h-4 text-muted-foreground transition-transform duration-200",
-              !isExpanded && "-rotate-90"
+              !isExpanded && "-rotate-90",
             )}
           />
-          <span className="text-xs text-muted-foreground">
-            {queue.length} in queue
-          </span>
+          <span className="text-xs text-muted-foreground">{queue.length} in queue</span>
         </div>
-
       </div>
 
       {/* Expanded content - queue items */}

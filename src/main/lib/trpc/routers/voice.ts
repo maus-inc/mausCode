@@ -2,16 +2,16 @@
  * Voice TRPC router
  * Provides voice-to-text transcription using OpenAI Whisper API
  *
- * For authenticated users (with subscription): uses 21st.dev backend
+ * For authenticated users (with subscription): uses the mausCode control plane
  * For open-source users: requires OPENAI_API_KEY in environment
  */
 
 import { execSync } from "node:child_process"
 import os from "node:os"
 import { z } from "zod"
-import { publicProcedure, router } from "../index"
-import { getApiUrl } from "../../config"
 import { getAuthManager } from "../../../auth-manager"
+import { getApiUrl } from "../../config"
+import { publicProcedure, router } from "../index"
 
 // Max audio size: 25MB (Whisper API limit)
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024
@@ -45,7 +45,7 @@ function cleanTranscribedText(text: string): string {
 }
 
 // Cache for OpenAI API key
-let cachedOpenAIKey: string | null | undefined = undefined
+let cachedOpenAIKey: string | null | undefined
 
 // User-configured OpenAI API key (from settings, set via IPC)
 let userConfiguredOpenAIKey: string | null = null
@@ -122,7 +122,7 @@ export function clearPlanCache(): void {
  */
 function getOpenAIApiKey(): string | null {
   // First check user-configured key (highest priority, not cached)
-  if (userConfiguredOpenAIKey && userConfiguredOpenAIKey.startsWith("sk-")) {
+  if (userConfiguredOpenAIKey?.startsWith("sk-")) {
     return userConfiguredOpenAIKey
   }
 
@@ -132,13 +132,10 @@ function getOpenAIApiKey(): string | null {
   }
 
   // Check Vite env vars (works with .env.local files)
-  const viteKey = (import.meta.env as Record<string, string | undefined>)
-    .MAIN_VITE_OPENAI_API_KEY
+  const viteKey = (import.meta.env as Record<string, string | undefined>).MAIN_VITE_OPENAI_API_KEY
   if (viteKey) {
     cachedOpenAIKey = viteKey
-    console.log(
-      "[Voice] Using OPENAI_API_KEY from Vite env (MAIN_VITE_OPENAI_API_KEY)"
-    )
+    console.log("[Voice] Using OPENAI_API_KEY from Vite env (MAIN_VITE_OPENAI_API_KEY)")
     return cachedOpenAIKey
   }
 
@@ -184,12 +181,12 @@ export function clearOpenAIKeyCache(): void {
 }
 
 /**
- * Transcribe audio using 21st.dev backend (for authenticated users)
+ * Transcribe audio using the mausCode control plane (for authenticated users)
  */
 async function transcribeViaBackend(
   audioBuffer: Buffer,
   format: string,
-  language?: string
+  language?: string,
 ): Promise<string> {
   const authManager = getAuthManager()
   if (!authManager) {
@@ -259,19 +256,17 @@ async function transcribeViaBackend(
 async function transcribeWithWhisper(
   audioBuffer: Buffer,
   format: string,
-  language?: string
+  language?: string,
 ): Promise<string> {
   const key = getOpenAIApiKey()
   if (!key) {
-    throw new Error(
-      "OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
-    )
+    throw new Error("OpenAI API key not configured. Set OPENAI_API_KEY environment variable.")
   }
 
   // Check audio size limit
   if (audioBuffer.length > MAX_AUDIO_SIZE) {
     throw new Error(
-      `Audio too large (${Math.round(audioBuffer.length / 1024 / 1024)}MB). Maximum is 25MB.`
+      `Audio too large (${Math.round(audioBuffer.length / 1024 / 1024)}MB). Maximum is 25MB.`,
     )
   }
 
@@ -294,17 +289,14 @@ async function transcribeWithWhisper(
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
 
   try {
-    const response = await fetch(
-      "https://api.openai.com/v1/audio/transcriptions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-        },
-        body: formData,
-        signal: controller.signal,
-      }
-    )
+    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+      },
+      body: formData,
+      signal: controller.signal,
+    })
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -344,30 +336,24 @@ export const voiceRouter = router({
         audio: z.string(), // base64 encoded audio
         format: z.enum(["webm", "wav", "mp3", "m4a", "ogg"]).default("webm"),
         language: z.string().optional(), // ISO 639-1 code (e.g., "en", "ru")
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const audioBuffer = Buffer.from(input.audio, "base64")
 
-      console.log(
-        `[Voice] Transcribing ${audioBuffer.length} bytes of ${input.format} audio`
-      )
+      console.log(`[Voice] Transcribing ${audioBuffer.length} bytes of ${input.format} audio`)
 
       // Check audio size limit
       if (audioBuffer.length > MAX_AUDIO_SIZE) {
         throw new Error(
-          `Audio too large (${Math.round(audioBuffer.length / 1024 / 1024)}MB). Maximum is 25MB.`
+          `Audio too large (${Math.round(audioBuffer.length / 1024 / 1024)}MB). Maximum is 25MB.`,
         )
       }
 
       // If local OPENAI_API_KEY exists, use it directly (fastest, no network to backend)
       const hasLocalKey = !!getOpenAIApiKey()
       if (hasLocalKey) {
-        const text = await transcribeWithWhisper(
-          audioBuffer,
-          input.format,
-          input.language
-        )
+        const text = await transcribeWithWhisper(audioBuffer, input.format, input.language)
         console.log(`[Voice] Local transcription result: "${text.slice(0, 100)}..."`)
         return { text }
       }
@@ -376,20 +362,14 @@ export const voiceRouter = router({
       const authManager = getAuthManager()
       const isAuthenticated = authManager?.isAuthenticated() ?? false
       if (isAuthenticated) {
-        const text = await transcribeViaBackend(
-          audioBuffer,
-          input.format,
-          input.language
-        )
-        console.log(
-          `[Voice] Backend transcription result: "${text.slice(0, 100)}..."`
-        )
+        const text = await transcribeViaBackend(audioBuffer, input.format, input.language)
+        console.log(`[Voice] Backend transcription result: "${text.slice(0, 100)}..."`)
         return { text }
       }
 
       // No local key and not authenticated
       throw new Error(
-        "Voice input requires signing in or setting OPENAI_API_KEY environment variable"
+        "Voice input requires signing in or setting OPENAI_API_KEY environment variable",
       )
     }),
 
@@ -434,8 +414,7 @@ export const voiceRouter = router({
     return {
       available: false,
       method: null,
-      reason:
-        "Add your OpenAI API key in Settings > Models, or sign in with a paid subscription",
+      reason: "Add your OpenAI API key in Settings > Models, or sign in with a paid subscription",
     }
   }),
 
@@ -443,23 +422,21 @@ export const voiceRouter = router({
    * Set OpenAI API key from user settings
    * This allows users without a paid subscription to use their own API key
    */
-  setOpenAIKey: publicProcedure
-    .input(z.object({ key: z.string() }))
-    .mutation(({ input }) => {
-      const key = input.key.trim()
+  setOpenAIKey: publicProcedure.input(z.object({ key: z.string() })).mutation(({ input }) => {
+    const key = input.key.trim()
 
-      // Validate key format if provided
-      if (key && !key.startsWith("sk-")) {
-        throw new Error("Invalid OpenAI API key format. Key should start with 'sk-'")
-      }
+    // Validate key format if provided
+    if (key && !key.startsWith("sk-")) {
+      throw new Error("Invalid OpenAI API key format. Key should start with 'sk-'")
+    }
 
-      setUserOpenAIKey(key || null)
+    setUserOpenAIKey(key || null)
 
-      // Clear plan cache so isAvailable re-evaluates
-      clearPlanCache()
+    // Clear plan cache so isAvailable re-evaluates
+    clearPlanCache()
 
-      return { success: true }
-    }),
+    return { success: true }
+  }),
 
   /**
    * Check if user has configured an OpenAI API key

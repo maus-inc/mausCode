@@ -1,0 +1,41 @@
+{
+  "name": "@maus-inc/runtime-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "mausCode runtime client: harness-api v1 NDJSON client for the native runtime (forked from @1jehuang/jcode-sdk, see UPSTREAM.md)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test --experimental-strip-types test/*.test.ts",
+    "test:live": "node test/run-live.mjs",
+    "check": "npm run typecheck && npm run test",
+    "clean": "rm -rf dist node_modules"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
+  },
+  "optionalDependencies": {
+    "@1jehuang/jcode-darwin-arm64": "1.1.0",
+    "@1jehuang/jcode-darwin-x64": "1.1.0",
+    "@1jehuang/jcode-linux-arm64": "1.1.0",
+    "@1jehuang/jcode-linux-x64": "1.1.0",
+    "@1jehuang/jcode-win32-arm64": "1.1.0",
+    "@1jehuang/jcode-win32-x64": "1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

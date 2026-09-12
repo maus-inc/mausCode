@@ -1,25 +1,28 @@
-import type { ChatTransport, UIMessage } from "ai"
+import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import { DEFAULT_API_BASE_URL } from "../../../../shared/app-identity"
+import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
+import { localOnlyModeAtom } from "../../../lib/atoms"
+import { appStore } from "../../../lib/jotai-store"
 
 // Cache the API base URL (fetched once from main process)
 let cachedApiBase: string | null = null
 
 async function getApiBase(): Promise<string> {
   if (!cachedApiBase) {
-    // Uses MAIN_VITE_API_URL in dev, "https://21st.dev" in production
-    cachedApiBase = await window.desktopApi?.getApiBaseUrl() || "https://21st.dev"
+    // Control-plane base URL (MAIN_VITE_API_URL build override; empty in
+    // local-only mode — see shared/app-identity.ts)
+    cachedApiBase = (await window.desktopApi?.getApiBaseUrl()) || DEFAULT_API_BASE_URL
   }
   return cachedApiBase
 }
-
-type UIMessageChunk = any
 
 type RemoteChatTransportConfig = {
   chatId: string
   subChatId: string
   subChatName: string
   sandboxUrl: string
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
   model?: string // Claude model ID (e.g., "claude-sonnet-4-6")
 }
 
@@ -40,7 +43,14 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
   async sendMessages(options: {
     messages: UIMessage[]
     abortSignal?: AbortSignal
-  }): Promise<ReadableStream<UIMessageChunk>> {
+  }): Promise<ReadableStream<SDKUIMessageChunk>> {
+    if (appStore.get(localOnlyModeAtom)) {
+      toast.error(LOCAL_ONLY_BLOCKED_MESSAGE, {
+        description:
+          "Remote sandbox chats need hosted services. Turn off local-only mode to use them.",
+      })
+      throw new Error(`${LOCAL_ONLY_BLOCKED_MESSAGE}: remote-chat`)
+    }
     if (!window.desktopApi?.streamFetch) {
       console.error("[RemoteTransport] Desktop API not available")
       toast.error("Desktop API not available", {
@@ -51,23 +61,16 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
 
     const streamId = generateStreamId()
     const subId = this.config.subChatId.slice(-8)
-    console.log(`[RemoteTransport] START`, {
-      streamId,
-      subId,
-      chatId: this.config.chatId,
-      sandboxUrl: this.config.sandboxUrl,
-      mode: this.config.mode,
-      model: this.config.model || "default",
-      messageCount: options.messages.length,
-    })
 
-    // Build headers - only include x-model if model is specified
+    // Build headers - only include x-model if model is specified.
+    // The remote backend only knows plan/agent: non-plan modes collapse to
+    // "agent" (remote enforcement stays plan-vs-everything-else).
     const headers: Record<string, string> = {
       "sandbox-url": this.config.sandboxUrl,
       "parent-chat-id": this.config.chatId,
       "sub-chat-id": this.config.subChatId,
       "sub-chat-name": encodeURIComponent(this.config.subChatName),
-      "sub-chat-mode": this.config.mode,
+      "sub-chat-mode": this.config.mode === "plan" ? "plan" : "agent",
     }
     if (this.config.model) {
       headers["x-model"] = this.config.model
@@ -80,28 +83,21 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
     const apiBase = await getApiBase()
 
     // Start the streaming fetch via IPC
-    const result = await window.desktopApi.streamFetch(
-      streamId,
-      `${apiBase}/api/agents/chat`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          id: this.config.subChatId,
-          messages: options.messages,
-        }),
-      }
-    )
-
-    console.log(`[RemoteTransport] Stream fetch started`, {
-      streamId,
-      subId,
-      ok: result.ok,
-      status: result.status,
+    const result = await window.desktopApi.streamFetch(streamId, `${apiBase}/api/agents/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        id: this.config.subChatId,
+        messages: options.messages,
+      }),
     })
 
     if (!result.ok) {
-      console.error(`[RemoteTransport] ERROR`, { subId, status: result.status, error: result.error })
+      console.error(`[RemoteTransport] ERROR`, {
+        subId,
+        status: result.status,
+        error: result.error,
+      })
 
       if (result.status === 401) {
         toast.error("Authentication failed", {
@@ -132,17 +128,16 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
   private createIPCStream(
     streamId: string,
     subId: string,
-    abortSignal?: AbortSignal
-  ): ReadableStream<UIMessageChunk> {
+    abortSignal?: AbortSignal,
+  ): ReadableStream<SDKUIMessageChunk> {
     const decoder = new TextDecoder()
     let buffer = ""
-    let chunkCount = 0
     let cleanupChunk: (() => void) | null = null
     let cleanupDone: (() => void) | null = null
     let cleanupError: (() => void) | null = null
-    let resolveNext: ((result: { done: boolean; chunk?: UIMessageChunk }) => void) | null = null
+    let resolveNext: ((result: { done: boolean; chunk?: SDKUIMessageChunk }) => void) | null = null
     let rejectNext: ((error: Error) => void) | null = null
-    let pendingChunks: UIMessageChunk[] = []
+    let pendingChunks: SDKUIMessageChunk[] = []
     let streamDone = false
     let streamError: Error | null = null
 
@@ -157,7 +152,6 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
           const data = line.slice(6).trim()
 
           if (data === "[DONE]") {
-            console.log(`[RemoteTransport] FINISH sub=${subId} chunks=${chunkCount}`)
             streamDone = true
             if (resolveNext) {
               resolveNext({ done: true })
@@ -168,14 +162,6 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
 
           try {
             const chunk = JSON.parse(data)
-            chunkCount++
-            if (chunkCount <= 3) {
-              console.log(`[RemoteTransport] Chunk #${chunkCount}`, {
-                subId,
-                type: chunk.type,
-                preview: JSON.stringify(chunk).slice(0, 200),
-              })
-            }
 
             if (resolveNext) {
               resolveNext({ done: false, chunk })
@@ -183,8 +169,11 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
             } else {
               pendingChunks.push(chunk)
             }
-          } catch (parseErr) {
-            console.warn(`[RemoteTransport] Failed to parse chunk`, { subId, data: data.slice(0, 100) })
+          } catch {
+            console.warn(`[RemoteTransport] Failed to parse chunk`, {
+              subId,
+              data: data.slice(0, 100),
+            })
           }
         }
       }
@@ -194,7 +183,6 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
     cleanupChunk = window.desktopApi.onStreamChunk(streamId, processBytes)
 
     cleanupDone = window.desktopApi.onStreamDone(streamId, () => {
-      console.log(`[RemoteTransport] DONE sub=${subId} chunks=${chunkCount}`)
       streamDone = true
       if (resolveNext) {
         resolveNext({ done: true })
@@ -211,26 +199,39 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
       }
     })
 
-    // Handle abort
-    if (abortSignal) {
-      abortSignal.addEventListener("abort", () => {
-        console.log(`[RemoteTransport] ABORT sub=${subId} chunks=${chunkCount}`)
-        streamDone = true
-        cleanup()
-      })
-    }
-
     const cleanup = () => {
       cleanupChunk?.()
       cleanupDone?.()
       cleanupError?.()
+      cleanupChunk = null
+      cleanupDone = null
+      cleanupError = null
+      pendingChunks = []
+      if (abortSignal && abortHandler) {
+        abortSignal.removeEventListener("abort", abortHandler)
+        abortHandler = null
+      }
+    }
+
+    // Handle abort — keep a handle so we can remove the listener on natural
+    // stream end. Without removal, a long-lived AbortSignal accumulates one
+    // listener per request (each closure pinning chunk buffers + listeners).
+    let abortHandler: (() => void) | null = null
+    if (abortSignal) {
+      abortHandler = () => {
+        streamDone = true
+        cleanup()
+      }
+      abortSignal.addEventListener("abort", abortHandler)
     }
 
     return new ReadableStream({
       pull: async (controller) => {
         // Check if we have pending chunks
         if (pendingChunks.length > 0) {
-          controller.enqueue(pendingChunks.shift()!)
+          const chunk = pendingChunks.shift()
+          if (chunk === undefined) return
+          controller.enqueue(chunk)
           return
         }
 
@@ -249,10 +250,12 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
         }
 
         // Wait for next chunk
-        const result = await new Promise<{ done: boolean; chunk?: UIMessageChunk }>((resolve, reject) => {
-          resolveNext = resolve
-          rejectNext = reject
-        })
+        const result = await new Promise<{ done: boolean; chunk?: SDKUIMessageChunk }>(
+          (resolve, reject) => {
+            resolveNext = resolve
+            rejectNext = reject
+          },
+        )
 
         if (result.done) {
           cleanup()
@@ -262,13 +265,12 @@ export class RemoteChatTransport implements ChatTransport<UIMessage> {
         }
       },
       cancel: () => {
-        console.log(`[RemoteTransport] CANCEL sub=${subId} chunks=${chunkCount}`)
         cleanup()
       },
     })
   }
 
-  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
+  async reconnectToStream(): Promise<ReadableStream<SDKUIMessageChunk> | null> {
     // TODO: Implement stream reconnection using stream_id from sub-chat
     return null
   }

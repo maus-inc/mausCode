@@ -1,20 +1,21 @@
 "use client"
 
-import { memo, useState, useEffect, useRef } from "react"
 import { useAtomValue } from "jotai"
 import { ChevronRight } from "lucide-react"
-import { useFileOpen } from "../mentions"
-import { selectedProjectAtom } from "../atoms"
-import { AgentToolRegistry, getToolStatus } from "./agent-tool-registry"
-import { AgentToolCall } from "./agent-tool-call"
-import { AgentToolInterrupted } from "./agent-tool-interrupted"
-import { areTaskToolPropsEqual } from "./agent-tool-utils"
+import { memo, useEffect, useRef, useState } from "react"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
+import { selectedProjectAtom } from "../atoms"
+import { useFileOpen } from "../mentions"
+import { AgentToolCall } from "./agent-tool-call"
+import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { AgentToolRegistry, type ToolDisplayPart, getToolStatus } from "./agent-tool-registry"
+import type { ToolPartLike } from "./agent-tool-state"
+import { areTaskToolPropsEqual } from "./agent-tool-utils"
 
 interface AgentTaskToolProps {
-  part: any
-  nestedTools: any[]
+  part: ToolPartLike
+  nestedTools: ToolPartLike[]
   chatStatus?: string
 }
 
@@ -59,11 +60,17 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   // Track elapsed time for running tasks
   const [elapsedMs, setElapsedMs] = useState(0)
 
-  const description = part.input?.description || ""
+  const taskInput = part.input as { description?: string } | undefined
+  const taskMeta = part as {
+    startedAt?: unknown
+    callProviderMetadata?: { custom?: { startedAt?: unknown } }
+  }
+  const description = taskInput?.description || ""
 
   // Get startedAt from providerMetadata (passed through AI SDK)
-  const startedAt = (part.callProviderMetadata?.custom?.startedAt as number | undefined)
-    ?? (part.startedAt as number | undefined)
+  const startedAt =
+    (taskMeta.callProviderMetadata?.custom?.startedAt as number | undefined) ??
+    (taskMeta.startedAt as number | undefined)
 
   // Tick elapsed time while task is running
   useEffect(() => {
@@ -78,7 +85,11 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   }, [isPending, startedAt])
 
   // Use output duration from Claude Code if available, otherwise use our tracked time
-  const outputDuration = part.output?.totalDurationMs || part.output?.duration || part.output?.duration_ms
+  const taskOutput = part.output as
+    | { totalDurationMs?: number; duration?: number; duration_ms?: number }
+    | undefined
+  const outputDuration =
+    taskOutput?.totalDurationMs || taskOutput?.duration || taskOutput?.duration_ms
   const displayMs = !isPending && outputDuration ? outputDuration : elapsedMs
   const elapsedTimeDisplay = formatElapsedTime(displayMs)
 
@@ -87,7 +98,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
     if (isPending && isExpanded && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [nestedTools.length, isPending, isExpanded])
+  }, [isPending, isExpanded])
 
   const hasNestedTools = nestedTools.length > 0
 
@@ -95,17 +106,16 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   const getSubtitle = () => {
     if (isPending && hasNestedTools) {
       const lastTool = nestedTools[nestedTools.length - 1]
-      const meta = lastTool ? AgentToolRegistry[lastTool.type] : null
-      if (meta) {
-        const title = meta.title(lastTool)
-        const sub = meta.subtitle?.(lastTool)
-        return sub ? `${title} ${sub}` : title
+      const lastToolType = lastTool?.type
+      const meta = lastToolType ? AgentToolRegistry[lastToolType] : null
+      if (meta && lastTool) {
+        const title = meta.title(lastTool as ToolDisplayPart)
+        const sub = meta.subtitle?.(lastTool as ToolDisplayPart)
+        return typeof sub === "string" && sub ? `${title} ${sub}` : title
       }
     }
     if (description) {
-      const truncated = description.length > 60
-        ? description.slice(0, 57) + "..."
-        : description
+      const truncated = description.length > 60 ? `${description.slice(0, 57)}...` : description
       return truncated
     }
     return ""
@@ -126,8 +136,18 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   return (
     <div>
       {/* Header - clickable to toggle, same style as AgentExploringGroup */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
         className="group flex items-start gap-1.5 py-0.5 px-2 cursor-pointer"
       >
         <div className="flex-1 min-w-0 flex items-center gap-1">
@@ -146,11 +166,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                 {getTitle()}
               </span>
             )}
-            {subtitle && (
-              <span className="text-muted-foreground/60 truncate">
-                {subtitle}
-              </span>
-            )}
+            {subtitle && <span className="text-muted-foreground/60 truncate">{subtitle}</span>}
             {/* Show elapsed time while running or final time when done */}
             {elapsedTimeDisplay && (
               <span className="text-muted-foreground/50 tabular-nums flex-shrink-0">
@@ -176,9 +192,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
           <div
             className={cn(
               "absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
-              isPending && nestedTools.length > MAX_VISIBLE_TOOLS
-                ? "opacity-100"
-                : "opacity-0",
+              isPending && nestedTools.length > MAX_VISIBLE_TOOLS ? "opacity-100" : "opacity-0",
             )}
           />
 
@@ -198,29 +212,34 @@ export const AgentTaskTool = memo(function AgentTaskTool({
             }
           >
             {nestedTools.map((nestedPart, idx) => {
-              const nestedMeta = AgentToolRegistry[nestedPart.type]
+              const nestedMeta = nestedPart.type ? AgentToolRegistry[nestedPart.type] : undefined
               if (!nestedMeta) {
                 return (
-                  <div
-                    key={idx}
-                    className="text-xs text-muted-foreground py-0.5 px-2"
-                  >
+                  /* biome-ignore lint/suspicious/noArrayIndexKey: nested tool parts are positional and append-only. */
+                  <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
                     {nestedPart.type?.replace("tool-", "")}
                   </div>
                 )
               }
-              const { isPending: nestedIsPending, isError: nestedIsError } =
-                getToolStatus(nestedPart, chatStatus)
-              const handleClick = nestedPart.type === "tool-Read" && onOpenFile && nestedPart.input?.file_path
-                ? () => onOpenFile(nestedPart.input.file_path)
-                : undefined
+              const { isPending: nestedIsPending, isError: nestedIsError } = getToolStatus(
+                nestedPart,
+                chatStatus,
+              )
+              const nestedInput = nestedPart.input as { file_path?: string } | undefined
+              const nestedReadPath =
+                nestedPart.type === "tool-Read" ? nestedInput?.file_path : undefined
+              const handleClick =
+                nestedReadPath && onOpenFile ? () => onOpenFile(nestedReadPath) : undefined
               return (
                 <AgentToolCall
                   key={idx}
                   icon={nestedMeta.icon}
-                  title={nestedMeta.title(nestedPart)}
-                  subtitle={nestedMeta.subtitle?.(nestedPart)}
-                  tooltipContent={nestedMeta.tooltipContent?.(nestedPart, projectPath)}
+                  title={nestedMeta.title(nestedPart as ToolDisplayPart)}
+                  subtitle={nestedMeta.subtitle?.(nestedPart as ToolDisplayPart)}
+                  tooltipContent={nestedMeta.tooltipContent?.(
+                    nestedPart as ToolDisplayPart,
+                    projectPath,
+                  )}
                   isPending={nestedIsPending}
                   isError={nestedIsError}
                   onClick={handleClick}

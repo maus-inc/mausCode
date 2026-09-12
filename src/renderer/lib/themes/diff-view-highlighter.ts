@@ -1,13 +1,13 @@
 /**
  * Custom Diff View Highlighter Integration
- * 
+ *
  * Creates a custom DiffHighlighter that uses our shiki theme mapping
  * instead of the hardcoded github-dark/github-light themes
  */
 
-import { getHighlighter } from "./shiki-theme-loader"
-import type { BundledTheme, Highlighter } from "shiki"
 import type { Root } from "hast"
+import type { BundledTheme, Highlighter } from "shiki"
+import { getHighlighter } from "./shiki-theme-loader"
 
 // Shiki themes we load
 const SHIKI_THEMES: BundledTheme[] = [
@@ -24,8 +24,8 @@ const SHIKI_THEMES: BundledTheme[] = [
  * Map our custom theme IDs to Shiki bundled themes
  */
 const THEME_TO_SHIKI_MAP: Record<string, BundledTheme> = {
-  "21st-dark": "github-dark",
-  "21st-light": "github-light",
+  "mauscode-dark": "github-dark",
+  "mauscode-light": "github-light",
   "claude-dark": "github-dark",
   "claude-light": "github-light",
   "vesper-dark": "vesper",
@@ -77,7 +77,12 @@ export type DiffHighlighter = {
   setMaxLineToIgnoreSyntax: (v: number) => void
   ignoreSyntaxHighlightList: (string | RegExp)[]
   setIgnoreSyntaxHighlightList: (v: (string | RegExp)[]) => void
-  getAST: (raw: string, fileName?: string, lang?: string, theme?: "light" | "dark") => Root | undefined
+  getAST: (
+    raw: string,
+    fileName?: string,
+    lang?: string,
+    theme?: "light" | "dark",
+  ) => Root | undefined
   processAST: (ast: Root) => {
     syntaxFileObject: Record<number, SyntaxLine>
     syntaxFileLineNumber: number
@@ -87,7 +92,7 @@ export type DiffHighlighter = {
 }
 
 // Current theme state - updated by the component
-let currentThemeId: string = "21st-dark"
+let currentThemeId: string = "mauscode-dark"
 
 /**
  * Set the current theme ID for highlighting
@@ -99,10 +104,13 @@ export function setDiffViewTheme(themeId: string): void {
 /**
  * Process AST into syntax lines for diff view
  */
-function processAST(ast: Root): { syntaxFileObject: Record<number, SyntaxLine>; syntaxFileLineNumber: number } {
+function processAST(ast: Root): {
+  syntaxFileObject: Record<number, SyntaxLine>
+  syntaxFileLineNumber: number
+} {
   let lineNumber = 1
   const syntaxObj: Record<number, SyntaxLine> = {}
-  
+
   const loopAST = (nodes: SyntaxNode[], wrapper?: SyntaxNode) => {
     nodes.forEach((node) => {
       if (node.type === "text") {
@@ -130,7 +138,7 @@ function processAST(ast: Root): { syntaxFileObject: Record<number, SyntaxLine>; 
         const lines = node.value.split("\n")
         node.children = node.children || []
         for (let i = 0; i < lines.length; i++) {
-          const _value = i === lines.length - 1 ? lines[i] : lines[i] + "\n"
+          const _value = i === lines.length - 1 ? lines[i] : `${lines[i]}\n`
           const _lineNumber = i === 0 ? lineNumber : ++lineNumber
           const _valueLength = _value.length
           const _node: SyntaxNode = {
@@ -167,7 +175,7 @@ function processAST(ast: Root): { syntaxFileObject: Record<number, SyntaxLine>; 
       }
     })
   }
-  
+
   loopAST(ast.children as SyntaxNode[])
   return { syntaxFileObject: syntaxObj, syntaxFileLineNumber: lineNumber }
 }
@@ -187,7 +195,7 @@ const ignoreSyntaxHighlightList: (string | RegExp)[] = []
 export async function createCustomDiffHighlighter(): Promise<DiffHighlighter> {
   // Get our shared shiki highlighter
   const highlighter = await getHighlighter()
-  
+
   // Load additional themes if not already loaded
   const loadedThemes = highlighter.getLoadedThemes()
   for (const theme of SHIKI_THEMES) {
@@ -199,42 +207,50 @@ export async function createCustomDiffHighlighter(): Promise<DiffHighlighter> {
       }
     }
   }
-  
+
   cachedHighlighter = highlighter
-  
+
   const diffHighlighter: DiffHighlighter = {
     name: "shiki-custom",
     type: "class",
-    
+
     get maxLineToIgnoreSyntax() {
       return maxLineToIgnoreSyntax
     },
-    
+
     setMaxLineToIgnoreSyntax(v: number) {
       maxLineToIgnoreSyntax = v
     },
-    
+
     get ignoreSyntaxHighlightList() {
       return ignoreSyntaxHighlightList
     },
-    
+
     setIgnoreSyntaxHighlightList(v: (string | RegExp)[]) {
       ignoreSyntaxHighlightList.length = 0
       ignoreSyntaxHighlightList.push(...v)
     },
-    
-    getAST(raw: string, fileName?: string, lang?: string, theme?: "light" | "dark"): Root | undefined {
+
+    getAST(
+      raw: string,
+      fileName?: string,
+      lang?: string,
+      theme?: "light" | "dark",
+    ): Root | undefined {
       // Check if file should be ignored
-      if (fileName && ignoreSyntaxHighlightList.some((item) => 
-        item instanceof RegExp ? item.test(fileName) : fileName === item
-      )) {
+      if (
+        fileName &&
+        ignoreSyntaxHighlightList.some((item) =>
+          item instanceof RegExp ? item.test(fileName) : fileName === item,
+        )
+      ) {
         return undefined
       }
-      
+
       try {
         const isDark = theme === "dark"
         const shikiTheme = getShikiTheme(currentThemeId, isDark)
-        
+
         return highlighter.codeToHast(raw, {
           lang: lang || "plaintext",
           themes: {
@@ -250,18 +266,18 @@ export async function createCustomDiffHighlighter(): Promise<DiffHighlighter> {
         return undefined
       }
     },
-    
+
     processAST,
-    
+
     hasRegisteredCurrentLang(lang: string): boolean {
       return highlighter.getLoadedLanguages().includes(lang)
     },
-    
+
     getHighlighterEngine(): Highlighter | null {
       return cachedHighlighter
     },
   }
-  
+
   return diffHighlighter
 }
 

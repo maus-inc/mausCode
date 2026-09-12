@@ -1,8 +1,8 @@
-import { defineConfig, externalizeDepsPlugin } from "electron-vite"
-import { resolve } from "path"
+import { resolve } from "node:path"
 import react from "@vitejs/plugin-react"
-import tailwindcss from "tailwindcss"
 import autoprefixer from "autoprefixer"
+import { defineConfig, externalizeDepsPlugin } from "electron-vite"
+import tailwindcss from "tailwindcss"
 
 const isDev = process.env.NODE_ENV !== "production"
 
@@ -24,6 +24,7 @@ export default defineConfig({
           "better-sqlite3",
           "@prisma/client",
           "@anthropic-ai/claude-agent-sdk", // ESM module - must use dynamic import
+          "@maus-inc/runtime-client", // ESM module - must use dynamic import
         ],
         output: {
           format: "cjs",
@@ -53,9 +54,7 @@ export default defineConfig({
     plugins: [
       react({
         // In dev mode, use WDYR as JSX import source to track ALL component re-renders
-        jsxImportSource: isDev
-          ? "@welldone-software/why-did-you-render"
-          : undefined,
+        jsxImportSource: isDev ? "@welldone-software/why-did-you-render" : undefined,
       }),
     ],
     resolve: {

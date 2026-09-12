@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect, type JSX } from "react"
 import { motion } from "motion/react"
+import React, { type JSX, useEffect, useMemo, useState } from "react"
 import { cn } from "../../lib/utils"
 
 interface TextShimmerProps {
@@ -50,7 +50,9 @@ function TextShimmerComponent({
         className,
       )}
       initial={{ backgroundPosition: "100% center" }}
-      animate={shouldAnimate ? { backgroundPosition: "0% center" } : { backgroundPosition: "100% center" }}
+      animate={
+        shouldAnimate ? { backgroundPosition: "0% center" } : { backgroundPosition: "100% center" }
+      }
       transition={{
         repeat: shouldAnimate ? Infinity : 0,
         duration,

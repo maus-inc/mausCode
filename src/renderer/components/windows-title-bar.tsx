@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { Minus, Square, X } from "lucide-react"
+import { useEffect, useState } from "react"
 import { Button } from "./ui/button"
 
 /**
@@ -14,8 +14,7 @@ export function WindowsTitleBar() {
   const [isMaximized, setIsMaximized] = useState(false)
   const [hasNativeFrame, setHasNativeFrame] = useState(false)
 
-  const isWindows =
-    typeof window !== "undefined" && window.desktopApi?.platform === "win32"
+  const isWindows = typeof window !== "undefined" && window.desktopApi?.platform === "win32"
 
   // Check actual window frame state
   useEffect(() => {
@@ -78,7 +77,7 @@ export function WindowsTitleBar() {
     >
       {/* Left side - App title (draggable) */}
       <div className="flex items-center gap-2 px-3 h-full">
-        <span className="text-xs font-medium text-foreground/70">1Code</span>
+        <span className="text-xs font-medium text-foreground/70">mausCode</span>
       </div>
 
       {/* Right side - Window controls (non-draggable) */}

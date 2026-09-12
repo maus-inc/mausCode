@@ -1,39 +1,37 @@
 // Atoms
 export {
-  chatSearchOpenAtom,
-  chatSearchInputAtom,
-  chatSearchQueryAtom,
-  chatSearchMatchesAtom,
+  chatSearchCountInfoAtom,
   chatSearchCurrentIndexAtom,
   chatSearchCurrentMatchAtom,
-  chatSearchCountInfoAtom,
-  highlightRangesAtomFamily,
+  chatSearchInputAtom,
+  chatSearchMatchesAtom,
+  chatSearchOpenAtom,
+  chatSearchQueryAtom,
+  closeSearchAtom,
   goToNextMatchAtom,
   goToPrevMatchAtom,
-  closeSearchAtom,
-  openSearchAtom,
-  toggleSearchAtom,
-  type SearchMatch,
   type HighlightRange,
+  highlightRangesAtomFamily,
+  openSearchAtom,
+  type SearchMatch,
+  toggleSearchAtom,
 } from "./chat-search-atoms"
-
+// Components
+export { ChatSearchBar } from "./chat-search-bar"
 // Utils
 export {
+  debounce,
   extractSearchableText,
   findMatches,
   splitTextByHighlights,
-  debounce,
   type TextSegment,
 } from "./chat-search-utils"
-
-// Components
-export { ChatSearchBar } from "./chat-search-bar"
 
 // Context
 export {
   SearchHighlightProvider,
-  useSearchHighlightContext,
-  useSearchHighlight,
   useIsSearchActive,
+  useSearchHighlight,
+  useSearchHighlightContext,
   useSearchQuery,
 } from "./search-highlight-context"

@@ -1,9 +1,11 @@
 "use client"
 
 import { Brain, ChevronRight, Zap } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { AnimatePresence, motion } from "motion/react"
+import { Button } from "../../../components/ui/button"
+import { Checkbox } from "../../../components/ui/checkbox"
 import {
   Command,
   CommandEmpty,
@@ -13,15 +15,20 @@ import {
   CommandList,
   CommandSeparator,
 } from "../../../components/ui/command"
-import { CheckIcon, ClaudeCodeIcon, IconChevronDown, ThinkingIcon } from "../../../components/ui/icons"
-import { Switch } from "../../../components/ui/switch"
-import { Checkbox } from "../../../components/ui/checkbox"
-import { Button } from "../../../components/ui/button"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../../components/ui/popover"
+  CheckIcon,
+  ClaudeCodeIcon,
+  ClineIcon,
+  CursorIcon,
+  GrokIcon,
+  IconChevronDown,
+  OpenclawIcon,
+  QwenIcon,
+  RooIcon,
+  ThinkingIcon,
+} from "../../../components/ui/icons"
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover"
+import { Switch } from "../../../components/ui/switch"
 import { cn } from "../../../lib/utils"
 import type { CodexThinkingLevel } from "../lib/models"
 import { formatCodexThinkingLabel } from "../lib/models"
@@ -29,12 +36,44 @@ import { formatCodexThinkingLabel } from "../lib/models"
 const CROSS_PROVIDER_DIALOG_DISMISSED_KEY = "agent-model-selector:skip-cross-provider-dialog"
 
 const CodexIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
   </svg>
 )
 
-export type AgentProviderId = "claude-code" | "codex"
+const GeminiIcon = ({ className }: { className?: string }) => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M12 2L13.09 8.26L20 9.27L15 14.14L16.18 21.02L12 17.77L7.82 21.02L9 14.14L4 9.27L10.91 8.26L12 2Z" />
+  </svg>
+)
+
+const OpenRouterIcon = ({ className }: { className?: string }) => (
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M3 12c4.5 0 4.5-6 9-6s4.5 6 9 6" />
+    <path d="M3 12c4.5 0 4.5 6 9 6s4.5-6 9-6" />
+  </svg>
+)
+
+export type AgentProviderId =
+  | "claude-code"
+  | "codex"
+  | "gemini"
+  | "openrouter"
+  | "cursor"
+  | "grok"
+  | "qwen"
+  | "cline"
+  | "openclaw"
+  | "roo"
 
 type ClaudeModelOption = {
   id: string
@@ -46,6 +85,53 @@ type CodexModelOption = {
   id: string
   name: string
   thinkings: CodexThinkingLevel[]
+}
+
+type GeminiModelOption = {
+  id: string
+  name: string
+  version: string
+}
+
+type OpenRouterModelOption = {
+  id: string
+  name: string
+}
+
+// NOTE (transplant): Cursor CLI provider group (SamSammane/1code-ui, Apache-2.0).
+type CursorModelOption = {
+  id: string
+  name: string
+}
+
+// Grok CLI provider group (mausCode-authored, mirrors cursor).
+type GrokModelOption = {
+  id: string
+  name: string
+}
+
+// Qwen Code provider group (mausCode-authored, mirrors cursor).
+type QwenModelOption = {
+  id: string
+  name: string
+}
+
+// Cline provider group (mausCode-authored, mirrors cursor).
+type ClineModelOption = {
+  id: string
+  name: string
+}
+
+// OpenClaw provider group (mausCode-authored, mirrors cursor).
+type OpenclawModelOption = {
+  id: string
+  name: string
+}
+
+// Roo Code provider group (mausCode-authored, mirrors cursor).
+type RooModelOption = {
+  id: string
+  name: string
 }
 
 interface AgentModelSelectorProps {
@@ -81,11 +167,67 @@ interface AgentModelSelectorProps {
     onSelectThinking: (thinking: CodexThinkingLevel) => void
     isConnected: boolean
   }
+  gemini?: {
+    models: GeminiModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
+  openrouter?: {
+    models: OpenRouterModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
+  cursor: {
+    models: CursorModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
+  grok: {
+    models: GrokModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
+  qwen: {
+    models: QwenModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
+  cline: {
+    models: ClineModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
+  openclaw: {
+    models: OpenclawModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
+  roo: {
+    models: RooModelOption[]
+    selectedModelId: string
+    onSelectModel: (modelId: string) => void
+    isConnected: boolean
+  }
 }
 
 type FlatModelItem =
   | { type: "claude"; model: ClaudeModelOption }
   | { type: "codex"; model: CodexModelOption }
+  | { type: "cursor"; model: CursorModelOption }
+  | { type: "grok"; model: GrokModelOption }
+  | { type: "qwen"; model: QwenModelOption }
+  | { type: "cline"; model: ClineModelOption }
+  | { type: "openclaw"; model: OpenclawModelOption }
+  | { type: "roo"; model: RooModelOption }
+  | { type: "gemini"; model: GeminiModelOption }
+  | { type: "openrouter"; model: OpenRouterModelOption }
   | { type: "ollama"; modelName: string; isRecommended: boolean }
   | { type: "custom" }
 
@@ -102,7 +244,7 @@ function CodexThinkingSubMenu({
   const subMenuRef = useRef<HTMLDivElement>(null)
   const [showSub, setShowSub] = useState(false)
   const [subPos, setSubPos] = useState({ top: 0, left: 0 })
-  const closeTimeout = useRef<ReturnType<typeof setTimeout>>()
+  const closeTimeout = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const scheduleClose = useCallback(() => {
     closeTimeout.current = setTimeout(() => setShowSub(false), 150)
@@ -116,9 +258,7 @@ function CodexThinkingSubMenu({
     cancelClose()
     if (triggerRef.current) {
       const triggerRect = triggerRef.current.getBoundingClientRect()
-      const popoverEl = triggerRef.current.closest(
-        "[data-radix-popper-content-wrapper] > *",
-      )
+      const _popoverEl = triggerRef.current.closest("[data-radix-popper-content-wrapper] > *")
       setSubPos({
         top: triggerRect.top - 4,
         left: triggerRect.right + 6,
@@ -153,8 +293,25 @@ function CodexThinkingSubMenu({
     <div className="py-1">
       <div
         ref={triggerRef}
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={showSub}
+        tabIndex={0}
         onMouseEnter={handleTriggerEnter}
         onMouseLeave={handleTriggerLeave}
+        onFocus={handleTriggerEnter}
+        onBlur={scheduleClose}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " " || e.key === "ArrowRight") {
+            e.preventDefault()
+            handleTriggerEnter()
+            requestAnimationFrame(() => {
+              subMenuRef.current?.querySelector("button")?.focus()
+            })
+          } else if (e.key === "Escape") {
+            setShowSub(false)
+          }
+        }}
         className={cn(
           "flex items-center justify-between gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 rounded-md text-sm cursor-default select-none outline-none transition-colors",
           showSub
@@ -167,9 +324,7 @@ function CodexThinkingSubMenu({
           <span>Thinking</span>
         </div>
         <div className="flex items-center gap-1 text-muted-foreground">
-          <span className="text-xs">
-            {formatCodexThinkingLabel(selectedThinking)}
-          </span>
+          <span className="text-xs">{formatCodexThinkingLabel(selectedThinking)}</span>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
         </div>
       </div>
@@ -178,6 +333,7 @@ function CodexThinkingSubMenu({
         createPortal(
           <div
             ref={subMenuRef}
+            role="menu"
             onMouseEnter={cancelClose}
             onMouseLeave={handleSubLeave}
             className="fixed z-50 min-w-[180px] overflow-auto rounded-[10px] border border-border bg-popover text-sm text-popover-foreground shadow-lg py-1 animate-in fade-in-0 zoom-in-95 slide-in-from-left-2"
@@ -187,14 +343,14 @@ function CodexThinkingSubMenu({
               const isSelected = selectedThinking === thinking
               return (
                 <button
+                  type="button"
                   key={thinking}
                   onClick={() => onSelectThinking(thinking)}
+                  onFocus={cancelClose}
                   className="flex items-center justify-between gap-4 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
                 >
                   <span>{formatCodexThinkingLabel(thinking)}</span>
-                  {isSelected && (
-                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
-                  )}
+                  {isSelected && <CheckIcon className="h-3.5 w-3.5 shrink-0" />}
                 </button>
               )
             })}
@@ -260,7 +416,11 @@ function CrossProviderConfirmDialog({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { duration: 0.18, ease: DIALOG_EASING } }}
-            exit={{ opacity: 0, pointerEvents: "none" as const, transition: { duration: 0.15, ease: DIALOG_EASING } }}
+            exit={{
+              opacity: 0,
+              pointerEvents: "none" as const,
+              transition: { duration: 0.15, ease: DIALOG_EASING },
+            }}
             className="fixed inset-0 z-[45] bg-black/25"
             onClick={onClose}
             style={{ pointerEvents: "auto" }}
@@ -276,11 +436,10 @@ function CrossProviderConfirmDialog({
             >
               <div className="bg-background rounded-2xl border shadow-2xl overflow-hidden">
                 <div className="p-6">
-                  <h2 className="text-xl font-semibold mb-2">
-                    Switch to {providerName}
-                  </h2>
+                  <h2 className="text-xl font-semibold mb-2">Switch to {providerName}</h2>
                   <p className="text-sm text-muted-foreground">
-                    To use a different agent, a new chat will be created with your current conversation history attached.
+                    To use a different agent, a new chat will be created with your current
+                    conversation history attached.
                   </p>
                 </div>
                 <div className="bg-muted p-4 flex items-center justify-between border-t border-border rounded-b-xl">
@@ -295,7 +454,11 @@ function CrossProviderConfirmDialog({
                     <Button onClick={onClose} variant="ghost" className="rounded-md">
                       Cancel
                     </Button>
-                    <Button onClick={() => onConfirm(dontShowAgain)} variant="default" className="rounded-md">
+                    <Button
+                      onClick={() => onConfirm(dontShowAgain)}
+                      variant="default"
+                      className="rounded-md"
+                    >
                       New chat
                     </Button>
                   </div>
@@ -323,6 +486,14 @@ export function AgentModelSelector({
   onContinueWithProvider,
   claude,
   codex,
+  gemini,
+  openrouter,
+  cursor,
+  grok,
+  qwen,
+  cline,
+  openclaw,
+  roo,
 }: AgentModelSelectorProps) {
   const [search, setSearch] = useState("")
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
@@ -355,8 +526,43 @@ export function AgentModelSelector({
       items.push({ type: "codex", model: m })
     }
 
+    for (const m of cursor.models) {
+      items.push({ type: "cursor", model: m })
+    }
+
+    for (const m of grok.models) {
+      items.push({ type: "grok", model: m })
+    }
+
+    for (const m of qwen.models) {
+      items.push({ type: "qwen", model: m })
+    }
+
+    for (const m of cline.models) {
+      items.push({ type: "cline", model: m })
+    }
+    for (const m of openclaw.models) {
+      items.push({ type: "openclaw", model: m })
+    }
+
+    for (const m of roo.models) {
+      items.push({ type: "roo", model: m })
+    }
+
+    if (gemini) {
+      for (const m of gemini.models) {
+        items.push({ type: "gemini", model: m })
+      }
+    }
+
+    if (openrouter) {
+      for (const m of openrouter.models) {
+        items.push({ type: "openrouter", model: m })
+      }
+    }
+
     return items
-  }, [claude, codex])
+  }, [claude, codex, gemini, openrouter, cursor, grok, qwen, cline, openclaw, roo])
 
   // Filter by search
   const filteredModels = useMemo(() => {
@@ -372,6 +578,27 @@ export function AgentModelSelector({
           )
         case "codex":
           return item.model.name.toLowerCase().includes(q)
+        case "cursor":
+          return item.model.name.toLowerCase().includes(q)
+        case "grok":
+          return item.model.name.toLowerCase().includes(q)
+        case "qwen":
+          return item.model.name.toLowerCase().includes(q)
+        case "cline":
+          return item.model.name.toLowerCase().includes(q)
+        case "openclaw":
+          return item.model.name.toLowerCase().includes(q)
+        case "roo":
+          return item.model.name.toLowerCase().includes(q)
+        case "gemini":
+          return (
+            item.model.name.toLowerCase().includes(q) ||
+            item.model.version.toLowerCase().includes(q)
+          )
+        case "openrouter":
+          return (
+            item.model.name.toLowerCase().includes(q) || item.model.id.toLowerCase().includes(q)
+          )
         case "ollama":
           return item.modelName.toLowerCase().includes(q)
         case "custom":
@@ -391,12 +618,26 @@ export function AgentModelSelector({
   )
 
   const triggerIcon =
-    selectedAgentId === "claude-code" &&
-    claude.isOffline &&
-    claude.ollamaModels.length > 0 ? (
+    selectedAgentId === "claude-code" && claude.isOffline && claude.ollamaModels.length > 0 ? (
       <Zap className="h-4 w-4" />
     ) : selectedAgentId === "codex" ? (
       <CodexIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "gemini" ? (
+      <GeminiIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "openrouter" ? (
+      <OpenRouterIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "cursor" ? (
+      <CursorIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "grok" ? (
+      <GrokIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "qwen" ? (
+      <QwenIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "cline" ? (
+      <ClineIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "openclaw" ? (
+      <OpenclawIcon className="h-3.5 w-3.5" />
+    ) : selectedAgentId === "roo" ? (
+      <RooIcon className="h-3.5 w-3.5" />
     ) : (
       <ClaudeCodeIcon className="h-3.5 w-3.5" />
     )
@@ -407,6 +648,22 @@ export function AgentModelSelector({
         return selectedAgentId === "claude-code" && claude.selectedModelId === item.model.id
       case "codex":
         return selectedAgentId === "codex" && codex.selectedModelId === item.model.id
+      case "cursor":
+        return selectedAgentId === "cursor" && cursor.selectedModelId === item.model.id
+      case "grok":
+        return selectedAgentId === "grok" && grok.selectedModelId === item.model.id
+      case "qwen":
+        return selectedAgentId === "qwen" && qwen.selectedModelId === item.model.id
+      case "cline":
+        return selectedAgentId === "cline" && cline.selectedModelId === item.model.id
+      case "openclaw":
+        return selectedAgentId === "openclaw" && openclaw.selectedModelId === item.model.id
+      case "roo":
+        return selectedAgentId === "roo" && roo.selectedModelId === item.model.id
+      case "gemini":
+        return selectedAgentId === "gemini" && gemini?.selectedModelId === item.model.id
+      case "openrouter":
+        return selectedAgentId === "openrouter" && openrouter?.selectedModelId === item.model.id
       case "ollama":
         return selectedAgentId === "claude-code" && claude.selectedOllamaModel === item.modelName
       case "custom":
@@ -415,7 +672,16 @@ export function AgentModelSelector({
   }
 
   const getItemProvider = (item: FlatModelItem): AgentProviderId => {
-    return item.type === "codex" ? "codex" : "claude-code"
+    if (item.type === "codex") return "codex"
+    if (item.type === "cursor") return "cursor"
+    if (item.type === "grok") return "grok"
+    if (item.type === "qwen") return "qwen"
+    if (item.type === "cline") return "cline"
+    if (item.type === "openclaw") return "openclaw"
+    if (item.type === "roo") return "roo"
+    if (item.type === "gemini") return "gemini"
+    if (item.type === "openrouter") return "openrouter"
+    return "claude-code"
   }
 
   const isItemDisabled = (item: FlatModelItem): boolean => {
@@ -458,7 +724,11 @@ export function AgentModelSelector({
     if (!canSelectProvider(provider) && onContinueWithProvider) {
       handleOpenChange(false)
       const dismissed = (() => {
-        try { return localStorage.getItem(CROSS_PROVIDER_DIALOG_DISMISSED_KEY) === "true" } catch { return false }
+        try {
+          return localStorage.getItem(CROSS_PROVIDER_DIALOG_DISMISSED_KEY) === "true"
+        } catch {
+          return false
+        }
       })()
       if (dismissed) {
         onContinueWithProvider(provider)
@@ -480,6 +750,48 @@ export function AgentModelSelector({
         onSelectedAgentIdChange("codex")
         codex.onSelectModel(item.model.id)
         break
+      case "cursor":
+        if (!canSelectProvider("cursor")) return
+        onSelectedAgentIdChange("cursor")
+        cursor.onSelectModel(item.model.id)
+        break
+      case "grok":
+        if (!canSelectProvider("grok")) return
+        onSelectedAgentIdChange("grok")
+        grok.onSelectModel(item.model.id)
+        break
+      case "qwen":
+        if (!canSelectProvider("qwen")) return
+        onSelectedAgentIdChange("qwen")
+        qwen.onSelectModel(item.model.id)
+        break
+      case "cline":
+        if (!canSelectProvider("cline")) return
+        onSelectedAgentIdChange("cline")
+        cline.onSelectModel(item.model.id)
+        break
+      case "openclaw":
+        if (!canSelectProvider("openclaw")) return
+        onSelectedAgentIdChange("openclaw")
+        openclaw.onSelectModel(item.model.id)
+        break
+      case "roo":
+        if (!canSelectProvider("roo")) return
+        onSelectedAgentIdChange("roo")
+        roo.onSelectModel(item.model.id)
+        break
+      case "gemini":
+        if (!canSelectProvider("gemini")) return
+        if (!gemini) return
+        onSelectedAgentIdChange("gemini")
+        gemini.onSelectModel(item.model.id)
+        break
+      case "openrouter":
+        if (!canSelectProvider("openrouter")) return
+        if (!openrouter) return
+        onSelectedAgentIdChange("openrouter")
+        openrouter.onSelectModel(item.model.id)
+        break
       case "ollama":
         if (!canSelectProvider("claude-code")) return
         onSelectedAgentIdChange("claude-code")
@@ -499,6 +811,22 @@ export function AgentModelSelector({
         return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "codex":
         return <CodexIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "cursor":
+        return <CursorIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "grok":
+        return <GrokIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "qwen":
+        return <QwenIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "cline":
+        return <ClineIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "openclaw":
+        return <OpenclawIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "roo":
+        return <RooIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "gemini":
+        return <GeminiIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      case "openrouter":
+        return <OpenRouterIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       case "ollama":
         return <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
       case "custom":
@@ -511,6 +839,22 @@ export function AgentModelSelector({
       case "claude":
         return `${item.model.name} ${item.model.version}`
       case "codex":
+        return item.model.name
+      case "cursor":
+        return item.model.name
+      case "grok":
+        return item.model.name
+      case "qwen":
+        return item.model.name
+      case "cline":
+        return item.model.name
+      case "openclaw":
+        return item.model.name
+      case "roo":
+        return item.model.name
+      case "gemini":
+        return item.model.name
+      case "openrouter":
         return item.model.name
       case "ollama":
         return item.modelName + (item.isRecommended ? " (recommended)" : "")
@@ -525,6 +869,22 @@ export function AgentModelSelector({
         return `claude-${item.model.id}`
       case "codex":
         return `codex-${item.model.id}`
+      case "cursor":
+        return `cursor-${item.model.id}`
+      case "grok":
+        return `grok-${item.model.id}`
+      case "qwen":
+        return `qwen-${item.model.id}`
+      case "cline":
+        return `cline-${item.model.id}`
+      case "openclaw":
+        return `openclaw-${item.model.id}`
+      case "roo":
+        return `roo-${item.model.id}`
+      case "gemini":
+        return `gemini-${item.model.id}`
+      case "openrouter":
+        return `openrouter-${item.model.id}`
       case "ollama":
         return `ollama-${item.modelName}`
       case "custom":
@@ -536,6 +896,7 @@ export function AgentModelSelector({
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
+          type="button"
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground transition-[background-color,color] duration-150 ease-out rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
             "hover:text-foreground hover:bg-muted/50",
@@ -547,55 +908,51 @@ export function AgentModelSelector({
           <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        className={cn("w-64 p-0", contentClassName)}
-        align="start"
-      >
+      <PopoverContent className={cn("w-64 p-0", contentClassName)} align="start">
         <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Search models..."
-            value={search}
-            onValueChange={setSearch}
-          />
+          <CommandInput placeholder="Search models..." value={search} onValueChange={setSearch} />
 
           {/* Claude thinking toggle */}
           {selectedAgentId === "claude-code" &&
             !claude.isOffline &&
             !claude.hasCustomModelConfig && (
-            <>
-              <div
-                className="flex items-center justify-between min-h-[32px] py-[5px] px-1.5 mx-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center gap-1.5">
-                  <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-sm">Thinking</span>
-                </div>
-                <Switch
-                  checked={claude.thinkingEnabled}
-                  onCheckedChange={claude.onThinkingChange}
-                  className="scale-75"
-                />
-              </div>
-              <CommandSeparator />
-            </>
-          )}
-
-          {/* Codex thinking level selector with hover sub-menu */}
-          {selectedAgentId === "codex" && (() => {
-            const selectedCodexModel = codex.models.find((m) => m.id === codex.selectedModelId) || codex.models[0]
-            if (!selectedCodexModel) return null
-            return (
               <>
-                <CodexThinkingSubMenu
-                  thinkings={selectedCodexModel.thinkings}
-                  selectedThinking={codex.selectedThinking}
-                  onSelectThinking={codex.onSelectThinking}
-                />
+                <div
+                  className="flex items-center justify-between min-h-[32px] py-[5px] px-1.5 mx-1"
+                  role="none"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm">Thinking</span>
+                  </div>
+                  <Switch
+                    checked={claude.thinkingEnabled}
+                    onCheckedChange={claude.onThinkingChange}
+                    className="scale-75"
+                  />
+                </div>
                 <CommandSeparator />
               </>
-            )
-          })()}
+            )}
+
+          {/* Codex thinking level selector with hover sub-menu */}
+          {selectedAgentId === "codex" &&
+            (() => {
+              const selectedCodexModel =
+                codex.models.find((m) => m.id === codex.selectedModelId) || codex.models[0]
+              if (!selectedCodexModel) return null
+              return (
+                <>
+                  <CodexThinkingSubMenu
+                    thinkings={selectedCodexModel.thinkings}
+                    selectedThinking={codex.selectedThinking}
+                    onSelectThinking={codex.onSelectThinking}
+                  />
+                  <CommandSeparator />
+                </>
+              )
+            })()}
 
           <CommandList className="max-h-[300px] overflow-y-auto">
             {filteredModels.length > 0 ? (
@@ -617,9 +974,7 @@ export function AgentModelSelector({
                       {crossProvider && (
                         <span className="text-[10px] text-muted-foreground shrink-0">New chat</span>
                       )}
-                      {selected && (
-                        <CheckIcon className="h-4 w-4 shrink-0" />
-                      )}
+                      {selected && <CheckIcon className="h-4 w-4 shrink-0" />}
                     </CommandItem>
                   )
                 })}
@@ -632,6 +987,7 @@ export function AgentModelSelector({
           {onOpenModelsSettings && (
             <div className="border-t border-border/50 py-1">
               <button
+                type="button"
                 onClick={() => {
                   onOpenModelsSettings()
                   handleOpenChange(false)
@@ -648,7 +1004,25 @@ export function AgentModelSelector({
 
       <CrossProviderConfirmDialog
         isOpen={confirmDialogOpen}
-        providerName={pendingProvider === "codex" ? "Codex" : "Claude Code"}
+        providerName={
+          pendingProvider === "codex"
+            ? "Codex"
+            : pendingProvider === "gemini"
+              ? "Gemini"
+              : pendingProvider === "cursor"
+                ? "Cursor CLI"
+                : pendingProvider === "grok"
+                  ? "Grok CLI"
+                  : pendingProvider === "qwen"
+                    ? "Qwen Code"
+                    : pendingProvider === "cline"
+                      ? "Cline"
+                      : pendingProvider === "openclaw"
+                        ? "OpenClaw"
+                        : pendingProvider === "roo"
+                          ? "Roo Code"
+                          : "Claude Code"
+        }
         onConfirm={handleConfirmCrossProvider}
         onClose={handleCloseConfirmDialog}
       />

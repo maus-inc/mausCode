@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": "timeout",
+  "final": "",
+  "payloads": [],
+  "model": null,
+  "provider": null,
+  "sessionId": "14cc0d4d-e91d-4b18-bd9a-3640d24d737e",
+  "error": {
+    "message": "LLM request failed: network connection error.",
+    "kind": "timeout"
+  }
+}

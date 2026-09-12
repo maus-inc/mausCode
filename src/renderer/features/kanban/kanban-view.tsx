@@ -1,32 +1,32 @@
-import { useCallback, useMemo, useEffect, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { trpc } from "../../lib/trpc"
+import { ConfirmArchiveDialog } from "../../components/confirm-archive-dialog"
 import { getWindowId } from "../../contexts/WindowContext"
 import {
-  selectedAgentChatIdAtom,
-  selectedDraftIdAtom,
-  showNewChatFormAtom,
-  loadingSubChatsAtom,
-  pendingUserQuestionsAtom,
-  pendingPlanApprovalsAtom,
-  agentsUnseenChangesAtom,
-  selectedProjectAtom,
-  agentsSidebarOpenAtom,
-} from "../agents/atoms"
-import {
-  selectedAgentChatIdsAtom,
   isAgentMultiSelectModeAtom,
+  selectedAgentChatIdsAtom,
   toggleAgentChatSelectionAtom,
 } from "../../lib/atoms"
+import { trpc } from "../../lib/trpc"
+import {
+  agentsSidebarOpenAtom,
+  agentsUnseenChangesAtom,
+  loadingSubChatsAtom,
+  pendingPlanApprovalsAtom,
+  pendingUserQuestionsAtom,
+  selectedAgentChatIdAtom,
+  selectedDraftIdAtom,
+  selectedProjectAtom,
+  showNewChatFormAtom,
+} from "../agents/atoms"
+import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
+import { useNewChatDrafts } from "../agents/lib/drafts"
+import { copyChat, exportChat } from "../agents/lib/export-chat"
+import { AgentsHeaderControls } from "../agents/ui/agents-header-controls"
 import { KanbanBoard } from "./components/kanban-board"
 import type { KanbanCardData } from "./components/kanban-card"
 import { deriveWorkspaceStatus } from "./lib/derive-status"
-import { useNewChatDrafts } from "../agents/lib/drafts"
-import { exportChat, copyChat } from "../agents/lib/export-chat"
-import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
-import { ConfirmArchiveDialog } from "../../components/confirm-archive-dialog"
-import { AgentsHeaderControls } from "../agents/ui/agents-header-controls"
 
 // Event for open sub-chats changes
 const OPEN_SUB_CHATS_CHANGE_EVENT = "open-sub-chats-change"
@@ -175,13 +175,21 @@ export function KanbanView() {
   // Pending plan approvals from DB
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
     { openSubChatIds: allOpenSubChatIds },
-    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: (prev) => prev }
+    {
+      refetchInterval: 5000,
+      enabled: allOpenSubChatIds.length > 0,
+      placeholderData: (prev) => prev,
+    },
   )
 
   // File stats from DB
   const { data: fileStatsData } = trpc.chats.getFileStats.useQuery(
     { openSubChatIds: allOpenSubChatIds },
-    { refetchInterval: 5000, enabled: allOpenSubChatIds.length > 0, placeholderData: (prev) => prev }
+    {
+      refetchInterval: 5000,
+      enabled: allOpenSubChatIds.length > 0,
+      placeholderData: (prev) => prev,
+    },
   )
 
   // Build set of chatIds with pending plan approvals from DB
@@ -231,10 +239,7 @@ export function KanbanView() {
 
   // Build set of chatIds (workspace IDs) that are loading
   // loadingSubChats is Map<subChatId, parentChatId>, we need the VALUES (parentChatId)
-  const workspacesLoading = useMemo(
-    () => new Set([...loadingSubChats.values()]),
-    [loadingSubChats],
-  )
+  const workspacesLoading = useMemo(() => new Set([...loadingSubChats.values()]), [loadingSubChats])
 
   // Build kanban cards from workspaces (chats) + drafts
   const cards = useMemo(() => {
@@ -296,7 +301,18 @@ export function KanbanView() {
     }
 
     return result
-  }, [chats, drafts, projectsMap, workspacesLoading, workspacesWithPendingQuestions, workspacesWithPendingApprovals, unseenChanges, workspaceFileStats, pinnedChatIds, selectedChatIds])
+  }, [
+    chats,
+    drafts,
+    projectsMap,
+    workspacesLoading,
+    workspacesWithPendingQuestions,
+    workspacesWithPendingApprovals,
+    unseenChanges,
+    workspaceFileStats,
+    pinnedChatIds,
+    selectedChatIds,
+  ])
 
   // Navigation on card click
   const handleCardClick = useCallback(
@@ -320,14 +336,23 @@ export function KanbanView() {
         setShowNewChatForm(false) // Clear explicit new form state
       }
     },
-    [setSelectedChatId, setSelectedDraftId, setShowNewChatForm, isMultiSelectMode, toggleChatSelection]
+    [
+      setSelectedChatId,
+      setSelectedDraftId,
+      setShowNewChatForm,
+      isMultiSelectMode,
+      toggleChatSelection,
+    ],
   )
 
   // Checkbox click handler for multi-select
-  const handleCheckboxClick = useCallback((e: React.MouseEvent, chatId: string) => {
-    e.stopPropagation()
-    toggleChatSelection(chatId)
-  }, [toggleChatSelection])
+  const handleCheckboxClick = useCallback(
+    (e: React.MouseEvent, chatId: string) => {
+      e.stopPropagation()
+      toggleChatSelection(chatId)
+    },
+    [toggleChatSelection],
+  )
 
   // Rename mutation
   const renameChatMutation = trpc.chats.rename.useMutation({
@@ -364,30 +389,33 @@ export function KanbanView() {
   })
 
   // Archive handler with confirmation for active processes
-  const handleArchive = useCallback(async (chatId: string) => {
-    // Check for active processes and worktree
-    const chat = chats?.find((c) => c.id === chatId)
-    const isLocalMode = !chat?.branch
-    const [sessionCount, worktreeStatus] = await Promise.all([
-      // Local mode: terminals are shared and won't be killed on archive, so skip count
-      isLocalMode
-        ? Promise.resolve(0)
-        : utils.terminal.getActiveSessionCount.fetch({ workspaceId: chatId }),
-      utils.chats.getWorktreeStatus.fetch({ chatId }),
-    ])
+  const handleArchive = useCallback(
+    async (chatId: string) => {
+      // Check for active processes and worktree
+      const chat = chats?.find((c) => c.id === chatId)
+      const isLocalMode = !chat?.branch
+      const [sessionCount, worktreeStatus] = await Promise.all([
+        // Local mode: terminals are shared and won't be killed on archive, so skip count
+        isLocalMode
+          ? Promise.resolve(0)
+          : utils.terminal.getActiveSessionCount.fetch({ workspaceId: chatId }),
+        utils.chats.getWorktreeStatus.fetch({ chatId }),
+      ])
 
-    const needsConfirmation = sessionCount > 0 || worktreeStatus.hasWorktree
+      const needsConfirmation = sessionCount > 0 || worktreeStatus.hasWorktree
 
-    if (needsConfirmation) {
-      setArchivingChatId(chatId)
-      setActiveProcessCount(sessionCount)
-      setHasWorktree(worktreeStatus.hasWorktree)
-      setUncommittedCount(worktreeStatus.uncommittedCount)
-      setConfirmArchiveDialogOpen(true)
-    } else {
-      await archiveChatMutation.mutateAsync({ id: chatId })
-    }
-  }, [utils, archiveChatMutation, chats])
+      if (needsConfirmation) {
+        setArchivingChatId(chatId)
+        setActiveProcessCount(sessionCount)
+        setHasWorktree(worktreeStatus.hasWorktree)
+        setUncommittedCount(worktreeStatus.uncommittedCount)
+        setConfirmArchiveDialogOpen(true)
+      } else {
+        await archiveChatMutation.mutateAsync({ id: chatId })
+      }
+    },
+    [utils, archiveChatMutation, chats],
+  )
 
   const handleConfirmArchive = useCallback(async () => {
     if (!archivingChatId) return
@@ -408,14 +436,20 @@ export function KanbanView() {
   }, [])
 
   // Export chat handler
-  const handleExportChat = useCallback((params: { chatId: string; format: "markdown" | "json" | "text" }) => {
-    exportChat(params)
-  }, [])
+  const handleExportChat = useCallback(
+    (params: { chatId: string; format: "markdown" | "json" | "text" }) => {
+      exportChat(params)
+    },
+    [],
+  )
 
   // Copy chat handler
-  const handleCopyChat = useCallback((params: { chatId: string; format: "markdown" | "json" | "text" }) => {
-    copyChat(params)
-  }, [])
+  const handleCopyChat = useCallback(
+    (params: { chatId: string; format: "markdown" | "json" | "text" }) => {
+      copyChat(params)
+    },
+    [],
+  )
 
   return (
     <div className="flex flex-col h-full w-full bg-background">

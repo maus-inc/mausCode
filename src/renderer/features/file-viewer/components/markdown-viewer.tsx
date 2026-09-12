@@ -1,48 +1,45 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import Editor from "@monaco-editor/react"
+import { useAtom, useAtomValue } from "jotai"
+import { AlertCircle, Check, X } from "lucide-react"
 import { useTheme } from "next-themes"
-import { useAtom } from "jotai"
-import { useAtomValue } from "jotai"
-import { Loader2, AlertCircle, Check, X } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
+import { AppLoader } from "@/components/ui/app-loader"
 import { Button } from "@/components/ui/button"
 import {
-  IconCloseSidebarRight,
-  IconSidePeek,
-  IconCenterPeek,
-  IconFullPage,
-  MarkdownIcon,
-  CodeIcon,
-} from "@/components/ui/icons"
-import { Kbd } from "@/components/ui/kbd"
-import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { cn } from "@/lib/utils"
-import { trpc } from "@/lib/trpc"
-import { preferredEditorAtom } from "@/lib/atoms"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { APP_META } from "../../../../shared/external-apps"
-import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
-import { CopyButton } from "../../agents/ui/message-action-buttons"
-import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  CodeIcon,
+  IconCenterPeek,
+  IconCloseSidebarRight,
+  IconFullPage,
+  IconSidePeek,
+  MarkdownIcon,
+} from "@/components/ui/icons"
+import { Kbd } from "@/components/ui/kbd"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { preferredEditorAtom } from "@/lib/atoms"
 import { EDITOR_ICONS } from "@/lib/editor-icons"
-import { fileViewerWordWrapAtom, fileViewerDisplayModeAtom } from "../../agents/atoms"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { trpc } from "@/lib/trpc"
+import { cn } from "@/lib/utils"
+import { APP_META } from "../../../../shared/external-apps"
+import { fileViewerDisplayModeAtom, fileViewerWordWrapAtom } from "../../agents/atoms"
+import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
+import { CopyButton } from "../../agents/ui/message-action-buttons"
 
 const FILE_VIEWER_MODES = [
   { value: "side-peek" as const, label: "Sidebar", Icon: IconSidePeek },
   { value: "center-peek" as const, label: "Dialog", Icon: IconCenterPeek },
   { value: "full-page" as const, label: "Fullscreen", Icon: IconFullPage },
 ]
-import { defaultEditorOptions, getMonacoTheme } from "./monaco-config"
+
 import { getFileName } from "../utils/file-utils"
+import { defaultEditorOptions, getMonacoTheme } from "./monaco-config"
 
 interface MarkdownViewerProps {
   filePath: string
@@ -50,11 +47,7 @@ interface MarkdownViewerProps {
   onClose: () => void
 }
 
-export function MarkdownViewer({
-  filePath,
-  projectPath,
-  onClose,
-}: MarkdownViewerProps) {
+export function MarkdownViewer({ filePath, projectPath, onClose }: MarkdownViewerProps) {
   const fileName = getFileName(filePath)
   const { resolvedTheme } = useTheme()
   const monacoTheme = getMonacoTheme(resolvedTheme || "dark")
@@ -130,10 +123,7 @@ export function MarkdownViewer({
           onClose={onClose}
         />
         <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="text-sm">Loading file...</span>
-          </div>
+          <AppLoader label="Loading file..." />
         </div>
       </div>
     )
@@ -142,11 +132,12 @@ export function MarkdownViewer({
   if (error || (data && !data.ok)) {
     let errorMessage = "Failed to load file"
     if (data && !data.ok) {
-      errorMessage = data.reason === "too-large"
-        ? "File too large"
-        : data.reason === "binary"
-        ? "Binary file"
-        : "File not found"
+      errorMessage =
+        data.reason === "too-large"
+          ? "File too large"
+          : data.reason === "binary"
+            ? "Binary file"
+            : "File not found"
     }
 
     return (
@@ -186,10 +177,7 @@ export function MarkdownViewer({
       >
         {showPreview ? (
           <div className="h-full overflow-auto p-6">
-            <ChatMarkdownRenderer
-              content={content}
-              size="md"
-            />
+            <ChatMarkdownRenderer content={content} size="md" />
           </div>
         ) : (
           <Editor
@@ -198,11 +186,7 @@ export function MarkdownViewer({
             value={content}
             theme={monacoTheme}
             options={editorOptions}
-            loading={
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            }
+            loading={<AppLoader size="md" layout="full" />}
           />
         )}
       </div>
@@ -264,7 +248,8 @@ function Header({
               className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
             >
               {(() => {
-                const CurrentIcon = FILE_VIEWER_MODES.find((m) => m.value === displayMode)?.Icon ?? IconSidePeek
+                const CurrentIcon =
+                  FILE_VIEWER_MODES.find((m) => m.value === displayMode)?.Icon ?? IconSidePeek
                 return <CurrentIcon className="size-4 text-muted-foreground" />
               })()}
             </Button>
@@ -312,7 +297,9 @@ function Header({
           </TooltipTrigger>
           <TooltipContent side="bottom" showArrow={false}>
             Open in {editorMeta.label}
-            {openInEditorHotkey && <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>}
+            {openInEditorHotkey && (
+              <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>
+            )}
           </TooltipContent>
         </Tooltip>
 

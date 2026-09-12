@@ -1,0 +1,30 @@
+{
+  "configPath": "/home/user/.openclaw/openclaw.json",
+  "agentDir": "/home/user/.openclaw/agents/main/agent",
+  "defaultModel": "openai/gpt-5.6-sol",
+  "resolvedDefault": "openai/gpt-5.6-sol",
+  "fallbacks": [],
+  "imageModel": null,
+  "imageFallbacks": [],
+  "utilityModel": { "ref": null, "source": "none" },
+  "aliases": {},
+  "allowed": [],
+  "auth": {
+    "storePath": "/home/user/.openclaw/agents/main/agent/openclaw-agent.sqlite",
+    "shellEnvFallback": { "enabled": false, "appliedKeys": [] },
+    "providersWithOAuth": [],
+    "missingProvidersInUse": ["openai"],
+    "modelRouteIssues": [],
+    "runtimeAuthRoutes": [],
+    "providers": [
+      {
+        "provider": "github-copilot",
+        "effective": { "kind": "env", "detail": "gh...00" },
+        "profiles": { "count": 0, "oauth": 0, "token": 0, "apiKey": 0, "labels": [] },
+        "env": { "value": "gh...00", "source": "env: GH_TOKEN" }
+      }
+    ],
+    "unusableProfiles": [],
+    "oauth": { "warnAfterMs": 86400000, "profiles": [], "providers": [] }
+  }
+}

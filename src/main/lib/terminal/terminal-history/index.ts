@@ -35,13 +35,7 @@ export class HistoryWriter {
   private flushTimeout: ReturnType<typeof setTimeout> | null = null
   private isInitialized = false
 
-  constructor(
-    workspaceId: string,
-    paneId: string,
-    cwd: string,
-    cols: number,
-    rows: number
-  ) {
+  constructor(workspaceId: string, paneId: string, cwd: string, cols: number, rows: number) {
     this.workspaceId = workspaceId
     this.paneId = paneId
     this.cwd = cwd
@@ -119,7 +113,7 @@ export class HistoryWriter {
         await fs.appendFile(
           this.filePath,
           `\n---\n# Exited: ${new Date().toISOString()}\n# Exit code: ${exitCode}\n`,
-          "utf-8"
+          "utf-8",
         )
       } catch {
         // Ignore
@@ -134,13 +128,9 @@ export class HistoryWriter {
  * Reads terminal history from disk.
  */
 export class HistoryReader {
-  private workspaceId: string
-  private paneId: string
   private filePath: string
 
   constructor(workspaceId: string, paneId: string) {
-    this.workspaceId = workspaceId
-    this.paneId = paneId
     this.filePath = getHistoryPath(workspaceId, paneId)
   }
 
@@ -171,7 +161,7 @@ export class HistoryReader {
       }
 
       return { scrollback }
-    } catch (err) {
+    } catch {
       // File doesn't exist or can't be read
       return { scrollback: "" }
     }

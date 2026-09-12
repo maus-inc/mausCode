@@ -1,4 +1,4 @@
-import type { ChatTransport, UIMessage } from "ai"
+import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import {
@@ -16,18 +16,17 @@ import {
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
 } from "../atoms"
-import { CODEX_MODELS, type CodexThinkingLevel } from "./models"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
-
-type UIMessageChunk = any
+import type { LooseUIPart, PrintChunk } from "./chat-chunk-atoms"
+import { CODEX_MODELS, type CodexThinkingLevel } from "./models"
 
 type ACPChatTransportConfig = {
   chatId: string
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
   provider: "codex"
 }
 
@@ -39,7 +38,7 @@ type ImageAttachment = {
 
 // When a sub-chat hits auth-error, force one fresh Codex ACP session on next send.
 const forceFreshSessionSubChats = new Set<string>()
-const DEFAULT_CODEX_MODEL = "gpt-5.3-codex/high"
+const DEFAULT_CODEX_MODEL = "gpt-5.5/high"
 function getStoredCodexCredentials(): {
   hasApiKey: boolean
   hasSubscription: boolean
@@ -83,9 +82,7 @@ function getSelectedCodexModel(subChatId: string): string {
   const selectedModelId = appStore.get(subChatCodexModelIdAtomFamily(subChatId))
   const selectedThinking = appStore.get(subChatCodexThinkingAtomFamily(subChatId))
   const selectedModel =
-    CODEX_MODELS.find((model) => model.id === selectedModelId) ||
-    CODEX_MODELS.find((model) => model.id === "gpt-5.3-codex") ||
-    CODEX_MODELS[0]
+    CODEX_MODELS.find((model) => model.id === selectedModelId) || CODEX_MODELS[0]
 
   if (!selectedModel) {
     return DEFAULT_CODEX_MODEL
@@ -112,10 +109,8 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   async sendMessages(options: {
     messages: UIMessage[]
     abortSignal?: AbortSignal
-  }): Promise<ReadableStream<UIMessageChunk>> {
-    const lastUser = [...options.messages]
-      .reverse()
-      .find((message) => message.role === "user")
+  }): Promise<ReadableStream<SDKUIMessageChunk>> {
+    const lastUser = [...options.messages].reverse().find((message) => message.role === "user")
 
     const prompt = this.extractText(lastUser)
     const images = this.extractImages(lastUser)
@@ -129,8 +124,8 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     const currentMode =
       useAgentSubChatStore
         .getState()
-        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)
-        ?.mode || this.config.mode
+        .allSubChats.find((subChat) => subChat.id === this.config.subChatId)?.mode ||
+      this.config.mode
     const forceNewSession = forceFreshSessionSubChats.has(this.config.subChatId)
     if (forceNewSession) {
       forceFreshSessionSubChats.delete(this.config.subChatId)
@@ -165,9 +160,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
             runId,
             prompt,
             cwd: this.config.cwd,
-            ...(this.config.projectPath
-              ? { projectPath: this.config.projectPath }
-              : {}),
+            ...(this.config.projectPath ? { projectPath: this.config.projectPath } : {}),
             model: selectedModel,
             mode: currentMode,
             ...(sessionId ? { sessionId } : {}),
@@ -182,7 +175,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               : {}),
           },
           {
-            onData: (chunk: UIMessageChunk) => {
+            onData: (chunk: PrintChunk) => {
               if (chunk.type === "session-init") {
                 appStore.set(sessionInfoAtom, {
                   tools: chunk.tools || [],
@@ -236,7 +229,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               }
 
               try {
-                const normalizedChunk = normalizeCodexStreamChunk(chunk) as UIMessageChunk
+                const normalizedChunk = normalizeCodexStreamChunk(chunk) as SDKUIMessageChunk
                 controller.enqueue(normalizedChunk)
               } catch {
                 // Stream already closed
@@ -301,16 +294,14 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     })
   }
 
-  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
+  async reconnectToStream(): Promise<ReadableStream<SDKUIMessageChunk> | null> {
     return null
   }
 
   cleanup(): void {
-    void trpcClient.codex.cleanup
-      .mutate({ subChatId: this.config.subChatId })
-      .catch(() => {
-        // No-op
-      })
+    void trpcClient.codex.cleanup.mutate({ subChatId: this.config.subChatId }).catch(() => {
+      // No-op
+    })
   }
 
   private extractText(message: UIMessage | undefined): string {
@@ -322,13 +313,12 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     const fileContents: string[] = []
 
     for (const part of message.parts) {
-      if (part.type === "text" && (part as any).text) {
-        textParts.push((part as any).text)
-      } else if ((part as any).type === "file-content") {
-        const filePart = part as any
-        const fileName =
-          filePart.filePath?.split("/").pop() || filePart.filePath || "file"
-        fileContents.push(`\n--- ${fileName} ---\n${filePart.content}`)
+      const loosePart = part as LooseUIPart
+      if (part.type === "text" && loosePart.text) {
+        textParts.push(loosePart.text)
+      } else if (loosePart.type === "file-content") {
+        const fileName = loosePart.filePath?.split("/").pop() || loosePart.filePath || "file"
+        fileContents.push(`\n--- ${fileName} ---\n${loosePart.content}`)
       }
     }
 
@@ -341,8 +331,8 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     const images: ImageAttachment[] = []
 
     for (const part of message.parts) {
-      if (part.type === "data-image" && (part as any).data) {
-        const data = (part as any).data
+      const data = (part as LooseUIPart).data
+      if (part.type === "data-image" && data) {
         if (data.base64Data && data.mediaType) {
           images.push({
             base64Data: data.base64Data,

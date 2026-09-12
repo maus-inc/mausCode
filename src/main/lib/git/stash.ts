@@ -19,10 +19,7 @@ type CheckpointPayload = {
  * Stores index and worktree trees in an orphan commit under refs/checkpoints/.
  * If there are no changes, no checkpoint is created (this is fine).
  */
-export async function createRollbackStash(
-  cwd: string,
-  sdkMessageUuid: string,
-): Promise<void> {
+export async function createRollbackStash(cwd: string, sdkMessageUuid: string): Promise<void> {
   try {
     const git = simpleGit(cwd)
 
@@ -72,19 +69,16 @@ export async function createRollbackStash(
       return
     }
 
-    await git.raw([
-      "update-ref",
-      `refs/checkpoints/${sdkMessageUuid}`,
-      commitHash,
-    ])
+    await git.raw(["update-ref", `refs/checkpoints/${sdkMessageUuid}`, commitHash])
   } catch (e) {
     console.error("[claude] Failed to create rollback checkpoint:", e)
   }
 }
 
-function parseCheckpointTrees(
-  message: string,
-): { indexTree: string | null; worktreeTree: string | null } {
+function parseCheckpointTrees(message: string): {
+  indexTree: string | null
+  worktreeTree: string | null
+} {
   const body = message.trim()
   if (body) {
     try {
@@ -121,21 +115,14 @@ export async function applyRollbackStash(
     let commitHash = ""
     try {
       commitHash = (await git.raw(["rev-parse", ref])).trim()
-    } catch (error) {
-      console.warn(
-        `[claude] Rollback checkpoint not found for sdkMessageUuid=${sdkMessageUuid}`,
-      )
+    } catch {
+      console.warn(`[claude] Rollback checkpoint not found for sdkMessageUuid=${sdkMessageUuid}`)
       // Checkpoint not found - return success but indicate no checkpoint was applied
       // The caller can decide whether to proceed with message truncation
       return { success: true, checkpointFound: false }
     }
 
-    const commitMessage = await git.raw([
-      "show",
-      "-s",
-      "--format=%B",
-      commitHash,
-    ])
+    const commitMessage = await git.raw(["show", "-s", "--format=%B", commitHash])
     const { indexTree, worktreeTree } = parseCheckpointTrees(commitMessage)
     if (!indexTree || !worktreeTree) {
       console.error(

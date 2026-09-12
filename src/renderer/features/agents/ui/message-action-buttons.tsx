@@ -1,7 +1,7 @@
 "use client"
 
-import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { useAtom, useSetAtom } from "jotai"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import {
   CheckIcon,
   CopyIcon,
@@ -9,14 +9,14 @@ import {
   PauseIcon,
   VolumeIcon,
 } from "../../../components/ui/icons"
-import { cn } from "../../../lib/utils"
 import { apiFetch } from "../../../lib/api-fetch"
+import { cn } from "../../../lib/utils"
 import { useHaptic } from "../hooks/use-haptic"
 import {
-  ttsPlaybackRateAtom,
-  setTtsPlaybackRateAtom,
   PLAYBACK_SPEEDS,
-  type PlaybackSpeed,
+  type Message as StoreMessage,
+  setTtsPlaybackRateAtom,
+  ttsPlaybackRateAtom,
 } from "../stores/message-store"
 
 // ============================================================================
@@ -28,10 +28,7 @@ interface CopyButtonProps {
   isMobile?: boolean
 }
 
-export const CopyButton = memo(function CopyButton({
-  text,
-  isMobile = false,
-}: CopyButtonProps) {
+export const CopyButton = memo(function CopyButton({ text }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
   const { trigger: triggerHaptic } = useHaptic()
 
@@ -44,6 +41,7 @@ export const CopyButton = memo(function CopyButton({
 
   return (
     <button
+      type="button"
       onClick={handleCopy}
       tabIndex={-1}
       className="p-1.5 rounded-md transition-[background-color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]"
@@ -77,10 +75,7 @@ interface PlayButtonProps {
   isMobile?: boolean
 }
 
-export const PlayButton = memo(function PlayButton({
-  text,
-  isMobile = false,
-}: PlayButtonProps) {
+export const PlayButton = memo(function PlayButton({ text, isMobile = false }: PlayButtonProps) {
   const [state, setState] = useState<PlayButtonState>("idle")
   const [playbackRate] = useAtom(ttsPlaybackRateAtom)
   const setPlaybackRate = useSetAtom(setTtsPlaybackRateAtom)
@@ -109,10 +104,7 @@ export const PlayButton = memo(function PlayButton({
         URL.revokeObjectURL(audioRef.current.src)
       }
     }
-    if (
-      mediaSourceRef.current &&
-      mediaSourceRef.current.readyState === "open"
-    ) {
+    if (mediaSourceRef.current && mediaSourceRef.current.readyState === "open") {
       try {
         mediaSourceRef.current.endOfStream()
       } catch {
@@ -166,13 +158,9 @@ export const PlayButton = memo(function PlayButton({
       mediaSource.addEventListener("sourceopen", () => resolve(), {
         once: true,
       })
-      mediaSource.addEventListener(
-        "error",
-        () => reject(new Error("MediaSource error")),
-        {
-          once: true,
-        },
-      )
+      mediaSource.addEventListener("error", () => reject(new Error("MediaSource error")), {
+        once: true,
+      })
     })
 
     const sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg")
@@ -211,7 +199,11 @@ export const PlayButton = memo(function PlayButton({
       }
 
       isAppending = true
-      const chunk = pendingChunks.shift()!
+      const chunk = pendingChunks.shift()
+      if (chunk === undefined) {
+        isAppending = false
+        return
+      }
       try {
         // Use ArrayBuffer.isView to ensure TypeScript knows this is a valid BufferSource
         const buffer = new Uint8Array(chunk.buffer.slice(0)) as BufferSource
@@ -317,8 +309,7 @@ export const PlayButton = memo(function PlayButton({
     try {
       // Check if MediaSource is supported for streaming
       const supportsMediaSource =
-        typeof MediaSource !== "undefined" &&
-        MediaSource.isTypeSupported("audio/mpeg")
+        typeof MediaSource !== "undefined" && MediaSource.isTypeSupported("audio/mpeg")
 
       if (supportsMediaSource) {
         // Use streaming approach with MediaSource API
@@ -344,12 +335,13 @@ export const PlayButton = memo(function PlayButton({
   const handleSpeedChange = useCallback(() => {
     const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackRate)
     const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length
-    setPlaybackRate(PLAYBACK_SPEEDS[nextIndex]!)
+    setPlaybackRate(PLAYBACK_SPEEDS[nextIndex] ?? playbackRate)
   }, [playbackRate, setPlaybackRate])
 
   return (
     <div className="relative flex items-center">
       <button
+        type="button"
         onClick={handlePlay}
         tabIndex={-1}
         className={cn(
@@ -371,13 +363,12 @@ export const PlayButton = memo(function PlayButton({
       {/* Speed selector - cyclic button with animation, only visible when playing */}
       {state === "playing" && (
         <button
+          type="button"
           onClick={handleSpeedChange}
           tabIndex={-1}
           className={cn(
             "p-1.5 rounded-md transition-[background-color,opacity,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97]",
-            isMobile
-              ? "opacity-100"
-              : "opacity-0 group-hover/message:opacity-100",
+            isMobile ? "opacity-100" : "opacity-0 group-hover/message:opacity-100",
           )}
         >
           <div className="relative w-4 h-3.5 flex items-center justify-center">
@@ -386,9 +377,7 @@ export const PlayButton = memo(function PlayButton({
                 key={speed}
                 className={cn(
                   "absolute inset-0 flex items-center justify-center text-xs font-medium text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                  speed === playbackRate
-                    ? "opacity-100 scale-100"
-                    : "opacity-0 scale-50",
+                  speed === playbackRate ? "opacity-100 scale-100" : "opacity-0 scale-50",
                 )}
               >
                 {speed}x
@@ -405,10 +394,12 @@ export const PlayButton = memo(function PlayButton({
 // HELPER - Get text content from message
 // ============================================================================
 
-export function getMessageTextContent(msg: any): string {
+export function getMessageTextContent(msg: StoreMessage): string {
   if (!msg?.parts) return ""
-  return msg.parts
-    .filter((p: any) => p.type === "text")
-    .map((p: any) => p.text || "")
-    .join("\n")
+  return (
+    msg.parts
+      ?.filter((p) => p.type === "text")
+      .map((p) => p.text || "")
+      .join("\n") || ""
+  )
 }

@@ -4,7 +4,13 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { Button } from "../../../components/ui/button"
-import { CheckIcon, CollapseIcon, CopyIcon, ExpandIcon, PlanIcon } from "../../../components/ui/icons"
+import {
+  CheckIcon,
+  CollapseIcon,
+  CopyIcon,
+  ExpandIcon,
+  PlanIcon,
+} from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
@@ -19,7 +25,7 @@ import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
 
-interface AgentPlanFileToolProps {
+export interface AgentPlanFileToolProps {
   part: {
     type: string // "tool-Write" | "tool-Edit"
     state?: string
@@ -47,7 +53,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
 }: AgentPlanFileToolProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
-  const { isPending } = getToolStatus(part, chatStatus)
+  const { isPending, isInputStreaming } = getToolStatus(part, chatStatus)
   const isWrite = part.type === "tool-Write"
   // Get mode from per-subChat atomFamily
   const subChatModeAtom = useMemo(() => subChatModeAtomFamily(subChatId), [subChatId])
@@ -60,23 +66,13 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   const bottomGradientRef = useRef<HTMLDivElement>(null)
 
   // Plan sidebar atoms - per subChat
-  const planSidebarOpenAtom = useMemo(
-    () => planSidebarOpenAtomFamily(subChatId),
-    [subChatId],
-  )
-  const currentPlanPathAtom = useMemo(
-    () => currentPlanPathAtomFamily(subChatId),
-    [subChatId],
-  )
+  const planSidebarOpenAtom = useMemo(() => planSidebarOpenAtomFamily(subChatId), [subChatId])
+  const currentPlanPathAtom = useMemo(() => currentPlanPathAtomFamily(subChatId), [subChatId])
   const [, setIsPlanSidebarOpen] = useAtom(planSidebarOpenAtom)
   const [, setCurrentPlanPath] = useAtom(currentPlanPathAtom)
 
-  // Only consider streaming if chat is actively streaming
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
-
   // Get plan content - for Write mode it's in input.content, for Edit it's in new_string
-  const planContent = isWrite ? (part.input?.content || "") : (part.input?.new_string || "")
+  const planContent = isWrite ? part.input?.content || "" : part.input?.new_string || ""
   const filePath = part.input?.file_path || ""
 
   // Show shimmer during streaming/pending
@@ -110,6 +106,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   }, [])
 
   // Update gradients on scroll and expand state change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isExpanded intentionally re-subscribes and re-measures gradients after expand/collapse layout change.
   useEffect(() => {
     const content = contentRef.current
     if (!content) return
@@ -122,6 +119,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   }, [updateScrollGradients, isExpanded])
 
   // Also update gradients when content changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: planContent intentionally re-measures gradients when content changes.
   useEffect(() => {
     updateScrollGradients()
   }, [planContent, updateScrollGradients])
@@ -184,8 +182,18 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   return (
     <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
       {/* Header - title + expand/collapse button */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
         onClick={handleToggleExpand}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
         className="flex items-center justify-between pl-2.5 pr-0.5 h-7 cursor-pointer hover:bg-muted/50 transition-colors duration-150"
       >
         <div className="flex items-center gap-1.5 text-xs truncate flex-1 min-w-0">
@@ -205,6 +213,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation()
                     handleCopy()
@@ -235,6 +244,7 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
 
           {/* Expand/Collapse button */}
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               handleToggleExpand()
@@ -265,12 +275,26 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
         <div
           ref={topGradientRef}
           className="absolute top-0 left-0 right-0 h-6 pointer-events-none z-10 transition-opacity duration-150"
-          style={{ opacity: 0, background: "linear-gradient(to bottom, color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--background))) 0%, transparent 100%)" }}
+          style={{
+            opacity: 0,
+            background:
+              "linear-gradient(to bottom, color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--background))) 0%, transparent 100%)",
+          }}
         />
 
+        {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
         <div
           ref={contentRef}
           onClick={() => !isExpanded && setIsExpanded(true)}
+          role="button"
+          tabIndex={0}
+          aria-expanded={isExpanded}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              e.currentTarget.click()
+            }
+          }}
           className={cn(
             "text-xs overflow-hidden transition-all duration-200",
             isExpanded
@@ -287,7 +311,11 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
         <div
           ref={bottomGradientRef}
           className="absolute bottom-0 left-0 right-0 h-6 pointer-events-none z-10 transition-opacity duration-150"
-          style={{ opacity: 1, background: "linear-gradient(to top, color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--background))) 0%, transparent 100%)" }}
+          style={{
+            opacity: 1,
+            background:
+              "linear-gradient(to top, color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--background))) 0%, transparent 100%)",
+          }}
         />
       </div>
 

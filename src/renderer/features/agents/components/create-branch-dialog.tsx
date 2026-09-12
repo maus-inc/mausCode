@@ -1,29 +1,29 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { toast } from "sonner"
-import { GitBranch, ChevronDown, Check } from "lucide-react"
-import {
-  Dialog,
-  CanvasDialogContent,
-  CanvasDialogHeader,
-  CanvasDialogBody,
-  CanvasDialogFooter,
-  DialogTitle,
-} from "../../../components/ui/dialog"
-import { Button } from "../../../components/ui/button"
-import { Input } from "../../../components/ui/input"
-import { Label } from "../../../components/ui/label"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
+import { Check, ChevronDown, GitBranch } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
+import { Button } from "../../../components/ui/button"
 import {
   Command,
-  CommandInput,
-  CommandList,
   CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
+  CommandList,
 } from "../../../components/ui/command"
+import {
+  CanvasDialogBody,
+  CanvasDialogContent,
+  CanvasDialogFooter,
+  CanvasDialogHeader,
+  Dialog,
+  DialogTitle,
+} from "../../../components/ui/dialog"
 import { IconSpinner } from "../../../components/ui/icons"
+import { Input } from "../../../components/ui/input"
+import { Label } from "../../../components/ui/label"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { formatTimeAgo } from "../utils/format-time-ago"
@@ -136,11 +136,7 @@ export function CreateBranchDialog({
               value={branchName}
               onChange={(e) => setBranchName(e.target.value)}
               onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  branchName.trim() &&
-                  !createBranchMutation.isPending
-                ) {
+                if (e.key === "Enter" && branchName.trim() && !createBranchMutation.isPending) {
                   e.preventDefault()
                   handleSubmit(e)
                 }
@@ -155,10 +151,7 @@ export function CreateBranchDialog({
           <div className="space-y-2">
             <Label className="text-sm">Create branch based on...</Label>
             {/* Using Popover WITHOUT Portal so it renders inside Dialog's DOM tree */}
-            <PopoverPrimitive.Root
-              open={baseBranchOpen}
-              onOpenChange={setBaseBranchOpen}
-            >
+            <PopoverPrimitive.Root open={baseBranchOpen} onOpenChange={setBaseBranchOpen}>
               <PopoverPrimitive.Trigger asChild>
                 <button
                   type="button"
@@ -209,9 +202,7 @@ export function CreateBranchDialog({
                                 {formatTimeAgo(branch.committedAt)}
                               </span>
                             )}
-                            {baseBranch === branch.name && (
-                              <Check className="h-4 w-4 shrink-0" />
-                            )}
+                            {baseBranch === branch.name && <Check className="h-4 w-4 shrink-0" />}
                           </CommandItem>
                         ))}
                       </CommandGroup>

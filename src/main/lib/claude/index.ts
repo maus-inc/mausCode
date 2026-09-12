@@ -1,16 +1,17 @@
-export { createTransformer } from "./transform"
-export type { UIMessageChunk, MessageMetadata } from "./types"
-export {
-  logRawClaudeMessage,
-  getLogsDirectory,
-  cleanupOldLogs,
-} from "./raw-logger"
 export {
   buildClaudeEnv,
-  getClaudeShellEnvironment,
   clearClaudeEnvCache,
-  logClaudeEnv,
   getBundledClaudeBinaryPath,
+  getClaudeShellEnvironment,
+  logClaudeEnv,
 } from "./env"
+export type { CustomClaudeConfig, OfflineCheckResult } from "./offline-handler"
 export { checkOfflineFallback } from "./offline-handler"
-export type { OfflineCheckResult, CustomClaudeConfig } from "./offline-handler"
+export {
+  cleanupOldLogs,
+  getLogsDirectory,
+  logRawClaudeMessage,
+} from "./raw-logger"
+export type { ChunkCoalescer } from "./transform"
+export { createChunkCoalescer, createTransformer } from "./transform"
+export type { MessageMetadata, UIMessageChunk } from "./types"

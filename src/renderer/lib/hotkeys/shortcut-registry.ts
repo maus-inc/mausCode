@@ -1,8 +1,8 @@
 import type {
+  CustomHotkeysConfig,
   ShortcutAction,
   ShortcutActionId,
   ShortcutCategory,
-  CustomHotkeysConfig,
   ShortcutConflict,
 } from "./types"
 
@@ -254,7 +254,7 @@ export function hotkeyStringToKeys(hotkey: string): string[] {
  */
 export function getResolvedHotkey(
   actionId: ShortcutActionId,
-  config: CustomHotkeysConfig
+  config: CustomHotkeysConfig,
 ): string | null {
   const customHotkey = config.bindings[actionId]
 
@@ -275,7 +275,7 @@ export function getResolvedHotkey(
  */
 export function getResolvedKeys(
   actionId: ShortcutActionId,
-  config: CustomHotkeysConfig
+  config: CustomHotkeysConfig,
 ): string[] | null {
   const hotkey = getResolvedHotkey(actionId, config)
   if (!hotkey) return null
@@ -285,10 +285,7 @@ export function getResolvedKeys(
 /**
  * Check if an action has a custom (non-default) hotkey
  */
-export function isCustomHotkey(
-  actionId: ShortcutActionId,
-  config: CustomHotkeysConfig
-): boolean {
+export function isCustomHotkey(actionId: ShortcutActionId, config: CustomHotkeysConfig): boolean {
   return config.bindings[actionId] !== undefined
 }
 
@@ -302,17 +299,11 @@ export function normalizeHotkey(hotkey: string): string {
   // Define modifier order
   const modifierOrder = ["cmd", "meta", "ctrl", "opt", "alt", "shift"]
 
-  const modifiers = parts.filter((p) =>
-    ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p)
-  )
-  const key = parts.filter(
-    (p) => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p)
-  )[0]
+  const modifiers = parts.filter((p) => ["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))
+  const key = parts.filter((p) => !["cmd", "meta", "ctrl", "opt", "alt", "shift"].includes(p))[0]
 
   // Sort modifiers
-  modifiers.sort(
-    (a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b)
-  )
+  modifiers.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b))
 
   // Normalize alt/opt
   const normalizedMods = modifiers.map((m) => (m === "alt" ? "opt" : m))
@@ -327,7 +318,7 @@ export function normalizeHotkey(hotkey: string): string {
  * Returns a map of actionId to array of conflicting actionIds
  */
 export function detectConflicts(
-  config: CustomHotkeysConfig
+  config: CustomHotkeysConfig,
 ): Map<ShortcutActionId, ShortcutConflict> {
   const conflicts = new Map<ShortcutActionId, ShortcutConflict>()
   const hotkeyToActions = new Map<string, ShortcutActionId[]>()

@@ -1,22 +1,14 @@
 "use client"
 
-import { LucideProps } from "lucide-react"
-import * as React from "react"
+import type { LucideProps } from "lucide-react"
+import type * as React from "react"
 
 type IconProps = React.SVGProps<SVGSVGElement> & { className?: string }
 
 export function AnthropicLogoIcon({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 92.2 65"
-      fill="currentColor"
-      aria-hidden="true"
-      className={className}
-    >
-      <use
-        href="/anthropic-logo.svg#Layer_1"
-        xlinkHref="/anthropic-logo.svg#Layer_1"
-      />
+    <svg viewBox="0 0 92.2 65" fill="currentColor" aria-hidden="true" className={className}>
+      <use href="/anthropic-logo.svg#Layer_1" xlinkHref="/anthropic-logo.svg#Layer_1" />
     </svg>
   )
 }
@@ -24,6 +16,7 @@ export function AnthropicLogoIcon({ className }: { className?: string }) {
 export function IconGap(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -38,6 +31,7 @@ export function IconGap(props: IconProps) {
 export function IconDoubleChevronRight(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 20 20"
       fill="currentColor"
       width="20"
@@ -52,13 +46,7 @@ export function IconDoubleChevronRight(props: IconProps) {
 
 export function IconArrowRight(props: IconProps) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      width="24"
-      height="24"
-      {...props}
-    >
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" width="24" height="24" {...props}>
       <path
         d="M14 6L20 12L14 18"
         stroke="currentColor"
@@ -80,6 +68,7 @@ export function IconArrowRight(props: IconProps) {
 export function IconDoubleChevronLeft(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 20 20"
       fill="currentColor"
       width="20"
@@ -100,7 +89,7 @@ export function IconCloseSidebarRight(props: IconProps) {
 
 export function IconOpenSidebarRight(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" width="24" {...props}>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" width="24" {...props}>
       <g transform="scale(1.05, 1.05) translate(-1.5, -1.15)">
         <path
           fillRule="evenodd"
@@ -121,6 +110,7 @@ export function IconOpenSidebarRight(props: IconProps) {
 export function IconForcePush(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
       width="24"
@@ -140,17 +130,35 @@ export function IconForcePush(props: IconProps) {
 
 export function IconFetch(props: IconProps) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      width="24"
-      height="24"
-      {...props}
-    >
-      <path d="M19 4V8H15" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4.98828 20V16H8.98828" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M20 12C20 16.4183 16.4183 20 12 20C9.36378 20 6.96969 18.7249 5.5 16.7578" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4 12C4 7.58172 7.58172 4 12 4C14.6045 4 16.9726 5.24457 18.4465 7.17142" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" width="24" height="24" {...props}>
+      <path
+        d="M19 4V8H15"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.98828 20V16H8.98828"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M20 12C20 16.4183 16.4183 20 12 20C9.36378 20 6.96969 18.7249 5.5 16.7578"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4 12C4 7.58172 7.58172 4 12 4C14.6045 4 16.9726 5.24457 18.4465 7.17142"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -158,6 +166,7 @@ export function IconFetch(props: IconProps) {
 export function DiffIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -179,7 +188,7 @@ export function DiffIcon(props: IconProps) {
 
 export function ClockIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...props}>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" width="24" height="24" {...props}>
       <g transform="scale(1.05) translate(-1.1, -1.1)">
         <path
           d="M12 8V12L14.5 14.5M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
@@ -195,7 +204,14 @@ export function ClockIcon(props: IconProps) {
 
 export function GitBranchFilledIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" {...props}>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="24"
+      height="24"
+      {...props}
+    >
       <path d="M6.5 3C4.84315 3 3.5 4.34315 3.5 6C3.5 7.30622 4.33481 8.41746 5.5 8.82929V15.1707C4.33481 15.5825 3.5 16.6938 3.5 18C3.5 19.6569 4.84315 21 6.5 21C8.15685 21 9.5 19.6569 9.5 18C9.5 16.6938 8.66519 15.5825 7.5 15.1707V14C7.5 13.4477 7.94772 13 8.5 13H15.5C17.1569 13 18.5 11.6569 18.5 10V8.82929C19.6652 8.41746 20.5 7.30622 20.5 6C20.5 4.34315 19.1569 3 17.5 3C15.8431 3 14.5 4.34315 14.5 6C14.5 7.30622 15.3348 8.41746 16.5 8.82929V10C16.5 10.5523 16.0523 11 15.5 11H8.5C8.14936 11 7.81278 11.0602 7.5 11.1707V8.82929C8.66519 8.41746 9.5 7.30622 9.5 6C9.5 4.34315 8.15685 3 6.5 3Z" />
     </svg>
   )
@@ -203,7 +219,14 @@ export function GitBranchFilledIcon(props: IconProps) {
 
 export function FolderFilledIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" {...props}>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="24"
+      height="24"
+      {...props}
+    >
       <path d="M5 3C3.34315 3 2 4.34315 2 6V17C2 18.6569 3.34315 20 5 20H19C20.6569 20 22 18.6569 22 17V9C22 7.34315 20.6569 6 19 6L12.5352 6L11.4258 4.3359C10.8694 3.5013 9.93269 3 8.92963 3H5Z" />
     </svg>
   )
@@ -211,7 +234,14 @@ export function FolderFilledIcon(props: IconProps) {
 
 export function GitPullRequestFilledIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" {...props}>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="24"
+      height="24"
+      {...props}
+    >
       <path d="M6 3C4.34315 3 3 4.34315 3 6C3 7.30622 3.83481 8.41746 5 8.82929V15.1707C3.83481 15.5825 3 16.6938 3 18C3 19.6569 4.34315 21 6 21C7.65685 21 9 19.6569 9 18C9 16.6938 8.16519 15.5825 7 15.1707V8.82929C8.16519 8.41746 9 7.30622 9 6C9 4.34315 7.65685 3 6 3Z" />
       <path d="M14.4142 5L14.7071 4.70711C15.0976 4.31658 15.0976 3.68342 14.7071 3.29289C14.3166 2.90237 13.6834 2.90237 13.2929 3.29289L11.2929 5.29289C10.9024 5.68342 10.9024 6.31658 11.2929 6.70711L13.2929 8.70711C13.6834 9.09763 14.3166 9.09763 14.7071 8.70711C15.0976 8.31658 15.0976 7.68342 14.7071 7.29289L14.4142 7H16C16.5523 7 17 7.44772 17 8V15.1707C15.8348 15.5825 15 16.6938 15 18C15 19.6569 16.3431 21 18 21C19.6569 21 21 19.6569 21 18C21 16.6938 20.1652 15.5825 19 15.1707V8C19 6.34315 17.6569 5 16 5H14.4142Z" />
     </svg>
@@ -221,6 +251,7 @@ export function GitPullRequestFilledIcon(props: IconProps) {
 export function IconChatBubble(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -237,6 +268,7 @@ export function IconChatBubble(props: IconProps) {
 export function CopyCodeIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -257,6 +289,7 @@ export function CopyCodeIcon(props: IconProps) {
 export function GitApplyIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -277,6 +310,7 @@ export function GitApplyIcon(props: IconProps) {
 export function CopyPatchIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -299,6 +333,7 @@ export function CopyPatchIcon(props: IconProps) {
 export function PlanFreeIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="14"
       height="14"
@@ -319,6 +354,7 @@ export function PlanFreeIcon(props: IconProps) {
 export function PlanNearingIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="14"
       height="14"
@@ -339,6 +375,7 @@ export function PlanNearingIcon(props: IconProps) {
 export function CaretRightIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -360,6 +397,7 @@ export function CaretRightIcon(props: IconProps) {
 export function IconTextAlignLeft(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -374,6 +412,7 @@ export function IconTextAlignLeft(props: IconProps) {
 export function IconTextAlignCenter(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -388,6 +427,7 @@ export function IconTextAlignCenter(props: IconProps) {
 export function IconTextAlignJustify(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -402,6 +442,7 @@ export function IconTextAlignJustify(props: IconProps) {
 export function IconTextAlignRight(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -416,6 +457,7 @@ export function IconTextAlignRight(props: IconProps) {
 export function IconItalic(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -430,6 +472,7 @@ export function IconItalic(props: IconProps) {
 export function IconUnderline(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -444,6 +487,7 @@ export function IconUnderline(props: IconProps) {
 export function IconStrikethrough(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -458,6 +502,7 @@ export function IconStrikethrough(props: IconProps) {
 export function IconUppercase(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -473,6 +518,7 @@ export function IconUppercase(props: IconProps) {
 export function IconDirectionRow(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -487,6 +533,7 @@ export function IconDirectionRow(props: IconProps) {
 export function IconDirectionColumn(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -501,6 +548,7 @@ export function IconDirectionColumn(props: IconProps) {
 export function IconMarginX(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -515,6 +563,7 @@ export function IconMarginX(props: IconProps) {
 export function IconMarginY(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -529,6 +578,7 @@ export function IconMarginY(props: IconProps) {
 export function IconPaddingX(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -543,6 +593,7 @@ export function IconPaddingX(props: IconProps) {
 export function IconPaddingY(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -557,6 +608,7 @@ export function IconPaddingY(props: IconProps) {
 export function IconExpand(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -571,6 +623,7 @@ export function IconExpand(props: IconProps) {
 export function IconLock(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -585,6 +638,7 @@ export function IconLock(props: IconProps) {
 export function IconTextStrikethrough(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -599,6 +653,7 @@ export function IconTextStrikethrough(props: IconProps) {
 export function IconTextOverline(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -614,6 +669,7 @@ export function IconTextOverline(props: IconProps) {
 export function IconTextStriked(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -628,6 +684,7 @@ export function IconTextStriked(props: IconProps) {
 export function IconTextJustifySpaced(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -642,6 +699,7 @@ export function IconTextJustifySpaced(props: IconProps) {
 export function IconAlignStretch(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -656,6 +714,7 @@ export function IconAlignStretch(props: IconProps) {
 export function IconAlignStart(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -670,6 +729,7 @@ export function IconAlignStart(props: IconProps) {
 export function IconAlignCenter(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -684,6 +744,7 @@ export function IconAlignCenter(props: IconProps) {
 export function IconAlignEnd(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -698,6 +759,7 @@ export function IconAlignEnd(props: IconProps) {
 export function UnarchiveIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       width="16"
       height="16"
@@ -721,6 +783,7 @@ export function UnarchiveIcon(props: IconProps) {
 export function IconTextUndo(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -739,6 +802,7 @@ export function IconTextUndo(props: IconProps) {
 export function IconTextAlignLeftNew(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -757,6 +821,7 @@ export function IconTextAlignLeftNew(props: IconProps) {
 export function IconTextAlignCenterNew(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -775,6 +840,7 @@ export function IconTextAlignCenterNew(props: IconProps) {
 export function IconTextAlignRightNew(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -793,6 +859,7 @@ export function IconTextAlignRightNew(props: IconProps) {
 export function IconTextJustifyNew(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -812,6 +879,7 @@ export function IconTextJustifyNew(props: IconProps) {
 export function IconItalicNew(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -830,6 +898,7 @@ export function IconItalicNew(props: IconProps) {
 export function IconStrikethroughNew(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -848,6 +917,7 @@ export function IconStrikethroughNew(props: IconProps) {
 export function IconUnderlineNew(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -862,6 +932,7 @@ export function IconUnderlineNew(props: IconProps) {
 export function IconOverlineNew(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -877,6 +948,7 @@ export function IconOverlineNew(props: IconProps) {
 export function IconTextNone(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -890,7 +962,7 @@ export function IconTextNone(props: IconProps) {
 
 export function IconColorDefault(props: IconProps) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
+    <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
       <g clipPath="url(#clip0_11223_26136)">
         <rect
           x="0.75"
@@ -919,6 +991,7 @@ export function IconColorDefault(props: IconProps) {
 export function IconBorderWidth(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -933,6 +1006,7 @@ export function IconBorderWidth(props: IconProps) {
 export function IconExpandBorder(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -952,6 +1026,7 @@ export function IconExpandBorder(props: IconProps) {
 export function IconMarginTop(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -966,6 +1041,7 @@ export function IconMarginTop(props: IconProps) {
 export function IconMarginBottom(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -980,6 +1056,7 @@ export function IconMarginBottom(props: IconProps) {
 export function IconMarginLeft(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -994,6 +1071,7 @@ export function IconMarginLeft(props: IconProps) {
 export function IconMarginRight(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1009,6 +1087,7 @@ export function IconMarginRight(props: IconProps) {
 export function IconSpacingX(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1023,6 +1102,7 @@ export function IconSpacingX(props: IconProps) {
 export function IconSpacingY(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1038,6 +1118,7 @@ export function IconSpacingY(props: IconProps) {
 export function IconPaddingTop(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1052,6 +1133,7 @@ export function IconPaddingTop(props: IconProps) {
 export function IconPaddingBottom(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1066,6 +1148,7 @@ export function IconPaddingBottom(props: IconProps) {
 export function IconPaddingLeft(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1080,6 +1163,7 @@ export function IconPaddingLeft(props: IconProps) {
 export function IconPaddingRight(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1094,6 +1178,7 @@ export function IconPaddingRight(props: IconProps) {
 export function IconExpandAll(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1113,6 +1198,7 @@ export function IconExpandAll(props: IconProps) {
 export function IconBorderWidthTop(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1127,6 +1213,7 @@ export function IconBorderWidthTop(props: IconProps) {
 export function IconBorderWidthBottom(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1141,6 +1228,7 @@ export function IconBorderWidthBottom(props: IconProps) {
 export function IconBorderWidthLeft(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1155,6 +1243,7 @@ export function IconBorderWidthLeft(props: IconProps) {
 export function IconBorderWidthRight(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1169,6 +1258,7 @@ export function IconBorderWidthRight(props: IconProps) {
 export function IconOpacity(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1199,6 +1289,7 @@ export function IconOpacity(props: IconProps) {
 export function IconBorderRadius(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       width="16"
       height="16"
@@ -1215,7 +1306,7 @@ export function IconBorderRadius(props: IconProps) {
 
 export function IconShadow(props: IconProps) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
+    <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
       <g clipPath="url(#clip0_shadow)">
         <path
           opacity="0.33"
@@ -1246,6 +1337,7 @@ export function IconShadow(props: IconProps) {
 export function IconShare(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -1283,6 +1375,7 @@ export function IconShare(props: IconProps) {
 export function IconDownload(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -1306,6 +1399,7 @@ export function IconDownload(props: IconProps) {
 export function IconChevronDown(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -1329,6 +1423,7 @@ export function IconChevronDown(props: IconProps) {
 export function IconChevronUp(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -1361,6 +1456,7 @@ export function IconSpinner(props: IconProps & { color?: string; size?: "default
         }
       `}</style>
       <svg
+        aria-hidden="true"
         viewBox="0 0 24 24"
         width="16"
         height="16"
@@ -1402,7 +1498,7 @@ export function IconSpinner(props: IconProps & { color?: string; size?: "default
 export function LoadingDot({
   isLoading,
   className,
-  dotClassName = "bg-[#307BD0]"
+  dotClassName = "bg-[#307BD0]",
 }: {
   isLoading: boolean
   className?: string
@@ -1418,13 +1514,14 @@ export function LoadingDot({
       `}</style>
       {/* Spinner - visible when loading */}
       <svg
+        aria-hidden="true"
         viewBox="0 0 24 24"
         fill="none"
         className={`absolute inset-0 w-full h-full transition-[opacity,transform] duration-200 ease-out ${
           isLoading ? "opacity-100 scale-100" : "opacity-0 scale-50"
         }`}
         style={{
-          animation: isLoading ? 'spin 1s linear infinite' : undefined,
+          animation: isLoading ? "spin 1s linear infinite" : undefined,
         }}
       >
         <circle
@@ -1457,7 +1554,7 @@ export function LoadingDot({
 
 export function IconEditFile(props: IconProps) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
+    <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
       <path
         d="M6.67 14.33H5.33C4.22 14.33 3.33 13.44 3.33 12.33V4C3.33 2.89 4.22 2 5.33 2H10.67C11.78 2 12.67 2.89 12.67 4V7.33"
         stroke="currentColor"
@@ -1472,25 +1569,15 @@ export function IconEditFile(props: IconProps) {
         strokeLinecap="square"
         strokeLinejoin="round"
       />
-      <path
-        d="M6 4.67H10"
-        stroke="currentColor"
-        strokeWidth="1.33"
-        strokeLinecap="round"
-      />
-      <path
-        d="M6 7.33H7.33"
-        stroke="currentColor"
-        strokeWidth="1.33"
-        strokeLinecap="round"
-      />
+      <path d="M6 4.67H10" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round" />
+      <path d="M6 7.33H7.33" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round" />
     </svg>
   )
 }
 
 export function IconMoon(props: IconProps) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
+    <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
       <g transform="scale(1.05)">
         <path
           fillRule="evenodd"
@@ -1509,7 +1596,7 @@ export function IconMoon(props: IconProps) {
 
 export function IconSun(props: IconProps) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
+    <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" {...props}>
       <g transform="scale(1.15) translate(-1, -1)">
         <circle
           cx="8"
@@ -1536,6 +1623,7 @@ export function IconCloseSidebar(props: IconProps) {
   const { className, ...rest } = props
   return (
     <svg
+      aria-hidden="true"
       width="18"
       viewBox="0 0 24 24"
       fill="none"
@@ -1556,6 +1644,7 @@ export function IconCloseSidebar(props: IconProps) {
 export function IconOpenSidebar(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       width="18"
       viewBox="0 0 24 24"
       fill="none"
@@ -1574,6 +1663,7 @@ export function IconOpenSidebar(props: IconProps) {
 
 export const DownloadIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     width="16"
     height="16"
     viewBox="0 0 16 16"
@@ -1592,6 +1682,7 @@ export const DownloadIcon = (props: LucideProps) => (
 
 export const GlobeIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -1625,6 +1716,7 @@ export const GlobeIcon = (props: LucideProps) => (
 export const SparkleIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -1647,6 +1739,7 @@ export const SparkleIcon = (props: IconProps) => {
 export const SparklesIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -1674,6 +1767,7 @@ export const SparklesIcon = (props: IconProps) => {
 
 export const CreateNewIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -1694,6 +1788,7 @@ export const CreateNewIcon = (props: IconProps) => (
 
 export const CustomTerminalIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -1715,6 +1810,7 @@ export const CustomTerminalIcon = (props: LucideProps) => (
 
 export const WriteFileIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -1736,23 +1832,14 @@ export const WriteFileIcon = (props: LucideProps) => (
       strokeLinecap="square"
       strokeLinejoin="round"
     />
-    <path
-      d="M9 7H15"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-    <path
-      d="M9 11H11"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
+    <path d="M9 7H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M9 11H11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
   </svg>
 )
 
 export const CloneSiteIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -1821,6 +1908,7 @@ export const CloneSiteIcon = (props: LucideProps) => (
 
 export const MarkdownIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -1840,6 +1928,7 @@ export const MarkdownIcon = (props: LucideProps) => (
 
 export const PlanningIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -1859,6 +1948,7 @@ export const PlanningIcon = (props: LucideProps) => (
 
 export const ComponentGenerationIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -1885,6 +1975,7 @@ export const ComponentGenerationIcon = (props: LucideProps) => (
 
 export const CheckIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -1902,6 +1993,7 @@ export const CheckIcon = (props: LucideProps) => (
 
 export const SelectIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -1918,6 +2010,7 @@ export const SelectIcon = (props: LucideProps) => (
 
 export const AttachIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -1936,6 +2029,7 @@ export const AttachIcon = (props: LucideProps) => (
 
 export const NoCodeIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -1955,6 +2049,7 @@ export const NoCodeIcon = (props: LucideProps) => (
 
 export const CodePasteIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -1974,6 +2069,7 @@ export const CodePasteIcon = (props: LucideProps) => (
 
 export const CSSPasteIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -1993,6 +2089,7 @@ export const CSSPasteIcon = (props: LucideProps) => (
 
 export const CodeIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2010,11 +2107,9 @@ export const CodeIcon = (props: LucideProps) => (
   </svg>
 )
 
-export const FilePlusIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const FilePlusIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2036,11 +2131,9 @@ export const FilePlusIcon = ({
   </svg>
 )
 
-export const FilePageIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const FilePageIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2059,11 +2152,9 @@ export const FilePageIcon = ({
   </svg>
 )
 
-export const BlankProjectIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const BlankProjectIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -2087,11 +2178,9 @@ export const BlankProjectIcon = ({
   </svg>
 )
 
-export const HomeIconCustom = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const HomeIconCustom = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2111,11 +2200,9 @@ export const HomeIconCustom = ({
   </svg>
 )
 
-export const ProfileIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const ProfileIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2135,11 +2222,9 @@ export const ProfileIcon = ({
   </svg>
 )
 
-export const DocumentIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const DocumentIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2157,11 +2242,9 @@ export const DocumentIcon = ({
   </svg>
 )
 
-export const FilesIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const FilesIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2180,11 +2263,9 @@ export const FilesIcon = ({
   </svg>
 )
 
-export const SettingsIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const SettingsIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2203,11 +2284,9 @@ export const SettingsIcon = ({
   </svg>
 )
 
-export const EditIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const EditIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2226,11 +2305,9 @@ export const EditIcon = ({
   </svg>
 )
 
-export const TrashIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const TrashIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2253,11 +2330,9 @@ export const TrashIcon = ({
   </svg>
 )
 
-export const ThemeIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const ThemeIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2279,6 +2354,7 @@ export const ThemeIcon = ({
 export function ExternalLinkIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="25"
       height="25"
@@ -2309,6 +2385,7 @@ export function ExternalLinkIcon({ className }: { className?: string }) {
 export function PlayIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2329,6 +2406,7 @@ export function PlayIcon({ className }: { className?: string }) {
 export const PromptCopyIcon = (props: React.SVGProps<SVGSVGElement>) => {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -2360,6 +2438,7 @@ export const PromptCopyIcon = (props: React.SVGProps<SVGSVGElement>) => {
 
 export const EyeIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -2390,6 +2469,7 @@ export const EyeIcon = (props: LucideProps) => (
 
 export const SavedBookmarkFilledIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2409,6 +2489,7 @@ export const SavedBookmarkFilledIcon = (props: IconProps) => (
 export const LightbulbIcon = (props: React.SVGProps<SVGSVGElement>) => {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -2434,6 +2515,7 @@ interface ScreenIconProps {
 export function ScreenIcon({ className }: ScreenIconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2461,6 +2543,7 @@ interface AgentCursorSparkIconProps {
 export function AgentCursorSparkIcon({ className }: AgentCursorSparkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2492,6 +2575,7 @@ interface CanvasFilesIconProps {
 export function CanvasFilesIcon({ className }: CanvasFilesIconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2519,6 +2603,7 @@ interface ComponentIconProps {
 export function ComponentIcon({ className }: ComponentIconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2542,6 +2627,7 @@ export function ComponentIcon({ className }: ComponentIconProps) {
 export function PauseIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2566,6 +2652,7 @@ export function PauseIcon({ className }: { className?: string }) {
 export function VolumeIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2573,7 +2660,7 @@ export function VolumeIcon({ className }: { className?: string }) {
       fill="none"
       className={className}
     >
-      <g transform="translate(0, 1) scale(1.1)" transform-origin="center">
+      <g transform="translate(0, 1) scale(1.1)" style={{ transformOrigin: "center" }}>
         <path
           d="M19.071 4.92968C20.8807 6.73932 22 9.23932 22 12.0007C22 14.7622 20.8807 17.2622 19.071 19.0718M15.8891 8.11132C16.8844 9.10662 17.5 10.4816 17.5 12.0004C17.5 13.5192 16.8844 14.8942 15.8891 15.8895M4 7.99999H5.2759C5.74377 7.99999 6.19684 7.83596 6.55627 7.53643L10.3598 4.36681C11.0111 3.82403 12 4.28719 12 5.13503V18.8649C12 19.7128 11.0111 20.1759 10.3598 19.6332L6.55627 16.4635C6.19684 16.164 5.74377 16 5.2759 16H4C2.89543 16 2 15.1046 2 14V9.99999C2 8.89542 2.89543 7.99999 4 7.99999Z"
           stroke="currentColor"
@@ -2589,6 +2676,7 @@ export function VolumeIcon({ className }: { className?: string }) {
 export const PlusIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2608,6 +2696,7 @@ export const PlusIcon = (props: IconProps) => {
 
 export const SearchIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -2622,12 +2711,7 @@ export const SearchIcon = (props: LucideProps) => (
         strokeWidth="2"
         strokeLinecap="round"
       />
-      <path
-        d="M20 20L16.05 16.05"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M20 20L16.05 16.05" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </g>
   </svg>
 )
@@ -2635,6 +2719,7 @@ export const SearchIcon = (props: LucideProps) => (
 export const VariantIcon = (props: React.SVGProps<SVGSVGElement>) => {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -2692,6 +2777,7 @@ export const VariantIcon = (props: React.SVGProps<SVGSVGElement>) => {
 export const VideoIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       width="16"
       height="16"
@@ -2713,6 +2799,7 @@ export const VideoIcon = (props: IconProps) => {
 export const MixedIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2734,6 +2821,7 @@ export const MixedIcon = (props: IconProps) => {
 export const ClickIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2792,6 +2880,7 @@ export const ClickIcon = (props: IconProps) => {
 export const CopyIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2822,6 +2911,7 @@ export const CopyIcon = (props: IconProps) => {
 export const SaveIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2843,6 +2933,7 @@ export const SaveIcon = (props: IconProps) => {
 export const UndoIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2871,6 +2962,7 @@ export const UndoIcon = (props: IconProps) => {
 export const KeyboardIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -2896,6 +2988,7 @@ export const KeyboardIcon = (props: IconProps) => {
 export const KeyboardFilledIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2916,6 +3009,7 @@ export const KeyboardFilledIcon = (props: IconProps) => {
 export const BookIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2937,6 +3031,7 @@ export const BookIcon = (props: IconProps) => {
 export const DesignModeIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -2971,6 +3066,7 @@ export const DesignModeIcon = (props: IconProps) => {
 export const BackspaceIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3006,6 +3102,7 @@ export const BackspaceIcon = (props: IconProps) => {
 export const OptionIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3036,6 +3133,7 @@ export const OptionIcon = (props: IconProps) => {
 export const CmdIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3056,6 +3154,7 @@ export const CmdIcon = (props: IconProps) => {
 export const ShiftIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3077,6 +3176,7 @@ export const ShiftIcon = (props: IconProps) => {
 export const ControlIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3098,6 +3198,7 @@ export const ControlIcon = (props: IconProps) => {
 export const FocusIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3121,6 +3222,7 @@ export const FocusIcon = (props: IconProps) => {
 export const ClipboardIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3149,6 +3251,7 @@ export const ClipboardIcon = (props: IconProps) => {
 export const ImageIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3180,6 +3283,7 @@ export const ImageIcon = (props: IconProps) => {
 export const ClipboardCheckIcon = (props: IconProps) => {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -3215,6 +3319,7 @@ export const ClipboardCheckIcon = (props: IconProps) => {
 export function MagnetIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -3256,6 +3361,7 @@ export function MagnetIcon(props: IconProps) {
 
 export const EnterIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     data-testid="geist-icon"
     height="16"
     strokeLinejoin="round"
@@ -3274,6 +3380,7 @@ export const EnterIcon = (props: LucideProps) => (
 
 export const DatabaseSearchIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3308,6 +3415,7 @@ export const DatabaseSearchIcon = (props: IconProps) => (
 
 export const SaveForLaterIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3329,6 +3437,7 @@ export const SaveForLaterIcon = (props: IconProps) => (
 
 export const SendBookmarkIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3353,6 +3462,7 @@ export const SendBookmarkIcon = (props: IconProps) => (
 
 export const StrongMagicIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     width="24"
     height="24"
     viewBox="0 0 24 24"
@@ -3413,6 +3523,7 @@ export const StrongMagicIcon = (props: IconProps) => (
 
 export const LinkIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3448,6 +3559,7 @@ export const LinkIcon = (props: IconProps) => (
 
 export const AddToTeamIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3469,6 +3581,7 @@ export const AddToTeamIcon = (props: IconProps) => (
 
 export const AddToTeamSuccessIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3490,6 +3603,7 @@ export const AddToTeamSuccessIcon = (props: IconProps) => (
 
 export const BillingIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3511,6 +3625,7 @@ export const BillingIcon = (props: IconProps) => (
 
 export const PublisherStudioIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3529,6 +3644,7 @@ export const PublisherStudioIcon = (props: IconProps) => (
 
 export const ClaudeCodeIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3545,6 +3661,7 @@ export const ClaudeCodeIcon = (props: IconProps) => (
 
 export const CursorIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3573,8 +3690,109 @@ export const CursorIcon = (props: IconProps) => (
   </svg>
 )
 
+export const GrokIcon = (props: IconProps) => (
+  <svg
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    {...props}
+  >
+    <path
+      d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+export const ClineIcon = (props: IconProps) => (
+  <svg
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    {...props}
+  >
+    {/* Abstract "C" mark (geometric primitives, NOT the official Cline logo). */}
+    <path
+      d="M20 8.5A8.5 8.5 0 1 0 20 15.5"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
+export const OpenclawIcon = (props: IconProps) => (
+  <svg
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    {...props}
+  >
+    {/* Abstract claw mark (geometric primitives, NOT the official OpenClaw logo). */}
+    <path
+      d="M6 20V11a6 6 0 0 1 12 0"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+    />
+    <path
+      d="M6 20l-2.5 1.5M18 20l2.5 1.5M12 20v2.5"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
+export const RooIcon = (props: IconProps) => (
+  <svg
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    {...props}
+  >
+    {/* Abstract bound mark (geometric primitives, NOT the official Roo Code logo). */}
+    <path
+      d="M4 18c3-1 4-4 5-7l3-5 2 3 5-1-3 4 3 2-5 1-2 3z"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinejoin="round"
+    />
+    <circle cx="17.5" cy="6.5" r="1.4" fill="currentColor" />
+  </svg>
+)
+
+export const QwenIcon = (props: IconProps) => (
+  <svg
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    {...props}
+  >
+    {/* Abstract "Q" mark (geometric primitives, NOT the official Qwen logo). */}
+    <circle cx="11" cy="11" r="7.5" stroke="currentColor" strokeWidth="2.4" />
+    <path d="M15.5 15.5 21 21" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+  </svg>
+)
+
 export const GitHubLogo = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     fill="currentColor"
     viewBox="0 0 24 24"
     xmlns="http://www.w3.org/2000/svg"
@@ -3586,6 +3804,7 @@ export const GitHubLogo = (props: IconProps) => (
 
 export const WindsurfIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3602,6 +3821,7 @@ export const WindsurfIcon = (props: IconProps) => (
 
 export const OriginalMCPIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3626,6 +3846,7 @@ export const OriginalMCPIcon = (props: IconProps) => (
 
 export const ShadcnCLIIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3634,24 +3855,15 @@ export const ShadcnCLIIcon = (props: IconProps) => (
     {...props}
   >
     <g transform="scale(1.15) translate(-1.8, -1.8)">
-      <path
-        d="M15 21L21 15"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 21L21 7"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M15 21L21 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M7 21L21 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </g>
   </svg>
 )
 
 export const VSCodeIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3670,6 +3882,7 @@ export const VSCodeIcon = (props: IconProps) => (
 
 export const ThreeSparklesIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3697,6 +3910,7 @@ export const ThreeSparklesIcon = (props: IconProps) => (
 // Filled versions for settings dialog
 export const PromptCopyIconFilled = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3721,6 +3935,7 @@ export const PromptCopyIconFilled = (props: IconProps) => (
 
 export const ProfileIconFilled = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3741,6 +3956,7 @@ export const ProfileIconFilled = (props: IconProps) => (
 
 export const SandboxIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -3759,6 +3975,7 @@ export const SandboxIcon = (props: IconProps) => (
 
 export const EyeOpenFilledIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -3777,6 +3994,7 @@ export const EyeOpenFilledIcon = (props: IconProps) => (
 
 export const BillingIconFilled = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -3801,6 +4019,7 @@ export const BillingIconFilled = (props: IconProps) => (
 
 export const RemixIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3823,6 +4042,7 @@ export const RemixIcon = (props: IconProps) => (
 // Small circular info icon used in Code/Info tabs
 export const InfoCircleSmallIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -3848,6 +4068,7 @@ export const InfoCircleSmallIcon = (props: IconProps) => (
 
 export const MailIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3866,6 +4087,7 @@ export const MailIcon = (props: IconProps) => (
 
 export const EmailNotificationIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3894,6 +4116,7 @@ export const EmailNotificationIcon = (props: IconProps) => (
 
 export const AffiliateIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3915,6 +4138,7 @@ export const AffiliateIcon = (props: IconProps) => (
 
 export const ReportIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3936,6 +4160,7 @@ export const ReportIcon = (props: IconProps) => (
 
 export const ThinFolderIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -3954,6 +4179,7 @@ export const ThinFolderIcon = (props: IconProps) => (
 
 export const ThresholdIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="14"
     height="14"
@@ -3975,6 +4201,7 @@ export const ThresholdIcon = (props: IconProps) => (
 
 export const SlackIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4003,6 +4230,7 @@ export const SlackIcon = (props: IconProps) => (
 
 export const CategoriesIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -4043,6 +4271,7 @@ export const CategoriesIcon = (props: IconProps) => (
 
 export const ListSearchIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -4075,6 +4304,7 @@ export const ListSearchIcon = (props: IconProps) => (
 
 export const CloseCircleFilledIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -4093,6 +4323,7 @@ export const CloseCircleFilledIcon = (props: IconProps) => (
 
 export const LayerUpIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -4112,6 +4343,7 @@ export const LayerUpIcon = (props: IconProps) => (
 
 export const LayerDownIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -4130,6 +4362,7 @@ export const LayerDownIcon = (props: IconProps) => (
 )
 export const ExploreIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4146,6 +4379,7 @@ export const ExploreIcon = (props: IconProps) => (
 
 export const LibraryIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4172,6 +4406,7 @@ export const LibraryIcon = (props: IconProps) => (
 
 export const PageIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="16"
     height="16"
@@ -4191,6 +4426,7 @@ export const PageIcon = (props: IconProps) => (
 
 export const AtSignIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4207,6 +4443,7 @@ export const AtSignIcon = (props: IconProps) => (
 
 export const IterateIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4242,6 +4479,7 @@ export const IterateIcon = (props: IconProps) => (
 export function PlanIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -4282,6 +4520,7 @@ export function PlanIcon(props: IconProps) {
 export function QuestionIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="16"
       height="16"
@@ -4311,6 +4550,7 @@ export function QuestionIcon({ className }: { className?: string }) {
 export function AgentIconSmall({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       width="12"
       height="12"
       viewBox="0 0 12 12"
@@ -4333,6 +4573,7 @@ export function AgentIconSmall({ className }: { className?: string }) {
 export function ExploreIconSmall({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       width="12"
       height="12"
       viewBox="0 0 12 12"
@@ -4357,6 +4598,7 @@ export function ExploreIconSmall({ className }: { className?: string }) {
 export function PlanIconSmall({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       width="12"
       height="12"
       viewBox="0 0 12 12"
@@ -4379,6 +4621,7 @@ export function PlanIconSmall({ className }: { className?: string }) {
 export function PrototypeIconSmall({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       width="12"
       height="12"
       viewBox="0 0 24 24"
@@ -4399,6 +4642,7 @@ export function PrototypeIconSmall({ className }: { className?: string }) {
 export function QuestionsSkippedIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="16"
       height="16"
@@ -4407,12 +4651,7 @@ export function QuestionsSkippedIcon({ className }: { className?: string }) {
       className={className}
     >
       <g transform="scale(1.15) translate(-1.8, -1.8)">
-        <path
-          d="M8 19L16 19"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
+        <path d="M8 19L16 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         <path
           d="M16 5H21V10"
           stroke="currentColor"
@@ -4420,11 +4659,7 @@ export function QuestionsSkippedIcon({ className }: { className?: string }) {
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <path
-          d="M20.5 5.5C16 9.5 12.5 13.5 12 19"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
+        <path d="M20.5 5.5C16 9.5 12.5 13.5 12 19" stroke="currentColor" strokeWidth="2" />
         <path
           d="M12 18.9999V18.9122C12 12.9251 7.5 7 2 7.06002"
           stroke="currentColor"
@@ -4436,11 +4671,9 @@ export function QuestionsSkippedIcon({ className }: { className?: string }) {
   )
 }
 
-export const TeamIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const TeamIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4456,11 +4689,9 @@ export const TeamIcon = ({
   </svg>
 )
 
-export const ChipIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const ChipIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4477,11 +4708,9 @@ export const ChipIcon = ({
   </svg>
 )
 
-export const MembersIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const MembersIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4509,6 +4738,7 @@ export const MembersIcon = ({
 
 export const PullRequestIcon = (props: IconProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4567,6 +4797,7 @@ export const PullRequestIcon = (props: IconProps) => (
 
 export const InviteUserIcon = ({ className }: { className?: string }) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4586,6 +4817,7 @@ export const InviteUserIcon = ({ className }: { className?: string }) => (
 
 export const TicketIcon = ({ className }: { className?: string }) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -4606,6 +4838,7 @@ export const TicketIcon = ({ className }: { className?: string }) => (
 
 export const FollowingIcon = ({ className }: { className?: string }) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4623,6 +4856,7 @@ export const FollowingIcon = ({ className }: { className?: string }) => (
 
 export const FollowPersonPlusIcon = ({ className }: { className?: string }) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4654,11 +4888,9 @@ export const FollowPersonPlusIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-export const InviteTeamIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const InviteTeamIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4680,11 +4912,9 @@ export const InviteTeamIcon = ({
   </svg>
 )
 
-export const MoveToTeamIcon = ({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) => (
+export const MoveToTeamIcon = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -4737,6 +4967,7 @@ export const MoveToTeamIcon = ({
 export function QuestionCircleIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -4752,12 +4983,7 @@ export function QuestionCircleIcon(props: IconProps) {
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <path
-          d="M12 16V16.01"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
+        <path d="M12 16V16.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         <path
           d="M12 13C12 11.3608 14 11.9319 14 10C14 8.89543 13.1046 8 12 8C11.2597 8 10.6134 8.4022 10.2676 9"
           stroke="currentColor"
@@ -4773,6 +4999,7 @@ export function QuestionCircleIcon(props: IconProps) {
 export function AIResearchIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -4805,6 +5032,7 @@ export function AIResearchIcon(props: IconProps) {
 export function MagicChatPlusIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -4832,6 +5060,7 @@ export function MagicChatPlusIcon(props: IconProps) {
 export function ContributeIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -4894,6 +5123,7 @@ export function ContributeIcon(props: IconProps) {
 export function SyncIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -4917,6 +5147,7 @@ export function SyncIcon(props: IconProps) {
 export function BranchIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -4974,6 +5205,7 @@ export function BranchIcon(props: IconProps) {
 export function CalendarDotsIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -4985,12 +5217,7 @@ export function CalendarDotsIcon(props: IconProps) {
         d="M6 4V3C4.34315 3 3 4.34315 3 6H4H5C5 5.44772 5.44772 5 6 5V4ZM6 4V5H18V4V3H6V4ZM18 4V5C18.5523 5 19 5.44772 19 6H20H21C21 4.34315 19.6569 3 18 3V4ZM20 6H19V8H20H21V6H20ZM20 8H19V18H20H21V8H20ZM20 18H19C19 18.5523 18.5523 19 18 19V20V21C19.6569 21 21 19.6569 21 18H20ZM18 20V19H6V20V21H18V20ZM6 20V19C5.44772 19 5 18.5523 5 18H4H3C3 19.6569 4.34315 21 6 21V20ZM4 18H5V8H4H3V18H4ZM4 8H5V6H4H3V8H4Z"
         fill="currentColor"
       />
-      <path
-        d="M4 8H20"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M4 8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path
         d="M9.25 12C9.25 12.6904 8.69036 13.25 8 13.25C7.30964 13.25 6.75 12.6904 6.75 12C6.75 11.3096 7.30964 10.75 8 10.75C8.69036 10.75 9.25 11.3096 9.25 12Z"
         fill="currentColor"
@@ -5018,6 +5245,7 @@ export function CalendarDotsIcon(props: IconProps) {
 export function AuthorIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5046,6 +5274,7 @@ export function AuthorIcon(props: IconProps) {
 export function LibraryOutlineIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5097,6 +5326,7 @@ export function LibraryOutlineIcon(props: IconProps) {
 export function ServerIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5131,6 +5361,7 @@ export function ServerIcon(props: IconProps) {
 export function KeyIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5158,6 +5389,7 @@ export function KeyIcon(props: IconProps) {
 export function FolderIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5178,6 +5410,7 @@ export function FolderIcon(props: IconProps) {
 export function FolderPlusIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5213,6 +5446,7 @@ export function FolderPlusIcon(props: IconProps) {
 export function ArchiveIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       className={className}
       viewBox="0 0 24 24"
       fill="none"
@@ -5248,6 +5482,7 @@ export function ArchiveIcon({ className }: { className?: string }) {
 export function PinFilledIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="24"
       height="24"
@@ -5264,6 +5499,7 @@ export function PinFilledIcon({ className }: { className?: string }) {
 export function AgentIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5283,6 +5519,7 @@ export function AgentIcon(props: IconProps) {
 export function CircleFilterIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5324,6 +5561,7 @@ export function CircleFilterIcon(props: IconProps) {
 export function CustomAgentIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5344,6 +5582,7 @@ export function CustomAgentIcon(props: IconProps) {
 export function CustomAgentIconFilled(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5363,6 +5602,7 @@ export function CustomAgentIconFilled(props: IconProps) {
 export function ExpandIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5383,6 +5623,7 @@ export function ExpandIcon(props: IconProps) {
 export function CollapseIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5403,6 +5644,7 @@ export function CollapseIcon(props: IconProps) {
 export function RoadmapIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5422,6 +5664,7 @@ export function RoadmapIcon(props: IconProps) {
 // Claude Code Logo icon
 export const ClaudeCodeLogoIcon = (props: LucideProps) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
@@ -5438,14 +5681,14 @@ export const ClaudeCodeLogoIcon = (props: LucideProps) => (
 
 // OpenAI Codex icon
 export const CodexIcon = (props: IconProps) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" {...props}>
     <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
   </svg>
 )
 
 // GitHub icon
 export const GitHubIcon = (props: LucideProps) => (
-  <svg viewBox="0 0 438.549 438.549" {...props}>
+  <svg aria-hidden="true" viewBox="0 0 438.549 438.549" {...props}>
     <path
       fill="currentColor"
       d="M409.132 114.573c-19.608-33.596-46.205-60.194-79.798-79.8-33.598-19.607-70.277-29.408-110.063-29.408-39.781 0-76.472 9.804-110.063 29.408-33.596 19.605-60.192 46.204-79.8 79.8C9.803 148.168 0 184.854 0 224.63c0 47.78 13.94 90.745 41.827 128.906 27.884 38.164 63.906 64.572 108.063 79.227 5.14.954 8.945.283 11.419-1.996 2.475-2.282 3.711-5.14 3.711-8.562 0-.571-.049-5.708-.144-15.417a2549.81 2549.81 0 01-.144-25.406l-6.567 1.136c-4.187.767-9.469 1.092-15.846 1-6.374-.089-12.991-.757-19.842-1.999-6.854-1.231-13.229-4.086-19.13-8.559-5.898-4.473-10.085-10.328-12.56-17.556l-2.855-6.57c-1.903-4.374-4.899-9.233-8.992-14.559-4.093-5.331-8.232-8.945-12.419-10.848l-1.999-1.431c-1.332-.951-2.568-2.098-3.711-3.429-1.142-1.331-1.997-2.663-2.568-3.997-.572-1.335-.098-2.43 1.427-3.289 1.525-.859 4.281-1.276 8.28-1.276l5.708.853c3.807.763 8.516 3.042 14.133 6.851 5.614 3.806 10.229 8.754 13.846 14.9 4.38 7.806 9.657 13.754 15.846 17.847 6.184 4.093 12.419 6.136 18.699 6.136 6.28 0 11.704-.476 16.274-1.423 4.565-.952 8.848-2.383 12.847-4.285 1.713-12.758 6.377-22.559 13.988-29.41-10.848-1.14-20.601-2.857-29.264-5.14-8.658-2.286-17.605-5.996-26.835-11.14-9.235-5.137-16.896-11.516-22.985-19.126-6.09-7.614-11.088-17.61-14.987-29.979-3.901-12.374-5.852-26.648-5.852-42.826 0-23.035 7.52-42.637 22.557-58.817-7.044-17.318-6.379-36.732 1.997-58.24 5.52-1.715 13.706-.428 24.554 3.853 10.85 4.283 18.794 7.952 23.84 10.994 5.046 3.041 9.089 5.618 12.135 7.708 17.705-4.947 35.976-7.421 54.818-7.421s37.117 2.474 54.823 7.421l10.849-6.849c7.419-4.57 16.18-8.758 26.262-12.565 10.088-3.805 17.802-4.853 23.134-3.138 8.562 21.509 9.325 40.922 2.279 58.24 15.036 16.18 22.559 35.787 22.559 58.817 0 16.178-1.958 30.497-5.853 42.966-3.9 12.471-8.941 22.457-15.125 29.979-6.191 7.521-13.901 13.85-23.131 18.986-9.232 5.14-18.182 8.85-26.84 11.136-8.662 2.286-18.415 4.004-29.263 5.146 9.894 8.562 14.842 22.077 14.842 40.539v60.237c0 3.422 1.19 6.279 3.572 8.562 2.379 2.279 6.136 2.95 11.276 1.995 44.163-14.653 80.185-41.062 108.068-79.226 27.88-38.161 41.825-81.126 41.825-128.906-.01-39.771-9.818-76.454-29.414-110.049z"
@@ -5457,6 +5700,7 @@ export const GitHubIcon = (props: LucideProps) => (
 export function LaptopIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5486,6 +5730,7 @@ export function LaptopIcon(props: IconProps) {
 export function SkillIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5529,6 +5774,7 @@ export function SkillIcon(props: IconProps) {
 export function BrainFilledIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5552,6 +5798,7 @@ export function BrainFilledIcon(props: IconProps) {
 export function FlaskFilledIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5581,6 +5828,7 @@ export function FlaskFilledIcon(props: IconProps) {
 export function BugFilledIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5602,6 +5850,7 @@ export function BugFilledIcon(props: IconProps) {
 export function SkillIconFilled(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5623,6 +5872,7 @@ export function SkillIconFilled(props: IconProps) {
 export function IconReview(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5644,6 +5894,7 @@ export function IconReview(props: IconProps) {
 export function KeyFilledIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="currentColor"
@@ -5663,6 +5914,7 @@ export function KeyFilledIcon(props: IconProps) {
 export function SettingsFilledIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="currentColor"
@@ -5682,8 +5934,19 @@ export function SettingsFilledIcon(props: IconProps) {
 // Diff view display mode icons
 export function IconSidePeek(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" {...props}>
-      <path fillRule="evenodd" clipRule="evenodd" d="M8.72505 3H14.2749C15.4129 2.99999 16.3307 2.99998 17.074 3.06071C17.8394 3.12324 18.5116 3.25534 19.1335 3.57222C20.1213 4.07555 20.9245 4.8787 21.4277 5.86655C21.7446 6.48846 21.8767 7.16066 21.9393 7.92595C22 8.66921 22 9.58706 22 10.7251V14.1749C22 15.3129 22 16.2308 21.9393 16.974C21.8767 17.7394 21.7446 18.4116 21.4277 19.0335C20.9245 20.0213 20.1213 20.8245 19.1335 21.3277C18.5116 21.6446 17.8394 21.7767 17.074 21.8393C16.3308 21.9 15.4129 21.9 14.2749 21.9H8.72503C7.58706 21.9 6.66921 21.9 5.92595 21.8393C5.16066 21.7767 4.48846 21.6446 3.86655 21.3277C2.8787 20.8245 2.07555 20.0213 1.57222 19.0335C1.25534 18.4116 1.12324 17.7394 1.06071 16.974C0.999979 16.2307 0.99999 15.3129 1 14.1749V10.7251C0.99999 9.58708 0.999979 8.66922 1.06071 7.92595C1.12324 7.16066 1.25534 6.48846 1.57222 5.86655C2.07555 4.8787 2.8787 4.07555 3.86655 3.57222C4.48846 3.25534 5.16066 3.12324 5.92595 3.06071C6.66922 2.99998 7.58708 2.99999 8.72505 3ZM6.09695 5.15374C5.46152 5.20565 5.09645 5.30243 4.81993 5.44333C4.22722 5.74533 3.74533 6.22722 3.44333 6.81993C3.30243 7.09645 3.20565 7.46152 3.15374 8.09695C3.10082 8.74463 3.1 9.57656 3.1 10.77V14.13C3.1 15.3234 3.10082 16.1553 3.15374 16.8031C3.20565 17.4384 3.30243 17.8035 3.44333 18.0801C3.74533 18.6728 4.22722 19.1547 4.81993 19.4566C5.09645 19.5976 5.46152 19.6944 6.09695 19.7462C6.74463 19.7992 7.57656 19.8 8.77 19.8H14.23C15.4234 19.8 16.2553 19.7992 16.9031 19.7462C17.5384 19.6944 17.9035 19.5976 18.1801 19.4566C18.7728 19.1547 19.2547 18.6728 19.5566 18.0801C19.6976 17.8035 19.7944 17.4384 19.8462 16.8031C19.8992 16.1553 19.9 15.3234 19.9 14.13V10.77C19.9 9.57656 19.8992 8.74463 19.8462 8.09695C19.7944 7.46152 19.6976 7.09645 19.5566 6.81993C19.2547 6.22722 18.7728 5.74533 18.1801 5.44333C17.9035 5.30243 17.5384 5.20565 16.9031 5.15374C16.2553 5.10082 15.4234 5.1 14.23 5.1H8.77C7.57656 5.1 6.74463 5.10082 6.09695 5.15374ZM10.45 7.2C11.0299 7.2 11.5 7.67011 11.5 8.25V16.65C11.5 17.2299 11.0299 17.7 10.45 17.7C9.87008 17.7 9.4 17.2299 9.4 16.65V8.25C9.4 7.67011 9.87008 7.2 10.45 7.2Z" />
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="24"
+      height="24"
+      {...props}
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M8.72505 3H14.2749C15.4129 2.99999 16.3307 2.99998 17.074 3.06071C17.8394 3.12324 18.5116 3.25534 19.1335 3.57222C20.1213 4.07555 20.9245 4.8787 21.4277 5.86655C21.7446 6.48846 21.8767 7.16066 21.9393 7.92595C22 8.66921 22 9.58706 22 10.7251V14.1749C22 15.3129 22 16.2308 21.9393 16.974C21.8767 17.7394 21.7446 18.4116 21.4277 19.0335C20.9245 20.0213 20.1213 20.8245 19.1335 21.3277C18.5116 21.6446 17.8394 21.7767 17.074 21.8393C16.3308 21.9 15.4129 21.9 14.2749 21.9H8.72503C7.58706 21.9 6.66921 21.9 5.92595 21.8393C5.16066 21.7767 4.48846 21.6446 3.86655 21.3277C2.8787 20.8245 2.07555 20.0213 1.57222 19.0335C1.25534 18.4116 1.12324 17.7394 1.06071 16.974C0.999979 16.2307 0.99999 15.3129 1 14.1749V10.7251C0.99999 9.58708 0.999979 8.66922 1.06071 7.92595C1.12324 7.16066 1.25534 6.48846 1.57222 5.86655C2.07555 4.8787 2.8787 4.07555 3.86655 3.57222C4.48846 3.25534 5.16066 3.12324 5.92595 3.06071C6.66922 2.99998 7.58708 2.99999 8.72505 3ZM6.09695 5.15374C5.46152 5.20565 5.09645 5.30243 4.81993 5.44333C4.22722 5.74533 3.74533 6.22722 3.44333 6.81993C3.30243 7.09645 3.20565 7.46152 3.15374 8.09695C3.10082 8.74463 3.1 9.57656 3.1 10.77V14.13C3.1 15.3234 3.10082 16.1553 3.15374 16.8031C3.20565 17.4384 3.30243 17.8035 3.44333 18.0801C3.74533 18.6728 4.22722 19.1547 4.81993 19.4566C5.09645 19.5976 5.46152 19.6944 6.09695 19.7462C6.74463 19.7992 7.57656 19.8 8.77 19.8H14.23C15.4234 19.8 16.2553 19.7992 16.9031 19.7462C17.5384 19.6944 17.9035 19.5976 18.1801 19.4566C18.7728 19.1547 19.2547 18.6728 19.5566 18.0801C19.6976 17.8035 19.7944 17.4384 19.8462 16.8031C19.8992 16.1553 19.9 15.3234 19.9 14.13V10.77C19.9 9.57656 19.8992 8.74463 19.8462 8.09695C19.7944 7.46152 19.6976 7.09645 19.5566 6.81993C19.2547 6.22722 18.7728 5.74533 18.1801 5.44333C17.9035 5.30243 17.5384 5.20565 16.9031 5.15374C16.2553 5.10082 15.4234 5.1 14.23 5.1H8.77C7.57656 5.1 6.74463 5.10082 6.09695 5.15374ZM10.45 7.2C11.0299 7.2 11.5 7.67011 11.5 8.25V16.65C11.5 17.2299 11.0299 17.7 10.45 17.7C9.87008 17.7 9.4 17.2299 9.4 16.65V8.25C9.4 7.67011 9.87008 7.2 10.45 7.2Z"
+      />
       <path d="M17.7992 8.2502C17.7992 7.6703 17.3291 7.2002 16.7492 7.2002C16.1693 7.2002 15.6992 7.6703 15.6992 8.2502V16.6502C15.6992 17.2301 16.1693 17.7002 16.7492 17.7002C17.3291 17.7002 17.7992 17.2301 17.7992 16.6502V8.2502Z" />
       <path d="M10.4492 7.2002H16.7492V17.7002H10.4492V7.2002Z" />
     </svg>
@@ -5692,8 +5955,19 @@ export function IconSidePeek(props: IconProps) {
 
 export function IconCenterPeek(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" {...props}>
-      <path fillRule="evenodd" clipRule="evenodd" d="M8.72505 3H14.2749C15.4129 2.99999 16.3307 2.99998 17.074 3.06071C17.8394 3.12324 18.5116 3.25534 19.1335 3.57222C20.1213 4.07555 20.9245 4.8787 21.4278 5.86655C21.7446 6.48846 21.8767 7.16066 21.9393 7.92595C22 8.66921 22 9.58706 22 10.7251V14.1749C22 15.3129 22 16.2308 21.9393 16.974C21.8767 17.7394 21.7446 18.4116 21.4278 19.0335C20.9245 20.0213 20.1213 20.8245 19.1335 21.3277C18.5116 21.6446 17.8394 21.7767 17.074 21.8393C16.3308 21.9 15.4129 21.9 14.2749 21.9H8.72503C7.58706 21.9 6.66921 21.9 5.92595 21.8393C5.16066 21.7767 4.48846 21.6446 3.86655 21.3277C2.8787 20.8245 2.07555 20.0213 1.57222 19.0335C1.25534 18.4116 1.12324 17.7394 1.06071 16.974C0.999979 16.2307 0.99999 15.3129 1 14.1749V10.7251C0.99999 9.58708 0.999979 8.66922 1.06071 7.92595C1.12324 7.16066 1.25534 6.48846 1.57222 5.86655C2.07555 4.8787 2.8787 4.07555 3.86655 3.57222C4.48846 3.25534 5.16066 3.12324 5.92595 3.06071C6.66922 2.99998 7.58708 2.99999 8.72505 3ZM6.09695 5.15374C5.46152 5.20565 5.09645 5.30243 4.81993 5.44333C4.22722 5.74533 3.74533 6.22722 3.44333 6.81993C3.30243 7.09645 3.20565 7.46152 3.15374 8.09695C3.10082 8.74463 3.1 9.57656 3.1 10.77V14.13C3.1 15.3234 3.10082 16.1553 3.15374 16.8031C3.20565 17.4384 3.30243 17.8035 3.44333 18.0801C3.74533 18.6728 4.22722 19.1547 4.81993 19.4566C5.09645 19.5976 5.46152 19.6944 6.09695 19.7462C6.74464 19.7992 7.57656 19.8 8.77 19.8H14.23C15.4234 19.8 16.2553 19.7992 16.9031 19.7462C17.5384 19.6944 17.9035 19.5976 18.1801 19.4566C18.7728 19.1547 19.2547 18.6728 19.5567 18.0801C19.6976 17.8035 19.7944 17.4384 19.8462 16.8031C19.8992 16.1553 19.9 15.3234 19.9 14.13V10.77C19.9 9.57656 19.8992 8.74463 19.8462 8.09695C19.7944 7.46152 19.6976 7.09645 19.5567 6.81993C19.2547 6.22722 18.7728 5.74533 18.1801 5.44333C17.9035 5.30243 17.5384 5.20565 16.9031 5.15374C16.2553 5.10082 15.4234 5.1 14.23 5.1H8.77C7.57656 5.1 6.74464 5.10082 6.09695 5.15374ZM10.45 7.2C11.0299 7.2 11.5 7.67011 11.5 8.25V16.65C11.5 17.2299 11.0299 17.7 10.45 17.7C9.87009 17.7 9.4 17.2299 9.4 16.65V8.25C9.4 7.67011 9.87009 7.2 10.45 7.2Z" />
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="24"
+      height="24"
+      {...props}
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M8.72505 3H14.2749C15.4129 2.99999 16.3307 2.99998 17.074 3.06071C17.8394 3.12324 18.5116 3.25534 19.1335 3.57222C20.1213 4.07555 20.9245 4.8787 21.4278 5.86655C21.7446 6.48846 21.8767 7.16066 21.9393 7.92595C22 8.66921 22 9.58706 22 10.7251V14.1749C22 15.3129 22 16.2308 21.9393 16.974C21.8767 17.7394 21.7446 18.4116 21.4278 19.0335C20.9245 20.0213 20.1213 20.8245 19.1335 21.3277C18.5116 21.6446 17.8394 21.7767 17.074 21.8393C16.3308 21.9 15.4129 21.9 14.2749 21.9H8.72503C7.58706 21.9 6.66921 21.9 5.92595 21.8393C5.16066 21.7767 4.48846 21.6446 3.86655 21.3277C2.8787 20.8245 2.07555 20.0213 1.57222 19.0335C1.25534 18.4116 1.12324 17.7394 1.06071 16.974C0.999979 16.2307 0.99999 15.3129 1 14.1749V10.7251C0.99999 9.58708 0.999979 8.66922 1.06071 7.92595C1.12324 7.16066 1.25534 6.48846 1.57222 5.86655C2.07555 4.8787 2.8787 4.07555 3.86655 3.57222C4.48846 3.25534 5.16066 3.12324 5.92595 3.06071C6.66922 2.99998 7.58708 2.99999 8.72505 3ZM6.09695 5.15374C5.46152 5.20565 5.09645 5.30243 4.81993 5.44333C4.22722 5.74533 3.74533 6.22722 3.44333 6.81993C3.30243 7.09645 3.20565 7.46152 3.15374 8.09695C3.10082 8.74463 3.1 9.57656 3.1 10.77V14.13C3.1 15.3234 3.10082 16.1553 3.15374 16.8031C3.20565 17.4384 3.30243 17.8035 3.44333 18.0801C3.74533 18.6728 4.22722 19.1547 4.81993 19.4566C5.09645 19.5976 5.46152 19.6944 6.09695 19.7462C6.74464 19.7992 7.57656 19.8 8.77 19.8H14.23C15.4234 19.8 16.2553 19.7992 16.9031 19.7462C17.5384 19.6944 17.9035 19.5976 18.1801 19.4566C18.7728 19.1547 19.2547 18.6728 19.5567 18.0801C19.6976 17.8035 19.7944 17.4384 19.8462 16.8031C19.8992 16.1553 19.9 15.3234 19.9 14.13V10.77C19.9 9.57656 19.8992 8.74463 19.8462 8.09695C19.7944 7.46152 19.6976 7.09645 19.5567 6.81993C19.2547 6.22722 18.7728 5.74533 18.1801 5.44333C17.9035 5.30243 17.5384 5.20565 16.9031 5.15374C16.2553 5.10082 15.4234 5.1 14.23 5.1H8.77C7.57656 5.1 6.74464 5.10082 6.09695 5.15374ZM10.45 7.2C11.0299 7.2 11.5 7.67011 11.5 8.25V16.65C11.5 17.2299 11.0299 17.7 10.45 17.7C9.87009 17.7 9.4 17.2299 9.4 16.65V8.25C9.4 7.67011 9.87009 7.2 10.45 7.2Z"
+      />
       <path d="M17.7992 8.2502C17.7992 7.6703 17.3291 7.2002 16.7492 7.2002C16.1693 7.2002 15.6992 7.6703 15.6992 8.2502V16.6502C15.6992 17.2301 16.1693 17.7002 16.7492 17.7002C17.3291 17.7002 17.7992 17.2301 17.7992 16.6502V8.2502Z" />
       <path d="M7.57461 8.2502C7.57461 7.6703 7.10452 7.2002 6.52461 7.2002C5.94469 7.2002 5.47461 7.6703 5.47461 8.2502V16.6502C5.47461 17.2301 5.94469 17.7002 6.52461 17.7002C7.10452 17.7002 7.57461 17.2301 7.57461 16.6502V8.2502Z" />
       <path d="M6.47461 7.19881L16.7787 7.19896V17.6915H6.47461V7.19881Z" />
@@ -5703,8 +5977,19 @@ export function IconCenterPeek(props: IconProps) {
 
 export function IconFullPage(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" {...props}>
-      <path fillRule="evenodd" clipRule="evenodd" d="M8.72505 3H14.2749C15.4129 2.99999 16.3307 2.99998 17.074 3.06071C17.8394 3.12324 18.5116 3.25534 19.1335 3.57222C20.1213 4.07555 20.9245 4.8787 21.4278 5.86655C21.7446 6.48846 21.8767 7.16066 21.9393 7.92595C22 8.66921 22 9.58706 22 10.7251V14.1749C22 15.3129 22 16.2308 21.9393 16.974C21.8767 17.7394 21.7446 18.4116 21.4278 19.0335C20.9245 20.0213 20.1213 20.8245 19.1335 21.3277C18.5116 21.6446 17.8394 21.7767 17.074 21.8393C16.3308 21.9 15.4129 21.9 14.2749 21.9H8.72503C7.58706 21.9 6.66921 21.9 5.92595 21.8393C5.16066 21.7767 4.48846 21.6446 3.86655 21.3277C2.8787 20.8245 2.07555 20.0213 1.57222 19.0335C1.25534 18.4116 1.12324 17.7394 1.06071 16.974C0.999979 16.2307 0.99999 15.3129 1 14.1749V10.7251C0.99999 9.58708 0.999979 8.66922 1.06071 7.92595C1.12324 7.16066 1.25534 6.48846 1.57222 5.86655C2.07555 4.8787 2.8787 4.07555 3.86655 3.57222C4.48846 3.25534 5.16066 3.12324 5.92595 3.06071C6.66922 2.99998 7.58708 2.99999 8.72505 3ZM6.09695 5.15374C5.46152 5.20565 5.09645 5.30243 4.81993 5.44333C4.22722 5.74533 3.74533 6.22722 3.44333 6.81993C3.30243 7.09645 3.20565 7.46152 3.15374 8.09695C3.10082 8.74463 3.1 9.57656 3.1 10.77V14.13C3.1 15.3234 3.10082 16.1553 3.15374 16.8031C3.20565 17.4384 3.30243 17.8035 3.44333 18.0801C3.74533 18.6728 4.22722 19.1547 4.81993 19.4566C5.09645 19.5976 5.46152 19.6944 6.09695 19.7462C6.74464 19.7992 7.57656 19.8 8.77 19.8H14.23C15.4234 19.8 16.2553 19.7992 16.9031 19.7462C17.5384 19.6944 17.9035 19.5976 18.1801 19.4566C18.7728 19.1547 19.2547 18.6728 19.5567 18.0801C19.6976 17.8035 19.7944 17.4384 19.8462 16.8031C19.8992 16.1553 19.9 15.3234 19.9 14.13V10.77C19.9 9.57656 19.8992 8.74463 19.8462 8.09695C19.7944 7.46152 19.6976 7.09645 19.5567 6.81993C19.2547 6.22722 18.7728 5.74533 18.1801 5.44333C17.9035 5.30243 17.5384 5.20565 16.9031 5.15374C16.2553 5.10082 15.4234 5.1 14.23 5.1H8.77C7.57656 5.1 6.74464 5.10082 6.09695 5.15374ZM10.45 7.2C11.0299 7.2 11.5 7.67011 11.5 8.25V16.65C11.5 17.2299 11.0299 17.7 10.45 17.7C9.87009 17.7 9.4 17.2299 9.4 16.65V8.25C9.4 7.67011 9.87009 7.2 10.45 7.2Z" />
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="24"
+      height="24"
+      {...props}
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M8.72505 3H14.2749C15.4129 2.99999 16.3307 2.99998 17.074 3.06071C17.8394 3.12324 18.5116 3.25534 19.1335 3.57222C20.1213 4.07555 20.9245 4.8787 21.4278 5.86655C21.7446 6.48846 21.8767 7.16066 21.9393 7.92595C22 8.66921 22 9.58706 22 10.7251V14.1749C22 15.3129 22 16.2308 21.9393 16.974C21.8767 17.7394 21.7446 18.4116 21.4278 19.0335C20.9245 20.0213 20.1213 20.8245 19.1335 21.3277C18.5116 21.6446 17.8394 21.7767 17.074 21.8393C16.3308 21.9 15.4129 21.9 14.2749 21.9H8.72503C7.58706 21.9 6.66921 21.9 5.92595 21.8393C5.16066 21.7767 4.48846 21.6446 3.86655 21.3277C2.8787 20.8245 2.07555 20.0213 1.57222 19.0335C1.25534 18.4116 1.12324 17.7394 1.06071 16.974C0.999979 16.2307 0.99999 15.3129 1 14.1749V10.7251C0.99999 9.58708 0.999979 8.66922 1.06071 7.92595C1.12324 7.16066 1.25534 6.48846 1.57222 5.86655C2.07555 4.8787 2.8787 4.07555 3.86655 3.57222C4.48846 3.25534 5.16066 3.12324 5.92595 3.06071C6.66922 2.99998 7.58708 2.99999 8.72505 3ZM6.09695 5.15374C5.46152 5.20565 5.09645 5.30243 4.81993 5.44333C4.22722 5.74533 3.74533 6.22722 3.44333 6.81993C3.30243 7.09645 3.20565 7.46152 3.15374 8.09695C3.10082 8.74463 3.1 9.57656 3.1 10.77V14.13C3.1 15.3234 3.10082 16.1553 3.15374 16.8031C3.20565 17.4384 3.30243 17.8035 3.44333 18.0801C3.74533 18.6728 4.22722 19.1547 4.81993 19.4566C5.09645 19.5976 5.46152 19.6944 6.09695 19.7462C6.74464 19.7992 7.57656 19.8 8.77 19.8H14.23C15.4234 19.8 16.2553 19.7992 16.9031 19.7462C17.5384 19.6944 17.9035 19.5976 18.1801 19.4566C18.7728 19.1547 19.2547 18.6728 19.5567 18.0801C19.6976 17.8035 19.7944 17.4384 19.8462 16.8031C19.8992 16.1553 19.9 15.3234 19.9 14.13V10.77C19.9 9.57656 19.8992 8.74463 19.8462 8.09695C19.7944 7.46152 19.6976 7.09645 19.5567 6.81993C19.2547 6.22722 18.7728 5.74533 18.1801 5.44333C17.9035 5.30243 17.5384 5.20565 16.9031 5.15374C16.2553 5.10082 15.4234 5.1 14.23 5.1H8.77C7.57656 5.1 6.74464 5.10082 6.09695 5.15374ZM10.45 7.2C11.0299 7.2 11.5 7.67011 11.5 8.25V16.65C11.5 17.2299 11.0299 17.7 10.45 17.7C9.87009 17.7 9.4 17.2299 9.4 16.65V8.25C9.4 7.67011 9.87009 7.2 10.45 7.2Z"
+      />
       <path d="M4 8.5C4 7.11929 5.11929 6 6.5 6H16.5C17.8807 6 19 7.11929 19 8.5V16.5C19 17.8807 17.8807 19 16.5 19H6.5C5.11929 19 4 17.8807 4 16.5V8.5Z" />
     </svg>
   )
@@ -5712,8 +5997,19 @@ export function IconFullPage(props: IconProps) {
 
 export function IconBottomPanel(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" {...props}>
-      <path fillRule="evenodd" clipRule="evenodd" d="M8.72505 3H14.2749C15.4129 2.99999 16.3307 2.99998 17.074 3.06071C17.8394 3.12324 18.5116 3.25534 19.1335 3.57222C20.1213 4.07555 20.9245 4.8787 21.4278 5.86655C21.7446 6.48846 21.8767 7.16066 21.9393 7.92595C22 8.66921 22 9.58706 22 10.7251V14.1749C22 15.3129 22 16.2308 21.9393 16.974C21.8767 17.7394 21.7446 18.4116 21.4278 19.0335C20.9245 20.0213 20.1213 20.8245 19.1335 21.3277C18.5116 21.6446 17.8394 21.7767 17.074 21.8393C16.3308 21.9 15.4129 21.9 14.2749 21.9H8.72503C7.58706 21.9 6.66921 21.9 5.92595 21.8393C5.16066 21.7767 4.48846 21.6446 3.86655 21.3277C2.8787 20.8245 2.07555 20.0213 1.57222 19.0335C1.25534 18.4116 1.12324 17.7394 1.06071 16.974C0.999979 16.2307 0.99999 15.3129 1 14.1749V10.7251C0.99999 9.58708 0.999979 8.66922 1.06071 7.92595C1.12324 7.16066 1.25534 6.48846 1.57222 5.86655C2.07555 4.8787 2.8787 4.07555 3.86655 3.57222C4.48846 3.25534 5.16066 3.12324 5.92595 3.06071C6.66922 2.99998 7.58708 2.99999 8.72505 3ZM6.09695 5.15374C5.46152 5.20565 5.09645 5.30243 4.81993 5.44333C4.22722 5.74533 3.74533 6.22722 3.44333 6.81993C3.30243 7.09645 3.20565 7.46152 3.15374 8.09695C3.10082 8.74463 3.1 9.57656 3.1 10.77V14.13C3.1 15.3234 3.10082 16.1553 3.15374 16.8031C3.20565 17.4384 3.30243 17.8035 3.44333 18.0801C3.74533 18.6728 4.22722 19.1547 4.81993 19.4566C5.09645 19.5976 5.46152 19.6944 6.09695 19.7462C6.74464 19.7992 7.57656 19.8 8.77 19.8H14.23C15.4234 19.8 16.2553 19.7992 16.9031 19.7462C17.5384 19.6944 17.9035 19.5976 18.1801 19.4566C18.7728 19.1547 19.2547 18.6728 19.5567 18.0801C19.6976 17.8035 19.7944 17.4384 19.8462 16.8031C19.8992 16.1553 19.9 15.3234 19.9 14.13V10.77C19.9 9.57656 19.8992 8.74463 19.8462 8.09695C19.7944 7.46152 19.6976 7.09645 19.5567 6.81993C19.2547 6.22722 18.7728 5.74533 18.1801 5.44333C17.9035 5.30243 17.5384 5.20565 16.9031 5.15374C16.2553 5.10082 15.4234 5.1 14.23 5.1H8.77C7.57656 5.1 6.74464 5.10082 6.09695 5.15374Z" />
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="24"
+      height="24"
+      {...props}
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M8.72505 3H14.2749C15.4129 2.99999 16.3307 2.99998 17.074 3.06071C17.8394 3.12324 18.5116 3.25534 19.1335 3.57222C20.1213 4.07555 20.9245 4.8787 21.4278 5.86655C21.7446 6.48846 21.8767 7.16066 21.9393 7.92595C22 8.66921 22 9.58706 22 10.7251V14.1749C22 15.3129 22 16.2308 21.9393 16.974C21.8767 17.7394 21.7446 18.4116 21.4278 19.0335C20.9245 20.0213 20.1213 20.8245 19.1335 21.3277C18.5116 21.6446 17.8394 21.7767 17.074 21.8393C16.3308 21.9 15.4129 21.9 14.2749 21.9H8.72503C7.58706 21.9 6.66921 21.9 5.92595 21.8393C5.16066 21.7767 4.48846 21.6446 3.86655 21.3277C2.8787 20.8245 2.07555 20.0213 1.57222 19.0335C1.25534 18.4116 1.12324 17.7394 1.06071 16.974C0.999979 16.2307 0.99999 15.3129 1 14.1749V10.7251C0.99999 9.58708 0.999979 8.66922 1.06071 7.92595C1.12324 7.16066 1.25534 6.48846 1.57222 5.86655C2.07555 4.8787 2.8787 4.07555 3.86655 3.57222C4.48846 3.25534 5.16066 3.12324 5.92595 3.06071C6.66922 2.99998 7.58708 2.99999 8.72505 3ZM6.09695 5.15374C5.46152 5.20565 5.09645 5.30243 4.81993 5.44333C4.22722 5.74533 3.74533 6.22722 3.44333 6.81993C3.30243 7.09645 3.20565 7.46152 3.15374 8.09695C3.10082 8.74463 3.1 9.57656 3.1 10.77V14.13C3.1 15.3234 3.10082 16.1553 3.15374 16.8031C3.20565 17.4384 3.30243 17.8035 3.44333 18.0801C3.74533 18.6728 4.22722 19.1547 4.81993 19.4566C5.09645 19.5976 5.46152 19.6944 6.09695 19.7462C6.74464 19.7992 7.57656 19.8 8.77 19.8H14.23C15.4234 19.8 16.2553 19.7992 16.9031 19.7462C17.5384 19.6944 17.9035 19.5976 18.1801 19.4566C18.7728 19.1547 19.2547 18.6728 19.5567 18.0801C19.6976 17.8035 19.7944 17.4384 19.8462 16.8031C19.8992 16.1553 19.9 15.3234 19.9 14.13V10.77C19.9 9.57656 19.8992 8.74463 19.8462 8.09695C19.7944 7.46152 19.6976 7.09645 19.5567 6.81993C19.2547 6.22722 18.7728 5.74533 18.1801 5.44333C17.9035 5.30243 17.5384 5.20565 16.9031 5.15374C16.2553 5.10082 15.4234 5.1 14.23 5.1H8.77C7.57656 5.1 6.74464 5.10082 6.09695 5.15374Z"
+      />
       <path d="M16.7783 11.501C17.3447 11.5164 17.7987 11.9797 17.7988 12.5498V16.6504C17.7987 17.2302 17.3289 17.7002 16.749 17.7002C16.706 17.7002 16.6637 17.6964 16.6221 17.6914H6.65625C6.6131 17.6968 6.56903 17.7002 6.52441 17.7002C5.94462 17.7001 5.47466 17.2302 5.47461 16.6504V12.5498C5.47471 11.9868 5.91799 11.5281 6.47461 11.502V11.5H16.7783V11.501Z" />
     </svg>
   )
@@ -5721,11 +6017,35 @@ export function IconBottomPanel(props: IconProps) {
 
 export function IconLineNumbers(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...props}>
-      <path d="M12 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 7H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M6 9.5V4.5L4 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4.25 15C4.25 15 4.9 14.5 5.61102 14.5C6.37813 14.5 7 15.1219 7 15.889C7 17.6885 4 18 4 19.5H7.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" width="24" height="24" {...props}>
+      <path
+        d="M12 17H20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 7H20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 9.5V4.5L4 5.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.25 15C4.25 15 4.9 14.5 5.61102 14.5C6.37813 14.5 7 15.1219 7 15.889C7 17.6885 4 18 4 19.5H7.25"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
@@ -5733,6 +6053,7 @@ export function IconLineNumbers(props: IconProps) {
 export function AIPenIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5752,12 +6073,7 @@ export function AIPenIcon(props: IconProps) {
           d="M7.24045 4.18518L6.54359 2.37334C6.45708 2.14842 6.24099 2 6 2C5.75901 2 5.54292 2.14842 5.45641 2.37334L4.75955 4.18518C4.65797 4.44927 4.44927 4.65797 4.18518 4.75955L2.37334 5.45641C2.14842 5.54292 2 5.75901 2 6C2 6.24099 2.14842 6.45708 2.37334 6.54359L4.18518 7.24045C4.44927 7.34203 4.65797 7.55073 4.75955 7.81482L5.45641 9.62666C5.54292 9.85158 5.75901 10 6 10C6.24099 10 6.45708 9.85158 6.54359 9.62666L7.24045 7.81482C7.34203 7.55073 7.55073 7.34203 7.81482 7.24045L9.62666 6.54359C9.85158 6.45708 10 6.24099 10 6C10 5.75901 9.85158 5.54292 9.62666 5.45641L7.81482 4.75955C7.55073 4.65797 7.34203 4.44927 7.24045 4.18518Z"
           fill="currentColor"
         />
-        <path
-          d="M15 8L18 11"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinejoin="round"
-        />
+        <path d="M15 8L18 11" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       </g>
     </svg>
   )
@@ -5766,6 +6082,7 @@ export function AIPenIcon(props: IconProps) {
 export function ThinkingIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5819,6 +6136,7 @@ export function ThinkingIcon(props: IconProps) {
 export function MicrophoneIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="currentColor"
@@ -5835,6 +6153,7 @@ export function MicrophoneIcon(props: IconProps) {
 export function CloudIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -5857,6 +6176,7 @@ export function CloudIcon(props: IconProps) {
 export function PluginFilledIcon(props: IconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"

@@ -1,40 +1,42 @@
-import { useTheme } from "next-themes"
-import { useState, useEffect, useCallback, useMemo } from "react"
-import { IconSpinner } from "../../../icons"
 import { useAtom, useSetAtom } from "jotai"
-import { motion, AnimatePresence } from "motion/react"
-import { cn } from "../../../lib/utils"
-import {
-  selectedFullThemeIdAtom,
-  fullThemeDataAtom,
-  systemLightThemeIdAtom,
-  systemDarkThemeIdAtom,
-  showWorkspaceIconAtom,
-  alwaysExpandTodoListAtom,
-  importedThemesAtom,
-  type VSCodeFullTheme,
-} from "../../../lib/atoms"
-import {
-  BUILTIN_THEMES,
-  getBuiltinThemeById,
-  BUILTIN_THEME_NAMES,
-} from "../../../lib/themes/builtin-themes"
-import {
-  generateCSSVariables,
-  applyCSSVariables,
-  removeCSSVariables,
-  getThemeTypeFromColors,
-} from "../../../lib/themes/vscode-to-css-mapping"
+import { AnimatePresence, motion } from "motion/react"
+import { useTheme } from "next-themes"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Select,
   SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectSeparator,
-  SelectLabel,
   SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
 } from "../../../components/ui/select"
 import { Switch } from "../../../components/ui/switch"
+import { type ChatFontSize, chatFontSizeAtom } from "../../../features/agents/atoms"
+import { type TerminalFontSize, terminalFontSizeAtom } from "../../../features/terminal/atoms"
+import { IconSpinner } from "../../../icons"
+import {
+  alwaysExpandTodoListAtom,
+  fullThemeDataAtom,
+  importedThemesAtom,
+  selectedFullThemeIdAtom,
+  showWorkspaceIconAtom,
+  systemDarkThemeIdAtom,
+  systemLightThemeIdAtom,
+  type VSCodeFullTheme,
+} from "../../../lib/atoms"
+import {
+  BUILTIN_THEME_NAMES,
+  BUILTIN_THEMES,
+  getBuiltinThemeById,
+} from "../../../lib/themes/builtin-themes"
+import {
+  applyCSSVariables,
+  generateCSSVariables,
+  getThemeTypeFromColors,
+  removeCSSVariables,
+} from "../../../lib/themes/vscode-to-css-mapping"
+import { cn } from "../../../lib/utils"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -78,13 +80,13 @@ function ThemePreviewBox({
   className?: string
 }) {
   const bgColor = theme?.colors?.["editor.background"] || "#1a1a1a"
-  
+
   // Get accent color, preferring button.background and skipping transparent colors
   const getAccentColor = () => {
     const candidates = [
       theme?.colors?.["button.background"],
       theme?.colors?.["textLink.foreground"],
-      theme?.colors?.["focusBorder"],
+      theme?.colors?.focusBorder,
       theme?.colors?.["activityBarBadge.background"],
     ]
     for (const color of candidates) {
@@ -94,14 +96,12 @@ function ThemePreviewBox({
     }
     return "#0034FF"
   }
-  
+
   const accentColor = getAccentColor()
   const isDark = theme ? theme.type === "dark" : true
 
   const sizeClasses =
-    size === "sm"
-      ? "w-7 h-5 text-[9px] gap-0.5 rounded-sm"
-      : "w-8 h-6 text-[10px] gap-1 rounded-sm"
+    size === "sm" ? "w-7 h-5 text-[9px] gap-0.5 rounded-sm" : "w-8 h-6 text-[10px] gap-1 rounded-sm"
 
   const dotSize = size === "sm" ? "w-1 h-1" : "w-1.5 h-1.5"
 
@@ -134,12 +134,8 @@ export function AgentsAppearanceTab() {
 
   // Theme atoms
   const [selectedThemeId, setSelectedThemeId] = useAtom(selectedFullThemeIdAtom)
-  const [systemLightThemeId, setSystemLightThemeId] = useAtom(
-    systemLightThemeIdAtom,
-  )
-  const [systemDarkThemeId, setSystemDarkThemeId] = useAtom(
-    systemDarkThemeIdAtom,
-  )
+  const [systemLightThemeId, setSystemLightThemeId] = useAtom(systemLightThemeIdAtom)
+  const [systemDarkThemeId, setSystemDarkThemeId] = useAtom(systemDarkThemeIdAtom)
   const setFullThemeData = useSetAtom(fullThemeDataAtom)
   const [importedThemes, setImportedThemes] = useAtom(importedThemesAtom)
 
@@ -148,6 +144,12 @@ export function AgentsAppearanceTab() {
 
   // To-do list preference
   const [alwaysExpandTodoList, setAlwaysExpandTodoList] = useAtom(alwaysExpandTodoListAtom)
+
+  // Terminal font size
+  const [terminalFontSize, setTerminalFontSize] = useAtom(terminalFontSizeAtom)
+
+  // Chat font size
+  const [chatFontSize, setChatFontSize] = useAtom(chatFontSizeAtom)
 
   // VS Code themes state
   const [isScanning, setIsScanning] = useState(false)
@@ -168,9 +170,7 @@ export function AgentsAppearanceTab() {
       try {
         const discovered = await api.scanVSCodeThemes()
         // Filter out themes that are already builtin
-        const newThemes = discovered.filter(
-          (t) => !BUILTIN_THEME_NAMES.has(t.name.toLowerCase())
-        )
+        const newThemes = discovered.filter((t) => !BUILTIN_THEME_NAMES.has(t.name.toLowerCase()))
 
         // Load all themes in parallel
         const loadedThemes = await Promise.all(
@@ -186,7 +186,7 @@ export function AgentsAppearanceTab() {
               console.error("[appearance-tab] Failed to load theme:", theme.name, err)
               return null
             }
-          })
+          }),
         )
 
         // Filter out failed loads and update imported themes
@@ -203,14 +203,8 @@ export function AgentsAppearanceTab() {
   }, [mounted, setImportedThemes])
 
   // Group themes by type
-  const darkThemes = useMemo(
-    () => BUILTIN_THEMES.filter((t) => t.type === "dark"),
-    [],
-  )
-  const lightThemes = useMemo(
-    () => BUILTIN_THEMES.filter((t) => t.type === "light"),
-    [],
-  )
+  const darkThemes = useMemo(() => BUILTIN_THEMES.filter((t) => t.type === "dark"), [])
+  const lightThemes = useMemo(() => BUILTIN_THEMES.filter((t) => t.type === "light"), [])
 
   // Is system mode selected
   const isSystemMode = selectedThemeId === null
@@ -221,9 +215,11 @@ export function AgentsAppearanceTab() {
       return null // System mode
     }
     // Check in both builtin and imported themes
-    return BUILTIN_THEMES.find((t) => t.id === selectedThemeId) ||
-           importedThemes.find((t) => t.id === selectedThemeId) ||
-           null
+    return (
+      BUILTIN_THEMES.find((t) => t.id === selectedThemeId) ||
+      importedThemes.find((t) => t.id === selectedThemeId) ||
+      null
+    )
   }, [selectedThemeId, importedThemes])
 
   // Get theme objects for system mode selectors
@@ -231,10 +227,7 @@ export function AgentsAppearanceTab() {
     () => getBuiltinThemeById(systemLightThemeId),
     [systemLightThemeId],
   )
-  const systemDarkTheme = useMemo(
-    () => getBuiltinThemeById(systemDarkThemeId),
-    [systemDarkThemeId],
-  )
+  const systemDarkTheme = useMemo(() => getBuiltinThemeById(systemDarkThemeId), [systemDarkThemeId])
 
   // Apply theme based on current settings
   const applyTheme = useCallback(
@@ -259,8 +252,8 @@ export function AgentsAppearanceTab() {
       }
 
       // Check in both builtin and imported themes
-      const theme = BUILTIN_THEMES.find((t) => t.id === themeId) ||
-                    importedThemes.find((t) => t.id === themeId)
+      const theme =
+        BUILTIN_THEMES.find((t) => t.id === themeId) || importedThemes.find((t) => t.id === themeId)
       if (theme) {
         setFullThemeData(theme)
 
@@ -337,11 +330,11 @@ export function AgentsAppearanceTab() {
   )
 
   // Group imported themes by type
-  const importedDarkThemes = useMemo(
+  const _importedDarkThemes = useMemo(
     () => importedThemes.filter((t) => t.type === "dark"),
     [importedThemes],
   )
-  const importedLightThemes = useMemo(
+  const _importedLightThemes = useMemo(
     () => importedThemes.filter((t) => t.type === "light"),
     [importedThemes],
   )
@@ -359,13 +352,7 @@ export function AgentsAppearanceTab() {
         applyCSSVariables(cssVars)
       }
     }
-  }, [
-    resolvedTheme,
-    selectedThemeId,
-    systemLightThemeId,
-    systemDarkThemeId,
-    mounted,
-  ])
+  }, [resolvedTheme, selectedThemeId, systemLightThemeId, systemDarkThemeId, mounted])
 
   if (!mounted) {
     return (
@@ -394,18 +381,13 @@ export function AgentsAppearanceTab() {
         {/* Main theme selector */}
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              Interface theme
-            </span>
+            <span className="text-sm font-medium text-foreground">Interface theme</span>
             <span className="text-xs text-muted-foreground">
               Select or customize your interface color scheme
             </span>
           </div>
 
-          <Select
-            value={selectedThemeId ?? "system"}
-            onValueChange={handleThemeChange}
-          >
+          <Select value={selectedThemeId ?? "system"} onValueChange={handleThemeChange}>
             <SelectTrigger className="w-auto px-2">
               <div className="flex items-center gap-2 min-w-0 -ml-[3px]">
                 {isSystemMode ? (
@@ -422,9 +404,7 @@ export function AgentsAppearanceTab() {
                 ) : (
                   <>
                     <ThemePreviewBox theme={currentTheme} />
-                    <span className="text-xs truncate">
-                      {currentTheme?.name || "Select"}
-                    </span>
+                    <span className="text-xs truncate">{currentTheme?.name || "Select"}</span>
                   </>
                 )}
               </div>
@@ -515,24 +495,17 @@ export function AgentsAppearanceTab() {
               {/* Light theme selector */}
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex flex-col space-y-1">
-                  <span className="text-sm font-medium text-foreground">
-                    Light
-                  </span>
+                  <span className="text-sm font-medium text-foreground">Light</span>
                   <span className="text-xs text-muted-foreground">
                     Theme to use for light system appearance
                   </span>
                 </div>
 
-                <Select
-                  value={systemLightThemeId}
-                  onValueChange={handleSystemLightThemeChange}
-                >
+                <Select value={systemLightThemeId} onValueChange={handleSystemLightThemeChange}>
                   <SelectTrigger className="w-auto px-2">
                     <div className="flex items-center gap-2 min-w-0 -ml-[3px]">
                       <ThemePreviewBox theme={systemLightTheme || null} />
-                      <span className="text-xs truncate">
-                        {systemLightTheme?.name || "Select"}
-                      </span>
+                      <span className="text-xs truncate">{systemLightTheme?.name || "Select"}</span>
                     </div>
                   </SelectTrigger>
                   <SelectContent>
@@ -551,24 +524,17 @@ export function AgentsAppearanceTab() {
               {/* Dark theme selector */}
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex flex-col space-y-1">
-                  <span className="text-sm font-medium text-foreground">
-                    Dark
-                  </span>
+                  <span className="text-sm font-medium text-foreground">Dark</span>
                   <span className="text-xs text-muted-foreground">
                     Theme to use for dark system appearance
                   </span>
                 </div>
 
-                <Select
-                  value={systemDarkThemeId}
-                  onValueChange={handleSystemDarkThemeChange}
-                >
+                <Select value={systemDarkThemeId} onValueChange={handleSystemDarkThemeChange}>
                   <SelectTrigger className="w-auto px-2">
                     <div className="flex items-center gap-2 min-w-0 -ml-[3px]">
                       <ThemePreviewBox theme={systemDarkTheme || null} />
-                      <span className="text-xs truncate">
-                        {systemDarkTheme?.name || "Select"}
-                      </span>
+                      <span className="text-xs truncate">{systemDarkTheme?.name || "Select"}</span>
                     </div>
                   </SelectTrigger>
                   <SelectContent>
@@ -588,36 +554,76 @@ export function AgentsAppearanceTab() {
         </AnimatePresence>
       </div>
 
-
       {/* Display Options Section */}
       <div className="bg-background rounded-lg border border-border overflow-hidden">
         <div className="flex items-center justify-between p-4">
           <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              Workspace icon
-            </span>
+            <span className="text-sm font-medium text-foreground">Workspace icon</span>
             <span className="text-xs text-muted-foreground">
               Show project icon in the sidebar workspace list
             </span>
           </div>
-          <Switch
-            checked={showWorkspaceIcon}
-            onCheckedChange={setShowWorkspaceIcon}
-          />
+          <Switch checked={showWorkspaceIcon} onCheckedChange={setShowWorkspaceIcon} />
         </div>
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              Always expand to-do list
-            </span>
+            <span className="text-sm font-medium text-foreground">Always expand to-do list</span>
             <span className="text-xs text-muted-foreground">
               Show the full to-do list instead of compact view
             </span>
           </div>
-          <Switch
-            checked={alwaysExpandTodoList}
-            onCheckedChange={setAlwaysExpandTodoList}
-          />
+          <Switch checked={alwaysExpandTodoList} onCheckedChange={setAlwaysExpandTodoList} />
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">Chat font size</span>
+            <span className="text-xs text-muted-foreground">
+              Font size for messages and responses
+            </span>
+          </div>
+          <Select
+            value={String(chatFontSize)}
+            onValueChange={(value) => setChatFontSize(Number(value) as ChatFontSize)}
+          >
+            <SelectTrigger className="w-auto px-2">
+              <span className="text-xs">{chatFontSize}px</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="12">12px</SelectItem>
+              <SelectItem value="13">13px</SelectItem>
+              <SelectItem value="14">14px</SelectItem>
+              <SelectItem value="15">15px</SelectItem>
+              <SelectItem value="16">16px</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">Terminal font size</span>
+            <span className="text-xs text-muted-foreground">
+              Font size for the integrated terminal
+            </span>
+          </div>
+          <Select
+            value={String(terminalFontSize)}
+            onValueChange={(value) => setTerminalFontSize(Number(value) as TerminalFontSize)}
+          >
+            <SelectTrigger className="w-auto px-2">
+              <span className="text-xs">{terminalFontSize}px</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10px</SelectItem>
+              <SelectItem value="11">11px</SelectItem>
+              <SelectItem value="12">12px</SelectItem>
+              <SelectItem value="13">13px</SelectItem>
+              <SelectItem value="14">14px</SelectItem>
+              <SelectItem value="15">15px</SelectItem>
+              <SelectItem value="16">16px</SelectItem>
+              <SelectItem value="18">18px</SelectItem>
+              <SelectItem value="20">20px</SelectItem>
+              <SelectItem value="24">24px</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </div>

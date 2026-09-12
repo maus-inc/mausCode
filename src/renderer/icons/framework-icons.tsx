@@ -13,7 +13,7 @@ interface FrameworkIconProps {
 // Next.js - Black circle with N arrow
 export function NextjsIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 180 180" className={cn("w-4 h-4", className)}>
+    <svg aria-hidden="true" viewBox="0 0 180 180" className={cn("w-4 h-4", className)}>
       <mask
         height="180"
         id="nextjs_mask"
@@ -31,13 +31,7 @@ export function NextjsIcon({ className }: FrameworkIconProps) {
           d="M149.508 157.52L69.142 54H54V125.97H66.1136V69.3836L139.999 164.845C143.333 162.614 146.509 160.165 149.508 157.52Z"
           fill="url(#nextjs_paint0)"
         />
-        <rect
-          fill="url(#nextjs_paint1)"
-          height="72"
-          width="12"
-          x="115"
-          y="54"
-        />
+        <rect fill="url(#nextjs_paint1)" height="72" width="12" x="115" y="54" />
       </g>
       <defs>
         <linearGradient
@@ -71,28 +65,17 @@ export function NextjsIcon({ className }: FrameworkIconProps) {
 export function ViteIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 256 257"
       className={cn("w-4 h-4", className)}
       preserveAspectRatio="xMidYMid"
     >
       <defs>
-        <linearGradient
-          x1="-.828%"
-          y1="7.652%"
-          x2="57.636%"
-          y2="78.411%"
-          id="vite_gradient_a"
-        >
+        <linearGradient x1="-.828%" y1="7.652%" x2="57.636%" y2="78.411%" id="vite_gradient_a">
           <stop stopColor="#41D1FF" offset="0%" />
           <stop stopColor="#BD34FE" offset="100%" />
         </linearGradient>
-        <linearGradient
-          x1="43.376%"
-          y1="2.242%"
-          x2="50.316%"
-          y2="89.03%"
-          id="vite_gradient_b"
-        >
+        <linearGradient x1="43.376%" y1="2.242%" x2="50.316%" y2="89.03%" id="vite_gradient_b">
           <stop stopColor="#FFEA83" offset="0%" />
           <stop stopColor="#FFDD35" offset="8.333%" />
           <stop stopColor="#FFA800" offset="100%" />
@@ -114,6 +97,7 @@ export function ViteIcon({ className }: FrameworkIconProps) {
 export function ReactIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 569 512"
       className={cn("w-4 h-4", className)}
       fill="none"
@@ -137,22 +121,14 @@ export function ReactIcon({ className }: FrameworkIconProps) {
 export function VueIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 256 221"
       className={cn("w-4 h-4", className)}
       preserveAspectRatio="xMidYMid"
     >
-      <path
-        d="M204.8 0H256L128 220.8 0 0h97.92L128 51.2 157.44 0h47.36Z"
-        fill="#41B883"
-      />
-      <path
-        d="m0 0 128 220.8L256 0h-51.2L128 132.48 50.56 0H0Z"
-        fill="#41B883"
-      />
-      <path
-        d="M50.56 0 128 133.12 204.8 0h-47.36L128 51.2 97.92 0H50.56Z"
-        fill="#35495E"
-      />
+      <path d="M204.8 0H256L128 220.8 0 0h97.92L128 51.2 157.44 0h47.36Z" fill="#41B883" />
+      <path d="m0 0 128 220.8L256 0h-51.2L128 132.48 50.56 0H0Z" fill="#41B883" />
+      <path d="M50.56 0 128 133.12 204.8 0h-47.36L128 51.2 97.92 0H50.56Z" fill="#35495E" />
     </svg>
   )
 }
@@ -160,7 +136,7 @@ export function VueIcon({ className }: FrameworkIconProps) {
 // Angular - Red/Purple gradient
 export function AngularIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 242 256" className={cn("w-4 h-4", className)} fill="none">
+    <svg aria-hidden="true" viewBox="0 0 242 256" className={cn("w-4 h-4", className)} fill="none">
       <defs>
         <linearGradient
           id="angular_gradient1"
@@ -205,6 +181,7 @@ export function AngularIcon({ className }: FrameworkIconProps) {
 export function SvelteIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 256 308"
       className={cn("w-4 h-4", className)}
       preserveAspectRatio="xMidYMid"
@@ -224,7 +201,7 @@ export function SvelteIcon({ className }: FrameworkIconProps) {
 // Astro - Dark rocket shape
 export function AstroIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 85 107" className={cn("w-4 h-4", className)} fill="none">
+    <svg aria-hidden="true" viewBox="0 0 85 107" className={cn("w-4 h-4", className)} fill="none">
       <path
         fill="#17191E"
         d="M27.59 91.136c-4.834-4.418-6.246-13.703-4.232-20.429 3.492 4.241 8.33 5.584 13.342 6.343 7.737 1.17 15.336.732 22.523-2.804.822-.405 1.582-.943 2.48-1.489.675 1.957.85 3.932.615 5.943-.573 4.896-3.01 8.678-6.885 11.545-1.55 1.147-3.19 2.172-4.79 3.253-4.917 3.323-6.247 7.22-4.4 12.888.044.139.084.277.183.614-2.51-1.124-4.344-2.76-5.742-4.911-1.475-2.27-2.177-4.78-2.214-7.498-.019-1.322-.019-2.656-.197-3.96-.434-3.178-1.926-4.601-4.737-4.683-2.884-.084-5.166 1.699-5.771 4.507-.046.216-.113.429-.18.68l.004.001ZM0 69.587s14.314-6.973 28.668-6.973L39.49 29.12c.405-1.62 1.588-2.72 2.924-2.72 1.335 0 2.518 1.1 2.924 2.72L56.16 62.614c17 0 28.668 6.973 28.668 6.973S60.514 3.352 60.467 3.219C59.769 1.261 58.591 0 57.003 0H27.827c-1.588 0-2.718 1.261-3.464 3.22C24.311 3.35 0 69.586 0 69.586Z"
@@ -236,7 +213,7 @@ export function AstroIcon({ className }: FrameworkIconProps) {
 // Remix - Dark R shape
 export function RemixIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 256 297" className={cn("w-4 h-4", className)}>
+    <svg aria-hidden="true" viewBox="0 0 256 297" className={cn("w-4 h-4", className)}>
       <path
         fill="#121212"
         d="M141.675 0C218.047 0 256 36.35 256 94.414c0 43.43-26.707 71.753-62.785 76.474 30.455 6.137 48.259 23.604 51.54 58.065l.474 6.337.415 5.924.358 5.542.249 4.179.267 4.93.138 2.814.198 4.47.159 4.222.079 2.427.107 3.888.092 4.446.033 2.148.06 6.226.02 6.496v3.885h-78.758l.004-1.62.028-3.147.047-3.065.136-7.424.035-2.489.027-3.902-.004-2.496-.023-2.617-.032-2.054-.064-2.876-.094-3.05-.125-3.242-.16-3.455-.096-1.813-.16-2.833-.186-2.976-.287-4.204-.247-3.342a116.56 116.56 0 0 0-.247-3.02l-.202-1.934c-2.6-22.827-11.655-32.157-27.163-35.269l-1.307-.245a60.184 60.184 0 0 0-2.704-.408l-1.397-.164c-.236-.025-.472-.05-.71-.073l-1.442-.127-1.471-.103-1.502-.081-1.514-.058-1.544-.039-1.574-.018L0 198.74V136.9h127.62c2.086 0 4.108-.04 6.066-.12l1.936-.095 1.893-.122 1.85-.15c.305-.028.608-.056.909-.086l1.785-.193a86.3 86.3 0 0 0 3.442-.475l1.657-.28c20.709-3.755 31.063-14.749 31.063-36.2 0-24.075-16.867-38.666-50.602-38.666H0V0h141.675ZM83.276 250.785c10.333 0 14.657 5.738 16.197 11.23l.203.79.167.782.109.617.046.306.078.603.058.59.023.29.031.569.01.278.008.54v29.507H0v-46.102h83.276Z"
@@ -248,7 +225,7 @@ export function RemixIcon({ className }: FrameworkIconProps) {
 // Gatsby - Purple #64328B
 export function GatsbyIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 128 128" className={cn("w-4 h-4", className)}>
+    <svg aria-hidden="true" viewBox="0 0 128 128" className={cn("w-4 h-4", className)}>
       <path
         fill="#64328B"
         d="M64 0C28.7 0 0 28.7 0 64s28.7 64 64 64 64-28.7 64-64S99.3 0 64 0zM13.2 64 64 114.8c-28.1 0-50.8-22.7-50.8-50.8zm62.2 49.5-60.9-61C19.7 30 39.9 13.2 64 13.2c16.6 0 31.3 7.9 40.5 20.2L97 40.6c-7.3-10.4-19.3-17.1-33-17.1-17.6 0-32.5 11.2-38.1 26.8C33.1 57 75.4 98.8 78.1 102c12.7-4.7 22.3-15.5 25.4-28.9H81.9v-9.4l33 .2c-.1 24.3-16.9 44.5-39.5 49.6z"
@@ -261,6 +238,7 @@ export function GatsbyIcon({ className }: FrameworkIconProps) {
 export function NuxtIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 256 168"
       className={cn("w-4 h-4", className)}
       preserveAspectRatio="xMidYMid"
@@ -276,7 +254,7 @@ export function NuxtIcon({ className }: FrameworkIconProps) {
 // Turbo/Turborepo - Black with gradient
 export function TurboIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 100 100" className={cn("w-4 h-4", className)} fill="none">
+    <svg aria-hidden="true" viewBox="0 0 100 100" className={cn("w-4 h-4", className)} fill="none">
       <path
         fill="#000"
         d="M49.96 17.482C32.046 17.482 17.47 32.07 17.47 50S32.045 82.518 49.96 82.518c17.916 0 32.492-14.588 32.492-32.518S67.877 17.482 49.961 17.482Zm0 49.346c-9.287 0-16.814-7.533-16.814-16.828 0-9.295 7.527-16.828 16.815-16.828S66.776 40.705 66.776 50c0 9.295-7.527 16.828-16.815 16.828Z"
@@ -308,6 +286,7 @@ export function TurboIcon({ className }: FrameworkIconProps) {
 export function TypeScriptIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 32 32"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -324,9 +303,10 @@ export function TypeScriptIcon({ className }: FrameworkIconProps) {
 export function JavaScriptIcon({ className }: FrameworkIconProps) {
   // Generate unique ID for clipPath to avoid conflicts when multiple icons are rendered
   const clipId = useId()
-  
+
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 800 800"
       className={cn("w-4 h-4", className)}
       fill="none"
@@ -350,7 +330,7 @@ export function JavaScriptIcon({ className }: FrameworkIconProps) {
 // Python - Blue/Yellow gradients
 export function PythonIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="16 16 32 32" className={cn("w-4 h-4", className)} fill="none">
+    <svg aria-hidden="true" viewBox="16 16 32 32" className={cn("w-4 h-4", className)} fill="none">
       <path
         fill="url(#python_gradient_a)"
         d="M31.885 16c-8.124 0-7.617 3.523-7.617 3.523l.01 3.65h7.752v1.095H21.197S16 23.678 16 31.876c0 8.196 4.537 7.906 4.537 7.906h2.708v-3.804s-.146-4.537 4.465-4.537h7.688s4.32.07 4.32-4.175v-7.019S40.374 16 31.885 16zm-4.275 2.454a1.394 1.394 0 1 1 0 2.79 1.393 1.393 0 0 1-1.395-1.395c0-.771.624-1.395 1.395-1.395z"
@@ -390,7 +370,7 @@ export function PythonIcon({ className }: FrameworkIconProps) {
 // Go - Black
 export function GoIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 207 78" className={cn("w-4 h-4", className)}>
+    <svg aria-hidden="true" viewBox="0 0 207 78" className={cn("w-4 h-4", className)}>
       <g fill="#000000" fillRule="evenodd">
         <path d="m16.2 24.1c-.4 0-.5-.2-.3-.5l2.1-2.7c.2-.3.7-.5 1.1-.5h35.7c.4 0 .5.3.3.6l-1.7 2.6c-.2.3-.7.6-1 .6z" />
         <path d="m1.1 33.3c-.4 0-.5-.2-.3-.5l2.1-2.7c.2-.3.7-.5 1.1-.5h45.6c.4 0 .6.3.5.6l-.8 2.4c-.1.4-.5.6-.9.6z" />
@@ -410,11 +390,7 @@ export function GoIcon({ className }: FrameworkIconProps) {
 // Markdown - Blue info circle icon (for README files)
 export function MarkdownInfoIcon({ className }: FrameworkIconProps) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      className={cn("w-4 h-4", className)}
-    >
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className={cn("w-4 h-4", className)}>
       <g transform="scale(1.1) translate(-1.2, -1.2)">
         <path
           d="M11 11H12V16M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
@@ -438,6 +414,7 @@ export function MarkdownInfoIcon({ className }: FrameworkIconProps) {
 export function MarkdownIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -456,7 +433,7 @@ export function MarkdownIcon({ className }: FrameworkIconProps) {
 // Rust - Black gear shape
 export function RustIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 224 224" className={cn("w-4 h-4", className)} fill="none">
+    <svg aria-hidden="true" viewBox="0 0 224 224" className={cn("w-4 h-4", className)} fill="none">
       <path
         fill="#000"
         d="M218.46 109.358l-9.062-5.614c-.076-.882-.162-1.762-.258-2.642l7.803-7.265a3.107 3.107 0 00.933-2.89 3.093 3.093 0 00-1.967-2.312l-9.97-3.715c-.25-.863-.512-1.72-.781-2.58l6.214-8.628a3.114 3.114 0 00-.592-4.263 3.134 3.134 0 00-1.431-.637l-10.507-1.709a80.869 80.869 0 00-1.263-2.353l4.417-9.7a3.12 3.12 0 00-.243-3.035 3.106 3.106 0 00-2.705-1.385l-10.671.372a85.152 85.152 0 00-1.685-2.044l2.456-10.381a3.125 3.125 0 00-3.762-3.763l-10.384 2.456a88.996 88.996 0 00-2.047-1.684l.373-10.671a3.11 3.11 0 00-1.385-2.704 3.127 3.127 0 00-3.034-.246l-9.681 4.417c-.782-.429-1.567-.854-2.353-1.265l-1.713-10.506a3.098 3.098 0 00-1.887-2.373 3.108 3.108 0 00-3.014.35l-8.628 6.213c-.85-.27-1.703-.53-2.56-.778l-3.716-9.97a3.111 3.111 0 00-2.311-1.97 3.134 3.134 0 00-2.89.933l-7.266 7.802a93.746 93.746 0 00-2.643-.258l-5.614-9.082A3.125 3.125 0 00111.97 4c-1.09 0-2.085.56-2.642 1.478l-5.615 9.081a93.32 93.32 0 00-2.642.259l-7.266-7.802a3.13 3.13 0 00-2.89-.933 3.106 3.106 0 00-2.312 1.97l-3.715 9.97c-.857.247-1.71.506-2.56.778L73.7 12.588a3.101 3.101 0 00-3.014-.35A3.127 3.127 0 0068.8 14.61l-1.713 10.506c-.79.41-1.575.832-2.353 1.265l-9.681-4.417a3.125 3.125 0 00-4.42 2.95l.372 10.67c-.69.553-1.373 1.115-2.048 1.685l-10.383-2.456a3.143 3.143 0 00-2.93.832 3.124 3.124 0 00-.833 2.93l2.436 10.383a93.897 93.897 0 00-1.68 2.043l-10.672-.372a3.138 3.138 0 00-2.704 1.385 3.126 3.126 0 00-.246 3.035l4.418 9.7c-.43.779-.855 1.563-1.266 2.353l-10.507 1.71a3.097 3.097 0 00-2.373 1.886 3.117 3.117 0 00.35 3.013l6.214 8.628a89.12 89.12 0 00-.78 2.58l-9.97 3.715a3.117 3.117 0 00-1.035 5.202l7.803 7.265c-.098.879-.184 1.76-.258 2.642l-9.062 5.614A3.122 3.122 0 004 112.021c0 1.092.56 2.084 1.478 2.642l9.062 5.614c.074.882.16 1.762.258 2.642l-7.803 7.265a3.117 3.117 0 001.034 5.201l9.97 3.716a110 110 0 00.78 2.58l-6.212 8.627a3.112 3.112 0 00.6 4.27c.419.33.916.547 1.443.63l10.507 1.709c.407.792.83 1.576 1.265 2.353l-4.417 9.68a3.126 3.126 0 002.95 4.42l10.65-.374c.553.69 1.115 1.372 1.685 2.047l-2.435 10.383a3.09 3.09 0 00.831 2.91 3.117 3.117 0 002.931.83l10.384-2.436a82.268 82.268 0 002.047 1.68l-.371 10.671a3.11 3.11 0 001.385 2.704 3.125 3.125 0 003.034.241l9.681-4.416c.779.432 1.563.854 2.353 1.265l1.713 10.505a3.147 3.147 0 001.887 2.395 3.111 3.111 0 003.014-.349l8.628-6.213c.853.271 1.71.535 2.58.783l3.716 9.969a3.112 3.112 0 002.312 1.967 3.112 3.112 0 002.89-.933l7.266-7.802c.877.101 1.761.186 2.642.264l5.615 9.061a3.12 3.12 0 002.642 1.478 3.165 3.165 0 002.663-1.478l5.614-9.061c.884-.078 1.765-.163 2.643-.264l7.265 7.802a3.106 3.106 0 002.89.933 3.105 3.105 0 002.312-1.967l3.716-9.969c.863-.248 1.719-.512 2.58-.783l8.629 6.213a3.12 3.12 0 004.9-2.045l1.713-10.506c.793-.411 1.577-.838 2.353-1.265l9.681 4.416a3.13 3.13 0 003.035-.241 3.126 3.126 0 001.385-2.704l-.372-10.671a81.794 81.794 0 002.046-1.68l10.383 2.436a3.123 3.123 0 003.763-3.74l-2.436-10.382a84.588 84.588 0 001.68-2.048l10.672.374a3.104 3.104 0 002.704-1.385 3.118 3.118 0 00.244-3.035l-4.417-9.68c.43-.779.852-1.563 1.263-2.353l10.507-1.709a3.08 3.08 0 002.373-1.886 3.11 3.11 0 00-.35-3.014l-6.214-8.627c.272-.857.532-1.717.781-2.58l9.97-3.716a3.109 3.109 0 001.967-2.311 3.107 3.107 0 00-.933-2.89l-7.803-7.265c.096-.88.182-1.761.258-2.642l9.062-5.614a3.11 3.11 0 001.478-2.642 3.157 3.157 0 00-1.476-2.663h-.064zm-60.687 75.337c-3.468-.747-5.656-4.169-4.913-7.637a6.412 6.412 0 017.617-4.933c3.468.741 5.676 4.169 4.933 7.637a6.414 6.414 0 01-7.617 4.933h-.02zm-3.076-20.847c-3.158-.677-6.275 1.334-6.936 4.5l-3.22 15.026c-9.929 4.5-21.055 7.018-32.614 7.018-11.89 0-23.12-2.622-33.234-7.328l-3.22-15.026c-.677-3.158-3.778-5.18-6.936-4.499l-13.273 2.848a80.222 80.222 0 01-6.853-8.091h64.61c.731 0 1.218-.132 1.218-.797v-22.91c0-.665-.487-.797-1.218-.797H94.133v-14.469h20.415c1.864 0 9.97.533 12.551 10.898.811 3.179 2.601 13.54 3.818 16.863 1.214 3.715 6.152 11.146 11.415 11.146h32.202c.365 0 .755-.041 1.166-.116a80.56 80.56 0 01-7.307 8.587l-13.583-2.911-.113.058zm-89.38 20.537a6.407 6.407 0 01-7.617-4.933c-.74-3.467 1.462-6.894 4.934-7.637a6.417 6.417 0 017.617 4.933c.74 3.468-1.464 6.894-4.934 7.637zm-24.564-99.28a6.438 6.438 0 01-3.261 8.484c-3.241 1.438-7.019-.025-8.464-3.261-1.445-3.237.025-7.039 3.262-8.483a6.416 6.416 0 018.463 3.26zM33.22 102.94l13.83-6.15c2.952-1.311 4.294-4.769 2.972-7.72l-2.848-6.44H58.36v50.362h-22.5a79.158 79.158 0 01-3.014-21.672c0-2.869.155-5.697.452-8.483l-.08.103zm60.687-4.892v-14.86h26.629c1.376 0 9.722 1.59 9.722 7.822 0 5.18-6.399 7.038-11.663 7.038h-24.77.082zm96.811 13.375c0 1.973-.072 3.922-.216 5.862h-8.113c-.811 0-1.137.532-1.137 1.327v3.715c0 8.752-4.934 10.671-9.268 11.146-4.129.464-8.691-1.726-9.248-4.252-2.436-13.684-6.482-16.595-12.881-21.672 7.948-5.036 16.204-12.487 16.204-22.498 0-10.753-7.369-17.523-12.385-20.847-7.059-4.644-14.862-5.572-16.968-5.572H52.899c11.374-12.673 26.835-21.673 44.174-24.975l9.887 10.361a5.849 5.849 0 008.278.19l11.064-10.568c23.119 4.314 42.729 18.721 54.082 38.598l-7.576 17.09c-1.306 2.951.027 6.419 2.973 7.72l14.573 6.48c.255 2.607.383 5.224.384 7.843l-.021.052zM106.912 24.94a6.398 6.398 0 019.062.209 6.437 6.437 0 01-.213 9.082 6.396 6.396 0 01-9.062-.21 6.436 6.436 0 01.213-9.083v.002zm75.137 60.476a6.402 6.402 0 018.463-3.26 6.425 6.425 0 013.261 8.482 6.402 6.402 0 01-8.463 3.261 6.425 6.425 0 01-3.261-8.483z"
@@ -469,6 +446,7 @@ export function RustIcon({ className }: FrameworkIconProps) {
 export function CSSIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 16 16"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -485,6 +463,7 @@ export function CSSIcon({ className }: FrameworkIconProps) {
 export function HTMLIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       className={cn("w-4 h-4", className)}
       fill="none"
@@ -506,6 +485,7 @@ export function HTMLIcon({ className }: FrameworkIconProps) {
 export function SCSSIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 32 32"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -522,6 +502,7 @@ export function SCSSIcon({ className }: FrameworkIconProps) {
 export function JSONIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 32 32"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -542,6 +523,7 @@ export function JSONIcon({ className }: FrameworkIconProps) {
 export function YAMLIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 800 800"
       className={cn("w-4 h-4", className)}
       fill="none"
@@ -559,6 +541,7 @@ export function YAMLIcon({ className }: FrameworkIconProps) {
 export function ShellIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       className={cn("w-4 h-4", className)}
       fill="none"
@@ -577,6 +560,7 @@ export function ShellIcon({ className }: FrameworkIconProps) {
 export function SQLIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 688 629"
       className={cn("w-4 h-4", className)}
       fill="none"
@@ -594,6 +578,7 @@ export function SQLIcon({ className }: FrameworkIconProps) {
 export function GraphQLIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="-16 0 288 288"
       className={cn("w-4 h-4", className)}
       version="1.1"
@@ -614,6 +599,7 @@ export function GraphQLIcon({ className }: FrameworkIconProps) {
 export function PrismaIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 32 32"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -631,6 +617,7 @@ export function PrismaIcon({ className }: FrameworkIconProps) {
 export function DockerIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -648,6 +635,7 @@ export function DockerIcon({ className }: FrameworkIconProps) {
 export function TOMLIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 20 20"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -664,6 +652,7 @@ export function TOMLIcon({ className }: FrameworkIconProps) {
 export function JavaIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 256 346"
       className={cn("w-4 h-4", className)}
       preserveAspectRatio="xMidYMid"
@@ -696,6 +685,7 @@ export function JavaIcon({ className }: FrameworkIconProps) {
 export function CIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 128 128"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -713,6 +703,7 @@ export function CIcon({ className }: FrameworkIconProps) {
 export function CppIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 256 288"
       className={cn("w-4 h-4", className)}
       preserveAspectRatio="xMidYMid"
@@ -745,6 +736,7 @@ export function CppIcon({ className }: FrameworkIconProps) {
 export function CSharpIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 -1.43 255.58 290.11"
       className={cn("w-4 h-4", className)}
       preserveAspectRatio="xMidYMid"
@@ -773,6 +765,7 @@ export function CSharpIcon({ className }: FrameworkIconProps) {
 export function PHPIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 128 128"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -795,10 +788,7 @@ export function KotlinIcon({ className }: FrameworkIconProps) {
       role="img"
     >
       <title>Kotlin icon</title>
-      <path
-        d="M1.3 24l11.3-11.5L24 24zM0 0h12L0 12.5zM13.4 0L0 14v10l12-12L24 0z"
-        fill="#E37834"
-      />
+      <path d="M1.3 24l11.3-11.5L24 24zM0 0h12L0 12.5zM13.4 0L0 14v10l12-12L24 0z" fill="#E37834" />
     </svg>
   )
 }
@@ -807,6 +797,7 @@ export function KotlinIcon({ className }: FrameworkIconProps) {
 export function SwiftIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       className={cn("w-4 h-4", className)}
       xmlns="http://www.w3.org/2000/svg"
@@ -824,6 +815,7 @@ export function SwiftIcon({ className }: FrameworkIconProps) {
 export function RubyIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 32 32"
       className={cn("w-4 h-4", className)}
       fill="none"
@@ -1154,7 +1146,7 @@ export function RubyIcon({ className }: FrameworkIconProps) {
 // Mintlify - Documentation platform
 export function MintlifyIcon({ className }: FrameworkIconProps) {
   return (
-    <svg viewBox="0 0 19 19" className={cn("w-4 h-4", className)} fill="none">
+    <svg aria-hidden="true" viewBox="0 0 19 19" className={cn("w-4 h-4", className)} fill="none">
       <path
         d="M18.367 7.28888V1.59755C18.367 0.986819 17.8715 0.5 17.2699 0.5H11.5812C10.6877 0.5 9.80295 0.677018 8.98017 1.01336C8.15738 1.35856 7.40539 1.85424 6.77724 2.49152L6.733 2.53578C5.90137 3.37664 5.30862 4.42108 5.00781 5.57174C5.54749 5.43012 6.10483 5.35931 6.6622 5.35046C8.14852 5.33276 9.60831 5.81073 10.7938 6.7047C11.8643 7.50131 12.6783 8.59885 13.1206 9.86458C13.5807 11.148 13.6337 12.5465 13.2887 13.8653C14.43 13.5644 15.4828 12.9714 16.3233 12.1393L16.3675 12.0951C16.9957 11.4667 17.4999 10.7143 17.845 9.89114C18.19 9.06797 18.3581 8.18285 18.3581 7.28888H18.367Z"
         fill="#18E299"
@@ -1175,6 +1167,7 @@ export function MintlifyIcon({ className }: FrameworkIconProps) {
 export function GitHubIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       className={cn("w-4 h-4", className)}
       fill="currentColor"
@@ -1380,7 +1373,7 @@ export function getDetectedFrameworkIcon(
     }
   }
 
-  // Return 21st.dev logo as final fallback
+  // Return mausCode logo as final fallback
   return <CodeIcon className={className} />
 }
 
@@ -1388,6 +1381,7 @@ export function getDetectedFrameworkIcon(
 export function SVGIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -1406,15 +1400,13 @@ export function SVGIcon({ className }: FrameworkIconProps) {
 export function NpmIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
       className={cn("w-4 h-4", className)}
     >
-      <path
-        d="M3 21H12V7.5H16.5V21H21V3H3V21Z"
-        fill="#CB3837"
-      />
+      <path d="M3 21H12V7.5H16.5V21H21V3H3V21Z" fill="#CB3837" />
     </svg>
   )
 }
@@ -1423,6 +1415,7 @@ export function NpmIcon({ className }: FrameworkIconProps) {
 export function GitIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
@@ -1440,6 +1433,7 @@ export function GitIcon({ className }: FrameworkIconProps) {
 export function TxtIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -1462,6 +1456,7 @@ export function TxtIcon({ className }: FrameworkIconProps) {
 export function PDFIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       viewBox="-4 0 40 40"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -1475,7 +1470,7 @@ export function PDFIcon({ className }: FrameworkIconProps) {
   )
 }
 
-// Default/Unknown - 21st.dev logo (same as canvas sidebar placeholder)
+// Default/Unknown - mausCode logo (same as canvas sidebar placeholder)
 export function CodeIcon({ className }: FrameworkIconProps) {
   return (
     <svg
@@ -1483,7 +1478,7 @@ export function CodeIcon({ className }: FrameworkIconProps) {
       className={cn("w-4 h-4 text-muted-foreground", className)}
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="21st.dev Logo"
+      aria-label="mausCode Logo"
     >
       <path
         fillRule="evenodd"
@@ -1498,6 +1493,7 @@ export function CodeIcon({ className }: FrameworkIconProps) {
 export function UnknownFileIcon({ className }: FrameworkIconProps) {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox="0 0 24 24"

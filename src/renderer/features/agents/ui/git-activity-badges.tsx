@@ -1,34 +1,32 @@
 "use client"
 
-import { memo, useCallback, useMemo, useState } from "react"
-import { GitCommit, GitPullRequest } from "lucide-react"
 import { useAtomValue, useSetAtom } from "jotai"
+import { GitCommit, GitPullRequest } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
+import { memo, useCallback, useMemo, useState } from "react"
+import { CollapseIcon, ExpandIcon } from "../../../components/ui/icons"
+import { cn } from "../../../lib/utils"
 import {
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
-import {
-  extractGitActivity,
-  extractChangedFiles,
-  type ChangedFileInfo,
-} from "../utils/git-activity"
-import {
-  selectedProjectAtom,
+  agentsFocusedDiffFileAtom,
+  diffActiveTabAtom,
   diffSidebarOpenAtomFamily,
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
   selectedCommitAtom,
-  diffActiveTabAtom,
-  agentsFocusedDiffFileAtom,
   selectedDiffFilePathAtom,
+  selectedProjectAtom,
 } from "../atoms"
-import { cn } from "../../../lib/utils"
-import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import { useFileOpen } from "../mentions"
+import type { ToolPartLike } from "./agent-tool-state"
+import { getFileIconByExtension } from "../mentions/agents-file-mention"
+import {
+  type ChangedFileInfo,
+  extractChangedFiles,
+  extractGitActivity,
+} from "../utils/git-activity"
 
 interface GitActivityBadgesProps {
-  parts: any[]
+  parts: ToolPartLike[]
   chatId: string
   subChatId: string
 }
@@ -51,7 +49,10 @@ export const GitActivityBadges = memo(function GitActivityBadges({
   const [isExpanded, setIsExpanded] = useState(false)
 
   const activity = useMemo(() => extractGitActivity(parts), [parts])
-  const changedFiles = useMemo(() => extractChangedFiles(parts, selectedProject?.path), [parts, selectedProject?.path])
+  const changedFiles = useMemo(
+    () => extractChangedFiles(parts, selectedProject?.path),
+    [parts, selectedProject?.path],
+  )
 
   const totals = useMemo(() => {
     let additions = 0
@@ -70,9 +71,7 @@ export const GitActivityBadges = memo(function GitActivityBadges({
     const owner = selectedProject?.gitOwner
     const repo = selectedProject?.gitRepo
     if (activity.pushed && activity.hash && owner && repo) {
-      window.desktopApi.openExternal(
-        `https://github.com/${owner}/${repo}/commit/${activity.hash}`,
-      )
+      window.desktopApi.openExternal(`https://github.com/${owner}/${repo}/commit/${activity.hash}`)
       return
     }
 
@@ -88,24 +87,46 @@ export const GitActivityBadges = memo(function GitActivityBadges({
     setFilteredSubChatId(subChatId)
     setDiffActiveTab("history")
     setDiffSidebarOpen(true)
-  }, [activity, subChatId, selectedProject, setSelectedCommit, setFilteredDiffFiles, setFilteredSubChatId, setDiffActiveTab, setDiffSidebarOpen])
+  }, [
+    activity,
+    subChatId,
+    selectedProject,
+    setSelectedCommit,
+    setFilteredDiffFiles,
+    setFilteredSubChatId,
+    setDiffActiveTab,
+    setDiffSidebarOpen,
+  ])
 
   const filesCommitted = activity?.type === "commit" || activity?.type === "pr"
 
-  const handleFileClick = useCallback((file: ChangedFileInfo) => {
-    if (filesCommitted) {
-      // Files already committed — open file preview
-      onOpenFile?.(file.filePath)
-    } else {
-      // Files not yet committed — open diff view with this file selected
-      setSelectedFilePath(file.displayPath)
-      setFilteredDiffFiles([file.displayPath])
-      setFocusedDiffFile(file.displayPath)
-      setFilteredSubChatId(subChatId)
-      setDiffActiveTab("changes")
-      setDiffSidebarOpen(true)
-    }
-  }, [filesCommitted, onOpenFile, subChatId, setSelectedFilePath, setFilteredDiffFiles, setFocusedDiffFile, setFilteredSubChatId, setDiffActiveTab, setDiffSidebarOpen])
+  const handleFileClick = useCallback(
+    (file: ChangedFileInfo) => {
+      if (filesCommitted) {
+        // Files already committed — open file preview
+        onOpenFile?.(file.filePath)
+      } else {
+        // Files not yet committed — open diff view with this file selected
+        setSelectedFilePath(file.displayPath)
+        setFilteredDiffFiles([file.displayPath])
+        setFocusedDiffFile(file.displayPath)
+        setFilteredSubChatId(subChatId)
+        setDiffActiveTab("changes")
+        setDiffSidebarOpen(true)
+      }
+    },
+    [
+      filesCommitted,
+      onOpenFile,
+      subChatId,
+      setSelectedFilePath,
+      setFilteredDiffFiles,
+      setFocusedDiffFile,
+      setFilteredSubChatId,
+      setDiffActiveTab,
+      setDiffSidebarOpen,
+    ],
+  )
 
   if (!activity && changedFiles.length === 0) return null
 
@@ -115,12 +136,24 @@ export const GitActivityBadges = memo(function GitActivityBadges({
       {changedFiles.length > 0 && (
         <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
           {/* Header */}
+          {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
           <div
             onClick={() => setIsExpanded(!isExpanded)}
+            role="button"
+            tabIndex={0}
+            aria-expanded={isExpanded}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                e.currentTarget.click()
+              }
+            }}
             className="flex items-center justify-between pl-2.5 pr-0.5 h-7 cursor-pointer hover:bg-muted/50 transition-colors duration-150"
           >
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
-              <span>Edited {changedFiles.length} {changedFiles.length === 1 ? "file" : "files"}</span>
+              <span>
+                Edited {changedFiles.length} {changedFiles.length === 1 ? "file" : "files"}
+              </span>
               {(totals.additions > 0 || totals.deletions > 0) && (
                 <>
                   <span className="text-green-600 dark:text-green-400">+{totals.additions}</span>
@@ -130,10 +163,10 @@ export const GitActivityBadges = memo(function GitActivityBadges({
             </div>
 
             <div className="flex items-center flex-shrink-0 ml-2">
-
               {/* Expand/Collapse button */}
               <div className="w-6 h-6 flex items-center justify-center">
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation()
                     setIsExpanded(!isExpanded)
@@ -173,26 +206,23 @@ export const GitActivityBadges = memo(function GitActivityBadges({
                   {changedFiles.map((file) => {
                     const FileIcon = getFileIconByExtension(file.displayPath)
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={file.filePath}
-                        role="button"
-                        tabIndex={0}
                         onClick={() => handleFileClick(file)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault()
-                            handleFileClick(file)
-                          }
-                        }}
                         className="flex items-center gap-2 px-2.5 py-1 text-xs hover:bg-muted/50 transition-colors cursor-pointer"
                       >
                         {FileIcon && (
                           <FileIcon className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
                         )}
                         <span className="truncate flex-1 text-foreground">{file.displayPath}</span>
-                        <span className="flex-shrink-0 text-green-600 dark:text-green-400">+{file.additions}</span>
-                        <span className="flex-shrink-0 text-red-600 dark:text-red-400">-{file.deletions}</span>
-                      </div>
+                        <span className="flex-shrink-0 text-green-600 dark:text-green-400">
+                          +{file.additions}
+                        </span>
+                        <span className="flex-shrink-0 text-red-600 dark:text-red-400">
+                          -{file.deletions}
+                        </span>
+                      </button>
                     )
                   })}
                 </div>
@@ -205,6 +235,7 @@ export const GitActivityBadges = memo(function GitActivityBadges({
       {/* Git activity badge */}
       {activity?.type === "commit" && (
         <button
+          type="button"
           onClick={handleOpenCommit}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-muted/30 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors cursor-pointer overflow-hidden min-w-0"
         >
@@ -215,6 +246,7 @@ export const GitActivityBadges = memo(function GitActivityBadges({
 
       {activity?.type === "pr" && (
         <button
+          type="button"
           onClick={() => window.desktopApi.openExternal(activity.url)}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-muted/30 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors cursor-pointer overflow-hidden min-w-0"
         >

@@ -1,8 +1,9 @@
 "use client"
 
-import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } from "react"
-import { Chat, useChat } from "@ai-sdk/react"
+import { type Chat, useChat } from "@ai-sdk/react"
+import type { UIMessage } from "ai"
 import { useSetAtom } from "jotai"
+import { createContext, type ReactNode, useContext, useLayoutEffect, useRef } from "react"
 import { syncMessagesWithStatusAtom } from "../stores/message-store"
 
 // ============================================================================
@@ -39,18 +40,13 @@ export function useChatActions() {
 
 // Props
 interface ChatDataSyncProps {
-  chat: Chat<any>
+  chat: Chat<UIMessage>
   subChatId: string
   streamId?: string | null
   children: ReactNode
 }
 
-export function ChatDataSync({
-  chat,
-  subChatId,
-  streamId,
-  children,
-}: ChatDataSyncProps) {
+export function ChatDataSync({ chat, subChatId, streamId, children }: ChatDataSyncProps) {
   // Call useChat - this causes re-renders on every chunk
   const { messages, sendMessage, status, stop, regenerate } = useChat({
     id: subChatId,
@@ -100,9 +96,5 @@ export function ChatDataSync({
     },
   }).current
 
-  return (
-    <ChatActionsContext.Provider value={contextValue}>
-      {children}
-    </ChatActionsContext.Provider>
-  )
+  return <ChatActionsContext.Provider value={contextValue}>{children}</ChatActionsContext.Provider>
 }

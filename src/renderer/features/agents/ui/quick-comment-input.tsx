@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { type TextSelectionSource } from "../context/text-selection-context"
 import { cn } from "../../../lib/utils"
+import type { TextSelectionSource } from "../context/text-selection-context"
 
 interface QuickCommentInputProps {
   selectedText: string
@@ -59,16 +59,19 @@ export function QuickCommentInput({
     }
   }, [comment, selectedText, source, onSubmit])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit()
-    }
-    if (e.key === "Escape") {
-      e.preventDefault()
-      onCancel()
-    }
-  }, [handleSubmit, onCancel])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault()
+        handleSubmit()
+      }
+      if (e.key === "Escape") {
+        e.preventDefault()
+        onCancel()
+      }
+    },
+    [handleSubmit, onCancel],
+  )
 
   // Calculate position - below the selection by default, above if not enough space
   const viewportWidth = window.innerWidth
@@ -85,9 +88,7 @@ export function QuickCommentInput({
   const spaceBelow = viewportHeight - rect.bottom
   const showBelow = spaceBelow > inputHeight + 8
 
-  const top = showBelow
-    ? rect.bottom + 4
-    : rect.top - inputHeight - 4
+  const top = showBelow ? rect.bottom + 4 : rect.top - inputHeight - 4
 
   const style: React.CSSProperties = {
     position: "fixed",
@@ -98,14 +99,13 @@ export function QuickCommentInput({
   }
 
   // Create preview text
-  const preview = selectedText.length > 60
-    ? selectedText.slice(0, 60) + "..."
-    : selectedText
+  const preview = selectedText.length > 60 ? `${selectedText.slice(0, 60)}...` : selectedText
 
   // Get source label
-  const sourceLabel = source.type === "diff" || source.type === "tool-edit"
-    ? `${source.filePath.split("/").pop()}${source.type === "diff" && source.lineNumber ? `:${source.lineNumber}` : ""}`
-    : "from chat"
+  const sourceLabel =
+    source.type === "diff" || source.type === "tool-edit"
+      ? `${source.filePath.split("/").pop()}${source.type === "diff" && source.lineNumber ? `:${source.lineNumber}` : ""}`
+      : "from chat"
 
   // Animation: scale from direction of selection
   const animationClass = showBelow
@@ -113,11 +113,7 @@ export function QuickCommentInput({
     : "animate-in fade-in-0 zoom-in-95 origin-bottom duration-100"
 
   const content = (
-    <div
-      ref={containerRef}
-      style={style}
-      className={animationClass}
-    >
+    <div ref={containerRef} style={style} className={animationClass}>
       <div className="rounded-md bg-popover border border-border shadow-lg overflow-hidden">
         {/* Preview of selected text */}
         <div className="px-2.5 py-1.5 border-b border-border bg-muted/30">
@@ -125,9 +121,7 @@ export function QuickCommentInput({
             <span>Replying to</span>
             <span className="font-medium text-foreground/70">{sourceLabel}</span>
           </div>
-          <div className="text-xs text-muted-foreground font-mono line-clamp-2">
-            {preview}
-          </div>
+          <div className="text-xs text-muted-foreground font-mono line-clamp-2">{preview}</div>
         </div>
 
         {/* Input area */}
@@ -143,13 +137,14 @@ export function QuickCommentInput({
               className="flex-1 text-xs bg-transparent outline-none text-foreground placeholder:text-muted-foreground px-1"
             />
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={!comment.trim()}
               className={cn(
                 "shrink-0 px-2 py-0.5 text-xs font-medium rounded transition-colors",
                 comment.trim()
                   ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-muted text-muted-foreground cursor-not-allowed",
               )}
             >
               Send

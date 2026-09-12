@@ -1,22 +1,19 @@
 "use client"
 
-import { memo, useState, useMemo } from "react"
-import { Check, X } from "lucide-react"
 import { useAtomValue } from "jotai"
-import {
-  IconSpinner,
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
+import { Check, X } from "lucide-react"
+import { memo, useMemo, useState } from "react"
+import { CollapseIcon, ExpandIcon, IconSpinner } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
-import { getToolStatus } from "./agent-tool-registry"
-import { AgentToolInterrupted } from "./agent-tool-interrupted"
-import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom } from "../atoms"
+import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { getToolStatus } from "./agent-tool-registry"
+import type { ToolPartLike } from "./agent-tool-state"
+import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface AgentBashToolProps {
-  part: any
+  part: ToolPartLike
   messageId?: string
   partIndex?: number
   chatStatus?: string
@@ -32,7 +29,7 @@ function extractCommandSummary(command: string): string {
   // Limit to first 4 commands to keep it concise
   const limited = firstWords.slice(0, 4)
   if (firstWords.length > 4) {
-    return limited.join(", ") + "..."
+    return `${limited.join(", ")}...`
   }
   return limited.join(", ")
 }
@@ -41,7 +38,7 @@ function extractCommandSummary(command: string): string {
 function shortenPaths(text: string, projectPath: string | undefined): string {
   if (!text || !projectPath || typeof text !== "string") return text || ""
   // Replace project path (with trailing slash) with empty string
-  return text.replaceAll(projectPath + "/", "").replaceAll(projectPath, ".")
+  return text.replaceAll(`${projectPath}/`, "").replaceAll(projectPath, ".")
 }
 
 // Limit output to first N lines
@@ -61,15 +58,19 @@ export const AgentBashTool = memo(function AgentBashTool({
   chatStatus,
 }: AgentBashToolProps) {
   const [isOutputExpanded, setIsOutputExpanded] = useState(false)
-  const { isPending } = getToolStatus(part, chatStatus)
+  const { isPending, isInputStreaming } = getToolStatus(part, chatStatus)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
 
-  const rawCommand = part.input?.command
+  const toolInput = part.input as { command?: unknown } | undefined
+  const toolOutput = part.output as
+    | { stdout?: string; output?: string; stderr?: string; exitCode?: number; exit_code?: number }
+    | undefined
+  const rawCommand = toolInput?.command
   const command = typeof rawCommand === "string" ? rawCommand : rawCommand ? String(rawCommand) : ""
-  const stdout = part.output?.stdout || part.output?.output || ""
-  const stderr = part.output?.stderr || ""
-  const exitCode = part.output?.exitCode ?? part.output?.exit_code
+  const stdout = toolOutput?.stdout || toolOutput?.output || ""
+  const stderr = toolOutput?.stderr || ""
+  const exitCode = toolOutput?.exitCode ?? toolOutput?.exit_code
 
   // For bash tools, success/error is determined by exitCode, not by state
   // exitCode 0 = success, anything else (or undefined if no output yet) = error
@@ -86,22 +87,10 @@ export const AgentBashTool = memo(function AgentBashTool({
   const hasMoreOutput = stdoutLimited.truncated || stderrLimited.truncated
 
   // Shorten paths in the displayed command
-  const displayCommand = useMemo(
-    () => shortenPaths(command, projectPath),
-    [command, projectPath],
-  )
+  const displayCommand = useMemo(() => shortenPaths(command, projectPath), [command, projectPath])
 
   // Memoize command summary to avoid recalculation on every render
-  const commandSummary = useMemo(
-    () => extractCommandSummary(displayCommand),
-    [displayCommand],
-  )
-
-  // Check if command input is still being streamed
-  // Only consider streaming if chat is actively streaming (prevents hang on stop)
-  // Include "submitted" status - this is when request was sent but streaming hasn't started yet
-  const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
-  const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
+  const commandSummary = useMemo(() => extractCommandSummary(displayCommand), [displayCommand])
 
   // If command is still being generated (input-streaming state), show loading state
   if (isInputStreaming) {
@@ -137,11 +126,23 @@ export const AgentBashTool = memo(function AgentBashTool({
       className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2"
     >
       {/* Header - clickable to expand, fixed height to prevent layout shift */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
         onClick={() => hasMoreOutput && !isPending && setIsOutputExpanded(!isOutputExpanded)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOutputExpanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
         className={cn(
           "flex items-center justify-between pl-2.5 pr-0.5 h-7",
-          hasMoreOutput && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          hasMoreOutput &&
+            !isPending &&
+            "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
         <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
@@ -174,6 +175,7 @@ export const AgentBashTool = memo(function AgentBashTool({
               <IconSpinner className="w-3 h-3" />
             ) : hasOutput && hasMoreOutput ? (
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   setIsOutputExpanded(!isOutputExpanded)
@@ -192,10 +194,18 @@ export const AgentBashTool = memo(function AgentBashTool({
       </div>
 
       {/* Content - always visible, clickable to expand (only when collapsed and has more output) */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
-        onClick={() =>
-          hasMoreOutput && !isOutputExpanded && setIsOutputExpanded(true)
-        }
+        onClick={() => hasMoreOutput && !isOutputExpanded && setIsOutputExpanded(true)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOutputExpanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
         className={cn(
           "border-t border-border px-2.5 py-1.5 transition-colors duration-150",
           hasMoreOutput && !isOutputExpanded && "cursor-pointer hover:bg-muted/50",
@@ -204,9 +214,7 @@ export const AgentBashTool = memo(function AgentBashTool({
         {/* Command - always show full command */}
         <div className="font-mono text-xs">
           <span className="text-amber-600 dark:text-amber-400">$ </span>
-          <span className="text-foreground whitespace-pre-wrap break-all">
-            {displayCommand}
-          </span>
+          <span className="text-foreground whitespace-pre-wrap break-all">{displayCommand}</span>
         </div>
 
         {/* Stdout - show limited lines when collapsed, full when expanded */}
@@ -231,7 +239,6 @@ export const AgentBashTool = memo(function AgentBashTool({
             {isOutputExpanded ? stderr : stderrLimited.text}
           </div>
         )}
-
       </div>
     </div>
   )

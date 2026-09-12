@@ -1,3 +1,22 @@
+import type { ToolPartLike } from "../ui/agent-tool-state"
+
+/** Bash tool input/output fields read for git activity extraction. */
+type BashToolView = {
+  input?: { toolName?: string; command?: string }
+  output?: { stdout?: string; output?: string; stderr?: string }
+}
+
+/** Edit/Write tool input fields read for changed-file extraction. */
+type EditToolView = {
+  input?: {
+    toolName?: string
+    file_path?: string
+    old_string?: string
+    new_string?: string
+    content?: string
+  }
+}
+
 export interface GitCommitInfo {
   type: "commit"
   message: string
@@ -24,10 +43,7 @@ export interface ChangedFileInfo {
 /**
  * Extract commit message from a git commit command and its output.
  */
-function extractCommitInfo(
-  command: string,
-  stdout: string,
-): GitCommitInfo | null {
+function extractCommitInfo(command: string, stdout: string): GitCommitInfo | null {
   if (!/git\s+commit/.test(command)) return null
 
   // Verify commit actually succeeded by checking stdout for git's commit output
@@ -36,15 +52,15 @@ function extractCommitInfo(
   if (!stdoutMatch) return null
 
   const hash = stdoutMatch[1]
-  let message = stdoutMatch[2]!.trim()
+  const stdoutMessage = stdoutMatch[2]
+  if (!stdoutMessage) return null
+  let message = stdoutMessage.trim()
 
   // If stdout message is truncated, try to get full message from command
   // Pattern 1: HEREDOC pattern (Claude's preferred format)
-  const heredocMatch = command.match(
-    /<<'?EOF'?\s*\n([\s\S]*?)\n\s*EOF/,
-  )
+  const heredocMatch = command.match(/<<'?EOF'?\s*\n([\s\S]*?)\n\s*EOF/)
   if (heredocMatch) {
-    const heredocFirstLine = heredocMatch[1]!.split("\n")[0]!.trim()
+    const heredocFirstLine = heredocMatch[1]?.split("\n")[0]?.trim()
     if (heredocFirstLine) {
       message = heredocFirstLine
     }
@@ -54,7 +70,10 @@ function extractCommitInfo(
   if (!heredocMatch) {
     const mFlagMatch = command.match(/-m\s+["']([^"']+)["']/)
     if (mFlagMatch) {
-      message = mFlagMatch[1]!.trim()
+      const mFlagMessage = mFlagMatch[1]
+      if (mFlagMessage) {
+        message = mFlagMessage.trim()
+      }
     }
   }
 
@@ -68,14 +87,14 @@ function extractPrInfo(command: string, stdout: string): GitPrInfo | null {
   if (!/gh\s+pr\s+create/.test(command)) return null
 
   // Extract URL from stdout
-  const urlMatch = stdout.match(
-    /(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/,
-  )
+  const urlMatch = stdout.match(/(https:\/\/github\.com\/[^\s]+\/pull\/\d+)/)
   if (!urlMatch) return null
 
-  const url = urlMatch[1]!
+  const url = urlMatch[1]
+  if (!url) return null
   const numberMatch = url.match(/\/pull\/(\d+)/)
-  const number = numberMatch ? parseInt(numberMatch[1]!, 10) : undefined
+  const numberStr = numberMatch?.[1]
+  const number = numberStr ? parseInt(numberStr, 10) : undefined
 
   // Extract title from --title flag in command
   const titleMatch = command.match(/--title\s+["']([^"']+)["']/)
@@ -89,19 +108,28 @@ function extractPrInfo(command: string, stdout: string): GitPrInfo | null {
  * Priority: last PR > last commit (PR is more significant).
  * Returns null if no git activity found.
  */
-export function extractGitActivity(parts: any[]): GitActivity | null {
+export function extractGitActivity(parts: ToolPartLike[]): GitActivity | null {
   let lastCommit: GitCommitInfo | null = null
   let lastPr: GitPrInfo | null = null
   let lastPushHash: string | null = null
   let hadRebase = false
 
   for (const part of parts) {
-    if (part.type !== "tool-Bash") continue
+    const bashInput = part.input as BashToolView["input"]
+    const bashOutput = part.output as BashToolView["output"]
+    const toolName = bashInput?.toolName || part.type?.replace("tool-", "")
+    const isBash =
+      part.type === "tool-Bash" ||
+      toolName === "run_shell_command" ||
+      toolName === "Bash" ||
+      toolName === "Run"
+
+    if (!isBash) continue
     if (!part.output) continue
 
-    const command: string = part.input?.command || ""
-    const stdout: string = part.output?.stdout || part.output?.output || ""
-    const stderr: string = part.output?.stderr || ""
+    const command: string = bashInput?.command || ""
+    const stdout: string = bashOutput?.stdout || bashOutput?.output || ""
+    const stderr: string = bashOutput?.stderr || ""
 
     const commit = extractCommitInfo(command, stdout)
     if (commit) lastCommit = commit
@@ -118,10 +146,10 @@ export function extractGitActivity(parts: any[]): GitActivity | null {
     // Push output format: "oldHash..newHash branch -> origin/branch"
     if (/git\s+push/.test(command) && !stderr.includes("error")) {
       // Check stdout and stderr for push ref update (git push outputs to stderr)
-      const pushOutput = stdout + "\n" + stderr
+      const pushOutput = `${stdout}\n${stderr}`
       const pushMatch = pushOutput.match(/[\da-f]+\.\.([\da-f]+)\s+\S+\s*->\s*\S+/)
       if (pushMatch) {
-        lastPushHash = pushMatch[1]!
+        lastPushHash = pushMatch[1] ?? ""
       } else {
         // Push succeeded but no hash in output (e.g. first push with -u)
         lastPushHash = ""
@@ -166,7 +194,8 @@ function toRelativePath(filePath: string, projectPath?: string): string {
   // Handle worktree paths: /Users/.../.21st/worktrees/{chatId}/{subChatId}/relativePath
   const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
   if (worktreeMatch) {
-    return worktreeMatch[1]!
+    const worktreeRelPath = worktreeMatch[1]
+    if (worktreeRelPath) return worktreeRelPath
   }
   return filePath.split("/").pop() || filePath
 }
@@ -176,12 +205,20 @@ function toRelativePath(filePath: string, projectPath?: string): string {
  * Tracks additions and deletions per file.
  * @param projectPath - project root path for computing relative display paths
  */
-export function extractChangedFiles(parts: any[], projectPath?: string): ChangedFileInfo[] {
+export function extractChangedFiles(
+  parts: ToolPartLike[],
+  projectPath?: string,
+): ChangedFileInfo[] {
   const fileMap = new Map<string, ChangedFileInfo>()
 
   for (const part of parts) {
-    if (part.type !== "tool-Edit" && part.type !== "tool-Write") continue
-    const filePath: string = part.input?.file_path || ""
+    const editInput = part.input as EditToolView["input"]
+    const toolName = editInput?.toolName || part.type?.replace("tool-", "")
+    const isEdit = part.type === "tool-Edit" || toolName === "replace" || toolName === "Edit"
+    const isWrite = part.type === "tool-Write" || toolName === "write_file" || toolName === "Write"
+
+    if (!isEdit && !isWrite) continue
+    const filePath: string = editInput?.file_path || ""
     if (!filePath) continue
 
     // Skip session/plan files
@@ -192,9 +229,9 @@ export function extractChangedFiles(parts: any[], projectPath?: string): Changed
 
     const existing = fileMap.get(filePath)
 
-    if (part.type === "tool-Edit") {
-      const oldLines = countLines(part.input?.old_string || "")
-      const newLines = countLines(part.input?.new_string || "")
+    if (isEdit) {
+      const oldLines = countLines(editInput?.old_string || "")
+      const newLines = countLines(editInput?.new_string || "")
       if (existing) {
         existing.additions += newLines
         existing.deletions += oldLines
@@ -203,7 +240,7 @@ export function extractChangedFiles(parts: any[], projectPath?: string): Changed
       }
     } else {
       // tool-Write: all new content = additions
-      const lines = countLines(part.input?.content || "")
+      const lines = countLines(editInput?.content || "")
       if (existing) {
         existing.additions += lines
       } else {

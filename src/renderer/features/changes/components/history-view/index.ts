@@ -1,1 +1,1 @@
-export { HistoryView, type CommitInfo } from "./history-view";
+export { type CommitInfo, HistoryView } from "./history-view"

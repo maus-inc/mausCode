@@ -1,23 +1,16 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { useTheme } from "next-themes"
-import { fullThemeDataAtom } from "@/lib/atoms"
 import { motion } from "motion/react"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { useTheme } from "next-themes"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { activeTerminalIdAtom, terminalCwdAtom, terminalsAtom } from "@/features/terminal/atoms"
+import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import { Terminal } from "@/features/terminal/terminal"
 import { TerminalTabs } from "@/features/terminal/terminal-tabs"
-import { getDefaultTerminalBg } from "@/features/terminal/helpers"
-import {
-  terminalSidebarOpenAtomFamily,
-  terminalsAtom,
-  activeTerminalIdAtom,
-  terminalCwdAtom,
-} from "@/features/terminal/atoms"
-import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "@/features/terminal/types"
+import { fullThemeDataAtom } from "@/lib/atoms"
+import { trpc } from "@/lib/trpc"
 
 interface TerminalSectionProps {
   chatId: string
@@ -46,8 +39,7 @@ function getNextTerminalName(terminals: TerminalInstance[]): string {
     })
     .filter((n) => n > 0)
 
-  const maxNumber =
-    existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
+  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
   return `Terminal ${maxNumber + 1}`
 }
 
@@ -85,15 +77,9 @@ export function TerminalSection({
   }, [terminalBg, onTerminalBgChange])
 
   // Get terminals for this chat
-  const terminals = useMemo(
-    () => allTerminals[chatId] || [],
-    [allTerminals, chatId],
-  )
+  const terminals = useMemo(() => allTerminals[chatId] || [], [allTerminals, chatId])
 
-  const activeTerminalId = useMemo(
-    () => allActiveIds[chatId] || null,
-    [allActiveIds, chatId],
-  )
+  const activeTerminalId = useMemo(() => allActiveIds[chatId] || null, [allActiveIds, chatId])
 
   const activeTerminal = useMemo(
     () => terminals.find((t) => t.id === activeTerminalId) || null,
@@ -180,9 +166,7 @@ export function TerminalSection({
       const currentChatId = chatIdRef.current
       setAllTerminals((prev) => ({
         ...prev,
-        [currentChatId]: (prev[currentChatId] || []).map((t) =>
-          t.id === id ? { ...t, name } : t,
-        ),
+        [currentChatId]: (prev[currentChatId] || []).map((t) => (t.id === id ? { ...t, name } : t)),
       }))
     },
     [setAllTerminals],
@@ -233,14 +217,10 @@ export function TerminalSection({
       }))
 
       const currentActiveId = activeTerminalIdRef.current
-      if (
-        currentActiveId &&
-        !remainingTerminals.find((t) => t.id === currentActiveId)
-      ) {
+      if (currentActiveId && !remainingTerminals.find((t) => t.id === currentActiveId)) {
         setAllActiveIds((prev) => ({
           ...prev,
-          [currentChatId]:
-            remainingTerminals[remainingTerminals.length - 1]?.id || null,
+          [currentChatId]: remainingTerminals[remainingTerminals.length - 1]?.id || null,
         }))
       }
     },
@@ -264,21 +244,22 @@ export function TerminalSection({
   }, [])
 
   // Tabs component for header
-  const tabsHeader = terminals.length > 0 ? (
-    <TerminalTabs
-      terminals={terminals}
-      activeTerminalId={activeTerminalId}
-      cwds={terminalCwds}
-      initialCwd={cwd}
-      terminalBg={terminalBg}
-      onSelectTerminal={selectTerminal}
-      onCloseTerminal={closeTerminal}
-      onCloseOtherTerminals={closeOtherTerminals}
-      onCloseTerminalsToRight={closeTerminalsToRight}
-      onCreateTerminal={createTerminal}
-      onRenameTerminal={renameTerminal}
-    />
-  ) : null
+  const tabsHeader =
+    terminals.length > 0 ? (
+      <TerminalTabs
+        terminals={terminals}
+        activeTerminalId={activeTerminalId}
+        cwds={terminalCwds}
+        initialCwd={cwd}
+        terminalBg={terminalBg}
+        onSelectTerminal={selectTerminal}
+        onCloseTerminal={closeTerminal}
+        onCloseOtherTerminals={closeOtherTerminals}
+        onCloseTerminalsToRight={closeTerminalsToRight}
+        onCreateTerminal={createTerminal}
+        onRenameTerminal={renameTerminal}
+      />
+    ) : null
 
   // Call renderHeader if provided (for widget card integration)
   useEffect(() => {
@@ -318,7 +299,10 @@ export function TerminalSection({
 
   // Standard render with tabs inside
   return (
-    <div className="flex flex-col" style={{ minHeight: isExpanded ? "400px" : "200px", height: isExpanded ? "100%" : undefined }}>
+    <div
+      className="flex flex-col"
+      style={{ minHeight: isExpanded ? "400px" : "200px", height: isExpanded ? "100%" : undefined }}
+    >
       {/* Tabs */}
       <div
         className="flex items-center gap-1 px-1 py-1 flex-shrink-0"

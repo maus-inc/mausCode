@@ -4,6 +4,7 @@ import { trpc } from "../../lib/trpc"
 
 const LightningIcon = ({ className }: { className?: string }) => (
   <svg
+    aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
     fill="none"
@@ -33,9 +34,7 @@ export function NetworkStatus() {
   return (
     <div className="flex items-center gap-1.5">
       <LightningIcon className="w-3 h-3 text-orange-500" />
-      <span className="text-xs text-muted-foreground">
-        Offline
-      </span>
+      <span className="text-xs text-muted-foreground">Offline</span>
     </div>
   )
 }

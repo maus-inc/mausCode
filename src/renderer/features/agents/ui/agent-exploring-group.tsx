@@ -1,17 +1,18 @@
 "use client"
 
-import { memo, useState, useEffect, useRef } from "react"
 import { useAtomValue } from "jotai"
 import { ChevronRight } from "lucide-react"
-import { useFileOpen } from "../mentions"
-import { selectedProjectAtom } from "../atoms"
-import { AgentToolRegistry, getToolStatus } from "./agent-tool-registry"
-import { AgentToolCall } from "./agent-tool-call"
-import { areExploringGroupPropsEqual } from "./agent-tool-utils"
+import { memo, useEffect, useRef, useState } from "react"
 import { cn } from "../../../lib/utils"
+import { selectedProjectAtom } from "../atoms"
+import { useFileOpen } from "../mentions"
+import { AgentToolCall } from "./agent-tool-call"
+import { AgentToolRegistry, getToolStatus, type ToolDisplayPart } from "./agent-tool-registry"
+import type { ToolPartLike } from "./agent-tool-state"
+import { areExploringGroupPropsEqual } from "./agent-tool-utils"
 
 interface AgentExploringGroupProps {
-  parts: any[]
+  parts: ToolPartLike[]
   chatStatus?: string
   isStreaming: boolean
 }
@@ -46,14 +47,14 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
     if (isStreaming && isExpanded && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [parts.length, isStreaming, isExpanded])
+  }, [isStreaming, isExpanded])
 
   // Count files (Read, Grep, Glob) and searches (WebSearch, WebFetch)
   const fileCount = parts.filter((p) =>
-    ["tool-Read", "tool-Grep", "tool-Glob"].includes(p.type),
+    ["tool-Read", "tool-Grep", "tool-Glob"].includes(p.type ?? ""),
   ).length
   const searchCount = parts.filter((p) =>
-    ["tool-WebSearch", "tool-WebFetch"].includes(p.type),
+    ["tool-WebSearch", "tool-WebFetch"].includes(p.type ?? ""),
   ).length
 
   // Build subtitle parts
@@ -62,17 +63,25 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
     subtitleParts.push(`${fileCount} ${fileCount === 1 ? "file" : "files"}`)
   }
   if (searchCount > 0) {
-    subtitleParts.push(
-      `${searchCount} ${searchCount === 1 ? "search" : "searches"}`,
-    )
+    subtitleParts.push(`${searchCount} ${searchCount === 1 ? "search" : "searches"}`)
   }
   const subtitle = subtitleParts.join(" ")
 
   return (
     <div>
       {/* Header - clickable to toggle */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
         className="group flex items-start gap-1.5 py-0.5 px-2 cursor-pointer"
       >
         <div className="flex-1 min-w-0 flex items-center gap-1">
@@ -102,9 +111,7 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
           <div
             className={cn(
               "absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
-              isStreaming && parts.length > MAX_VISIBLE_TOOLS
-                ? "opacity-100"
-                : "opacity-0",
+              isStreaming && parts.length > MAX_VISIBLE_TOOLS ? "opacity-100" : "opacity-0",
             )}
           />
 
@@ -113,8 +120,7 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
             ref={scrollRef}
             className={cn(
               "space-y-1.5",
-              parts.length > MAX_VISIBLE_TOOLS &&
-                "overflow-y-auto scrollbar-hide",
+              parts.length > MAX_VISIBLE_TOOLS && "overflow-y-auto scrollbar-hide",
             )}
             style={
               parts.length > MAX_VISIBLE_TOOLS
@@ -123,28 +129,27 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
             }
           >
             {parts.map((part, idx) => {
-              const meta = AgentToolRegistry[part.type]
+              const meta = part.type ? AgentToolRegistry[part.type] : undefined
               if (!meta) {
                 return (
-                  <div
-                    key={idx}
-                    className="text-xs text-muted-foreground py-0.5 px-2"
-                  >
+                  /* biome-ignore lint/suspicious/noArrayIndexKey: tool parts are positional and append-only. */
+                  <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
                     {part.type?.replace("tool-", "")}
                   </div>
                 )
               }
               const { isPending, isError } = getToolStatus(part, chatStatus)
-              const handleClick = part.type === "tool-Read" && onOpenFile && part.input?.file_path
-                ? () => onOpenFile(part.input.file_path)
-                : undefined
+              const toolInput = part.input as { file_path?: string } | undefined
+              const readFilePath = part.type === "tool-Read" ? toolInput?.file_path : undefined
+              const handleClick =
+                readFilePath && onOpenFile ? () => onOpenFile(readFilePath) : undefined
               return (
                 <AgentToolCall
                   key={idx}
                   icon={meta.icon}
-                  title={meta.title(part)}
-                  subtitle={meta.subtitle?.(part)}
-                  tooltipContent={meta.tooltipContent?.(part, projectPath)}
+                  title={meta.title(part as ToolDisplayPart)}
+                  subtitle={meta.subtitle?.(part as ToolDisplayPart)}
+                  tooltipContent={meta.tooltipContent?.(part as ToolDisplayPart, projectPath)}
                   isPending={isPending}
                   isError={isError}
                   onClick={handleClick}

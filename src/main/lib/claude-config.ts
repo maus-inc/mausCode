@@ -1,12 +1,13 @@
 /**
  * Helpers for reading and writing ~/.claude.json configuration
  */
+
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import { Mutex } from "async-mutex"
 import { eq } from "drizzle-orm"
-import { existsSync, readFileSync, writeFileSync } from "fs"
-import * as fs from "fs/promises"
-import * as os from "os"
-import * as path from "path"
 import { getDatabase } from "./db"
 import { chats, projects } from "./db/schema"
 
@@ -41,7 +42,7 @@ export interface ProjectConfig {
 }
 
 export interface ClaudeConfig {
-  mcpServers?: Record<string, McpServerConfig>  // User-scope (global) MCP servers
+  mcpServers?: Record<string, McpServerConfig> // User-scope (global) MCP servers
   projects?: Record<string, ProjectConfig>
   [key: string]: unknown
 }
@@ -98,7 +99,7 @@ export function writeClaudeConfigSync(config: ClaudeConfig): void {
  * @returns The updated config
  */
 export async function updateClaudeConfigAtomic(
-  updater: (config: ClaudeConfig) => ClaudeConfig | Promise<ClaudeConfig>
+  updater: (config: ClaudeConfig) => ClaudeConfig | Promise<ClaudeConfig>,
 ): Promise<ClaudeConfig> {
   return configMutex.runExclusive(async () => {
     const config = await readClaudeConfig()
@@ -121,7 +122,7 @@ export function claudeConfigExists(): boolean {
  */
 export function getProjectMcpServers(
   config: ClaudeConfig,
-  projectPath: string
+  projectPath: string,
 ): Record<string, McpServerConfig> | undefined {
   const resolvedPath = resolveProjectPathFromWorktree(projectPath) || projectPath
   return config.projects?.[resolvedPath]?.mcpServers
@@ -138,7 +139,7 @@ export const GLOBAL_MCP_PATH = "__global__"
 export function getMcpServerConfig(
   config: ClaudeConfig,
   projectPath: string | null,
-  serverName: string
+  serverName: string,
 ): McpServerConfig | undefined {
   // Global MCP servers (root level mcpServers in ~/.claude.json)
   if (!projectPath || projectPath === GLOBAL_MCP_PATH) {
@@ -158,7 +159,7 @@ export function updateMcpServerConfig(
   config: ClaudeConfig,
   projectPath: string | null,
   serverName: string,
-  update: Partial<McpServerConfig>
+  update: Partial<McpServerConfig>,
 ): ClaudeConfig {
   // Global MCP servers (root level mcpServers in ~/.claude.json)
   if (!projectPath || projectPath === GLOBAL_MCP_PATH) {
@@ -189,7 +190,7 @@ export function updateMcpServerConfig(
 export function removeMcpServerConfig(
   config: ClaudeConfig,
   projectPath: string | null,
-  serverName: string
+  serverName: string,
 ): ClaudeConfig {
   // Global MCP servers
   if (!projectPath || projectPath === GLOBAL_MCP_PATH) {
@@ -215,34 +216,44 @@ export function removeMcpServerConfig(
 
 /**
  * Resolve original project path from a worktree path.
- * Supports legacy (~/.21st/worktrees/{projectId}/{chatId}/) and
- * new format (~/.21st/worktrees/{projectName}/{worktreeFolder}/).
+ * Worktrees live under ~/.mauscode/worktrees in two layouts:
+ *   legacy: {projectId}/{chatId}/
+ *   current: {projectName}/{worktreeFolder}/
+ * Paths created by 1Code under ~/.21st/worktrees are still resolved
+ * (legacy location — read-only support, mausCode never writes there).
  *
  * @param pathToResolve - Either a worktree path or regular project path
  * @returns The original project path, or the input if not a worktree, or null if resolution fails
  */
-export function resolveProjectPathFromWorktree(
-  pathToResolve: string
-): string | null {
-  const worktreeMarker = path.join(".21st", "worktrees")
+export function resolveProjectPathFromWorktree(pathToResolve: string): string | null {
+  // Worktree bases: current location first, then the legacy 1Code location.
+  const worktreeBases: { marker: string; base: string }[] = [
+    {
+      marker: ".mauscode/worktrees",
+      base: path.join(os.homedir(), ".mauscode", "worktrees"),
+    },
+    {
+      // Legacy 1Code location — detection only, never written
+      marker: ".21st/worktrees",
+      base: path.join(os.homedir(), ".21st", "worktrees"),
+    },
+  ]
 
   // Normalize for cross-platform (handle both / and \ separators)
   const normalizedPath = pathToResolve.replace(/\\/g, "/")
-  const normalizedMarker = worktreeMarker.replace(/\\/g, "/")
 
-  if (!normalizedPath.includes(normalizedMarker)) {
+  const matched = worktreeBases.find(({ marker }) => normalizedPath.includes(marker))
+  if (!matched) {
     // Not a worktree path, return as-is
     return pathToResolve
   }
 
   try {
     // Extract segments from path structure
-    // Path format: /Users/.../.21st/worktrees/{projectSlug}/{worktreeFolder}
-    const worktreeBase = path.join(os.homedir(), ".21st", "worktrees")
+    // Path format: /Users/.../.mauscode/worktrees/{projectSlug}/{worktreeFolder}
+    const worktreeBase = matched.base
     const normalizedBase = worktreeBase.replace(/\\/g, "/")
-    const relativePath = normalizedPath
-      .replace(normalizedBase, "")
-      .replace(/^\//, "")
+    const relativePath = normalizedPath.replace(normalizedBase, "").replace(/^\//, "")
 
     const parts = relativePath.split("/")
     if (parts.length < 1 || !parts[0]) {
@@ -317,7 +328,7 @@ function expandEnvVars(value: string): string {
  * Expand env vars in MCP server config fields: command, args, env, url, headers
  */
 function expandMcpServerEnvVars(
-  servers: Record<string, McpServerConfig>
+  servers: Record<string, McpServerConfig>,
 ): Record<string, McpServerConfig> {
   const result: Record<string, McpServerConfig> = {}
   for (const [name, config] of Object.entries(servers)) {
@@ -326,9 +337,7 @@ function expandMcpServerEnvVars(
       expanded.command = expandEnvVars(expanded.command)
     }
     if (Array.isArray(expanded.args)) {
-      expanded.args = expanded.args.map((a) =>
-        typeof a === "string" ? expandEnvVars(a) : a
-      )
+      expanded.args = expanded.args.map((a) => (typeof a === "string" ? expandEnvVars(a) : a))
     }
     if (typeof expanded.url === "string") {
       expanded.url = expandEnvVars(expanded.url)
@@ -361,7 +370,7 @@ function expandMcpServerEnvVars(
  * Returns empty record if file doesn't exist or is invalid.
  */
 export async function readProjectMcpJson(
-  projectPath: string
+  projectPath: string,
 ): Promise<Record<string, McpServerConfig>> {
   try {
     const mcpJsonPath = path.join(projectPath, ".mcp.json")
@@ -377,12 +386,7 @@ export async function readProjectMcpJson(
       // Filter out non-server keys (a server entry should be an object with command or url)
       servers = {}
       for (const [key, value] of Object.entries(parsed)) {
-        if (
-          value &&
-          typeof value === "object" &&
-          !Array.isArray(value) &&
-          key !== "mcpServers"
-        ) {
+        if (value && typeof value === "object" && !Array.isArray(value) && key !== "mcpServers") {
           servers[key] = value as McpServerConfig
         }
       }
@@ -446,7 +450,7 @@ export async function readClaudeDirMcpJson(): Promise<Record<string, McpServerCo
  */
 export async function getMergedGlobalMcpServers(
   claudeConfig?: ClaudeConfig,
-  claudeDirConfig?: ClaudeConfig
+  claudeDirConfig?: ClaudeConfig,
 ): Promise<Record<string, McpServerConfig>> {
   const config = claudeConfig ?? (await readClaudeConfig())
   const dirConfig = claudeDirConfig ?? (await readClaudeDirConfig())
@@ -468,17 +472,15 @@ export async function getMergedGlobalMcpServers(
 export async function getMergedLocalProjectMcpServers(
   projectPath: string,
   claudeConfig?: ClaudeConfig,
-  claudeDirConfig?: ClaudeConfig
+  claudeDirConfig?: ClaudeConfig,
 ): Promise<Record<string, McpServerConfig>> {
   const config = claudeConfig ?? (await readClaudeConfig())
   const dirConfig = claudeDirConfig ?? (await readClaudeDirConfig())
 
   const resolvedPath = resolveProjectPathFromWorktree(projectPath) || projectPath
 
-  const claudeDirProjectServers =
-    dirConfig.projects?.[resolvedPath]?.mcpServers || {}
-  const mainProjectServers =
-    config.projects?.[resolvedPath]?.mcpServers || {}
+  const claudeDirProjectServers = dirConfig.projects?.[resolvedPath]?.mcpServers || {}
+  const mainProjectServers = config.projects?.[resolvedPath]?.mcpServers || {}
 
   // Higher priority overwrites
   return {

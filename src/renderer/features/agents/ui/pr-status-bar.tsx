@@ -1,6 +1,6 @@
-import { trpc } from "../../../lib/trpc"
 import { GitPullRequest } from "lucide-react"
 import { IconSpinner } from "../../../components/ui/icons"
+import { trpc } from "../../../lib/trpc"
 
 interface PrStatusBarProps {
   chatId: string
@@ -21,15 +21,11 @@ function getStatusLabel(state: PrState, reviewDecision?: ReviewDecision): string
 }
 
 export function PrStatusBar({ chatId, prUrl, prNumber }: PrStatusBarProps) {
-  console.log("[PrStatusBar] Rendered with props:", { chatId, prUrl, prNumber })
-
   // Poll PR status every 30 seconds
   const { data: status, isLoading } = trpc.chats.getPrStatus.useQuery(
     { chatId },
-    { refetchInterval: 30000 }
+    { refetchInterval: 30000 },
   )
-
-  console.log("[PrStatusBar] Query state:", { isLoading, status, pr: status?.pr })
 
   const pr = status?.pr
 
@@ -41,6 +37,7 @@ export function PrStatusBar({ chatId, prUrl, prNumber }: PrStatusBarProps) {
     <div className="flex items-center gap-3 px-3 py-2 bg-muted/30 border-b border-border/50">
       {/* PR Link */}
       <button
+        type="button"
         onClick={handleOpenPr}
         className="flex items-center gap-1.5 text-sm font-medium hover:underline text-foreground cursor-pointer"
       >

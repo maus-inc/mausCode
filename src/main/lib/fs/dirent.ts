@@ -1,6 +1,6 @@
-import type { Dirent } from "fs"
-import * as fs from "fs/promises"
-import * as path from "path"
+import type { Dirent } from "node:fs"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
 
 export interface DirentType {
   isDirectory: boolean
@@ -10,10 +10,7 @@ export interface DirentType {
 /**
  * Resolve entry type, following symlinks when needed.
  */
-export async function resolveDirentType(
-  dir: string,
-  entry: Dirent,
-): Promise<DirentType> {
+export async function resolveDirentType(dir: string, entry: Dirent): Promise<DirentType> {
   let isDirectory = entry.isDirectory()
   let isFile = entry.isFile()
 
@@ -34,10 +31,7 @@ export async function resolveDirentType(
 /**
  * Check if a Dirent resolves to a directory (including symlink targets).
  */
-export async function isDirentDirectory(
-  dir: string,
-  entry: Dirent,
-): Promise<boolean> {
+export async function isDirentDirectory(dir: string, entry: Dirent): Promise<boolean> {
   const { isDirectory } = await resolveDirentType(dir, entry)
   return isDirectory
 }

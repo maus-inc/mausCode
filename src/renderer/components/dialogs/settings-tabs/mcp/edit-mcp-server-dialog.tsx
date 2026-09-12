@@ -1,21 +1,20 @@
-import { useState, useMemo } from "react"
+import { Eye, EyeOff, Trash2 } from "lucide-react"
+import { useMemo, useState } from "react"
+import { toast } from "sonner"
+import { trpc } from "../../../../lib/trpc"
+import { Button } from "../../../ui/button"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "../../../ui/dialog"
-import { Button } from "../../../ui/button"
 import { Input } from "../../../ui/input"
 import { Label } from "../../../ui/label"
 import { Switch } from "../../../ui/switch"
-import { trpc } from "../../../../lib/trpc"
-import { toast } from "sonner"
-import { cn } from "../../../../lib/utils"
-import { Eye, EyeOff, Trash2 } from "lucide-react"
 import { DeleteServerConfirm } from "./delete-server-confirm"
-import { StatusDot, getStatusText } from "./mcp-server-row"
+import { getStatusText, StatusDot } from "./mcp-server-row"
 import type { McpServer, ScopeType } from "./types"
 
 interface EditMcpServerDialogProps {
@@ -55,7 +54,6 @@ export function EditMcpServerDialog({
 
   if (!server) return null
 
-  const isConnected = server.status === "connected"
   const hasTools = server.tools.length > 0
 
   const handleToggleEnabled = async (enabled: boolean) => {
@@ -69,8 +67,7 @@ export function EditMcpServerDialog({
       toast.success(enabled ? "Server enabled" : "Server disabled")
       onServerUpdated?.()
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to update server"
+      const message = error instanceof Error ? error.message : "Failed to update server"
       toast.error(message)
     }
   }
@@ -89,8 +86,7 @@ export function EditMcpServerDialog({
       setBearerToken("")
       onServerUpdated?.()
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to save token"
+      const message = error instanceof Error ? error.message : "Failed to save token"
       toast.error(message)
     } finally {
       setIsSavingToken(false)
@@ -111,8 +107,7 @@ export function EditMcpServerDialog({
         toast.error(result.error || "OAuth failed")
       }
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Authentication failed"
+      const message = error instanceof Error ? error.message : "Authentication failed"
       toast.error(message)
     } finally {
       setIsStartingOAuth(false)
@@ -130,8 +125,7 @@ export function EditMcpServerDialog({
       onOpenChange(false)
       onServerDeleted?.()
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to remove server"
+      const message = error instanceof Error ? error.message : "Failed to remove server"
       toast.error(message)
     }
   }
@@ -160,10 +154,7 @@ export function EditMcpServerDialog({
                   Disable to prevent this server from connecting
                 </p>
               </div>
-              <Switch
-                checked={!isDisabled}
-                onCheckedChange={handleToggleEnabled}
-              />
+              <Switch checked={!isDisabled} onCheckedChange={handleToggleEnabled} />
             </div>
 
             {/* Error */}
@@ -171,9 +162,7 @@ export function EditMcpServerDialog({
               <div>
                 <Label className="text-red-500">Error</Label>
                 <div className="mt-1.5 rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2">
-                  <p className="text-xs text-red-400 font-mono break-all">
-                    {server.error}
-                  </p>
+                  <p className="text-xs text-red-400 font-mono break-all">{server.error}</p>
                 </div>
               </div>
             )}

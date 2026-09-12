@@ -1,10 +1,10 @@
-import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import { readdir, stat, readFile, writeFile, mkdir, rename as fsRename, rm } from "node:fs/promises"
-import { join, relative, basename, extname, dirname, resolve, isAbsolute } from "node:path"
-import { app, shell } from "electron"
 import { watch } from "node:fs"
+import { rename as fsRename, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises"
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path"
 import { observable } from "@trpc/server/observable"
+import { app, shell } from "electron"
+import { z } from "zod"
+import { publicProcedure, router } from "../index"
 
 // Directories to ignore when scanning
 const IGNORED_DIRS = new Set([
@@ -30,11 +30,7 @@ const IGNORED_DIRS = new Set([
 ])
 
 // Files to ignore
-const IGNORED_FILES = new Set([
-  ".DS_Store",
-  "Thumbs.db",
-  ".gitkeep",
-])
+const IGNORED_FILES = new Set([".DS_Store", "Thumbs.db", ".gitkeep"])
 
 // File extensions to ignore
 const IGNORED_EXTENSIONS = new Set([
@@ -84,7 +80,7 @@ function validatePathSafe(targetPath: string, allowedParent?: string): void {
   const resolved = resolve(targetPath)
   if (allowedParent) {
     const resolvedParent = resolve(allowedParent)
-    if (!resolved.startsWith(resolvedParent + "/") && resolved !== resolvedParent) {
+    if (!resolved.startsWith(`${resolvedParent}/`) && resolved !== resolvedParent) {
       throw new Error("Path escapes allowed directory")
     }
   }
@@ -109,7 +105,7 @@ async function scanDirectory(
   rootPath: string,
   currentPath: string = rootPath,
   depth: number = 0,
-  maxDepth: number = 15
+  maxDepth: number = 15,
 ): Promise<FileEntry[]> {
   if (depth > maxDepth) return []
 
@@ -126,7 +122,12 @@ async function scanDirectory(
         // Skip ignored directories
         if (IGNORED_DIRS.has(entry.name)) continue
         // Skip hidden directories (except .github, .vscode, etc.)
-        if (entry.name.startsWith(".") && !entry.name.startsWith(".github") && !entry.name.startsWith(".vscode")) continue
+        if (
+          entry.name.startsWith(".") &&
+          !entry.name.startsWith(".github") &&
+          !entry.name.startsWith(".vscode")
+        )
+          continue
 
         // Add the folder itself to results
         entries.push({ path: relativePath, type: "folder" })
@@ -139,7 +140,7 @@ async function scanDirectory(
         if (IGNORED_FILES.has(entry.name)) continue
 
         // Check extension
-        const ext = entry.name.includes(".") ? "." + entry.name.split(".").pop()?.toLowerCase() : ""
+        const ext = entry.name.includes(".") ? `.${entry.name.split(".").pop()?.toLowerCase()}` : ""
         if (IGNORED_EXTENSIONS.has(ext)) {
           // Allow specific lock files
           if (!ALLOWED_LOCK_FILES.has(entry.name)) continue
@@ -228,7 +229,7 @@ function filterEntries(
       const bStarts = bName.startsWith(queryLower)
       if (aStarts && !bStarts) return -1
       if (!aStarts && bStarts) return 1
-      
+
       // Priority 3: If both start with query, shorter name = better match
       if (aStarts && bStarts) {
         if (aName.length !== bName.length) {
@@ -271,7 +272,7 @@ export const filesRouter = router({
         query: z.string().default(""),
         limit: z.number().min(1).max(5000).default(50),
         typeFilter: z.enum(["file", "folder"]).optional(),
-      })
+      }),
     )
     .query(async ({ input }) => {
       const { projectPath, query, limit, typeFilter } = input
@@ -302,29 +303,27 @@ export const filesRouter = router({
   /**
    * Clear the file cache for a project (useful when files change)
    */
-  clearCache: publicProcedure
-    .input(z.object({ projectPath: z.string() }))
-    .mutation(({ input }) => {
-      fileListCache.delete(input.projectPath)
-      return { success: true }
-    }),
+  clearCache: publicProcedure.input(z.object({ projectPath: z.string() })).mutation(({ input }) => {
+    fileListCache.delete(input.projectPath)
+    return { success: true }
+  }),
 
   /**
    * Read file contents from filesystem
    */
-  readFile: publicProcedure
-    .input(z.object({ filePath: z.string() }))
-    .query(async ({ input }) => {
-      const { filePath } = input
+  readFile: publicProcedure.input(z.object({ filePath: z.string() })).query(async ({ input }) => {
+    const { filePath } = input
 
-      try {
-        const content = await readFile(filePath, "utf-8")
-        return content
-      } catch (error) {
-        console.error(`[files] Error reading file ${filePath}:`, error)
-        throw new Error(`Failed to read file: ${error instanceof Error ? error.message : "Unknown error"}`)
-      }
-    }),
+    try {
+      const content = await readFile(filePath, "utf-8")
+      return content
+    } catch (error) {
+      console.error(`[files] Error reading file ${filePath}:`, error)
+      throw new Error(
+        `Failed to read file: ${error instanceof Error ? error.message : "Unknown error"}`,
+      )
+    }
+  }),
 
   /**
    * Read a text file with size/binary validation
@@ -439,7 +438,7 @@ export const filesRouter = router({
         subChatId: z.string(),
         text: z.string(),
         filename: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const { subChatId, text, filename } = input
@@ -476,10 +475,12 @@ export const filesRouter = router({
    * Rename a file or folder
    */
   renameFile: publicProcedure
-    .input(z.object({
-      absolutePath: z.string(),
-      newName: z.string().min(1),
-    }))
+    .input(
+      z.object({
+        absolutePath: z.string(),
+        newName: z.string().min(1),
+      }),
+    )
     .mutation(async ({ input }) => {
       const { absolutePath, newName } = input
 
@@ -500,9 +501,11 @@ export const filesRouter = router({
    * Delete a file or folder (move to trash)
    */
   deleteFile: publicProcedure
-    .input(z.object({
-      absolutePath: z.string(),
-    }))
+    .input(
+      z.object({
+        absolutePath: z.string(),
+      }),
+    )
     .mutation(async ({ input }) => {
       validatePathSafe(input.absolutePath)
       await shell.trashItem(input.absolutePath)

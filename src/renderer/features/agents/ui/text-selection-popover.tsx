@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useCallback, useState, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { useTextSelection, type TextSelectionSource } from "../context/text-selection-context"
+import { type TextSelectionSource, useTextSelection } from "../context/text-selection-context"
 
 interface TextSelectionPopoverProps {
   onAddToContext: (text: string, source: TextSelectionSource) => void
@@ -15,8 +15,7 @@ export function TextSelectionPopover({
   onQuickComment,
   onFocusInput,
 }: TextSelectionPopoverProps) {
-  const { selectedText, source, selectionRect, clearSelection } =
-    useTextSelection()
+  const { selectedText, source, selectionRect, clearSelection } = useTextSelection()
   const [isVisible, setIsVisible] = useState(false)
   const [isMouseDown, setIsMouseDown] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -93,16 +92,15 @@ export function TextSelectionPopover({
   left = Math.max(popoverWidth / 2 + 8, Math.min(left, viewportWidth - popoverWidth / 2 - 8))
 
   // Calculate actual left position accounting for centering
-  const popoverWidthEstimate = onQuickComment && (source.type === "diff" || source.type === "tool-edit") ? 160 : 100
+  const popoverWidthEstimate =
+    onQuickComment && (source.type === "diff" || source.type === "tool-edit") ? 160 : 100
   const centeredLeft = left - popoverWidthEstimate / 2
 
   // Position above by default, below if not enough space above
   const spaceAbove = selectionRect.top
   const showAbove = spaceAbove > popoverHeight + 8
 
-  const top = showAbove
-    ? selectionRect.top - popoverHeight - 4
-    : selectionRect.bottom + 4
+  const top = showAbove ? selectionRect.top - popoverHeight - 4 : selectionRect.bottom + 4
 
   const style: React.CSSProperties = {
     position: "fixed",
@@ -117,13 +115,10 @@ export function TextSelectionPopover({
     : "animate-in fade-in-0 zoom-in-95 origin-top duration-100"
 
   const popoverContent = (
-    <div
-      ref={popoverRef}
-      style={style}
-      className={animationClass}
-    >
+    <div ref={popoverRef} style={style} className={animationClass}>
       <div className="flex items-center gap-0.5 rounded-md border border-border bg-popover px-0.5 py-0.5 shadow-lg">
         <button
+          type="button"
           onClick={handleAddToContext}
           className="rounded px-1.5 py-0.5 text-xs text-popover-foreground hover:bg-white/15 transition-colors duration-100 active:scale-[0.97]"
         >
@@ -134,6 +129,7 @@ export function TextSelectionPopover({
           <>
             <div className="w-px h-3 bg-border" />
             <button
+              type="button"
               onClick={handleQuickComment}
               className="rounded px-1.5 py-0.5 text-xs text-popover-foreground hover:bg-white/15 transition-colors duration-100 active:scale-[0.97]"
             >

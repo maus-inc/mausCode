@@ -1,4 +1,4 @@
-import { checkInternetConnection } from '../ollama'
+import { checkInternetConnection } from "../ollama"
 
 /**
  * Warns if a git command requires internet connection and we're offline.
@@ -6,14 +6,14 @@ import { checkInternetConnection } from '../ollama'
  */
 export async function warnIfOfflineGitOperation(command: string): Promise<string | null> {
   const requiresInternet = [
-    'git push',
-    'git pull',
-    'git fetch',
-    'git clone',
-    'gh pr',
-    'gh issue',
-    'gh repo',
-  ].some(cmd => command.includes(cmd))
+    "git push",
+    "git pull",
+    "git fetch",
+    "git clone",
+    "gh pr",
+    "gh issue",
+    "gh repo",
+  ].some((cmd) => command.includes(cmd))
 
   if (requiresInternet) {
     const hasInternet = await checkInternetConnection()

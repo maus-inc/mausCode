@@ -1,16 +1,16 @@
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import * as fs from "fs/promises"
-import * as path from "path"
-import * as os from "os"
+import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
+import { publicProcedure, router } from "../index"
 import {
-  parseAgentMd,
+  type FileAgent,
   generateAgentMd,
+  parseAgentMd,
   scanAgentsDirectory,
   VALID_AGENT_MODELS,
-  type FileAgent,
 } from "./agent-utils"
-import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { getEnabledPlugins } from "./claude-settings"
 
 // Shared procedure for listing agents
@@ -37,9 +37,7 @@ const listAgentsProcedure = publicProcedure
       getEnabledPlugins(),
       discoverInstalledPlugins(),
     ])
-    const enabledPlugins = installedPlugins.filter(
-      (p) => enabledPluginSources.includes(p.source),
-    )
+    const enabledPlugins = installedPlugins.filter((p) => enabledPluginSources.includes(p.source))
     const pluginAgentsPromises = enabledPlugins.map(async (plugin) => {
       const paths = getPluginComponentPaths(plugin)
       try {
@@ -51,12 +49,11 @@ const listAgentsProcedure = publicProcedure
     })
 
     // Scan all directories in parallel
-    const [userAgents, projectAgents, ...pluginAgentsArrays] =
-      await Promise.all([
-        userAgentsPromise,
-        projectAgentsPromise,
-        ...pluginAgentsPromises,
-      ])
+    const [userAgents, projectAgents, ...pluginAgentsArrays] = await Promise.all([
+      userAgentsPromise,
+      projectAgentsPromise,
+      ...pluginAgentsPromises,
+    ])
     const pluginAgents = pluginAgentsArrays.flat()
 
     return [...projectAgents, ...userAgents, ...pluginAgents]
@@ -106,9 +103,7 @@ export const agentsRouter = router({
             source,
             path: agentPath,
           }
-        } catch {
-          continue
-        }
+        } catch {}
       }
 
       // Search in plugin directories
@@ -116,9 +111,7 @@ export const agentsRouter = router({
         getEnabledPlugins(),
         discoverInstalledPlugins(),
       ])
-      const enabledPlugins = installedPlugins.filter(
-        (p) => enabledPluginSources.includes(p.source),
-      )
+      const enabledPlugins = installedPlugins.filter((p) => enabledPluginSources.includes(p.source))
       for (const plugin of enabledPlugins) {
         const paths = getPluginComponentPaths(plugin)
         const agentPath = path.join(paths.agents, `${input.name}.md`)
@@ -131,9 +124,7 @@ export const agentsRouter = router({
             pluginName: plugin.source,
             path: agentPath,
           }
-        } catch {
-          continue
-        }
+        } catch {}
       }
       return null
     }),
@@ -152,7 +143,7 @@ export const agentsRouter = router({
         model: z.enum(VALID_AGENT_MODELS).optional(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Validate name (kebab-case, no special chars)
@@ -221,7 +212,7 @@ export const agentsRouter = router({
         model: z.enum(VALID_AGENT_MODELS).optional(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Validate names
@@ -297,7 +288,7 @@ export const agentsRouter = router({
         name: z.string(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-")

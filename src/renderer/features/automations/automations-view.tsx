@@ -1,29 +1,30 @@
 "use client"
 
 import "./automations-styles.css"
-import { useAtomValue, useSetAtom, useAtom } from "jotai"
-import { selectedTeamIdAtom } from "../../lib/atoms"
-import {
-  desktopViewAtom,
-  automationDetailIdAtom,
-  automationTemplateParamsAtom,
-  agentsSidebarOpenAtom,
-  agentsMobileViewModeAtom,
-} from "../agents/atoms"
+import { useQuery } from "@tanstack/react-query"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { AlignJustify, Plus } from "lucide-react"
+import { useCallback, useMemo, useState } from "react"
 import { Logo } from "../../components/ui/logo"
-import { useState, useMemo, useCallback } from "react"
-import { Plus, AlignJustify } from "lucide-react"
+import { selectedTeamIdAtom } from "../../lib/atoms"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
 import { remoteTrpc } from "../../lib/remote-trpc"
-import { useQuery } from "@tanstack/react-query"
+import {
+  agentsMobileViewModeAtom,
+  agentsSidebarOpenAtom,
+  automationDetailIdAtom,
+  automationTemplateParamsAtom,
+  desktopViewAtom,
+} from "../agents/atoms"
 
 import {
-  AutomationCard,
-  TemplateCard,
-  TabToggle,
   AUTOMATION_TEMPLATES,
-  type ViewTab,
+  AutomationCard,
+  type AutomationCardProps,
   type Platform,
+  TabToggle,
+  TemplateCard,
+  type ViewTab,
 } from "./_components"
 
 export function AutomationsView() {
@@ -50,21 +51,21 @@ export function AutomationsView() {
   // Fetch automations via remoteTrpc
   const { data: automationsData, isLoading } = useQuery({
     queryKey: ["automations", "list", teamId],
-    queryFn: () => remoteTrpc.automations.listAutomations.query({ teamId: teamId! }),
+    queryFn: () => remoteTrpc.automations.listAutomations.query({ teamId: teamId ?? "" }),
     enabled: !!teamId,
   })
 
   // Fetch GitHub connection status
   const { data: githubStatus } = useQuery({
     queryKey: ["github", "connectionStatus", teamId],
-    queryFn: () => remoteTrpc.github.getConnectionStatus.query({ teamId: teamId! }),
+    queryFn: () => remoteTrpc.github.getConnectionStatus.query({ teamId: teamId ?? "" }),
     enabled: !!teamId,
   })
 
   // Fetch Linear integration status
   const { data: linearStatus } = useQuery({
     queryKey: ["linear", "integration", teamId],
-    queryFn: () => remoteTrpc.linear.getIntegration.query({ teamId: teamId! }),
+    queryFn: () => remoteTrpc.linear.getIntegration.query({ teamId: teamId ?? "" }),
     enabled: !!teamId,
   })
 
@@ -74,9 +75,7 @@ export function AutomationsView() {
   const filteredAutomations = useMemo(() => {
     if (!searchQuery.trim()) return automations
     const query = searchQuery.toLowerCase()
-    return automations.filter((a: any) =>
-      a.name?.toLowerCase().includes(query)
-    )
+    return automations.filter((a: { name: string }) => a.name?.toLowerCase().includes(query))
   }, [automations, searchQuery])
 
   const handleNewAutomation = () => {
@@ -85,7 +84,7 @@ export function AutomationsView() {
     setDesktopView("automations-detail")
   }
 
-  const handleUseTemplate = (template: typeof AUTOMATION_TEMPLATES[number]) => {
+  const handleUseTemplate = (template: (typeof AUTOMATION_TEMPLATES)[number]) => {
     setAutomationDetailId("new")
     setTemplateParams({
       name: template.name,
@@ -119,7 +118,7 @@ export function AutomationsView() {
   if (!teamId) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Logo className="h-8 w-8 animate-pulse text-muted-foreground" />
+        <Logo className="h-8 w-8 animate-pulse opacity-50" />
       </div>
     )
   }
@@ -133,6 +132,7 @@ export function AutomationsView() {
             <div className="min-w-0 flex-1 flex items-center gap-2">
               {(!sidebarOpen || isMobile) && (
                 <button
+                  type="button"
                   onClick={handleSidebarToggle}
                   className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md text-muted-foreground hover:text-foreground"
                   aria-label={isMobile ? "Back to chats" : "Open sidebar"}
@@ -148,6 +148,7 @@ export function AutomationsView() {
               </div>
             </div>
             <button
+              type="button"
               onClick={handleNewAutomation}
               className="h-8 px-3 rounded-lg text-sm font-medium border border-border hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex items-center gap-1.5 flex-shrink-0"
             >
@@ -213,58 +214,55 @@ export function AutomationsView() {
               )}
 
               {/* Active Automations View */}
-              {activeTab !== "templates" && (
-                <>
-                  {filteredAutomations.length > 0 ? (
-                    <div className="grid grid-cols-1 min-420:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
-                      {filteredAutomations.map((automation: any) => (
-                        <AutomationCard
-                          key={automation.id}
-                          automation={automation}
-                          onClick={() => handleAutomationClick(automation.id)}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col">
-                      {searchQuery ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <p className="text-sm">No automations match your search.</p>
+              {activeTab !== "templates" &&
+                (filteredAutomations.length > 0 ? (
+                  <div className="grid grid-cols-1 min-420:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
+                    {filteredAutomations.map((automation: AutomationCardProps["automation"]) => (
+                      <AutomationCard
+                        key={automation.id}
+                        automation={automation}
+                        onClick={() => handleAutomationClick(automation.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    {searchQuery ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <p className="text-sm">No automations match your search.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p className="text-sm">
+                            No automations yet. Get started with a template below.
+                          </p>
                         </div>
-                      ) : (
-                        <>
-                          <div className="text-center py-8 text-muted-foreground">
-                            <p className="text-sm">
-                              No automations yet. Get started with a template below.
-                            </p>
-                          </div>
 
-                          {/* Templates section */}
-                          <div className="mt-2">
-                            <h3 className="text-xs font-medium text-muted-foreground mb-3">
-                              Templates
-                            </h3>
-                            <div className="grid grid-cols-1 min-420:grid-cols-2 md:grid-cols-3 gap-2">
-                              {AUTOMATION_TEMPLATES.map((template) => {
-                                const disabledReason = getTemplateDisabledReason(template.platform)
-                                return (
-                                  <TemplateCard
-                                    key={template.id}
-                                    template={template}
-                                    onUseTemplate={() => handleUseTemplate(template)}
-                                    disabled={!!disabledReason}
-                                    disabledReason={disabledReason}
-                                  />
-                                )
-                              })}
-                            </div>
+                        {/* Templates section */}
+                        <div className="mt-2">
+                          <h3 className="text-xs font-medium text-muted-foreground mb-3">
+                            Templates
+                          </h3>
+                          <div className="grid grid-cols-1 min-420:grid-cols-2 md:grid-cols-3 gap-2">
+                            {AUTOMATION_TEMPLATES.map((template) => {
+                              const disabledReason = getTemplateDisabledReason(template.platform)
+                              return (
+                                <TemplateCard
+                                  key={template.id}
+                                  template={template}
+                                  onUseTemplate={() => handleUseTemplate(template)}
+                                  disabled={!!disabledReason}
+                                  disabledReason={disabledReason}
+                                />
+                              )
+                            })}
                           </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
             </>
           )}
         </div>

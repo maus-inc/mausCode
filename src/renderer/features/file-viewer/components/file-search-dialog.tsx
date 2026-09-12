@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { useAtom } from "jotai"
 import { X } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { trpc } from "@/lib/trpc"
-import { Input } from "@/components/ui/input"
+import type React from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { SearchIcon } from "@/components/ui/icons"
+import { Input } from "@/components/ui/input"
 import { UnknownFileIcon } from "@/icons/framework-icons"
-import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
+import { trpc } from "@/lib/trpc"
+import { cn } from "@/lib/utils"
 import { recentlyOpenedFilesAtom } from "../../agents/atoms"
+import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
 
 // ============================================================================
 // Highlight helper – splits text into segments with matching parts marked
@@ -92,7 +93,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
 
   // Build recent file items directly from atom (independent of search results)
   const recentItems = useMemo(() => {
-    const prefix = projectPath + "/"
+    const prefix = `${projectPath}/`
     const items: { id: string; label: string; path: string }[] = []
     const queryLower = debouncedQuery.toLowerCase()
     for (const absPath of recentlyOpenedFiles) {
@@ -106,10 +107,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
     return items
   }, [recentlyOpenedFiles, projectPath, debouncedQuery])
 
-  const recentPathsSet = useMemo(
-    () => new Set(recentItems.map((f) => f.path)),
-    [recentItems],
-  )
+  const recentPathsSet = useMemo(() => new Set(recentItems.map((f) => f.path)), [recentItems])
 
   // Search results excluding recently opened files
   const otherFiles = useMemo(() => {
@@ -118,16 +116,13 @@ export const FileSearchDialog = memo(function FileSearchDialog({
   }, [results, recentPathsSet])
 
   // Flat list for keyboard navigation: recent first, then rest
-  const allItems = useMemo(
-    () => [...recentItems, ...otherFiles],
-    [recentItems, otherFiles],
-  )
+  const allItems = useMemo(() => [...recentItems, ...otherFiles], [recentItems, otherFiles])
 
   // Reset selection when results change
   useEffect(() => {
     setSelectedIndex(0)
     itemRefs.current = []
-  }, [debouncedQuery])
+  }, [])
 
   // Scroll selected item into view
   useEffect(() => {
@@ -139,7 +134,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
 
   const handleSelect = useCallback(
     (relativePath: string) => {
-      const absolutePath = projectPath + "/" + relativePath
+      const absolutePath = `${projectPath}/${relativePath}`
       onSelectFile(absolutePath)
       onOpenChange(false)
     },
@@ -148,7 +143,7 @@ export const FileSearchDialog = memo(function FileSearchDialog({
 
   const handleRemoveRecent = useCallback(
     (relativePath: string) => {
-      const absolutePath = projectPath + "/" + relativePath
+      const absolutePath = `${projectPath}/${relativePath}`
       setRecentlyOpenedFiles((prev) => prev.filter((p) => p !== absolutePath))
     },
     [projectPath, setRecentlyOpenedFiles],
@@ -175,19 +170,13 @@ export const FileSearchDialog = memo(function FileSearchDialog({
     [allItems, selectedIndex, handleSelect],
   )
 
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setQuery(e.target.value)
-    },
-    [],
-  )
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value)
+  }, [])
 
-  const handleSetRef = useCallback(
-    (index: number, el: HTMLDivElement | null) => {
-      itemRefs.current[index] = el
-    },
-    [],
-  )
+  const handleSetRef = useCallback((index: number, el: HTMLDivElement | null) => {
+    itemRefs.current[index] = el
+  }, [])
 
   const recentCount = recentItems.length
 
@@ -251,28 +240,25 @@ export const FileSearchDialog = memo(function FileSearchDialog({
                 })}
 
                 {/* Other files section */}
-                {otherFiles.length > 0 && (
-                  <>
-                    {otherFiles.map((item, i) => {
-                      const flatIndex = recentCount + i
-                      const dirPath = item.path.includes("/")
-                        ? item.path.slice(0, item.path.lastIndexOf("/"))
-                        : ""
-                      return (
-                        <FileSearchItem
-                          key={item.id}
-                          label={item.label}
-                          dirPath={dirPath}
-                          index={flatIndex}
-                          isSelected={flatIndex === selectedIndex}
-                          onSelect={() => handleSelect(item.path)}
-                          setRef={handleSetRef}
-                          query={debouncedQuery}
-                        />
-                      )
-                    })}
-                  </>
-                )}
+                {otherFiles.length > 0 &&
+                  otherFiles.map((item, i) => {
+                    const flatIndex = recentCount + i
+                    const dirPath = item.path.includes("/")
+                      ? item.path.slice(0, item.path.lastIndexOf("/"))
+                      : ""
+                    return (
+                      <FileSearchItem
+                        key={item.id}
+                        label={item.label}
+                        dirPath={dirPath}
+                        index={flatIndex}
+                        isSelected={flatIndex === selectedIndex}
+                        onSelect={() => handleSelect(item.path)}
+                        setRef={handleSetRef}
+                        query={debouncedQuery}
+                      />
+                    )
+                  })}
               </>
             )}
           </div>
@@ -326,6 +312,16 @@ const FileSearchItem = memo(function FileSearchItem({
     <div
       ref={handleRef}
       onClick={onSelect}
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          e.stopPropagation()
+          e.currentTarget.click()
+        }
+      }}
       className={cn(
         "flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)]",
         "rounded-md text-sm cursor-default select-none outline-none",
@@ -341,7 +337,10 @@ const FileSearchItem = memo(function FileSearchItem({
           {query
             ? highlightMatches(label, query).map((seg, i) =>
                 seg.highlight ? (
-                  <mark key={i} className="bg-transparent text-foreground font-semibold">{seg.text}</mark>
+                  /* biome-ignore lint/suspicious/noArrayIndexKey: highlight segments are positional splits, static per render. */
+                  <mark key={i} className="bg-transparent text-foreground font-semibold">
+                    {seg.text}
+                  </mark>
                 ) : (
                   <span key={i}>{seg.text}</span>
                 ),
@@ -361,7 +360,10 @@ const FileSearchItem = memo(function FileSearchItem({
               {query
                 ? highlightMatches(dirPath, query).map((seg, i) =>
                     seg.highlight ? (
-                      <mark key={i} className="bg-transparent text-foreground font-semibold">{seg.text}</mark>
+                      /* biome-ignore lint/suspicious/noArrayIndexKey: highlight segments are positional splits, static per render. */
+                      <mark key={i} className="bg-transparent text-foreground font-semibold">
+                        {seg.text}
+                      </mark>
                     ) : (
                       <span key={i}>{seg.text}</span>
                     ),

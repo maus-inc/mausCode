@@ -101,7 +101,7 @@ export class MentionCache {
     const escapedPattern = pattern
       .replace(/[.+?^${}()|[\]\\]/g, "\\$&") // Escape special regex chars (except *)
       .replace(/\*/g, ".*") // Convert * to .*
-    const regex = new RegExp("^" + escapedPattern + "$")
+    const regex = new RegExp(`^${escapedPattern}$`)
     let count = 0
 
     Array.from(this.cache.keys()).forEach((key) => {
@@ -154,11 +154,7 @@ export class MentionCache {
    * Generate a cache key for a search query
    * Uses URI encoding to prevent collision when parts contain separators
    */
-  static createKey(
-    providerId: string,
-    query: string,
-    context?: { projectPath?: string }
-  ): string {
+  static createKey(providerId: string, query: string, context?: { projectPath?: string }): string {
     const parts = [providerId, query]
     if (context?.projectPath) {
       parts.push(context.projectPath)

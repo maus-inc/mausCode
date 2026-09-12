@@ -1,18 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Server as ServerIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
-import {
-  EyeOpenFilledIcon,
-  ProfileIconFilled,
-  SlidersFilledIcon,
-} from "../../icons"
-import {
-  agentsSettingsDialogActiveTabAtom,
-  devToolsUnlockedAtom,
-  isDesktopAtom,
-  type SettingsTab,
-} from "../../lib/atoms"
-import { cn } from "../../lib/utils"
 import {
   BrainFilledIcon,
   BugFilledIcon,
@@ -24,6 +12,14 @@ import {
   PluginFilledIcon,
   SkillIconFilled,
 } from "../../components/ui/icons"
+import { EyeOpenFilledIcon, ProfileIconFilled, SlidersFilledIcon } from "../../icons"
+import {
+  agentsSettingsDialogActiveTabAtom,
+  devToolsUnlockedAtom,
+  isDesktopAtom,
+  type SettingsTab,
+} from "../../lib/atoms"
+import { cn } from "../../lib/utils"
 import { desktopViewAtom } from "../agents/atoms"
 
 // Check if we're in development mode
@@ -74,6 +70,11 @@ const ADVANCED_TABS_BASE = [
     icon: BrainFilledIcon,
   },
   {
+    id: "backends" as SettingsTab,
+    label: "Backends",
+    icon: ServerIcon,
+  },
+  {
     id: "skills" as SettingsTab,
     label: "Skills",
     icon: SkillIconFilled,
@@ -106,7 +107,7 @@ interface TabButtonProps {
   tab: {
     id: SettingsTab
     label: string
-    icon: React.ComponentType<{ className?: string }> | any
+    icon: React.ComponentType<{ className?: string }>
   }
   isActive: boolean
   onClick: () => void
@@ -118,19 +119,20 @@ function TabButton({ tab, isActive, onClick }: TabButtonProps) {
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "inline-flex items-center whitespace-nowrap transition-colors duration-75 cursor-pointer w-full justify-start gap-2 text-left px-3 py-1.5 text-sm h-7 rounded-md",
         "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
         isActive
           ? "bg-foreground/5 text-foreground font-medium"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground font-medium"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground font-medium",
       )}
     >
       <Icon
         className={cn(
           "h-4 w-4",
-          isProjectTab ? "opacity-100" : isActive ? "opacity-100" : "opacity-50"
+          isProjectTab ? "opacity-100" : isActive ? "opacity-100" : "opacity-50",
         )}
       />
       <span className="flex-1 truncate">{tab.label}</span>
@@ -191,6 +193,7 @@ export function SettingsSidebar() {
       {/* Back button */}
       <div className="px-2 pt-3 pb-2">
         <button
+          type="button"
           onClick={handleBack}
           className="inline-flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm h-7 rounded-md text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer"
         >
@@ -227,7 +230,6 @@ export function SettingsSidebar() {
             />
           ))}
         </div>
-
       </div>
     </div>
   )

@@ -1,8 +1,8 @@
-// Patches the Electron.app bundle in node_modules to show "1Code" name and icon in macOS dock during dev mode.
-import { execSync } from "child_process"
-import { copyFileSync, existsSync } from "fs"
-import { join, dirname } from "path"
-import { fileURLToPath } from "url"
+// Patches the Electron.app bundle in node_modules to show "mausCode" name and icon in macOS dock during dev mode.
+import { execSync } from "node:child_process"
+import { copyFileSync, existsSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, "..")
@@ -18,9 +18,9 @@ if (process.platform !== "darwin") {
 
 if (existsSync(plistPath)) {
   try {
-    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleName 1Code" "${plistPath}"`)
-    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 1Code" "${plistPath}"`)
-    console.log("[patch-electron-dev] Updated Info.plist: name -> 1Code")
+    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleName mausCode" "${plistPath}"`)
+    execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName mausCode" "${plistPath}"`)
+    console.log("[patch-electron-dev] Updated Info.plist: name -> mausCode")
   } catch (e) {
     console.warn("[patch-electron-dev] Failed to update Info.plist:", e.message)
   }

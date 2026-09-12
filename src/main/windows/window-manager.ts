@@ -7,10 +7,10 @@ import { cleanupWindowSubscriptions } from "../lib/git/watcher/ipc-bridge"
 class WindowManager {
   private windows: Map<number, BrowserWindow> = new Map()
   private focusedWindowId: number | null = null
-  private mainWindowId: number | null = null  // Track the "main" window
-  private windowIdMap: Map<number, string> = new Map()  // Map Electron window.id to stable ID
-  private nextSecondaryId = 2  // Counter for secondary windows
-  private chatOwnership: Map<string, number> = new Map()  // chatId -> electronWindowId
+  private mainWindowId: number | null = null // Track the "main" window
+  private windowIdMap: Map<number, string> = new Map() // Map Electron window.id to stable ID
+  private nextSecondaryId = 2 // Counter for secondary windows
+  private chatOwnership: Map<string, number> = new Map() // chatId -> electronWindowId
 
   /**
    * Register a window with the manager and assign a stable ID
@@ -141,7 +141,10 @@ class WindowManager {
    * Attempt to claim a chat for a window.
    * Returns { ok: true } if claimed, or { ok: false, ownerStableId } if already owned by another window.
    */
-  claimChat(chatId: string, electronId: number): { ok: true } | { ok: false; ownerStableId: string } {
+  claimChat(
+    chatId: string,
+    electronId: number,
+  ): { ok: true } | { ok: false; ownerStableId: string } {
     const existingOwner = this.chatOwnership.get(chatId)
 
     // Already owned by this same window — idempotent success

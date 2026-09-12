@@ -102,8 +102,7 @@ export function handlePasteEvent(
 
       // Get the contentEditable element
       const target = e.currentTarget as HTMLElement
-      const editableElement =
-        target.closest('[contenteditable="true"]') || target
+      const editableElement = target.closest('[contenteditable="true"]') || target
       insertTextAtCursor(text, editableElement)
     }
   }

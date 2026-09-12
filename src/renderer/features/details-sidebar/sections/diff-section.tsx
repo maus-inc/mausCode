@@ -1,10 +1,11 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
 import { GitCommit } from "lucide-react"
-import { IconSpinner, DiffIcon } from "@/components/ui/icons"
-import { cn } from "@/lib/utils"
+import { Fragment } from "react"
+import { Button } from "@/components/ui/button"
+import { DiffIcon, IconSpinner } from "@/components/ui/icons"
 import { getFileIconByExtension } from "@/features/agents/mentions/agents-file-mention"
+import { cn } from "@/lib/utils"
 
 /** Parsed diff file type */
 interface ParsedDiffFile {
@@ -46,14 +47,11 @@ function getFileDir(path: string): string {
 }
 
 export function DiffSection({
-  chatId,
-  isDiffSidebarOpen,
   setIsDiffSidebarOpen,
   diffStats,
   parsedFileDiffs,
   onCommit,
   isCommitting = false,
-  isExpanded = false,
 }: DiffSectionProps) {
   const hasChanges = diffStats && diffStats.fileCount > 0
   const files = parsedFileDiffs || []
@@ -79,9 +77,7 @@ export function DiffSection({
                 </span>
               )}
               {diffStats.deletions > 0 && (
-                <span className="text-red-600 dark:text-red-400">
-                  -{diffStats.deletions}
-                </span>
+                <span className="text-red-600 dark:text-red-400">-{diffStats.deletions}</span>
               )}
             </span>
           </div>
@@ -98,64 +94,69 @@ export function DiffSection({
                 const FileIcon = getFileIconByExtension(fileName)
 
                 return (
-                  <div
-                    key={file.key}
-                    className={cn(
-                      "group flex items-center gap-2 font-mono text-xs",
-                      "py-1 px-1.5 rounded cursor-pointer",
-                      "hover:bg-accent/50 transition-colors",
-                    )}
-                    onClick={() => setIsDiffSidebarOpen(true)}
-                  >
-                    {/* File icon */}
-                    <div className="relative w-3.5 h-3.5 shrink-0">
-                      {FileIcon && (
-                        <FileIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                  <Fragment key={file.key}>
+                    {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
+                    <div
+                      className={cn(
+                        "group flex items-center gap-2 font-mono text-xs",
+                        "py-1 px-1.5 rounded cursor-pointer",
+                        "hover:bg-accent/50 transition-colors",
                       )}
-                    </div>
+                      onClick={() => setIsDiffSidebarOpen(true)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          e.currentTarget.click()
+                        }
+                      }}
+                    >
+                      {/* File icon */}
+                      <div className="relative w-3.5 h-3.5 shrink-0">
+                        {FileIcon && <FileIcon className="w-3.5 h-3.5 text-muted-foreground" />}
+                      </div>
 
-                    {/* File name + path + status - same layout as agent-diff-view */}
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="font-medium text-foreground shrink-0">
-                        {fileName}
+                      {/* File name + path + status - same layout as agent-diff-view */}
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="font-medium text-foreground shrink-0">{fileName}</span>
+                        {dirPath && (
+                          <span className="text-muted-foreground truncate text-[11px] min-w-0">
+                            {dirPath}
+                          </span>
+                        )}
+                        {isNewFile && (
+                          <span className="shrink-0 text-[11px] text-emerald-600 dark:text-emerald-400">
+                            (new)
+                          </span>
+                        )}
+                        {isDeletedFile && (
+                          <span className="shrink-0 text-[11px] text-red-600 dark:text-red-400">
+                            (deleted)
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Stats - same style as agent-diff-view */}
+                      <span className="shrink-0 font-mono text-[11px] tabular-nums whitespace-nowrap">
+                        {file.additions > 0 && (
+                          <span className="mr-1.5 text-emerald-600 dark:text-emerald-400">
+                            +{file.additions}
+                          </span>
+                        )}
+                        {file.deletions > 0 && (
+                          <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
+                        )}
                       </span>
-                      {dirPath && (
-                        <span className="text-muted-foreground truncate text-[11px] min-w-0">
-                          {dirPath}
-                        </span>
-                      )}
-                      {isNewFile && (
-                        <span className="shrink-0 text-[11px] text-emerald-600 dark:text-emerald-400">
-                          (new)
-                        </span>
-                      )}
-                      {isDeletedFile && (
-                        <span className="shrink-0 text-[11px] text-red-600 dark:text-red-400">
-                          (deleted)
-                        </span>
-                      )}
                     </div>
-
-                    {/* Stats - same style as agent-diff-view */}
-                    <span className="shrink-0 font-mono text-[11px] tabular-nums whitespace-nowrap">
-                      {file.additions > 0 && (
-                        <span className="mr-1.5 text-emerald-600 dark:text-emerald-400">
-                          +{file.additions}
-                        </span>
-                      )}
-                      {file.deletions > 0 && (
-                        <span className="text-red-600 dark:text-red-400">
-                          -{file.deletions}
-                        </span>
-                      )}
-                    </span>
-                  </div>
+                  </Fragment>
                 )
               })}
 
               {/* Show more indicator */}
               {remainingCount > 0 && (
                 <button
+                  type="button"
                   className="text-xs text-muted-foreground hover:text-foreground py-1 px-1.5 w-full text-left font-mono"
                   onClick={() => setIsDiffSidebarOpen(true)}
                 >

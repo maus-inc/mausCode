@@ -1,15 +1,15 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { useAtom } from "jotai"
-import { Button } from "@/components/ui/button"
-import { Kbd } from "@/components/ui/kbd"
-import { cn } from "@/lib/utils"
-import { PlanIcon, ExpandIcon, CollapseIcon, IconSpinner } from "@/components/ui/icons"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
+import { Button } from "@/components/ui/button"
+import { CollapseIcon, ExpandIcon, IconSpinner, PlanIcon } from "@/components/ui/icons"
+import { Kbd } from "@/components/ui/kbd"
 import { trpc } from "@/lib/trpc"
-import { planContentCacheAtomFamily } from "../atoms"
+import { cn } from "@/lib/utils"
 import type { AgentMode } from "../../agents/atoms"
+import { planContentCacheAtomFamily } from "../atoms"
 
 interface PlanWidgetProps {
   /** Chat ID for cache */
@@ -62,7 +62,7 @@ export const PlanWidget = memo(function PlanWidget({
     isLoading,
     error,
     refetch,
-  } = trpc.files.readFile.useQuery({ filePath: planPath! }, { enabled: !!planPath })
+  } = trpc.files.readFile.useQuery({ filePath: planPath ?? "" }, { enabled: !!planPath })
 
   // Update cache when content loads successfully
   useEffect(() => {
@@ -117,6 +117,7 @@ export const PlanWidget = memo(function PlanWidget({
   }, [])
 
   // Update gradient on scroll and content changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isExpanded intentionally re-subscribes and re-measures the gradient after expand/collapse layout change.
   useEffect(() => {
     const content = contentRef.current
     if (!content) return
@@ -127,6 +128,7 @@ export const PlanWidget = memo(function PlanWidget({
     return () => content.removeEventListener("scroll", updateScrollGradient)
   }, [updateScrollGradient, isExpanded])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: displayContent intentionally re-measures the gradient when content changes.
   useEffect(() => {
     updateScrollGradient()
   }, [displayContent, updateScrollGradient])
@@ -217,7 +219,7 @@ export const PlanWidget = memo(function PlanWidget({
                 ref={contentRef}
                 className={cn(
                   "px-2 py-2 allow-text-selection",
-                  isExpanded ? "" : "max-h-64 overflow-hidden"
+                  isExpanded ? "" : "max-h-64 overflow-hidden",
                 )}
               >
                 <ChatMarkdownRenderer content={displayContent} size="sm" />

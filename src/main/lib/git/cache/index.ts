@@ -1,5 +1,5 @@
 export {
-	gitCache,
-	computeContentHash,
-	estimateSizeBytes,
-} from "./git-cache";
+  computeContentHash,
+  estimateSizeBytes,
+  gitCache,
+} from "./git-cache"

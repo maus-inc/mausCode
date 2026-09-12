@@ -17,9 +17,7 @@ const SHOW_DELAY = 400
  * Check if the current platform is macOS.
  */
 export function isMac(): boolean {
-  return typeof navigator !== "undefined"
-    ? /Mac/.test(navigator.platform)
-    : false
+  return typeof navigator !== "undefined" ? /Mac/.test(navigator.platform) : false
 }
 
 /**

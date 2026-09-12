@@ -1,9 +1,13 @@
+@import "./fonts.css";
 @import "./agents-styles.css";
 
 @source "../../../node_modules/streamdown/dist/*.js";
 
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS v3 directives (tailwindcss 3.4 PostCSS plugin) */
 @tailwind base;
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS v3 directives (tailwindcss 3.4 PostCSS plugin) */
 @tailwind components;
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS v3 directives (tailwindcss 3.4 PostCSS plugin) */
 @tailwind utilities;
 
 @layer base {
@@ -38,6 +42,12 @@
     --plan-mode-foreground: 0 0% 8%;
     /* Timeline/Content background */
     --tl-background: 0 0% 98%;
+    /* Dot-matrix loader "solid-theme" preset fill — follows the theme foreground */
+    --color-dot-on: hsl(var(--foreground));
+    /* Button letter-spacing. Direction says -3px; at 13–14px button text that
+       overlaps glyphs, so the shipping value is the equivalent tight tracking
+       (-0.03em ≈ -0.4px). Set to -3px here to take it literally. */
+    --button-tracking: -0.03em;
   }
 
   .dark {
@@ -85,18 +95,33 @@
       "rlig" 1,
       "calt" 1;
   }
+  /* Display face for headers + brand text (Geist Pixel Circle). */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Geist Pixel Circle", "Neue Haas Grotesk Display", system-ui, sans-serif;
+  }
+  /* All buttons render in Pathway Extreme Thin with tight tracking. */
+  button {
+    font-family: "Pathway Extreme", "Neue Haas Grotesk Display", system-ui, sans-serif;
+    font-weight: 100;
+    letter-spacing: var(--button-tracking);
+  }
 }
 
 /* Search highlight styles */
-.search-highlight {
-  background-color: rgb(250 204 21 / 0.35) !important;
-  color: inherit !important;
+.search-highlight.search-highlight {
+  background-color: rgb(250 204 21 / 0.35);
+  color: inherit;
   border-radius: 2px;
 }
 
-.search-highlight-current {
-  background-color: rgb(250 204 21 / 0.85) !important;
-  color: hsl(0 0% 5%) !important;
+.search-highlight-current.search-highlight-current {
+  background-color: rgb(250 204 21 / 0.85);
+  color: hsl(0 0% 5%);
 }
 
 /* Custom scrollbar */
@@ -200,25 +225,25 @@
 }
 
 /* Sonner Toast Styling - Google-style layout */
-/* Use !important to override Sonner's internal [data-theme] selectors (higher specificity) */
-[data-sonner-toaster] {
-  --normal-bg: hsl(var(--popover)) !important;
-  --normal-text: hsl(var(--popover-foreground)) !important;
-  --normal-border: hsl(var(--border)) !important;
-  --border-radius: var(--radius) !important;
+/* Tripled attribute selector (0,3,0) beats Sonner's internal [data-theme] selectors (0,2,0) */
+[data-sonner-toaster][data-sonner-toaster][data-sonner-toaster] {
+  --normal-bg: hsl(var(--popover));
+  --normal-text: hsl(var(--popover-foreground));
+  --normal-border: hsl(var(--border));
+  --border-radius: var(--radius);
   /* Override rich colors - all toasts should be neutral */
-  --success-bg: hsl(var(--popover)) !important;
-  --success-border: hsl(var(--border)) !important;
-  --success-text: hsl(var(--popover-foreground)) !important;
-  --info-bg: hsl(var(--popover)) !important;
-  --info-border: hsl(var(--border)) !important;
-  --info-text: hsl(var(--popover-foreground)) !important;
-  --warning-bg: hsl(var(--popover)) !important;
-  --warning-border: hsl(var(--border)) !important;
-  --warning-text: hsl(var(--popover-foreground)) !important;
-  --error-bg: hsl(var(--popover)) !important;
-  --error-border: hsl(var(--border)) !important;
-  --error-text: hsl(var(--popover-foreground)) !important;
+  --success-bg: hsl(var(--popover));
+  --success-border: hsl(var(--border));
+  --success-text: hsl(var(--popover-foreground));
+  --info-bg: hsl(var(--popover));
+  --info-border: hsl(var(--border));
+  --info-text: hsl(var(--popover-foreground));
+  --warning-bg: hsl(var(--popover));
+  --warning-border: hsl(var(--border));
+  --warning-text: hsl(var(--popover-foreground));
+  --error-bg: hsl(var(--popover));
+  --error-border: hsl(var(--border));
+  --error-text: hsl(var(--popover-foreground));
 }
 
 [data-sonner-toast][data-styled="true"] {
@@ -277,20 +302,22 @@
   position: absolute;
   bottom: 12px;
   right: 8px;
-  background: transparent !important;
-  color: hsl(var(--foreground)) !important;
+  background: transparent;
+  color: hsl(var(--foreground));
   font-weight: 500;
   font-size: 13px;
   padding: 4px 12px;
   height: auto;
-  border: 1px solid hsl(var(--border)) !important;
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
-  margin: 0 !important;
-  transition: background-color 150ms ease-out, transform 150ms ease-out;
+  margin: 0;
+  transition:
+    background-color 150ms ease-out,
+    transform 150ms ease-out;
 }
 
 [data-sonner-toast][data-styled="true"] [data-button]:hover {
-  background: hsl(var(--foreground) / 0.1) !important;
+  background: hsl(var(--foreground) / 0.1);
 }
 
 [data-sonner-toast][data-styled="true"] [data-button]:active {
@@ -302,24 +329,24 @@
   padding-bottom: 44px;
 }
 
-/* Close button - inside toast, top right corner */
-[data-sonner-toast] [data-close-button] {
-  position: absolute !important;
-  top: 8px !important;
-  right: 8px !important;
-  left: unset !important;
-  transform: none !important;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 4px !important;
+/* Close button - inside toast, top right corner (doubled attr breaks the specificity tie with Sonner's base rule) */
+[data-sonner-toast][data-sonner-toast] [data-close-button] {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  left: unset;
+  transform: none;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
   color: hsl(var(--muted-foreground));
   width: 20px;
   height: 20px;
 }
 
-[data-sonner-toast] [data-close-button]:hover {
+[data-sonner-toast][data-sonner-toast] [data-close-button]:hover {
   color: hsl(var(--foreground));
-  background: hsl(var(--accent)) !important;
+  background: hsl(var(--accent));
 }
 
 /* Terminal link popup */

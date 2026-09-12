@@ -1,16 +1,18 @@
 /**
- * PostHog analytics for 1Code Desktop - Main Process
+ * PostHog analytics for mausCode Desktop - Main Process
  * Uses PostHog Node.js SDK for server-side tracking
  */
 
-import { PostHog } from "posthog-node"
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { app } from "electron"
-import * as fs from "fs"
-import * as path from "path"
+import { PostHog } from "posthog-node"
+import { isLocalOnlyMode } from "./local-only"
 
 // PostHog configuration - hardcoded key for opensource users, env var override for internal builds
 // This enables analytics for all users including those building from source
-const POSTHOG_DESKTOP_KEY = import.meta.env.MAIN_VITE_POSTHOG_KEY || "phc_wM7gbrJhOLTvynyhnhPkrVGDc5mKRSXsLGQHqM3T3vq"
+const POSTHOG_DESKTOP_KEY =
+  import.meta.env.MAIN_VITE_POSTHOG_KEY || "phc_wM7gbrJhOLTvynyhnhPkrVGDc5mKRSXsLGQHqM3T3vq"
 const POSTHOG_HOST = import.meta.env.MAIN_VITE_POSTHOG_HOST || "https://us.i.posthog.com"
 
 let posthog: PostHog | null = null
@@ -132,15 +134,12 @@ export function initAnalytics() {
 /**
  * Capture an analytics event
  */
-export function capture(
-  eventName: string,
-  properties?: Record<string, any>,
-) {
+export function capture(eventName: string, properties?: Record<string, unknown>) {
   // Skip in development mode
   if (isDev()) return
 
-  // Skip if user opted out
-  if (userOptedOut) return
+  // Skip if user opted out or local-only mode is on
+  if (userOptedOut || isLocalOnlyMode()) return
 
   if (!posthog) return
 
@@ -159,17 +158,14 @@ export function capture(
 /**
  * Identify a user
  */
-export function identify(
-  userId: string,
-  traits?: Record<string, any>,
-) {
+export function identify(userId: string, traits?: Record<string, unknown>) {
   currentUserId = userId
 
   // Skip in development mode
   if (isDev()) return
 
-  // Skip if user opted out
-  if (userOptedOut) return
+  // Skip if user opted out or local-only mode is on
+  if (userOptedOut || isLocalOnlyMode()) return
 
   if (!posthog) return
 
@@ -250,10 +246,7 @@ export function trackAuthCompleted(userId: string, email?: string) {
 /**
  * Track project opened
  */
-export function trackProjectOpened(project: {
-  id: string
-  hasGitRemote: boolean
-}) {
+export function trackProjectOpened(project: { id: string; hasGitRemote: boolean }) {
   capture("project_opened", {
     project_id: project.id,
     has_git_remote: project.hasGitRemote,
@@ -301,7 +294,7 @@ export function trackWorkspaceDeleted(workspaceId: string) {
 export function trackMessageSent(data: {
   workspaceId: string
   subChatId?: string
-  mode: "plan" | "agent"
+  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
 }) {
   capture("message_sent", {
     workspace_id: data.workspaceId,
@@ -345,10 +338,7 @@ export function trackCommitCreated(data: {
 /**
  * Track sub-chat created
  */
-export function trackSubChatCreated(data: {
-  workspaceId: string
-  subChatId: string
-}) {
+export function trackSubChatCreated(data: { workspaceId: string; subChatId: string }) {
   capture("sub_chat_created", {
     workspace_id: data.workspaceId,
     sub_chat_id: data.subChatId,

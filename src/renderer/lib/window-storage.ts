@@ -30,7 +30,6 @@ function migrateFromNumericWindowId(key: string, targetWindowKey: string): strin
     if (match && match[2] === key) {
       const value = localStorage.getItem(storageKey)
       if (value !== null) {
-        console.log(`[WindowStorage] Migrated from numeric ID: ${storageKey} to ${targetWindowKey}`)
         migratedKeys.add(targetWindowKey)
         return value
       }
@@ -76,7 +75,6 @@ function createWindowScopedStorage<T>() {
           if (legacyValue !== null) {
             try {
               localStorage.setItem(windowKey, legacyValue)
-              console.log(`[WindowStorage] Migrated ${key} to ${windowKey}`)
             } catch (e) {
               console.warn(`[WindowStorage] Failed to save migrated value for ${windowKey}:`, e)
             }
@@ -128,12 +126,7 @@ function createWindowScopedStorage<T>() {
 export function atomWithWindowStorage<T>(
   key: string,
   initialValue: T,
-  options?: { getOnInit?: boolean }
+  options?: { getOnInit?: boolean },
 ) {
-  return atomWithStorage<T>(
-    key,
-    initialValue,
-    createWindowScopedStorage<T>(),
-    options
-  )
+  return atomWithStorage<T>(key, initialValue, createWindowScopedStorage<T>(), options)
 }

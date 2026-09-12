@@ -1,43 +1,10 @@
 "use client"
 
 import "./automations-styles.css"
-import { useAtomValue, useSetAtom, useAtom } from "jotai"
-import { selectedTeamIdAtom } from "../../lib/atoms"
-import {
-  desktopViewAtom,
-  automationDetailIdAtom,
-  automationTemplateParamsAtom,
-  agentsSidebarOpenAtom,
-  agentsMobileViewModeAtom,
-} from "../agents/atoms"
-import { useIsMobile } from "../../lib/hooks/use-mobile"
-import { IconSpinner, IconChevronDown, ExternalLinkIcon } from "../../components/ui/icons"
-import { Logo } from "../../components/ui/logo"
-import { useState, useEffect, useMemo, useCallback } from "react"
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  MoreHorizontal,
-} from "lucide-react"
-import { Badge } from "../../components/ui/badge"
-import { remoteTrpc } from "../../lib/remote-trpc"
-import { cn } from "../../lib/utils"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Switch } from "../../components/ui/switch"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { ArrowLeft, MoreHorizontal, Plus, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,14 +15,41 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog"
+import { Badge } from "../../components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu"
+import { ExternalLinkIcon, IconChevronDown, IconSpinner } from "../../components/ui/icons"
+import { Logo } from "../../components/ui/logo"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select"
+import { Switch } from "../../components/ui/switch"
+import { selectedTeamIdAtom } from "../../lib/atoms"
+import { useIsMobile } from "../../lib/hooks/use-mobile"
+import { remoteTrpc } from "../../lib/remote-trpc"
+import { cn } from "../../lib/utils"
+import {
+  agentsMobileViewModeAtom,
+  agentsSidebarOpenAtom,
+  automationDetailIdAtom,
+  automationTemplateParamsAtom,
+  desktopViewAtom,
+} from "../agents/atoms"
 
 import {
+  CLAUDE_MODELS,
   GITHUB_TRIGGER_OPTIONS,
   LINEAR_TRIGGER_OPTIONS,
-  CLAUDE_MODELS,
-  getTriggerLabel,
-  PlatformIcon,
   type Platform,
+  PlatformIcon,
   type TriggerType,
 } from "./_components"
 
@@ -67,6 +61,53 @@ function formatExternalId(externalId: string | null | undefined): string {
     return externalId.slice(slashIdx + 1)
   }
   return externalId
+}
+
+/** View of a trigger row returned by the automations API. */
+interface AutomationTriggerView {
+  id?: string
+  platform?: Platform
+  trigger_type?: TriggerType
+  filters?: Array<{ field: string; operator: string; value: string }>
+}
+
+/** View of an execution row returned by the automations API. */
+interface AutomationExecutionView {
+  id: string
+  status: string
+  external_url?: string | null
+  external_id?: string | null
+  error_message?: string | null
+  created_at: string | Date
+}
+
+/** Trigger payload sent to create/update automation. */
+interface AutomationTriggerInput {
+  id?: string
+  platform: Platform
+  trigger_type: TriggerType
+  filters: Array<{ field: string; operator: string; value: string }>
+}
+
+interface CreateAutomationInput {
+  teamId: string
+  name: string
+  agentPrompt: string
+  addToInbox: boolean
+  respondToTrigger: boolean
+  triggers: AutomationTriggerInput[]
+  targetRepository?: string
+}
+
+interface UpdateAutomationInput {
+  automationId: string
+  name: string
+  agentPrompt: string
+  addToInbox: boolean
+  respondToTrigger: boolean
+  isEnabled: boolean
+  triggers: AutomationTriggerInput[]
+  targetRepository: string | null
 }
 
 function getStatusColor(status: string) {
@@ -106,9 +147,9 @@ export function AutomationsDetailView() {
   const setDesktopView = useSetAtom(desktopViewAtom)
   const setAutomationDetailId = useSetAtom(automationDetailIdAtom)
   const setTemplateParams = useSetAtom(automationTemplateParamsAtom)
-  const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
-  const setMobileViewMode = useSetAtom(agentsMobileViewModeAtom)
-  const isMobile = useIsMobile()
+  const [_sidebarOpen, _setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
+  const _setMobileViewMode = useSetAtom(agentsMobileViewModeAtom)
+  const _isMobile = useIsMobile()
   const queryClient = useQueryClient()
 
   const isCreateMode = automationId === "new"
@@ -146,25 +187,26 @@ export function AutomationsDetailView() {
   // Past Runs state
   const [pastRunsExpanded, setPastRunsExpanded] = useState(true)
   const [pastRunsOffset, setPastRunsOffset] = useState(0)
-  const [additionalExecutions, setAdditionalExecutions] = useState<any[]>([])
+  const [additionalExecutions, setAdditionalExecutions] = useState<AutomationExecutionView[]>([])
 
   // ============================================================================
   // Fetch existing automation (edit mode)
   // ============================================================================
   const { data: automation, isLoading } = useQuery({
     queryKey: ["automations", "get", automationId],
-    queryFn: () => remoteTrpc.automations.getAutomation.query({ automationId: automationId! }),
+    queryFn: () => remoteTrpc.automations.getAutomation.query({ automationId: automationId ?? "" }),
     enabled: !isCreateMode && !!automationId,
   })
 
   // Fetch additional executions for Past Runs pagination
   const { data: moreExecutionsData, isFetching: isFetchingMoreExecutions } = useQuery({
     queryKey: ["automations", "listExecutions", automationId, pastRunsOffset],
-    queryFn: () => remoteTrpc.automations.listExecutions.query({
-      automationId: automationId!,
-      limit: 20,
-      offset: pastRunsOffset,
-    }),
+    queryFn: () =>
+      remoteTrpc.automations.listExecutions.query({
+        automationId: automationId ?? "",
+        limit: 20,
+        offset: pastRunsOffset,
+      }),
     enabled: !isCreateMode && !!automationId && pastRunsOffset > 0,
   })
 
@@ -177,12 +219,12 @@ export function AutomationsDetailView() {
 
   // Combine initial executions (from getAutomation) with paginated ones
   const allExecutions = useMemo(() => {
-    const initial = (automation as any)?.executions || []
+    const initial = automation?.executions || []
     if (additionalExecutions.length === 0) return initial
-    const ids = new Set(initial.map((e: any) => e.id))
-    const extra = additionalExecutions.filter((e: any) => !ids.has(e.id))
+    const ids = new Set(initial.map((e: AutomationExecutionView) => e.id))
+    const extra = additionalExecutions.filter((e: AutomationExecutionView) => !ids.has(e.id))
     return [...initial, ...extra]
-  }, [(automation as any)?.executions, additionalExecutions])
+  }, [automation?.executions, additionalExecutions])
 
   const totalExecutions = moreExecutionsData?.total ?? allExecutions.length
   const hasMoreExecutions = allExecutions.length < totalExecutions
@@ -192,7 +234,7 @@ export function AutomationsDetailView() {
   // ============================================================================
   const { data: githubStatus } = useQuery({
     queryKey: ["github", "connectionStatus", teamId],
-    queryFn: () => remoteTrpc.github.getConnectionStatus.query({ teamId: teamId! }),
+    queryFn: () => remoteTrpc.github.getConnectionStatus.query({ teamId: teamId ?? "" }),
     enabled: !!teamId,
   })
 
@@ -201,7 +243,7 @@ export function AutomationsDetailView() {
   // ============================================================================
   const { data: linearStatus } = useQuery({
     queryKey: ["linear", "integration", teamId],
-    queryFn: () => remoteTrpc.linear.getIntegration.query({ teamId: teamId! }),
+    queryFn: () => remoteTrpc.linear.getIntegration.query({ teamId: teamId ?? "" }),
     enabled: !!teamId,
   })
 
@@ -237,12 +279,12 @@ export function AutomationsDetailView() {
       setIsEnabled(automation.is_enabled ?? true)
       setTargetRepository(automation.target_repository || "")
       setLocalTriggers(
-        (automation.triggers || []).map((t: any) => ({
+        (automation.triggers || []).map((t: AutomationTriggerView) => ({
           id: t.id || crypto.randomUUID(),
           platform: t.platform || "github",
-          trigger_type: t.trigger_type,
+          trigger_type: t.trigger_type as TriggerType,
           filters: t.filters || [],
-        }))
+        })),
       )
     }
   }, [isCreateMode, automation])
@@ -251,7 +293,8 @@ export function AutomationsDetailView() {
   // Mutations
   // ============================================================================
   const createMutation = useMutation({
-    mutationFn: (data: any) => remoteTrpc.automations.createAutomation.mutate(data),
+    mutationFn: (data: CreateAutomationInput) =>
+      remoteTrpc.automations.createAutomation.mutate(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", "list"] })
       doNavigateBack()
@@ -259,7 +302,8 @@ export function AutomationsDetailView() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) => remoteTrpc.automations.updateAutomation.mutate(data),
+    mutationFn: (data: UpdateAutomationInput) =>
+      remoteTrpc.automations.updateAutomation.mutate(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", "list"] })
       queryClient.invalidateQueries({ queryKey: ["automations", "get", automationId] })
@@ -268,7 +312,10 @@ export function AutomationsDetailView() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: () => remoteTrpc.automations.deleteAutomation.mutate({ automationId: automationId! }),
+    mutationFn: () => {
+      if (!automationId) throw new Error("No automation selected")
+      return remoteTrpc.automations.deleteAutomation.mutate({ automationId })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", "list"] })
       doNavigateBack()
@@ -276,11 +323,13 @@ export function AutomationsDetailView() {
   })
 
   const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) =>
-      remoteTrpc.automations.updateAutomation.mutate({
-        automationId: automationId!,
+    mutationFn: (enabled: boolean) => {
+      if (!automationId) throw new Error("No automation selected")
+      return remoteTrpc.automations.updateAutomation.mutate({
+        automationId,
         isEnabled: enabled,
-      }),
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", "get", automationId] })
     },
@@ -306,8 +355,9 @@ export function AutomationsDetailView() {
 
   const handleSave = useCallback(() => {
     if (isCreateMode) {
+      if (!teamId) return
       createMutation.mutate({
-        teamId: teamId!,
+        teamId,
         name: name || "Untitled Automation",
         agentPrompt: instructions,
         addToInbox,
@@ -320,8 +370,9 @@ export function AutomationsDetailView() {
         targetRepository: targetRepository || undefined,
       })
     } else {
+      if (!automationId) return
       updateMutation.mutate({
-        automationId: automationId!,
+        automationId,
         name,
         agentPrompt: instructions,
         addToInbox,
@@ -337,9 +388,18 @@ export function AutomationsDetailView() {
       })
     }
   }, [
-    isCreateMode, teamId, name, instructions, addToInbox, respondToTrigger, isEnabled,
-    localTriggers, targetRepository, automationId,
-    createMutation, updateMutation,
+    isCreateMode,
+    teamId,
+    name,
+    instructions,
+    addToInbox,
+    respondToTrigger,
+    isEnabled,
+    localTriggers,
+    targetRepository,
+    automationId,
+    createMutation,
+    updateMutation,
   ])
 
   const handleAddTrigger = useCallback((platform: Platform) => {
@@ -361,7 +421,7 @@ export function AutomationsDetailView() {
 
   const handleUpdateTriggerType = useCallback((triggerId: string, triggerType: TriggerType) => {
     setLocalTriggers((prev) =>
-      prev.map((t) => (t.id === triggerId ? { ...t, trigger_type: triggerType } : t))
+      prev.map((t) => (t.id === triggerId ? { ...t, trigger_type: triggerType } : t)),
     )
   }, [])
 
@@ -370,18 +430,28 @@ export function AutomationsDetailView() {
   // Determine where comments can be posted based on configured triggers
   const commentTargetDescription = useMemo(() => {
     const hasLinear = localTriggers.some((t) => t.platform === "linear")
-    const githubCommentTriggers = ["pr_opened", "pr_closed", "pr_merged", "pr_commits_pushed", "issue_opened", "issue_closed", "issue_comment_created"]
+    const githubCommentTriggers = [
+      "pr_opened",
+      "pr_closed",
+      "pr_merged",
+      "pr_commits_pushed",
+      "issue_opened",
+      "issue_closed",
+      "issue_comment_created",
+    ]
     const hasGithubCommentable = localTriggers.some(
-      (t) => t.platform === "github" && githubCommentTriggers.includes(t.trigger_type)
+      (t) => t.platform === "github" && githubCommentTriggers.includes(t.trigger_type),
     )
     const hasGithubNonCommentable = localTriggers.some(
-      (t) => t.platform === "github" && !githubCommentTriggers.includes(t.trigger_type)
+      (t) => t.platform === "github" && !githubCommentTriggers.includes(t.trigger_type),
     )
 
-    if (hasGithubCommentable && hasLinear) return "Post comments on GitHub issues/PRs and Linear issues"
+    if (hasGithubCommentable && hasLinear)
+      return "Post comments on GitHub issues/PRs and Linear issues"
     if (hasGithubCommentable) return "Post comments on GitHub issues/PRs"
     if (hasLinear) return "Post comments on Linear issues"
-    if (hasGithubNonCommentable) return "No commentable triggers configured (push, branch, workflow triggers don't support comments)"
+    if (hasGithubNonCommentable)
+      return "No commentable triggers configured (push, branch, workflow triggers don't support comments)"
     return "Post comments on the source issue/PR with progress and results"
   }, [localTriggers])
 
@@ -391,7 +461,7 @@ export function AutomationsDetailView() {
   if (!teamId) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Logo className="h-8 w-8 animate-pulse text-muted-foreground" />
+        <Logo className="h-8 w-8 animate-pulse opacity-50" />
       </div>
     )
   }
@@ -409,6 +479,7 @@ export function AutomationsDetailView() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <button
+          type="button"
           onClick={handleBack}
           className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md text-muted-foreground hover:text-foreground"
         >
@@ -420,7 +491,10 @@ export function AutomationsDetailView() {
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-colors rounded-md text-muted-foreground hover:text-foreground">
+                  <button
+                    type="button"
+                    className="h-7 w-7 p-0 flex items-center justify-center hover:bg-foreground/10 transition-colors rounded-md text-muted-foreground hover:text-foreground"
+                  >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
@@ -446,6 +520,7 @@ export function AutomationsDetailView() {
                 <span className="text-xs text-muted-foreground">Active</span>
               </div>
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={isSaving || !instructionsDirty}
                 className="h-7 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
@@ -458,6 +533,7 @@ export function AutomationsDetailView() {
 
           {isCreateMode && (
             <button
+              type="button"
               onClick={handleSave}
               disabled={isSaving || localTriggers.length === 0}
               className="h-7 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
@@ -493,7 +569,10 @@ export function AutomationsDetailView() {
                     key={trigger.id}
                     className="border border-border rounded-xl p-3 flex items-center gap-3"
                   >
-                    <PlatformIcon platform={trigger.platform} className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <PlatformIcon
+                      platform={trigger.platform}
+                      className="h-4 w-4 text-muted-foreground flex-shrink-0"
+                    />
                     <Select
                       value={trigger.trigger_type}
                       onValueChange={(v) => handleUpdateTriggerType(trigger.id, v as TriggerType)}
@@ -513,6 +592,7 @@ export function AutomationsDetailView() {
                       </SelectContent>
                     </Select>
                     <button
+                      type="button"
                       onClick={() => handleRemoveTrigger(trigger.id)}
                       className="h-6 w-6 p-0 flex items-center justify-center hover:bg-red-500/10 transition-colors rounded-md text-muted-foreground hover:text-red-500 flex-shrink-0"
                     >
@@ -524,7 +604,10 @@ export function AutomationsDetailView() {
                 {/* Add trigger button */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 h-[46px] px-3 w-full border border-border rounded-xl text-muted-foreground hover:bg-muted/30 transition-colors">
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 h-[46px] px-3 w-full border border-border rounded-xl text-muted-foreground hover:bg-muted/30 transition-colors"
+                    >
                       <Plus className="h-5 w-5" />
                       <span className="text-sm">Add trigger</span>
                     </button>
@@ -557,7 +640,9 @@ export function AutomationsDetailView() {
 
             {/* Do section */}
             <section className="w-full flex flex-col gap-1">
-              <div className="text-xs font-medium text-muted-foreground h-6 flex items-center">Do</div>
+              <div className="text-xs font-medium text-muted-foreground h-6 flex items-center">
+                Do
+              </div>
 
               {/* Action card */}
               <div className="rounded-xl bg-background border border-border overflow-hidden">
@@ -565,7 +650,16 @@ export function AutomationsDetailView() {
                   {/* Header */}
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 rounded flex items-center justify-center bg-accent/50 shrink-0">
-                      <svg className="h-3.5 w-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                       </svg>
                     </div>
@@ -631,7 +725,9 @@ export function AutomationsDetailView() {
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm text-foreground">Add to inbox</span>
-                      <span className="text-xs text-muted-foreground">Show results in your inbox for review</span>
+                      <span className="text-xs text-muted-foreground">
+                        Show results in your inbox for review
+                      </span>
                     </div>
                     <Switch checked={addToInbox} onCheckedChange={setAddToInbox} />
                   </div>
@@ -640,7 +736,9 @@ export function AutomationsDetailView() {
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm text-foreground">Post comments</span>
-                      <span className="text-xs text-muted-foreground">{commentTargetDescription}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {commentTargetDescription}
+                      </span>
                     </div>
                     <Switch checked={respondToTrigger} onCheckedChange={setRespondToTrigger} />
                   </div>
@@ -649,6 +747,7 @@ export function AutomationsDetailView() {
 
               {/* Add action button - disabled */}
               <button
+                type="button"
                 disabled
                 className="flex items-center gap-2 p-3 w-full border border-border rounded-[10px] text-muted-foreground/50 cursor-not-allowed"
               >
@@ -665,18 +764,19 @@ export function AutomationsDetailView() {
 
                 <section className="w-full mb-8">
                   <button
+                    type="button"
                     onClick={() => setPastRunsExpanded(!pastRunsExpanded)}
                     className="flex items-center gap-1 text-xs font-medium text-muted-foreground mb-2 hover:text-foreground transition-colors"
                   >
-                    <IconChevronDown className={cn(
-                      "h-3.5 w-3.5 transition-transform",
-                      !pastRunsExpanded && "-rotate-90"
-                    )} />
+                    <IconChevronDown
+                      className={cn(
+                        "h-3.5 w-3.5 transition-transform",
+                        !pastRunsExpanded && "-rotate-90",
+                      )}
+                    />
                     <span>Past Runs</span>
                     {allExecutions.length > 0 && (
-                      <span className="text-muted-foreground/60 ml-1">
-                        ({totalExecutions})
-                      </span>
+                      <span className="text-muted-foreground/60 ml-1">({totalExecutions})</span>
                     )}
                   </button>
 
@@ -690,13 +790,13 @@ export function AutomationsDetailView() {
                         </div>
                       ) : (
                         <div className="divide-y divide-border">
-                          {allExecutions.map((execution: any) => (
+                          {allExecutions.map((execution: AutomationExecutionView) => (
                             <div key={execution.id} className="flex items-center gap-3 px-3 py-2.5">
                               <Badge
                                 variant="outline"
                                 className={cn(
                                   "text-[10px] px-1.5 py-0 h-5 flex-shrink-0 capitalize",
-                                  getStatusColor(execution.status)
+                                  getStatusColor(execution.status),
                                 )}
                               >
                                 {execution.status}
@@ -705,11 +805,14 @@ export function AutomationsDetailView() {
                               <div className="flex-1 min-w-0">
                                 {execution.external_url ? (
                                   <button
+                                    type="button"
                                     onClick={() => {
+                                      const url = execution.external_url
+                                      if (!url) return
                                       if (window.desktopApi?.openExternal) {
-                                        window.desktopApi.openExternal(execution.external_url)
+                                        window.desktopApi.openExternal(url)
                                       } else {
-                                        window.open(execution.external_url, "_blank")
+                                        window.open(url, "_blank")
                                       }
                                     }}
                                     className="text-sm text-foreground hover:underline truncate inline-flex items-center gap-1 text-left"
@@ -742,7 +845,10 @@ export function AutomationsDetailView() {
                       {hasMoreExecutions && (
                         <div className="border-t border-border px-3 py-2">
                           <button
-                            onClick={() => setPastRunsOffset((prev) => prev === 0 ? 10 : prev + 20)}
+                            type="button"
+                            onClick={() =>
+                              setPastRunsOffset((prev) => (prev === 0 ? 10 : prev + 20))
+                            }
                             disabled={isFetchingMoreExecutions}
                             className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center py-1"
                           >

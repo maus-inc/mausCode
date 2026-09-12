@@ -8,10 +8,10 @@
 import { trpcClient } from "../../../lib/trpc"
 import {
   createMentionProvider,
+  MENTION_PREFIXES,
   type MentionItem,
   type MentionSearchContext,
   type MentionSearchResult,
-  MENTION_PREFIXES,
   sortByRelevance,
 } from "../types"
 
@@ -21,7 +21,7 @@ import {
 export interface SkillData {
   name: string
   description: string
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
   path: string
 }
 

@@ -1,16 +1,21 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { useAtomValue } from "jotai"
+import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
 import { Button } from "../../../components/ui/button"
-import { IconDoubleChevronRight, IconSpinner, PlanIcon, MarkdownIcon, CodeIcon } from "../../../components/ui/icons"
+import {
+  CodeIcon,
+  IconDoubleChevronRight,
+  IconSpinner,
+  MarkdownIcon,
+  PlanIcon,
+} from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
-import { ChatMarkdownRenderer } from "../../../components/chat-markdown-renderer"
-import { cn } from "../../../lib/utils"
 import { trpc } from "../../../lib/trpc"
-import { CopyButton } from "./message-action-buttons"
+import { cn } from "../../../lib/utils"
 import type { AgentMode } from "../atoms"
+import { CopyButton } from "./message-action-buttons"
 
 interface AgentPlanSidebarProps {
   chatId: string
@@ -24,7 +29,6 @@ interface AgentPlanSidebarProps {
 }
 
 export function AgentPlanSidebar({
-  chatId,
   planPath,
   onClose,
   onBuildPlan,
@@ -40,10 +44,12 @@ export function AgentPlanSidebar({
   }, [])
 
   // Fetch plan file content using tRPC
-  const { data: planContent, isLoading, error, refetch } = trpc.files.readFile.useQuery(
-    { filePath: planPath! },
-    { enabled: !!planPath }
-  )
+  const {
+    data: planContent,
+    isLoading,
+    error,
+    refetch,
+  } = trpc.files.readFile.useQuery({ filePath: planPath ?? "" }, { enabled: !!planPath })
 
   // Refetch when trigger changes
   useEffect(() => {
@@ -148,6 +154,7 @@ export function AgentPlanSidebar({
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
             <div className="text-muted-foreground mb-4">
               <svg
+                aria-hidden="true"
                 xmlns="http://www.w3.org/2000/svg"
                 width="48"
                 height="48"
@@ -164,9 +171,7 @@ export function AgentPlanSidebar({
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
-            <p className="text-sm text-muted-foreground mb-2">
-              Failed to load plan
-            </p>
+            <p className="text-sm text-muted-foreground mb-2">Failed to load plan</p>
             <p className="text-xs text-muted-foreground/70 max-w-[300px]">
               {error.message || "The plan file could not be read"}
             </p>
@@ -176,23 +181,15 @@ export function AgentPlanSidebar({
             <div className="text-muted-foreground mb-4">
               <PlanIcon className="h-12 w-12 opacity-50" />
             </div>
-            <p className="text-sm text-muted-foreground mb-2">
-              No plan selected
-            </p>
+            <p className="text-sm text-muted-foreground mb-2">No plan selected</p>
             <p className="text-xs text-muted-foreground/70 max-w-[250px]">
               Click "View plan" on a plan file to preview it here
             </p>
           </div>
         ) : (
-          <div
-            className="px-4 py-3 allow-text-selection"
-            data-plan-path={planPath}
-          >
+          <div className="px-4 py-3 allow-text-selection" data-plan-path={planPath}>
             {viewMode === "rendered" ? (
-              <ChatMarkdownRenderer
-                content={planContent || ""}
-                size="sm"
-              />
+              <ChatMarkdownRenderer content={planContent || ""} size="sm" />
             ) : (
               <pre className="text-sm font-mono whitespace-pre-wrap text-foreground/80 leading-relaxed">
                 {planContent || ""}

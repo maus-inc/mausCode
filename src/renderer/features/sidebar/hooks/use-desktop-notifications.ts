@@ -1,15 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useCallback } from "react"
 import { useAtom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
+import { useCallback, useEffect, useRef } from "react"
 import { isDesktopApp } from "../../../lib/utils/platform"
 
 // Track pending notifications count for badge
-const pendingNotificationsAtom = atomWithStorage<number>(
-  "desktop-pending-notifications",
-  0,
-)
+const pendingNotificationsAtom = atomWithStorage<number>("desktop-pending-notifications", 0)
 
 // Track window focus state
 let isWindowFocused = true

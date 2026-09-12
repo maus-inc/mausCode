@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is this?
 
-**21st Agents** - A local-first Electron desktop app for AI-powered code assistance. Users create chat sessions linked to local project folders, interact with Claude in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.).
+**mausCode** - A local-first agent workspace by maus-inc. Users create chat sessions linked to local project folders, run coding agents (Claude Code, Codex) in isolated git worktrees in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.). Product/UI foundation inherited from the archived 1Code project (Apache-2.0) - see `UPSTREAM.md`.
 
 ## Commands
 
@@ -159,17 +159,16 @@ When testing auth flows or behavior for new users, you need to simulate a fresh 
 
 ```bash
 # 1. Clear all app data (auth, database, settings)
-rm -rf ~/Library/Application\ Support/Agents\ Dev/
+rm -rf ~/Library/Application\ Support/mausCode\ Dev/
 
 # 2. Reset macOS protocol handler registration (if testing deep links)
 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -kill -r -domain local -domain system -domain user
 
 # 3. Clear app preferences
-defaults delete dev.21st.agents.dev  # Dev mode
-defaults delete dev.21st.agents      # Production
+defaults delete dev.mausinc.mauscode.dev  # Dev mode
+defaults delete dev.mausinc.mauscode      # Production
 
 # 4. Run in dev mode with clean state
-cd apps/desktop
 bun run dev
 ```
 
@@ -178,16 +177,20 @@ bun run dev
 - **Folder dialog not appearing**: Window focus timing issues on first launch. Fixed by ensuring window focus before showing `dialog.showOpenDialog()`.
 
 **Dev vs Production App:**
-- Dev mode uses `twentyfirst-agents-dev://` protocol
-- Dev mode uses separate userData path (`~/Library/Application Support/Agents Dev/`)
+- Dev mode uses `mauscode-dev://` protocol
+- Dev mode uses separate userData path (`~/Library/Application Support/mausCode Dev/`)
 - This prevents conflicts between dev and production installs
 
 ## Releasing a New Version
 
 ### Prerequisites for Notarization
 
-- Keychain profile: `21st-notarize`
-- Create with: `xcrun notarytool store-credentials "21st-notarize" --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID`
+mausCode must re-provision its own Apple signing/notarization credentials (the inherited
+`21st-notarize` keychain profile belongs to the upstream project and is not available to maus-inc).
+
+- Create a maus-inc keychain profile, e.g. `mauscode-notarize`:
+  `xcrun notarytool store-credentials "mauscode-notarize" --apple-id MAUS_APPLE_ID --team-id MAUS_TEAM_ID`
+- Update `electron-builder.yml` / CI to use the new identity
 
 ### Release Commands
 
@@ -210,7 +213,7 @@ npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 
 ### After Release Script Completes
 
-1. Wait for notarization (2-5 min): `xcrun notarytool history --keychain-profile "21st-notarize"`
+1. Wait for notarization (2-5 min): `xcrun notarytool history --keychain-profile "mauscode-notarize"`
 2. Staple DMGs: `cd release && xcrun stapler staple *.dmg`
 3. Re-upload stapled DMGs to R2 and GitHub (see RELEASE.md for commands)
 4. Update changelog: `gh release edit v0.0.X --notes "..."`
@@ -223,14 +226,24 @@ npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
 |------|---------|
 | `latest-mac.yml` | Manifest for arm64 auto-updates |
 | `latest-mac-x64.yml` | Manifest for Intel auto-updates |
-| `1Code-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
-| `1Code-{version}-mac.zip` | Auto-update payload (Intel) |
-| `1Code-{version}-arm64.dmg` | Manual download (arm64) |
-| `1Code-{version}.dmg` | Manual download (Intel) |
+mausCode release artifacts use the `mausCode` product name (e.g. `mausCode-{version}-arm64-mac.zip`).
+Upload targets are mausCode's own release CDN, configured via `MAIN_VITE_UPDATE_FEED_URL` —
+the inherited `cdn.21st.dev` channel is gone and must never be re-added.
+
+| File | Purpose |
+|------|---------|
+| `latest-mac.yml` | Manifest for arm64 auto-updates |
+| `latest-mac-x64.yml` | Manifest for Intel auto-updates |
+| `mausCode-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
+| `mausCode-{version}-mac.zip` | Auto-update payload (Intel) |
+| `mausCode-{version}-arm64.dmg` | Manual download (arm64) |
+| `mausCode-{version}.dmg` | Manual download (Intel) |
 
 ### Auto-Update Flow
 
-1. App checks `https://cdn.21st.dev/releases/desktop/latest-mac.yml` on startup and when window regains focus (with 1 min cooldown)
+Auto-update is disabled until `MAIN_VITE_UPDATE_FEED_URL` is configured at build time. Once configured:
+
+1. App checks `{feed-url}/latest-mac.yml` on startup and when window regains focus (with 1 min cooldown)
 2. If version in manifest > current version, shows "Update Available" banner
 3. User clicks Download → downloads ZIP in background
 4. User clicks "Restart Now" → installs update and restarts

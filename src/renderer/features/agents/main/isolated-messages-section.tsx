@@ -1,8 +1,13 @@
 "use client"
 
-import { memo } from "react"
 import { useAtomValue } from "jotai"
-import { userMessageIdsPerChatAtom } from "../stores/message-store"
+import { memo } from "react"
+import {
+  type ImagePartLike,
+  type Message,
+  userMessageIdsPerChatAtom,
+} from "../stores/message-store"
+import type { ToolDisplayPart } from "../ui/agent-tool-registry"
 import { IsolatedMessageGroup } from "./isolated-message-group"
 
 // ============================================================================
@@ -26,28 +31,31 @@ interface IsolatedMessagesSectionProps {
   stickyTopClass: string
   sandboxSetupError?: string
   onRetrySetup?: () => void
-  onRollback?: (msg: any) => void
+  onRollback?: (msg: Message | null) => void
   onFork?: (messageId: string) => void
   // Components passed from parent - must be stable references
   UserBubbleComponent: React.ComponentType<{
     messageId: string
     textContent: string
-    imageParts: any[]
+    imageParts: ImagePartLike[]
     skipTextMentionBlocks?: boolean
   }>
   ToolCallComponent: React.ComponentType<{
-    icon: any
+    icon: React.ComponentType<{ className?: string }>
     title: string
     isPending: boolean
     isError: boolean
   }>
   MessageGroupWrapper: React.ComponentType<{ children: React.ReactNode; isLastGroup?: boolean }>
-  toolRegistry: Record<string, { icon: any; title: (args: any) => string }>
+  toolRegistry: Record<
+    string,
+    { icon: React.ComponentType<{ className?: string }>; title: (part: ToolDisplayPart) => string }
+  >
 }
 
 function areSectionPropsEqual(
   prev: IsolatedMessagesSectionProps,
-  next: IsolatedMessagesSectionProps
+  next: IsolatedMessagesSectionProps,
 ): boolean {
   return (
     prev.subChatId === next.subChatId &&

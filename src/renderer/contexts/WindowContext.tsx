@@ -7,11 +7,7 @@ export function WindowProvider({ children }: { children: React.ReactNode }) {
     return getWindowId()
   }, [])
 
-  return (
-    <WindowContext.Provider value={windowId}>
-      {children}
-    </WindowContext.Provider>
-  )
+  return <WindowContext.Provider value={windowId}>{children}</WindowContext.Provider>
 }
 
 export function useWindowId(): string {
@@ -60,7 +56,6 @@ export function getWindowId(): string {
   }
 
   globalWindowId = id
-  console.log("[WindowContext] Window ID:", id)
   return id
 }
 

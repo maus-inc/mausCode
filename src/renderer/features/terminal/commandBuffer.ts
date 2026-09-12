@@ -22,7 +22,7 @@ export function sanitizeForTitle(command: string): string {
   cleaned = cleaned.trim()
 
   if (cleaned.length > 50) {
-    cleaned = cleaned.slice(0, 47) + "..."
+    cleaned = `${cleaned.slice(0, 47)}...`
   }
 
   return cleaned

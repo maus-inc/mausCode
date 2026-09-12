@@ -1,14 +1,16 @@
 /// <reference types="@welldone-software/why-did-you-render" />
-import React from "react"
+
 import whyDidYouRender from "@welldone-software/why-did-you-render"
+import React from "react"
 
 // ============================================================================
 // WDYR (Why Did You Render) - React Re-render Debugging
 // ============================================================================
-// Set to true to enable re-render tracking and infinite loop detection.
+// Enabled via VITE_WDYR=1 (matches the jsxImportSource toggle in
+// electron.vite.config.ts). The hardcoded flag is kept as a safety override.
 // See DEBUG-WDYR.md for usage instructions.
 // ============================================================================
-const WDYR_ENABLED = false
+const WDYR_ENABLED = import.meta.env.VITE_WDYR === "1"
 
 if (import.meta.env.DEV && WDYR_ENABLED) {
   // Track render counts per component to detect infinite loops
@@ -24,7 +26,7 @@ if (import.meta.env.DEV && WDYR_ENABLED) {
     collapseGroups: true,
 
     notifier: (info) => {
-      const name = info.displayName || (info.Component as any)?.name || "Unknown"
+      const name = info.displayName || (info.Component as { name?: string })?.name || "Unknown"
       const now = Date.now()
 
       // Reset count if outside time window
@@ -36,10 +38,14 @@ if (import.meta.env.DEV && WDYR_ENABLED) {
       renderCounts[name].lastTime = now
 
       // Log every render with prop names (safely handle different data types)
-      const getDiffNames = (diff: any) => {
+      const getDiffNames = (diff: unknown): string[] => {
         if (!diff) return []
-        if (Array.isArray(diff)) return diff.map((d: any) => d?.pathString || d?.name || 'unknown')
-        if (typeof diff === 'object') return Object.keys(diff)
+        if (Array.isArray(diff))
+          return diff.map((d: unknown) => {
+            const view = d as { pathString?: unknown; name?: unknown } | null | undefined
+            return String(view?.pathString || view?.name || "unknown")
+          })
+        if (typeof diff === "object") return Object.keys(diff)
         return []
       }
       const propNames = getDiffNames(info.reason?.propsDifferences)
@@ -54,12 +60,13 @@ if (import.meta.env.DEV && WDYR_ENABLED) {
       // Trigger debugger before crash if threshold exceeded
       if (renderCounts[name].count >= THRESHOLD) {
         console.error(
-          `🔴 INFINITE LOOP DETECTED: ${name} rendered ${THRESHOLD}+ times in ${TIME_WINDOW}ms`
+          `🔴 INFINITE LOOP DETECTED: ${name} rendered ${THRESHOLD}+ times in ${TIME_WINDOW}ms`,
         )
         console.error("Full info:", info)
         console.error("Props diff:", info.reason?.propsDifferences)
         console.error("State diff:", info.reason?.stateDifferences)
         console.error("Hook diff:", info.reason?.hookDifferences)
+        // biome-ignore lint/suspicious/noDebugger: deliberate dev-only breakpoint (DEV + VITE_WDYR=1) for infinite-render-loop diagnosis
         debugger // Pause here - inspect call stack!
       }
     },
@@ -67,5 +74,3 @@ if (import.meta.env.DEV && WDYR_ENABLED) {
 
   console.log("[WDYR] Why Did You Render initialized with loop detection")
 }
-
-export {}

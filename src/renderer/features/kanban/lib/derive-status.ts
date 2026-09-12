@@ -8,7 +8,7 @@ interface WorkspaceStatusDependencies {
 
 export function deriveWorkspaceStatus(
   chatId: string,
-  deps: WorkspaceStatusDependencies
+  deps: WorkspaceStatusDependencies,
 ): SubChatStatus {
   const { workspacesLoading, workspacesWithPendingQuestions, workspacesWithPendingApprovals } = deps
 

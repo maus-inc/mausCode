@@ -19,18 +19,18 @@
  *   const winProvider = getPlatformProvider('win32')
  */
 
-import type { PlatformProvider } from "./types"
-import { WindowsPlatformProvider } from "./windows"
 import { DarwinPlatformProvider } from "./darwin"
 import { LinuxPlatformProvider } from "./linux"
+import type { PlatformProvider } from "./types"
+import { WindowsPlatformProvider } from "./windows"
 
 // Export types
 export type {
-  PlatformProvider,
-  ShellConfig,
-  PathConfig,
   CliConfig,
   EnvironmentConfig,
+  PathConfig,
+  PlatformProvider,
+  ShellConfig,
 } from "./types"
 
 // Provider instances (lazy initialized)
@@ -41,9 +41,7 @@ let linuxProvider: LinuxPlatformProvider | null = null
 /**
  * Get platform provider for a specific platform
  */
-export function getPlatformProvider(
-  platformId: "win32" | "darwin" | "linux"
-): PlatformProvider {
+export function getPlatformProvider(platformId: "win32" | "darwin" | "linux"): PlatformProvider {
   switch (platformId) {
     case "win32":
       if (!windowsProvider) {
@@ -115,9 +113,7 @@ export function buildExtendedPath(currentPath?: string): string {
 /**
  * Build environment for shell/process execution
  */
-export function buildEnvironment(
-  baseEnv?: Record<string, string>
-): Record<string, string> {
+export function buildEnvironment(baseEnv?: Record<string, string>): Record<string, string> {
   return platform.buildEnvironment(baseEnv)
 }
 

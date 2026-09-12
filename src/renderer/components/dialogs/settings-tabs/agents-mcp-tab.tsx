@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtomValue } from "jotai"
-import { Loader2, Plus, RefreshCw, Trash2 } from "lucide-react"
+import { Plus, RefreshCw, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -11,6 +11,7 @@ import {
 } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import { AppLoader } from "../../ui/app-loader"
 import { Button } from "../../ui/button"
 import { LoadingDot, OriginalMCPIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
@@ -18,18 +19,21 @@ import { Label } from "../../ui/label"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import { Switch } from "../../ui/switch"
-import {
-  DeleteServerConfirm,
-  getStatusText,
-  type McpServer,
-  type ScopeType,
-} from "./mcp"
+import { DeleteServerConfirm, getStatusText, type McpServer, type ScopeType } from "./mcp"
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
 
-type McpProvider = "claude-code" | "codex"
+type McpProvider =
+  | "claude-code"
+  | "codex"
+  | "cursor"
+  | "grok"
+  | "qwen"
+  | "cline"
+  | "openclaw"
+  | "roo"
 type ProviderSection = {
   provider: McpProvider
-  title: "CODEX" | "CLAUDE CODE"
+  title: "CODEX" | "CLAUDE CODE" | "CURSOR" | "GROK" | "QWEN" | "CLINE" | "OPENCLAW" | "ROO CODE"
 }
 
 type ListedServer = {
@@ -41,13 +45,7 @@ type ListedServer = {
 }
 
 // Status indicator dot - exported for reuse in other components
-export function McpStatusDot({
-  status,
-  disabled,
-}: {
-  status: string
-  disabled?: boolean
-}) {
+export function McpStatusDot({ status, disabled }: { status: string; disabled?: boolean }) {
   if (disabled) {
     return <span className="w-2 h-2 rounded-full bg-muted-foreground/30 shrink-0" />
   }
@@ -66,7 +64,6 @@ export function McpStatusDot({
   }
 }
 
-
 // Extract connection info from server config
 function getConnectionInfo(config: Record<string, unknown>) {
   const url = config.url as string | undefined
@@ -80,12 +77,20 @@ function getConnectionInfo(config: Record<string, unknown>) {
   if (command) {
     return { type: "stdio" as const, url: undefined, command, args, env }
   }
-  return { type: "unknown" as const, url: undefined, command: undefined, args: undefined, env: undefined }
+  return {
+    type: "unknown" as const,
+    url: undefined,
+    command: undefined,
+    args: undefined,
+    env: undefined,
+  }
 }
 
 function isCodexHttpServer(provider: McpProvider, server: McpServer): boolean {
   if (provider !== "codex") return false
-  const transportType = String((server.config as Record<string, unknown>).transportType || "").toLowerCase()
+  const transportType = String(
+    (server.config as Record<string, unknown>).transportType || "",
+  ).toLowerCase()
   if (transportType === "http" || transportType === "sse" || transportType === "streamable_http") {
     return true
   }
@@ -137,7 +142,11 @@ function McpServerDetail({
               {isDisabled
                 ? "Disabled"
                 : isConnected
-                  ? (hideToolsCount ? "Connected" : (hasTools ? `${tools.length} tool${tools.length !== 1 ? "s" : ""}` : "No tools"))
+                  ? hideToolsCount
+                    ? "Connected"
+                    : hasTools
+                      ? `${tools.length} tool${tools.length !== 1 ? "s" : ""}`
+                      : "No tools"
                   : getStatusText(server.status)}
               {server.serverInfo?.version && ` \u00B7 v${server.serverInfo.version}`}
             </p>
@@ -166,6 +175,60 @@ function McpServerDetail({
           )}
         </div>
 
+        {provider === "cursor" && (
+          <p className="text-xs text-muted-foreground">
+            Managed in <code className="bg-muted px-1 py-0.5 rounded">.cursor/mcp.json</code>{" "}
+            (project) or <code className="bg-muted px-1 py-0.5 rounded">~/.cursor/mcp.json</code>{" "}
+            (global)
+          </p>
+        )}
+
+        {provider === "grok" && (
+          <p className="text-xs text-muted-foreground">
+            Managed in <code className="bg-muted px-1 py-0.5 rounded">.grok/config.toml</code>{" "}
+            (project) or <code className="bg-muted px-1 py-0.5 rounded">~/.grok/config.toml</code>{" "}
+            (global)
+          </p>
+        )}
+
+        {provider === "qwen" && (
+          <p className="text-xs text-muted-foreground">
+            Managed in <code className="bg-muted px-1 py-0.5 rounded">.qwen/settings.json</code>{" "}
+            (project) or <code className="bg-muted px-1 py-0.5 rounded">~/.qwen/settings.json</code>{" "}
+            (global)
+          </p>
+        )}
+
+        {provider === "cline" && (
+          <p className="text-xs text-muted-foreground">
+            Managed in <code className="bg-muted px-1 py-0.5 rounded">.cline/mcp.json</code>{" "}
+            (project) or{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">
+              ~/.cline/data/settings/cline_mcp_settings.json
+            </code>{" "}
+            (global)
+          </p>
+        )}
+
+        {provider === "openclaw" && (
+          <p className="text-xs text-muted-foreground">
+            Managed in{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">~/.openclaw/openclaw.json</code> (global
+            only — use <code className="bg-muted px-1 py-0.5 rounded">openclaw mcp set</code>)
+          </p>
+        )}
+
+        {provider === "roo" && (
+          <p className="text-xs text-muted-foreground">
+            Managed in <code className="bg-muted px-1 py-0.5 rounded">.roo/mcp.json</code> (project)
+            or{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">
+              ~/.vscode-mock/global-storage/settings/mcp_settings.json
+            </code>{" "}
+            (global)
+          </p>
+        )}
+
         {/* Enable/Disable Toggle */}
         {isToggleable && onToggleEnabled && (
           <div className="flex items-center justify-between">
@@ -175,11 +238,7 @@ function McpServerDetail({
                 Disable to prevent this server from connecting
               </p>
             </div>
-            <Switch
-              checked={!isDisabled}
-              onCheckedChange={onToggleEnabled}
-              disabled={isToggling}
-            />
+            <Switch checked={!isDisabled} onCheckedChange={onToggleEnabled} disabled={isToggling} />
           </div>
         )}
 
@@ -190,24 +249,32 @@ function McpServerDetail({
             <div className="divide-y divide-border">
               <div className="flex gap-3 px-3 py-2">
                 <span className="text-xs text-muted-foreground w-16 shrink-0">Type</span>
-                <span className="text-xs text-foreground font-mono select-text">{connection.type}</span>
+                <span className="text-xs text-foreground font-mono select-text">
+                  {connection.type}
+                </span>
               </div>
               {connection.url && (
                 <div className="flex gap-3 px-3 py-2">
                   <span className="text-xs text-muted-foreground w-16 shrink-0">URL</span>
-                  <span className="text-xs text-foreground font-mono break-all select-text">{connection.url}</span>
+                  <span className="text-xs text-foreground font-mono break-all select-text">
+                    {connection.url}
+                  </span>
                 </div>
               )}
               {connection.command && (
                 <div className="flex gap-3 px-3 py-2">
                   <span className="text-xs text-muted-foreground w-16 shrink-0">Command</span>
-                  <span className="text-xs text-foreground font-mono break-all select-text">{connection.command}</span>
+                  <span className="text-xs text-foreground font-mono break-all select-text">
+                    {connection.command}
+                  </span>
                 </div>
               )}
               {connection.args && connection.args.length > 0 && (
                 <div className="flex gap-3 px-3 py-2">
                   <span className="text-xs text-muted-foreground w-16 shrink-0">Args</span>
-                  <span className="text-xs text-foreground font-mono break-all select-text">{connection.args.join(" ")}</span>
+                  <span className="text-xs text-foreground font-mono break-all select-text">
+                    {connection.args.join(" ")}
+                  </span>
                 </div>
               )}
               {connection.env && Object.keys(connection.env).length > 0 && (
@@ -215,7 +282,10 @@ function McpServerDetail({
                   <span className="text-xs text-muted-foreground w-16 shrink-0">Env</span>
                   <div className="flex flex-wrap gap-1">
                     {Object.keys(connection.env).map((key) => (
-                      <span key={key} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text">
+                      <span
+                        key={key}
+                        className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text"
+                      >
                         {key}
                       </span>
                     ))}
@@ -247,10 +317,15 @@ function McpServerDetail({
                 const toolName = typeof tool === "string" ? tool : tool.name
                 const toolDesc = typeof tool === "string" ? undefined : tool.description
                 return (
-                  <div key={toolName || i} className="rounded-lg border border-border bg-background px-3.5 py-2.5">
+                  <div
+                    key={toolName || i}
+                    className="rounded-lg border border-border bg-background px-3.5 py-2.5"
+                  >
                     <p className="text-[13px] font-medium text-foreground font-mono">{toolName}</p>
                     {toolDesc && (
-                      <p className="text-xs text-muted-foreground leading-relaxed mt-1">{toolDesc}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                        {toolDesc}
+                      </p>
                     )}
                   </div>
                 )
@@ -258,7 +333,6 @@ function McpServerDetail({
             </div>
           </div>
         )}
-
       </div>
     </div>
   )
@@ -284,9 +358,7 @@ function CreateMcpServerForm({
   const addCodexServerMutation = trpc.codex.addMcpServer.useMutation()
   const [provider, setProvider] = useState<McpProvider>(defaultProvider)
   const isSaving =
-    provider === "codex"
-      ? addCodexServerMutation.isPending
-      : addClaudeServerMutation.isPending
+    provider === "codex" ? addCodexServerMutation.isPending : addClaudeServerMutation.isPending
   const [name, setName] = useState("")
   const [type, setType] = useState<"stdio" | "http">("stdio")
   const [command, setCommand] = useState("")
@@ -295,10 +367,10 @@ function CreateMcpServerForm({
   const [scope, setScope] = useState<"global" | "project">("global")
   const effectiveScope = provider === "codex" ? "global" : scope
 
-  const canSave = name.trim().length > 0 && (effectiveScope !== "project" || !!projectPath) && (
-    (type === "stdio" && command.trim().length > 0) ||
-    (type === "http" && url.trim().length > 0)
-  )
+  const canSave =
+    name.trim().length > 0 &&
+    (effectiveScope !== "project" || !!projectPath) &&
+    ((type === "stdio" && command.trim().length > 0) || (type === "http" && url.trim().length > 0))
 
   const handleSubmit = async () => {
     const parsedArgs = args.trim() ? args.split(/\s+/) : undefined
@@ -337,7 +409,9 @@ function CreateMcpServerForm({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">New MCP Server</h3>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              Cancel
+            </Button>
             <Button size="sm" onClick={handleSubmit} disabled={!canSave || isSaving}>
               {isSaving ? "Adding..." : "Add"}
             </Button>
@@ -435,19 +509,23 @@ function CreateMcpServerForm({
               </SelectContent>
             </Select>
           </div>
-        ) : hasProject && (
-          <div className="space-y-1.5">
-            <Label>Scope</Label>
-            <Select value={scope} onValueChange={(v) => setScope(v as "global" | "project")}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="global">Global (~/.claude.json)</SelectItem>
-                <SelectItem value="project">{projectName ? `Project: ${projectName}` : "Project"}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        ) : (
+          hasProject && (
+            <div className="space-y-1.5">
+              <Label>Scope</Label>
+              <Select value={scope} onValueChange={(v) => setScope(v as "global" | "project")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">Global (~/.claude.json)</SelectItem>
+                  <SelectItem value="project">
+                    {projectName ? `Project: ${projectName}` : "Project"}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )
         )}
       </div>
     </div>
@@ -458,7 +536,11 @@ function CreateMcpServerForm({
 export function AgentsMcpTab() {
   const lastSelectedAgentId = useAtomValue(lastSelectedAgentIdAtom)
   const defaultAddProvider: McpProvider =
-    lastSelectedAgentId === "codex" ? "codex" : "claude-code"
+    lastSelectedAgentId === "codex"
+      ? "codex"
+      : lastSelectedAgentId === "cursor"
+        ? "claude-code"
+        : "claude-code"
   const [selectedServerKey, setSelectedServerKey] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
@@ -470,13 +552,69 @@ export function AgentsMcpTab() {
   } | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const providerSections = useMemo<ProviderSection[]>(
-    () => [
+  const providerSections = useMemo<ProviderSection[]>(() => {
+    const sections: ProviderSection[] = [
       { provider: "claude-code", title: "CLAUDE CODE" },
       { provider: "codex", title: "CODEX" },
-    ],
-    [],
-  )
+      { provider: "cursor", title: "CURSOR" },
+      { provider: "grok", title: "GROK" },
+      { provider: "qwen", title: "QWEN" },
+      { provider: "cline", title: "CLINE" },
+      { provider: "openclaw", title: "OPENCLAW" },
+      { provider: "roo", title: "ROO CODE" },
+    ]
+
+    if (lastSelectedAgentId === "cursor") {
+      return [
+        { provider: "cursor", title: "CURSOR" },
+        ...sections.filter((section) => section.provider !== "cursor"),
+      ]
+    }
+
+    if (lastSelectedAgentId === "grok") {
+      return [
+        { provider: "grok", title: "GROK" },
+        ...sections.filter((section) => section.provider !== "grok"),
+      ]
+    }
+
+    if (lastSelectedAgentId === "qwen") {
+      return [
+        { provider: "qwen", title: "QWEN" },
+        ...sections.filter((section) => section.provider !== "qwen"),
+      ]
+    }
+
+    if (lastSelectedAgentId === "cline") {
+      return [
+        { provider: "cline", title: "CLINE" },
+        ...sections.filter((section) => section.provider !== "cline"),
+      ]
+    }
+
+    if (lastSelectedAgentId === "openclaw") {
+      return [
+        { provider: "openclaw", title: "OPENCLAW" },
+        ...sections.filter((section) => section.provider !== "openclaw"),
+      ]
+    }
+
+    if (lastSelectedAgentId === "roo") {
+      return [
+        { provider: "roo", title: "ROO CODE" },
+        ...sections.filter((section) => section.provider !== "roo"),
+      ]
+    }
+
+    if (lastSelectedAgentId === "codex") {
+      return [
+        { provider: "codex", title: "CODEX" },
+        ...sections.filter((section) => section.provider !== "codex"),
+      ]
+    }
+
+    return sections
+  }, [lastSelectedAgentId])
 
   // Focus search on "/" hotkey
   useEffect(() => {
@@ -498,16 +636,69 @@ export function AgentsMcpTab() {
   const codexMcpQuery = trpc.codex.getAllMcpConfig.useQuery(undefined, {
     staleTime: 10 * 60 * 1000,
   })
-  const hasAnyData = Boolean(claudeMcpQuery.data || codexMcpQuery.data)
+  const cursorMcpQuery = trpc.cursor.getAllMcpConfig.useQuery(undefined, {
+    staleTime: 10 * 60 * 1000,
+  })
+  const grokMcpQuery = trpc.grok.getAllMcpConfig.useQuery(undefined, {
+    staleTime: 10 * 60 * 1000,
+  })
+  const qwenMcpQuery = trpc.qwen.getAllMcpConfig.useQuery(undefined, {
+    staleTime: 10 * 60 * 1000,
+  })
+  const clineMcpQuery = trpc.cline.getAllMcpConfig.useQuery(undefined, {
+    staleTime: 10 * 60 * 1000,
+  })
+  const openclawMcpQuery = trpc.openclaw.getAllMcpConfig.useQuery(undefined, {
+    staleTime: 10 * 60 * 1000,
+  })
+  const rooMcpQuery = trpc.roo.getAllMcpConfig.useQuery(undefined, {
+    staleTime: 10 * 60 * 1000,
+  })
+  const hasAnyData = Boolean(
+    claudeMcpQuery.data ||
+      codexMcpQuery.data ||
+      cursorMcpQuery.data ||
+      grokMcpQuery.data ||
+      qwenMcpQuery.data ||
+      clineMcpQuery.data ||
+      openclawMcpQuery.data ||
+      rooMcpQuery.data,
+  )
   const isLoadingConfig =
-    !hasAnyData && (claudeMcpQuery.isLoading || codexMcpQuery.isLoading)
+    !hasAnyData &&
+    (claudeMcpQuery.isLoading ||
+      codexMcpQuery.isLoading ||
+      cursorMcpQuery.isLoading ||
+      grokMcpQuery.isLoading ||
+      qwenMcpQuery.isLoading ||
+      clineMcpQuery.isLoading ||
+      openclawMcpQuery.isLoading ||
+      rooMcpQuery.isLoading)
   const refreshClaudeMcpMutation = trpc.claude.refreshMcpConfig.useMutation()
   const refreshCodexMcpMutation = trpc.codex.refreshMcpConfig.useMutation()
+  const refreshCursorMcpMutation = trpc.cursor.refreshMcpConfig.useMutation()
+  const refreshGrokMcpMutation = trpc.grok.refreshMcpConfig.useMutation()
+  const refreshQwenMcpMutation = trpc.qwen.refreshMcpConfig.useMutation()
+  const refreshClineMcpMutation = trpc.cline.refreshMcpConfig.useMutation()
+  const refreshOpenclawMcpMutation = trpc.openclaw.refreshMcpConfig.useMutation()
+  const refreshRooMcpMutation = trpc.roo.refreshMcpConfig.useMutation()
   const isRefreshingConfig =
     claudeMcpQuery.isFetching ||
     codexMcpQuery.isFetching ||
+    cursorMcpQuery.isFetching ||
+    grokMcpQuery.isFetching ||
+    qwenMcpQuery.isFetching ||
+    clineMcpQuery.isFetching ||
+    openclawMcpQuery.isFetching ||
+    rooMcpQuery.isFetching ||
     refreshClaudeMcpMutation.isPending ||
-    refreshCodexMcpMutation.isPending
+    refreshCodexMcpMutation.isPending ||
+    refreshCursorMcpMutation.isPending ||
+    refreshGrokMcpMutation.isPending ||
+    refreshQwenMcpMutation.isPending ||
+    refreshClineMcpMutation.isPending ||
+    refreshOpenclawMcpMutation.isPending ||
+    refreshRooMcpMutation.isPending
 
   const startClaudeOAuthMutation = trpc.claude.startMcpOAuth.useMutation()
   const startCodexOAuthMutation = trpc.codex.startMcpOAuth.useMutation()
@@ -537,15 +728,42 @@ export function AgentsMcpTab() {
     return {
       codex: sortGroups(codexMcpQuery.data?.groups || []),
       claudeCode: sortGroups(claudeMcpQuery.data?.groups || []),
+      cursor: sortGroups(cursorMcpQuery.data?.groups || []),
+      grok: sortGroups(grokMcpQuery.data?.groups || []),
+      qwen: sortGroups(qwenMcpQuery.data?.groups || []),
+      cline: sortGroups(clineMcpQuery.data?.groups || []),
+      openclaw: sortGroups(openclawMcpQuery.data?.groups || []),
+      roo: sortGroups(rooMcpQuery.data?.groups || []),
     }
-  }, [codexMcpQuery.data?.groups, claudeMcpQuery.data?.groups])
+  }, [
+    codexMcpQuery.data?.groups,
+    claudeMcpQuery.data?.groups,
+    cursorMcpQuery.data?.groups,
+    grokMcpQuery.data?.groups,
+    qwenMcpQuery.data?.groups,
+    clineMcpQuery.data?.groups,
+    openclawMcpQuery.data?.groups,
+    rooMcpQuery.data?.groups,
+  ])
 
   const allListedServers = useMemo<ListedServer[]>(() => {
     return providerSections.flatMap((section) => {
       const groups =
         section.provider === "codex"
           ? sortedGroupsByProvider.codex
-          : sortedGroupsByProvider.claudeCode
+          : section.provider === "cursor"
+            ? sortedGroupsByProvider.cursor
+            : section.provider === "grok"
+              ? sortedGroupsByProvider.grok
+              : section.provider === "qwen"
+                ? sortedGroupsByProvider.qwen
+                : section.provider === "cline"
+                  ? sortedGroupsByProvider.cline
+                  : section.provider === "openclaw"
+                    ? sortedGroupsByProvider.openclaw
+                    : section.provider === "roo"
+                      ? sortedGroupsByProvider.roo
+                      : sortedGroupsByProvider.claudeCode
 
       return groups.flatMap((group) =>
         group.mcpServers.map((server) => ({
@@ -562,9 +780,7 @@ export function AgentsMcpTab() {
   const filteredListedServers = useMemo(() => {
     if (!searchQuery.trim()) return allListedServers
     const q = searchQuery.toLowerCase()
-    return allListedServers.filter((item) =>
-      item.server.name.toLowerCase().includes(q),
-    )
+    return allListedServers.filter((item) => item.server.name.toLowerCase().includes(q))
   }, [allListedServers, searchQuery])
 
   const filteredSections = useMemo(
@@ -572,9 +788,7 @@ export function AgentsMcpTab() {
       providerSections
         .map((section) => ({
           ...section,
-          servers: filteredListedServers.filter(
-            (server) => server.provider === section.provider,
-          ),
+          servers: filteredListedServers.filter((server) => server.provider === section.provider),
         }))
         .filter((section) => section.servers.length > 0),
     [providerSections, filteredListedServers],
@@ -606,9 +820,7 @@ export function AgentsMcpTab() {
   // Find selected server
   const selectedServer = useMemo<ListedServer | null>(() => {
     if (!selectedServerKey) return null
-    return (
-      allListedServers.find((server) => server.key === selectedServerKey) || null
-    )
+    return allListedServers.find((server) => server.key === selectedServerKey) || null
   }, [selectedServerKey, allListedServers])
 
   const handleRefresh = useCallback(
@@ -617,6 +829,24 @@ export function AgentsMcpTab() {
         if (targetProvider === "codex") {
           await refreshCodexMcpMutation.mutateAsync()
           await codexMcpQuery.refetch({ cancelRefetch: false })
+        } else if (targetProvider === "cursor") {
+          await refreshCursorMcpMutation.mutateAsync()
+          await cursorMcpQuery.refetch({ cancelRefetch: false })
+        } else if (targetProvider === "grok") {
+          await refreshGrokMcpMutation.mutateAsync()
+          await grokMcpQuery.refetch({ cancelRefetch: false })
+        } else if (targetProvider === "qwen") {
+          await refreshQwenMcpMutation.mutateAsync()
+          await qwenMcpQuery.refetch({ cancelRefetch: false })
+        } else if (targetProvider === "cline") {
+          await refreshClineMcpMutation.mutateAsync()
+          await clineMcpQuery.refetch({ cancelRefetch: false })
+        } else if (targetProvider === "openclaw") {
+          await refreshOpenclawMcpMutation.mutateAsync()
+          await openclawMcpQuery.refetch({ cancelRefetch: false })
+        } else if (targetProvider === "roo") {
+          await refreshRooMcpMutation.mutateAsync()
+          await rooMcpQuery.refetch({ cancelRefetch: false })
         } else if (targetProvider === "claude-code") {
           await refreshClaudeMcpMutation.mutateAsync()
           await claudeMcpQuery.refetch({ cancelRefetch: false })
@@ -624,10 +854,20 @@ export function AgentsMcpTab() {
           await Promise.all([
             refreshCodexMcpMutation.mutateAsync(),
             refreshClaudeMcpMutation.mutateAsync(),
+            refreshCursorMcpMutation.mutateAsync(),
+            refreshGrokMcpMutation.mutateAsync(),
+            refreshQwenMcpMutation.mutateAsync(),
+            refreshClineMcpMutation.mutateAsync(),
+            refreshOpenclawMcpMutation.mutateAsync(),
           ])
           await Promise.all([
             codexMcpQuery.refetch({ cancelRefetch: false }),
             claudeMcpQuery.refetch({ cancelRefetch: false }),
+            cursorMcpQuery.refetch({ cancelRefetch: false }),
+            grokMcpQuery.refetch({ cancelRefetch: false }),
+            qwenMcpQuery.refetch({ cancelRefetch: false }),
+            clineMcpQuery.refetch({ cancelRefetch: false }),
+            openclawMcpQuery.refetch({ cancelRefetch: false }),
           ])
         }
         if (!silent) {
@@ -642,11 +882,22 @@ export function AgentsMcpTab() {
     [
       codexMcpQuery,
       claudeMcpQuery,
+      cursorMcpQuery,
+      grokMcpQuery,
+      qwenMcpQuery,
+      clineMcpQuery,
+      openclawMcpQuery,
       refreshCodexMcpMutation,
       refreshClaudeMcpMutation,
+      refreshCursorMcpMutation,
+      refreshGrokMcpMutation,
+      refreshQwenMcpMutation,
+      refreshClineMcpMutation,
+      refreshOpenclawMcpMutation,
+      rooMcpQuery.refetch,
+      refreshRooMcpMutation.mutateAsync,
     ],
   )
-
 
   const handleAuth = async (
     provider: McpProvider,
@@ -654,20 +905,21 @@ export function AgentsMcpTab() {
     projectPath: string | null,
   ) => {
     try {
-      const result = provider === "codex"
-        ? await startCodexOAuthMutation.mutateAsync({
-            serverName,
-            ...(projectPath ? { projectPath } : {}),
-          })
-        : await startClaudeOAuthMutation.mutateAsync({
-            serverName,
-            projectPath: projectPath ?? "__global__",
-          })
+      const result =
+        provider === "codex"
+          ? await startCodexOAuthMutation.mutateAsync({
+              serverName,
+              ...(projectPath ? { projectPath } : {}),
+            })
+          : await startClaudeOAuthMutation.mutateAsync({
+              serverName,
+              projectPath: projectPath ?? "__global__",
+            })
 
       if (result.success) {
         toast.success(`"${serverName}" is authenticated, refreshing...`)
         // Plugin servers get promoted to Global after OAuth — update selection
-          setSelectedServerKey(`${provider}:Global:${serverName}`)
+        setSelectedServerKey(`${provider}:Global:${serverName}`)
         await handleRefresh(true, provider)
       } else {
         toast.error(result.error || "Authentication failed")
@@ -678,10 +930,7 @@ export function AgentsMcpTab() {
     }
   }
 
-  const handleCodexAuthLogout = async (
-    serverName: string,
-    projectPath?: string | null,
-  ) => {
+  const handleCodexAuthLogout = async (serverName: string, projectPath?: string | null) => {
     try {
       const result = await logoutCodexMcpMutation.mutateAsync({
         serverName,
@@ -746,15 +995,19 @@ export function AgentsMcpTab() {
   }
 
   const canCodexLogout = (server: McpServer) => {
-    const authStatus = String(
-      (server.config as Record<string, unknown>).authStatus || "",
-    )
+    const authStatus = String((server.config as Record<string, unknown>).authStatus || "")
       .trim()
       .toLowerCase()
     return authStatus === "o_auth" || authStatus === "bearer_token"
   }
 
   const isEditableServer = (item: ListedServer): boolean => {
+    if (item.provider === "cursor") {
+      return false
+    }
+    if (item.provider === "grok") {
+      return false
+    }
     if (item.provider === "codex") {
       // Codex edit/delete currently supports global scope only.
       return !item.projectPath
@@ -766,8 +1019,7 @@ export function AgentsMcpTab() {
     item.projectPath ? "project" : "global"
 
   const isToggleableServer = (item: ListedServer): boolean =>
-    item.provider === "claude-code" &&
-    !item.groupName.toLowerCase().includes("plugin")
+    item.provider === "claude-code" && !item.groupName.toLowerCase().includes("plugin")
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -784,7 +1036,10 @@ export function AgentsMcpTab() {
         exitWidth={240}
         disableClickToClose={true}
       >
-        <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
+        <div
+          className="flex flex-col h-full bg-background border-r overflow-hidden"
+          style={{ borderRightWidth: "0.5px" }}
+        >
           {/* Search + Add */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center">
             <input
@@ -796,14 +1051,21 @@ export function AgentsMcpTab() {
               className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none mr-1.5"
             />
             <button
-              onClick={() => { setShowAddForm(true); setSelectedServerKey(null) }}
+              type="button"
+              onClick={() => {
+                setShowAddForm(true)
+                setSelectedServerKey(null)
+              }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
               title="Add MCP server"
             >
               <Plus className="h-4 w-4" />
             </button>
             <button
-              onClick={() => { void handleRefresh() }}
+              type="button"
+              onClick={() => {
+                void handleRefresh()
+              }}
               className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
               title="Refresh MCP servers"
               aria-label="Refresh MCP servers"
@@ -812,11 +1074,15 @@ export function AgentsMcpTab() {
             </button>
           </div>
           {/* Server list */}
-          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
+          <div
+            ref={listRef}
+            role="listbox"
+            onKeyDown={listKeyDown}
+            tabIndex={-1}
+            className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none"
+          >
             {isLoadingConfig ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
-              </div>
+              <AppLoader size="sm" layout="full" />
             ) : totalServers === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <OriginalMCPIcon className="h-8 w-8 text-border mb-3" />
@@ -853,6 +1119,7 @@ export function AgentsMcpTab() {
                       const isSelected = selectedServerKey === key
                       return (
                         <button
+                          type="button"
                           key={key}
                           data-item-id={key}
                           onClick={() => setSelectedServerKey(key)}
@@ -881,15 +1148,15 @@ export function AgentsMcpTab() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 min-w-0">
-                                <span className="truncate flex-1 min-w-0">
-                                  {item.groupName}
-                                </span>
+                                <span className="truncate flex-1 min-w-0">{item.groupName}</span>
                                 {server.status !== "pending" && (
                                   <span className="flex-shrink-0">
                                     {isDisabled
                                       ? "Disabled"
                                       : server.status === "connected"
-                                        ? (hideToolsCount ? "Connected" : `${server.tools.length} tool${server.tools.length !== 1 ? "s" : ""}`)
+                                        ? hideToolsCount
+                                          ? "Connected"
+                                          : `${server.tools.length} tool${server.tools.length !== 1 ? "s" : ""}`
                                         : getStatusText(server.status)}
                                   </span>
                                 )}
@@ -903,7 +1170,6 @@ export function AgentsMcpTab() {
                 ))}
               </div>
             )}
-
           </div>
         </div>
       </ResizableSidebar>
@@ -912,7 +1178,10 @@ export function AgentsMcpTab() {
       <div className="flex-1 min-w-0 h-full overflow-hidden">
         {showAddForm ? (
           <CreateMcpServerForm
-            onCreated={() => { setShowAddForm(false); handleRefresh(true) }}
+            onCreated={() => {
+              setShowAddForm(false)
+              handleRefresh(true)
+            }}
             onCancel={() => setShowAddForm(false)}
             hasProject={!!selectedProject?.path}
             defaultProvider={defaultAddProvider}
@@ -923,16 +1192,20 @@ export function AgentsMcpTab() {
           <McpServerDetail
             provider={selectedServer.provider}
             server={selectedServer.server}
-            onAuth={() =>
-              handleAuth(
-                selectedServer.provider,
-                selectedServer.server.name,
-                selectedServer.projectPath,
-              )
+            onAuth={
+              selectedServer.provider === "cursor" || selectedServer.provider === "grok"
+                ? undefined
+                : () =>
+                    handleAuth(
+                      selectedServer.provider,
+                      selectedServer.server.name,
+                      selectedServer.projectPath,
+                    )
             }
             onLogout={
               selectedServer.provider === "codex" && canCodexLogout(selectedServer.server)
-                ? () => handleCodexAuthLogout(selectedServer.server.name, selectedServer.projectPath)
+                ? () =>
+                    handleCodexAuthLogout(selectedServer.server.name, selectedServer.projectPath)
                 : undefined
             }
             onDelete={
@@ -956,16 +1229,12 @@ export function AgentsMcpTab() {
             isToggling={updateMutation.isPending}
           />
         ) : isLoadingConfig ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
-          </div>
+          <AppLoader size="sm" layout="full" />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <OriginalMCPIcon className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
-              {totalServers > 0
-                ? "Select a server to view details"
-                : "No MCP servers configured"}
+              {totalServers > 0 ? "Select a server to view details" : "No MCP servers configured"}
             </p>
             {totalServers === 0 && (
               <Button
@@ -984,7 +1253,9 @@ export function AgentsMcpTab() {
 
       <DeleteServerConfirm
         open={!!deletingServer}
-        onOpenChange={(open) => { if (!open) setDeletingServer(null) }}
+        onOpenChange={(open) => {
+          if (!open) setDeletingServer(null)
+        }}
         serverName={deletingServer?.server.name ?? ""}
         onConfirm={handleDelete}
         isDeleting={removeClaudeMcpMutation.isPending || removeCodexMcpMutation.isPending}

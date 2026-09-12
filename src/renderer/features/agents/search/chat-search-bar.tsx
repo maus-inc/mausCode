@@ -1,28 +1,25 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronDown, ChevronUp, X } from "lucide-react"
-import * as React from "react"
+import type * as React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { cn } from "../../../lib/utils"
+import type { SyncableMessage } from "../stores/message-store"
 import {
   chatSearchCountInfoAtom,
+  chatSearchCurrentIndexAtom,
   chatSearchInputAtom,
   chatSearchMatchesAtom,
   chatSearchOpenAtom,
   chatSearchQueryAtom,
-  chatSearchCurrentIndexAtom,
   closeSearchAtom,
   goToNextMatchAtom,
   goToPrevMatchAtom,
 } from "./chat-search-atoms"
-import {
-  extractSearchableText,
-  findMatches,
-} from "./chat-search-utils"
-import type { Message } from "../stores/message-store"
+import { extractSearchableText, findMatches } from "./chat-search-utils"
 
 interface ChatSearchBarProps {
-  messages: Message[]
+  messages: SyncableMessage[]
   className?: string
   topOffset?: string // e.g., "52px" when sub-chat selector is open
 }
@@ -113,7 +110,10 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
         } else {
           goToNext()
         }
-      } else if (e.key === "ArrowDown" || (e.key === "g" && !e.shiftKey && (e.metaKey || e.ctrlKey))) {
+      } else if (
+        e.key === "ArrowDown" ||
+        (e.key === "g" && !e.shiftKey && (e.metaKey || e.ctrlKey))
+      ) {
         e.preventDefault()
         goToNext()
       } else if (e.key === "ArrowUp" || (e.key === "g" && e.shiftKey && (e.metaKey || e.ctrlKey))) {
@@ -121,7 +121,7 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
         goToPrev()
       }
     },
-    [closeSearch, goToNext, goToPrev]
+    [closeSearch, goToNext, goToPrev],
   )
 
   // Focus input when clicking on container (but not on buttons)
@@ -137,13 +137,14 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
 
   return (
     <div
+      role="none"
       className={cn(
         "absolute right-3 left-3 z-50",
         "flex items-center gap-1 px-2 py-1.5",
         "bg-popover border border-border rounded-lg shadow-lg",
         "animate-in fade-in-0 slide-in-from-top-2 duration-150",
         "max-w-[340px] ml-auto cursor-text", // Max width, but can shrink; ml-auto pushes to right
-        className
+        className,
       )}
       style={{ top: topOffset ? topOffset : "0px" }}
       onClick={handleContainerClick}
@@ -159,7 +160,7 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
         className={cn(
           "flex-1 min-w-[80px] h-7 px-2 text-sm bg-transparent",
           "border-none outline-none",
-          "placeholder:text-muted-foreground/60"
+          "placeholder:text-muted-foreground/60",
         )}
         autoComplete="off"
         autoCorrect="off"
@@ -198,9 +199,8 @@ export function ChatSearchBar({ messages, className, topOffset }: ChatSearchBarP
             </button>
           </>
         ) : (
-          inputValue.trim() && searchCompleted && (
-            <span className="text-xs text-muted-foreground">No results</span>
-          )
+          inputValue.trim() &&
+          searchCompleted && <span className="text-xs text-muted-foreground">No results</span>
         )}
       </div>
 

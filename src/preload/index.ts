@@ -29,11 +29,17 @@ contextBridge.exposeInMainWorld("desktopApi", {
   getVersion: () => ipcRenderer.invoke("app:version"),
   isPackaged: () => ipcRenderer.invoke("app:isPackaged"),
 
+  // Dev memory monitor → appends to userData/mem-trace.ndjson so the trace
+  // survives a renderer crash.
+  appendMemLog: (line: string) =>
+    ipcRenderer.invoke("debug:append-mem-log", line) as Promise<boolean>,
+
   // Auto-update methods
   checkForUpdates: (force?: boolean) => ipcRenderer.invoke("update:check", force),
   downloadUpdate: () => ipcRenderer.invoke("update:download"),
   installUpdate: () => ipcRenderer.invoke("update:install"),
-  setUpdateChannel: (channel: "latest" | "beta") => ipcRenderer.invoke("update:set-channel", channel),
+  setUpdateChannel: (channel: "latest" | "beta") =>
+    ipcRenderer.invoke("update:set-channel", channel),
   getUpdateChannel: () => ipcRenderer.invoke("update:get-channel") as Promise<"latest" | "beta">,
 
   // Auto-update event listeners
@@ -43,7 +49,8 @@ contextBridge.exposeInMainWorld("desktopApi", {
     return () => ipcRenderer.removeListener("update:checking", handler)
   },
   onUpdateAvailable: (callback: (info: { version: string; releaseDate?: string }) => void) => {
-    const handler = (_event: unknown, info: { version: string; releaseDate?: string }) => callback(info)
+    const handler = (_event: unknown, info: { version: string; releaseDate?: string }) =>
+      callback(info)
     ipcRenderer.on("update:available", handler)
     return () => ipcRenderer.removeListener("update:available", handler)
   },
@@ -52,8 +59,18 @@ contextBridge.exposeInMainWorld("desktopApi", {
     ipcRenderer.on("update:not-available", handler)
     return () => ipcRenderer.removeListener("update:not-available", handler)
   },
-  onUpdateProgress: (callback: (progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => {
-    const handler = (_event: unknown, progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => callback(progress)
+  onUpdateProgress: (
+    callback: (progress: {
+      percent: number
+      bytesPerSecond: number
+      transferred: number
+      total: number
+    }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      progress: { percent: number; bytesPerSecond: number; transferred: number; total: number },
+    ) => callback(progress)
     ipcRenderer.on("update:progress", handler)
     return () => ipcRenderer.removeListener("update:progress", handler)
   },
@@ -108,12 +125,14 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // Multi-window
   newWindow: (options?: { chatId?: string; subChatId?: string }) =>
-    ipcRenderer.invoke("window:new", options) as Promise<{ blocked: boolean } | void>,
+    ipcRenderer.invoke("window:new", options) as Promise<{ blocked: boolean } | undefined>,
   setWindowTitle: (title: string) => ipcRenderer.invoke("window:set-title", title),
 
   // Chat ownership — prevent same chat open in multiple windows
   claimChat: (chatId: string) =>
-    ipcRenderer.invoke("chat:claim", chatId) as Promise<{ ok: true } | { ok: false; ownerStableId: string }>,
+    ipcRenderer.invoke("chat:claim", chatId) as Promise<
+      { ok: true } | { ok: false; ownerStableId: string }
+    >,
   releaseChat: (chatId: string) => ipcRenderer.invoke("chat:release", chatId) as Promise<void>,
   focusChatOwner: (chatId: string) =>
     ipcRenderer.invoke("chat:focus-owner", chatId) as Promise<boolean>,
@@ -124,6 +143,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // Analytics
   setAnalyticsOptOut: (optedOut: boolean) => ipcRenderer.invoke("analytics:set-opt-out", optedOut),
+  setLocalOnlyMode: (enabled: boolean) => ipcRenderer.invoke("local-only:set", enabled),
 
   // Native features
   setBadge: (count: number | null) => ipcRenderer.invoke("app:set-badge", count),
@@ -131,6 +151,21 @@ contextBridge.exposeInMainWorld("desktopApi", {
   showNotification: (options: { title: string; body: string }) =>
     ipcRenderer.invoke("app:show-notification", options),
   openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
+  openFolder: (path: string) =>
+    ipcRenderer.invoke("shell:open-folder", path) as Promise<{
+      success: boolean
+      error?: string
+    }>,
+  openTerminal: (path: string) =>
+    ipcRenderer.invoke("shell:open-terminal", path) as Promise<{
+      success: boolean
+      error?: string
+    }>,
+  openVSCode: (path: string) =>
+    ipcRenderer.invoke("shell:open-vscode", path) as Promise<{
+      success: boolean
+      error?: string
+    }>,
 
   // API base URL (for fetch requests to server)
   getApiBaseUrl: () => ipcRenderer.invoke("app:get-api-base-url"),
@@ -140,8 +175,15 @@ contextBridge.exposeInMainWorld("desktopApi", {
   clipboardRead: () => ipcRenderer.invoke("clipboard:read"),
 
   // Save file with native dialog
-  saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) =>
-    ipcRenderer.invoke("dialog:save-file", options) as Promise<{ success: boolean; filePath?: string }>,
+  saveFile: (options: {
+    base64Data: string
+    filename: string
+    filters?: { name: string; extensions: string[] }[]
+  }) =>
+    ipcRenderer.invoke("dialog:save-file", options) as Promise<{
+      success: boolean
+      filePath?: string
+    }>,
 
   // Auth methods
   getUser: () => ipcRenderer.invoke("auth:get-user"),
@@ -194,8 +236,8 @@ contextBridge.exposeInMainWorld("desktopApi", {
   },
 
   // Auth events
-  onAuthSuccess: (callback: (user: any) => void) => {
-    const handler = (_event: unknown, user: any) => callback(user)
+  onAuthSuccess: (callback: (user: unknown) => void) => {
+    const handler = (_event: unknown, user: unknown) => callback(user)
     ipcRenderer.on("auth:success", handler)
     return () => ipcRenderer.removeListener("auth:success", handler)
   },
@@ -218,29 +260,56 @@ contextBridge.exposeInMainWorld("desktopApi", {
   },
 
   // File change events (from Claude Write/Edit tools)
-  onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => {
-    const handler = (_event: unknown, data: { filePath: string; type: string; subChatId: string }) => callback(data)
+  onFileChanged: (
+    callback: (data: { filePath: string; type: string; subChatId: string }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      data: { filePath: string; type: string; subChatId: string },
+    ) => callback(data)
     ipcRenderer.on("file-changed", handler)
     return () => ipcRenderer.removeListener("file-changed", handler)
   },
 
   // Git status change events (from file watcher)
-  onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => {
-    const handler = (_event: unknown, data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => callback(data)
+  onGitStatusChanged: (
+    callback: (data: {
+      worktreePath: string
+      changes: Array<{ path: string; type: "add" | "change" | "unlink" }>
+    }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        worktreePath: string
+        changes: Array<{ path: string; type: "add" | "change" | "unlink" }>
+      },
+    ) => callback(data)
     ipcRenderer.on("git:status-changed", handler)
     return () => ipcRenderer.removeListener("git:status-changed", handler)
   },
 
   // Worktree setup failure events
-  onWorktreeSetupFailed: (callback: (data: { kind: "create-failed" | "setup-failed"; message: string; projectId: string }) => void) => {
-    const handler = (_event: unknown, data: { kind: "create-failed" | "setup-failed"; message: string; projectId: string }) => callback(data)
+  onWorktreeSetupFailed: (
+    callback: (data: {
+      kind: "create-failed" | "setup-failed"
+      message: string
+      projectId: string
+    }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      data: { kind: "create-failed" | "setup-failed"; message: string; projectId: string },
+    ) => callback(data)
     ipcRenderer.on("worktree:setup-failed", handler)
     return () => ipcRenderer.removeListener("worktree:setup-failed", handler)
   },
 
   // Subscribe to git watcher for a worktree (from renderer)
-  subscribeToGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
-  unsubscribeFromGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
+  subscribeToGitWatcher: (worktreePath: string) =>
+    ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
+  unsubscribeFromGitWatcher: (worktreePath: string) =>
+    ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
 
   // VS Code theme scanning
   scanVSCodeThemes: () => ipcRenderer.invoke("vscode:scan-themes"),
@@ -277,9 +346,13 @@ export interface VSCodeThemeData {
   name: string
   type: "light" | "dark"
   colors: Record<string, string>
-  tokenColors?: any[]
+  tokenColors?: {
+    name?: string
+    scope?: string | string[]
+    settings?: { foreground?: string; background?: string; fontStyle?: string }
+  }[]
   semanticHighlighting?: boolean
-  semanticTokenColors?: Record<string, any>
+  semanticTokenColors?: Record<string, unknown>
   source: "imported"
   path: string
 }
@@ -289,6 +362,7 @@ export interface DesktopApi {
   arch: string
   getVersion: () => Promise<string>
   isPackaged: () => Promise<boolean>
+  appendMemLog: (line: string) => Promise<boolean>
   // Auto-update
   checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
   downloadUpdate: () => Promise<boolean>
@@ -320,7 +394,10 @@ export interface DesktopApi {
   zoomReset: () => Promise<void>
   getZoom: () => Promise<number>
   // Multi-window
-  newWindow: (options?: { chatId?: string; subChatId?: string }) => Promise<{ blocked: boolean } | void>
+  newWindow: (options?: {
+    chatId?: string
+    subChatId?: string
+  }) => Promise<{ blocked: boolean } | undefined>
   setWindowTitle: (title: string) => Promise<void>
   // Chat ownership — prevent same chat open in multiple windows
   claimChat: (chatId: string) => Promise<{ ok: true } | { ok: false; ownerStableId: string }>
@@ -329,14 +406,22 @@ export interface DesktopApi {
   toggleDevTools: () => Promise<void>
   unlockDevTools: () => Promise<void>
   setAnalyticsOptOut: (optedOut: boolean) => Promise<void>
+  setLocalOnlyMode: (enabled: boolean) => Promise<void>
   setBadge: (count: number | null) => Promise<void>
   setBadgeIcon: (imageData: string | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
-  openExternal: (url: string) => Promise<void>
+  openExternal: (url: string) => Promise<{ blocked: boolean; message?: string }>
+  openFolder: (path: string) => Promise<{ success: boolean; error?: string }>
+  openTerminal: (path: string) => Promise<{ success: boolean; error?: string }>
+  openVSCode: (path: string) => Promise<{ success: boolean; error?: string }>
   getApiBaseUrl: () => Promise<string>
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
-  saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) => Promise<{ success: boolean; filePath?: string }>
+  saveFile: (options: {
+    base64Data: string
+    filename: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => Promise<{ success: boolean; filePath?: string }>
   // Auth
   getUser: () => Promise<{
     id: string
@@ -370,20 +455,35 @@ export interface DesktopApi {
   onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => () => void
   onStreamDone: (streamId: string, callback: () => void) => () => void
   onStreamError: (streamId: string, callback: (error: string) => void) => () => void
-  onAuthSuccess: (callback: (user: any) => void) => () => void
+  onAuthSuccess: (callback: (user: unknown) => void) => () => void
   onAuthError: (callback: (error: string) => void) => () => void
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
   onShortcutOpenSettings: (callback: () => void) => () => void
   // File changes
-  onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => () => void
+  onFileChanged: (
+    callback: (data: { filePath: string; type: string; subChatId: string }) => void,
+  ) => () => void
   // Git status changes (from file watcher)
-  onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => () => void
+  onGitStatusChanged: (
+    callback: (data: {
+      worktreePath: string
+      changes: Array<{ path: string; type: "add" | "change" | "unlink" }>
+    }) => void,
+  ) => () => void
   subscribeToGitWatcher: (worktreePath: string) => Promise<void>
   unsubscribeFromGitWatcher: (worktreePath: string) => Promise<void>
   // VS Code theme scanning
   scanVSCodeThemes: () => Promise<DiscoveredTheme[]>
   loadVSCodeTheme: (themePath: string) => Promise<VSCodeThemeData>
+  // Worktree setup failures
+  onWorktreeSetupFailed: (callback: (payload: WorktreeSetupFailurePayload) => void) => () => void
+}
+
+export interface WorktreeSetupFailurePayload {
+  kind: "create-failed" | "setup-failed"
+  message: string
+  projectId: string
 }
 
 declare global {

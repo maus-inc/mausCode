@@ -29,6 +29,7 @@ export interface DesktopApi {
   platform: NodeJS.Platform
   arch: string
   getVersion: () => Promise<string>
+  appendMemLog: (line: string) => Promise<boolean>
 
   // Auto-update
   checkForUpdates: (force?: boolean) => Promise<UpdateInfo | null>
@@ -69,6 +70,9 @@ export interface DesktopApi {
   setBadge: (count: number | null) => Promise<void>
   showNotification: (options: { title: string; body: string }) => Promise<void>
   openExternal: (url: string) => Promise<void>
+  openFolder: (path: string) => Promise<{ success: boolean; error?: string }>
+  openTerminal: (path: string) => Promise<{ success: boolean; error?: string }>
+  openVSCode: (path: string) => Promise<{ success: boolean; error?: string }>
   getApiBaseUrl: () => Promise<string>
 
   // Clipboard
@@ -82,11 +86,14 @@ export interface DesktopApi {
   startAuthFlow: () => Promise<void>
   submitAuthCode: (code: string) => Promise<void>
   updateUser: (updates: { name?: string }) => Promise<DesktopUser | null>
-  onAuthSuccess: (callback: (user: any) => void) => () => void
+  onAuthSuccess: (callback: (user: unknown) => void) => () => void
   onAuthError: (callback: (error: string) => void) => () => void
 
   // Multi-window
-  newWindow: (options?: { chatId?: string; subChatId?: string }) => Promise<{ blocked: boolean } | void>
+  newWindow: (options?: {
+    chatId?: string
+    subChatId?: string
+  }) => Promise<{ blocked: boolean } | undefined>
 
   // Chat ownership — prevent same chat open in multiple windows
   claimChat: (chatId: string) => Promise<{ ok: true } | { ok: false; ownerStableId: string }>

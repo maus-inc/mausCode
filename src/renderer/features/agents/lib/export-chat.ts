@@ -1,6 +1,6 @@
-import { trpcClient } from "../../../lib/trpc"
-import { remoteApi } from "../../../lib/remote-api"
 import { toast } from "sonner"
+import { remoteApi } from "../../../lib/remote-api"
+import { trpcClient } from "../../../lib/trpc"
 
 const MAX_HISTORY_CHARS = 50_000
 
@@ -9,7 +9,16 @@ const MAX_HISTORY_CHARS = 50_000
  * Tool calls are summarized as one-liners. Truncates at ~50k chars, dropping oldest first.
  */
 export function formatHistoryForContext(
-  messages: Array<{ role: string; parts?: Array<{ type: string; text?: string; toolName?: string; result?: any; args?: any }> }>,
+  messages: Array<{
+    role: string
+    parts?: Array<{
+      type: string
+      text?: string
+      toolName?: string
+      result?: unknown
+      args?: unknown
+    }>
+  }>,
 ): string {
   const formatted: string[] = []
 
@@ -33,7 +42,7 @@ export function formatHistoryForContext(
     }
   }
 
-  let result = "# Previous Chat History\n\n" + formatted.join("\n\n")
+  let result = `# Previous Chat History\n\n${formatted.join("\n\n")}`
 
   // Truncate from the beginning if too long, keeping most recent context
   if (result.length > MAX_HISTORY_CHARS) {
@@ -64,9 +73,13 @@ interface Message {
 /**
  * Format messages for export
  */
-function formatMessages(messages: Message[], format: ExportFormat, chatName: string): { content: string; filename: string } {
-  const timestamp = new Date().toISOString().split('T')[0]
-  const safeName = chatName.replace(/[^a-z0-9]/gi, '-').toLowerCase()
+function formatMessages(
+  messages: Message[],
+  format: ExportFormat,
+  chatName: string,
+): { content: string; filename: string } {
+  const timestamp = new Date().toISOString().split("T")[0]
+  const safeName = chatName.replace(/[^a-z0-9]/gi, "-").toLowerCase()
 
   if (format === "json") {
     return {
@@ -108,16 +121,19 @@ function formatMessages(messages: Message[], format: ExportFormat, chatName: str
  * Export a chat or sub-chat to a file.
  * Shows download dialog to save the exported content.
  */
-export async function exportChat({ chatId, subChatId, format, isRemote = false }: ExportOptions): Promise<void> {
+export async function exportChat({
+  chatId,
+  subChatId,
+  format,
+  isRemote = false,
+}: ExportOptions): Promise<void> {
   try {
     let exportData: { content: string; filename: string }
 
     if (isRemote) {
       // Remote chat export - fetch from remote API and format locally
       const chat = await remoteApi.getAgentChat(chatId)
-      const subChat = subChatId
-        ? chat.subChats.find(sc => sc.id === subChatId)
-        : chat.subChats[0]
+      const subChat = subChatId ? chat.subChats.find((sc) => sc.id === subChatId) : chat.subChats[0]
 
       if (!subChat) {
         throw new Error("No chat data found")
@@ -159,16 +175,19 @@ export async function exportChat({ chatId, subChatId, format, isRemote = false }
 /**
  * Copy chat or sub-chat content to clipboard.
  */
-export async function copyChat({ chatId, subChatId, format, isRemote = false }: ExportOptions): Promise<void> {
+export async function copyChat({
+  chatId,
+  subChatId,
+  format,
+  isRemote = false,
+}: ExportOptions): Promise<void> {
   try {
     let exportData: { content: string; filename: string }
 
     if (isRemote) {
       // Remote chat export - fetch from remote API and format locally
       const chat = await remoteApi.getAgentChat(chatId)
-      const subChat = subChatId
-        ? chat.subChats.find(sc => sc.id === subChatId)
-        : chat.subChats[0]
+      const subChat = subChatId ? chat.subChats.find((sc) => sc.id === subChatId) : chat.subChats[0]
 
       if (!subChat) {
         throw new Error("No chat data found")

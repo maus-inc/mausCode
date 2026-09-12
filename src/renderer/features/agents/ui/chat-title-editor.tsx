@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback, memo } from "react"
 import { useAtomValue } from "jotai"
-import { cn } from "../../../lib/utils"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { TypewriterText } from "../../../components/ui/typewriter-text"
+import { cn } from "../../../lib/utils"
 import { justCreatedIdsAtom } from "../atoms"
 
 interface ChatTitleEditorProps {
@@ -17,10 +17,7 @@ interface ChatTitleEditorProps {
 }
 
 // Custom comparison to prevent re-renders during streaming
-function areTitlePropsEqual(
-  prev: ChatTitleEditorProps,
-  next: ChatTitleEditorProps,
-): boolean {
+function areTitlePropsEqual(prev: ChatTitleEditorProps, next: ChatTitleEditorProps): boolean {
   return (
     prev.name === next.name &&
     prev.placeholder === next.placeholder &&
@@ -100,10 +97,7 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
     if (!isEditing) return
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         handleSave()
       }
     }
@@ -145,10 +139,7 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
   const heightClass = isMobile ? "h-7" : "h-7"
 
   return (
-    <div
-      ref={containerRef}
-      className={cn("max-w-2xl mx-auto px-4", heightClass)}
-    >
+    <div ref={containerRef} className={cn("max-w-2xl mx-auto px-4", heightClass)}>
       {isEditing ? (
         <input
           ref={inputRef}
@@ -165,7 +156,8 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
           )}
         />
       ) : (
-        <div
+        <button
+          type="button"
           onClick={handleClick}
           className={cn(
             "text-left w-full h-full flex items-center",
@@ -183,7 +175,7 @@ export const ChatTitleEditor = memo(function ChatTitleEditor({
               showPlaceholder={hasMessages}
             />
           </span>
-        </div>
+        </button>
       )}
     </div>
   )

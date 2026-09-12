@@ -1,7 +1,8 @@
 "use client"
 
 import { motion } from "motion/react"
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { Input } from "../../../components/ui/input"
 import {
   Select,
   SelectContent,
@@ -9,8 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select"
-import { Input } from "../../../components/ui/input"
-import { DEVICE_PRESETS, AGENTS_PREVIEW_CONSTANTS } from "../constants"
+import { AGENTS_PREVIEW_CONSTANTS, DEVICE_PRESETS } from "../constants"
 
 interface DevicePresetsBarProps {
   selectedPreset: string
@@ -43,14 +43,11 @@ export function DevicePresetsBar({
   }
 
   const handleWidthBlur = () => {
-    const value = parseInt(widthInputValue)
+    const value = parseInt(widthInputValue, 10)
 
     // Apply any valid positive number, clamp to reasonable bounds
-    if (!isNaN(value) && value > 0) {
-      const clampedValue = Math.max(
-        AGENTS_PREVIEW_CONSTANTS.MIN_WIDTH,
-        Math.min(maxWidth, value),
-      )
+    if (!Number.isNaN(value) && value > 0) {
+      const clampedValue = Math.max(AGENTS_PREVIEW_CONSTANTS.MIN_WIDTH, Math.min(maxWidth, value))
       setWidthInputValue(String(clampedValue))
       onWidthChange(clampedValue)
     } else {
@@ -84,11 +81,7 @@ export function DevicePresetsBar({
           </SelectTrigger>
           <SelectContent className="!w-36">
             {DEVICE_PRESETS.map((preset) => (
-              <SelectItem
-                key={preset.name}
-                value={preset.name}
-                className="whitespace-nowrap"
-              >
+              <SelectItem key={preset.name} value={preset.name} className="whitespace-nowrap">
                 {preset.name}
               </SelectItem>
             ))}
@@ -134,4 +127,3 @@ export function DevicePresetsBar({
     </motion.div>
   )
 }
-

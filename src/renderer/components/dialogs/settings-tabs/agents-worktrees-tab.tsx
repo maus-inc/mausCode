@@ -1,23 +1,15 @@
-import { useState, useEffect } from "react"
 import { useSetAtom } from "jotai"
-import { trpc } from "../../../lib/trpc"
-import { Button } from "../../ui/button"
-import { Input } from "../../ui/input"
-import { Label } from "../../ui/label"
-import { Plus, Trash2, ChevronDown } from "lucide-react"
-import { AIPenIcon } from "../../ui/icons"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "../../ui/select"
+import { ChevronDown, Plus, Trash2 } from "lucide-react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { COMMAND_PROMPTS } from "../../../features/agents/commands"
-import {
-  agentsSettingsDialogOpenAtom,
-  selectedAgentChatIdAtom,
-} from "../../../lib/atoms"
+import { agentsSettingsDialogOpenAtom, selectedAgentChatIdAtom } from "../../../lib/atoms"
+import { trpc } from "../../../lib/trpc"
+import { Button } from "../../ui/button"
+import { AIPenIcon } from "../../ui/icons"
+import { Input } from "../../ui/input"
+import { Label } from "../../ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "../../ui/select"
 
 function useIsNarrowScreen(): boolean {
   const [isNarrow, setIsNarrow] = useState(false)
@@ -40,16 +32,13 @@ export function AgentsWorktreesTab() {
 
   // Get projects list
   const { data: projects } = trpc.projects.list.useQuery()
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null,
-  )
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   // Get config for selected project
-  const { data: configData, refetch: refetchConfig } =
-    trpc.worktreeConfig.get.useQuery(
-      { projectId: selectedProjectId! },
-      { enabled: !!selectedProjectId },
-    )
+  const { data: configData, refetch: refetchConfig } = trpc.worktreeConfig.get.useQuery(
+    { projectId: selectedProjectId ?? "" },
+    { enabled: !!selectedProjectId },
+  )
 
   // Save mutation
   const saveMutation = trpc.worktreeConfig.save.useMutation({
@@ -73,7 +62,7 @@ export function AgentsWorktreesTab() {
   })
 
   // Local state
-  const [saveTarget, setSaveTarget] = useState<"cursor" | "1code">("1code")
+  const [saveTarget, setSaveTarget] = useState<"cursor" | "mauscode">("mauscode")
   const [commands, setCommands] = useState<string[]>([""])
   const [unixCommands, setUnixCommands] = useState<string[]>([])
   const [windowsCommands, setWindowsCommands] = useState<string[]>([])
@@ -92,30 +81,21 @@ export function AgentsWorktreesTab() {
       if (configData.source === "cursor") {
         setSaveTarget("cursor")
       } else {
-        setSaveTarget("1code")
+        // mausCode's own file (including when a legacy 1Code file is detected)
+        setSaveTarget("mauscode")
       }
 
       if (configData.config) {
         // Generic commands
         const generic = configData.config["setup-worktree"]
-        setCommands(
-          Array.isArray(generic)
-            ? [...generic, ""]
-            : generic
-              ? [generic, ""]
-              : [""],
-        )
+        setCommands(Array.isArray(generic) ? [...generic, ""] : generic ? [generic, ""] : [""])
 
         // Platform-specific
         const unix = configData.config["setup-worktree-unix"]
         const win = configData.config["setup-worktree-windows"]
 
-        setUnixCommands(
-          Array.isArray(unix) ? unix : unix ? [unix] : [],
-        )
-        setWindowsCommands(
-          Array.isArray(win) ? win : win ? [win] : [],
-        )
+        setUnixCommands(Array.isArray(unix) ? unix : unix ? [unix] : [])
+        setWindowsCommands(Array.isArray(win) ? win : win ? [win] : [])
 
         // Show platform section if any platform-specific commands exist
         if (unix || win) {
@@ -165,11 +145,7 @@ export function AgentsWorktreesTab() {
     setter(newList)
   }
 
-  const removeCommand = (
-    index: number,
-    list: string[],
-    setter: (v: string[]) => void,
-  ) => {
+  const removeCommand = (index: number, list: string[], setter: (v: string[]) => void) => {
     if (list.length <= 1) return
     setter(list.filter((_, i) => i !== index))
   }
@@ -203,19 +179,12 @@ export function AgentsWorktreesTab() {
           <div className="p-4 flex items-center justify-between gap-6">
             <div className="flex-1">
               <Label className="text-sm font-medium">Select project</Label>
-              <p className="text-xs text-muted-foreground">
-                Choose which project to configure
-              </p>
+              <p className="text-xs text-muted-foreground">Choose which project to configure</p>
             </div>
             <div className="flex-shrink-0 w-64">
-              <Select
-                value={selectedProjectId ?? ""}
-                onValueChange={setSelectedProjectId}
-              >
+              <Select value={selectedProjectId ?? ""} onValueChange={setSelectedProjectId}>
                 <SelectTrigger className="w-full">
-                  <span className="text-sm truncate">
-                    {selectedProject?.name ?? "Select..."}
-                  </span>
+                  <span className="text-sm truncate">{selectedProject?.name ?? "Select..."}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {projects?.map((p) => (
@@ -235,13 +204,9 @@ export function AgentsWorktreesTab() {
           {/* Config Location */}
           <div className="space-y-2">
             <div className="pb-2">
-              <h4 className="text-sm font-medium text-foreground">
-                Config Location
-              </h4>
+              <h4 className="text-sm font-medium text-foreground">Config Location</h4>
               {configData?.path && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Using: {configData.path}
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">Using: {configData.path}</p>
               )}
             </div>
 
@@ -256,23 +221,19 @@ export function AgentsWorktreesTab() {
                 <div className="flex-shrink-0 w-auto min-w-56 max-w-80">
                   <Select
                     value={saveTarget}
-                    onValueChange={(v) => setSaveTarget(v as "cursor" | "1code")}
+                    onValueChange={(v) => setSaveTarget(v as "cursor" | "mauscode")}
                   >
                     <SelectTrigger className="w-full">
                       <span className="text-sm font-mono truncate">
                         {saveTarget === "cursor"
                           ? ".cursor/worktrees.json"
-                          : ".1code/worktree.json"}
+                          : ".mauscode/worktree.json"}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1code">
-                        .1code/worktree.json
-                      </SelectItem>
+                      <SelectItem value="mauscode">.mauscode/worktree.json</SelectItem>
                       {cursorExists && (
-                        <SelectItem value="cursor">
-                          .cursor/worktrees.json
-                        </SelectItem>
+                        <SelectItem value="cursor">.cursor/worktrees.json</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
@@ -285,9 +246,7 @@ export function AgentsWorktreesTab() {
           <div className="space-y-2">
             <div className="pb-2 flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-medium text-foreground">
-                  Setup Commands
-                </h4>
+                <h4 className="text-sm font-medium text-foreground">Setup Commands</h4>
                 <p className="text-xs text-muted-foreground mt-1">
                   Commands run in the worktree after creation
                 </p>
@@ -320,7 +279,11 @@ export function AgentsWorktreesTab() {
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">All Platforms</Label>
                   <span className="text-xs text-muted-foreground">
-                    use <code className="font-mono bg-muted px-1 py-0.5 rounded">$ROOT_WORKTREE_PATH</code> for main repo path
+                    use{" "}
+                    <code className="font-mono bg-muted px-1 py-0.5 rounded">
+                      $ROOT_WORKTREE_PATH
+                    </code>{" "}
+                    for main repo path
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -328,9 +291,7 @@ export function AgentsWorktreesTab() {
                     <div key={i} className="flex items-center gap-2">
                       <Input
                         value={cmd}
-                        onChange={(e) =>
-                          updateCommand(i, e.target.value, commands, setCommands)
-                        }
+                        onChange={(e) => updateCommand(i, e.target.value, commands, setCommands)}
                         placeholder="bun install && cp $ROOT_WORKTREE_PATH/.env .env"
                         className="flex-1 font-mono text-sm"
                       />
@@ -391,12 +352,7 @@ export function AgentsWorktreesTab() {
                               <Input
                                 value={cmd}
                                 onChange={(e) =>
-                                  updateCommand(
-                                    i,
-                                    e.target.value,
-                                    unixCommands,
-                                    setUnixCommands,
-                                  )
+                                  updateCommand(i, e.target.value, unixCommands, setUnixCommands)
                                 }
                                 placeholder="bun install"
                                 className="flex-1 font-mono text-sm"
@@ -405,9 +361,7 @@ export function AgentsWorktreesTab() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                onClick={() =>
-                                  removeCommand(i, unixCommands, setUnixCommands)
-                                }
+                                onClick={() => removeCommand(i, unixCommands, setUnixCommands)}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -428,9 +382,7 @@ export function AgentsWorktreesTab() {
 
                     {/* Windows Commands */}
                     <div className="space-y-2">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Windows
-                      </span>
+                      <span className="text-xs font-medium text-muted-foreground">Windows</span>
                       {windowsCommands.length === 0 ? (
                         <p className="text-xs text-muted-foreground/60 italic">
                           Falls back to "All Platforms"
@@ -457,11 +409,7 @@ export function AgentsWorktreesTab() {
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                 onClick={() =>
-                                  removeCommand(
-                                    i,
-                                    windowsCommands,
-                                    setWindowsCommands,
-                                  )
+                                  removeCommand(i, windowsCommands, setWindowsCommands)
                                 }
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -474,9 +422,7 @@ export function AgentsWorktreesTab() {
                         variant="ghost"
                         size="sm"
                         className="gap-1.5 text-muted-foreground h-7 text-xs"
-                        onClick={() =>
-                          addCommand(windowsCommands, setWindowsCommands)
-                        }
+                        onClick={() => addCommand(windowsCommands, setWindowsCommands)}
                       >
                         <Plus className="h-3 w-3" />
                         Add
@@ -487,11 +433,7 @@ export function AgentsWorktreesTab() {
               </div>
 
               <div className="bg-muted p-3 flex justify-end gap-2 border-t">
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={saveMutation.isPending}
-                >
+                <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? "Saving..." : "Save"}
                 </Button>
               </div>

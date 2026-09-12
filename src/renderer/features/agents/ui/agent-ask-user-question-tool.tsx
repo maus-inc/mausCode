@@ -1,18 +1,18 @@
 "use client"
 
-import { memo } from "react"
 import { useAtomValue } from "jotai"
-import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { memo } from "react"
 import { QuestionIcon } from "../../../components/ui/icons"
+import { TextShimmer } from "../../../components/ui/text-shimmer"
 import {
-  QUESTIONS_SKIPPED_MESSAGE,
-  QUESTIONS_TIMED_OUT_MESSAGE,
   askUserQuestionResultsAtom,
   pendingUserQuestionsAtom,
+  QUESTIONS_SKIPPED_MESSAGE,
+  QUESTIONS_TIMED_OUT_MESSAGE,
 } from "../atoms"
 import { areAskUserQuestionPropsEqual } from "./agent-tool-utils"
 
-interface AgentAskUserQuestionToolProps {
+export interface AgentAskUserQuestionToolProps {
   input: {
     questions?: Array<{
       question: string
@@ -53,7 +53,7 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
   // Check if the question dialog is currently shown for this tool
   const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
   const isDialogShown = toolCallId
-    ? Array.from(pendingQuestionsMap.values()).some(q => q.toolUseId === toolCallId)
+    ? Array.from(pendingQuestionsMap.values()).some((q) => q.toolUseId === toolCallId)
     : false
 
   // Use realtime result if available, otherwise fall back to prop
@@ -72,8 +72,7 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
   // Determine status
   const isSkipped = effectiveErrorText === QUESTIONS_SKIPPED_MESSAGE
   const isTimedOut = effectiveErrorText === QUESTIONS_TIMED_OUT_MESSAGE
-  const isCompleted =
-    state === "result" && answers && !isSkipped && !isTimedOut && !isError
+  const isCompleted = state === "result" && answers && !isSkipped && !isTimedOut && !isError
 
   // Show loading state if:
   // 1. No questions yet (still streaming input)

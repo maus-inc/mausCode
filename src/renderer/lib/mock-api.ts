@@ -5,11 +5,11 @@
 
 import { useMemo } from "react"
 import { normalizeCodexToolPart } from "../../shared/codex-tool-normalizer"
-import { trpc, trpcClient } from "./trpc"
+import { trpc } from "./trpc"
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: dynamic API bridge - args/options bags intentionally untyped.
 type AnyFn = (...args: any[]) => any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: dynamic API bridge - option bags intentionally untyped.
 type AnyObj = Record<string, any>
 
 export const api = {
@@ -28,7 +28,7 @@ export const api = {
       useQuery: (args?: { chatId: string }, opts?: AnyObj) => {
         const chatId = args?.chatId
         const result = trpc.chats.get.useQuery(
-          { id: chatId! },
+          { id: chatId ?? "" },
           {
             ...(opts ?? {}),
             enabled: !!chatId && opts?.enabled !== false,
@@ -85,9 +85,7 @@ export const api = {
                             return {
                               ...normalizedMcpPart,
                               state: normalizedState,
-                              output:
-                                normalizedMcpPart.output ||
-                                normalizedMcpPart.result,
+                              output: normalizedMcpPart.output || normalizedMcpPart.result,
                             }
                           }
                           return normalizedMcpPart
@@ -95,11 +93,23 @@ export const api = {
                       }
                       // Normalize ACP/codex tool types (e.g. "tool-Read README.md" → "tool-Read")
                       // Detects ACP parts by: title-based type with space, or proxy tool name, or input.toolName present
-                      if (part.type?.startsWith("tool-") && (part.input?.toolName || part.type.includes(" ") || part.type === "tool-acp.acp_provider_agent_dynamic_tool")) {
+                      if (
+                        part.type?.startsWith("tool-") &&
+                        (part.input?.toolName ||
+                          part.type.includes(" ") ||
+                          part.type === "tool-acp.acp_provider_agent_dynamic_tool")
+                      ) {
                         const acpVerbMap: AnyObj = {
-                          Read: "Read", Run: "Bash", List: "Glob", Search: "Grep",
-                          Grep: "Grep", Glob: "Glob", Edit: "Edit", Write: "Write",
-                          Thought: "Thinking", Fetch: "WebFetch",
+                          Read: "Read",
+                          Run: "Bash",
+                          List: "Glob",
+                          Search: "Grep",
+                          Grep: "Grep",
+                          Glob: "Glob",
+                          Edit: "Edit",
+                          Write: "Write",
+                          Thought: "Thinking",
+                          Fetch: "WebFetch",
                         }
                         let parsedInput: AnyObj = {}
                         if (part.input && typeof part.input === "object") {
@@ -129,23 +139,35 @@ export const api = {
                             type: `tool-${toolType}`,
                             input: { ...args, _acpTitle: title, _acpDetail: detail },
                           }
-                          if (toolType === "Read" && !unwrapped.input.file_path && detail) unwrapped.input.file_path = detail
+                          if (toolType === "Read" && !unwrapped.input.file_path && detail)
+                            unwrapped.input.file_path = detail
                           if (toolType === "Bash") {
                             if (Array.isArray(unwrapped.input.command)) {
-                              unwrapped.input.command = unwrapped.input.command[unwrapped.input.command.length - 1] || detail
+                              unwrapped.input.command =
+                                unwrapped.input.command[unwrapped.input.command.length - 1] ||
+                                detail
                             } else if (!unwrapped.input.command && detail) {
                               unwrapped.input.command = detail
                             }
                           }
-                          if (toolType === "Grep" && !unwrapped.input.pattern && detail) unwrapped.input.pattern = detail
-                          if (toolType === "Glob" && !unwrapped.input.pattern && detail) unwrapped.input.pattern = detail
+                          if (toolType === "Grep" && !unwrapped.input.pattern && detail)
+                            unwrapped.input.pattern = detail
+                          if (toolType === "Glob" && !unwrapped.input.pattern && detail)
+                            unwrapped.input.pattern = detail
                           // State normalization
                           if (unwrapped.state) {
                             let normalizedState = unwrapped.state
                             if (unwrapped.state === "result") {
-                              normalizedState = unwrapped.result?.success === false ? "output-error" : "output-available"
+                              normalizedState =
+                                unwrapped.result?.success === false
+                                  ? "output-error"
+                                  : "output-available"
                             }
-                            return { ...unwrapped, state: normalizedState, output: unwrapped.output || unwrapped.result }
+                            return {
+                              ...unwrapped,
+                              state: normalizedState,
+                              output: unwrapped.output || unwrapped.result,
+                            }
                           }
                           return unwrapped
                         }
@@ -157,9 +179,7 @@ export const api = {
                         if (part.state === "result") {
                           // Check if it was an error result
                           normalizedState =
-                            part.result?.success === false
-                              ? "output-error"
-                              : "output-available"
+                            part.result?.success === false ? "output-error" : "output-available"
                         }
                         // Also add output field from result if present (for diff display)
                         return {
@@ -173,10 +193,7 @@ export const api = {
                   }
                 })
               } catch {
-                console.warn(
-                  "[mock-api] Failed to parse messages for subChat:",
-                  sc.id,
-                )
+                console.warn("[mock-api] Failed to parse messages for subChat:", sc.id)
                 parsedMessages = []
               }
               return {
@@ -206,11 +223,7 @@ export const api = {
       },
     },
     archiveChat: {
-      useMutation: (opts?: {
-        onMutate?: AnyFn
-        onError?: AnyFn
-        onSettled?: AnyFn
-      }) => {
+      useMutation: (opts?: { onMutate?: AnyFn; onError?: AnyFn; onSettled?: AnyFn }) => {
         const mutation = trpc.chats.archive.useMutation({
           onSuccess: () => opts?.onSettled?.(),
           onError: (err) => opts?.onError?.(err),
@@ -228,11 +241,7 @@ export const api = {
       },
     },
     restoreChat: {
-      useMutation: (opts?: {
-        onMutate?: AnyFn
-        onError?: AnyFn
-        onSettled?: AnyFn
-      }) => {
+      useMutation: (opts?: { onMutate?: AnyFn; onError?: AnyFn; onSettled?: AnyFn }) => {
         const mutation = trpc.chats.restore.useMutation({
           onSuccess: () => opts?.onSettled?.(),
           onError: (err) => opts?.onError?.(err),
@@ -270,11 +279,7 @@ export const api = {
       },
     },
     renameSubChat: {
-      useMutation: (opts?: {
-        onSuccess?: AnyFn
-        onError?: AnyFn
-        onMutate?: AnyFn
-      }) => {
+      useMutation: (opts?: { onSuccess?: AnyFn; onError?: AnyFn; onMutate?: AnyFn }) => {
         const mutation = trpc.chats.renameSubChat.useMutation({
           onSuccess: (data) => opts?.onSuccess?.(data),
           onError: (err) => opts?.onError?.(err),
@@ -308,7 +313,10 @@ export const api = {
         const mutation = trpc.chats.generateSubChatName.useMutation()
         return {
           mutateAsync: async (args: { userMessage: string; ollamaModel?: string | null }) => {
-            return mutation.mutateAsync({ userMessage: args.userMessage, ollamaModel: args.ollamaModel })
+            return mutation.mutateAsync({
+              userMessage: args.userMessage,
+              ollamaModel: args.ollamaModel,
+            })
           },
           isPending: mutation.isPending,
         }
@@ -321,7 +329,10 @@ export const api = {
           onError: (err) => opts?.onError?.(err),
         })
         return {
-          mutate: (args?: { subChatId: string; mode: "plan" | "agent" }) => {
+          mutate: (args?: {
+            subChatId: string
+            mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+          }) => {
             if (args?.subChatId && args?.mode) {
               mutation.mutate({ id: args.subChatId, mode: args.mode })
             }
@@ -333,7 +344,7 @@ export const api = {
     // Desktop stubs - not needed for local development
     createAgentPr: {
       useMutation: (opts?: { onSuccess?: AnyFn; onError?: AnyFn }) => ({
-        mutate: (_args?: AnyObj, callbacks?: { onSuccess?: AnyFn }) => {
+        mutate: (_args?: AnyObj, _callbacks?: { onSuccess?: AnyFn }) => {
           // Desktop: PR creation not implemented yet
           opts?.onError?.(new Error("PR creation not available in desktop app"))
         },
@@ -349,15 +360,9 @@ export const api = {
           onSuccess: () => opts?.onSuccess?.(),
         })
         return {
-          mutate: (
-            args?: { chatIds: string[] },
-            callbacks?: { onSuccess?: AnyFn },
-          ) => {
+          mutate: (args?: { chatIds: string[] }, callbacks?: { onSuccess?: AnyFn }) => {
             if (args?.chatIds) {
-              mutation.mutate(
-                { chatIds: args.chatIds },
-                { onSuccess: callbacks?.onSuccess },
-              )
+              mutation.mutate({ chatIds: args.chatIds }, { onSuccess: callbacks?.onSuccess })
             }
           },
           isPending: mutation.isPending,
@@ -455,8 +460,18 @@ export const api = {
   },
   // Stubs for features not needed in desktop
   teams: {
-    getUserTeams: { useQuery: () => ({ data: [], isLoading: false }) },
-    getTeam: { useQuery: () => ({ data: null, isLoading: false }) },
+    getUserTeams: {
+      useQuery: (_input?: unknown, _opts?: unknown) => ({
+        data: [],
+        isLoading: false,
+      }),
+    },
+    getTeam: {
+      useQuery: (_input?: unknown, _opts?: unknown) => ({
+        data: null,
+        isLoading: false,
+      }),
+    },
     updateTeam: {
       useMutation: () => ({
         mutate: () => {},

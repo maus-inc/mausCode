@@ -10,7 +10,7 @@ export function getTriggerLabel(triggerType: string, platform?: string): string 
 }
 
 export function getAutomationDescription(
-  triggers: Array<{ trigger_type: string; platform?: string }>
+  triggers: Array<{ trigger_type: string; platform?: string }>,
 ): string {
   if (triggers.length === 0) return "No triggers configured"
   const triggerDescriptions = triggers.map((t) => {

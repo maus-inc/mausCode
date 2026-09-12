@@ -1,12 +1,12 @@
-import { createHash, randomBytes } from 'crypto';
-import { shell } from 'electron';
-import { createServer, type Server } from 'http';
-import { URL } from 'url';
+import { createHash, randomBytes } from "node:crypto"
+import { createServer, type Server } from "node:http"
+import { URL } from "node:url"
+import { shell } from "electron"
 
 export interface OAuthMetadata {
-  authorization_endpoint: string;
-  token_endpoint: string;
-  registration_endpoint?: string;
+  authorization_endpoint: string
+  token_endpoint: string
+  registration_endpoint?: string
 }
 
 /**
@@ -15,104 +15,107 @@ export interface OAuthMetadata {
  */
 export async function fetchOAuthMetadata(mcpBaseUrl: string): Promise<OAuthMetadata | null> {
   try {
-    const origin = new URL(mcpBaseUrl).origin;
-    const metadataUrl = `${origin}/.well-known/oauth-authorization-server`;
-    const response = await fetch(metadataUrl);
+    const origin = new URL(mcpBaseUrl).origin
+    const metadataUrl = `${origin}/.well-known/oauth-authorization-server`
+    const response = await fetch(metadataUrl)
     if (response.ok) {
-      return await response.json() as OAuthMetadata;
+      return (await response.json()) as OAuthMetadata
     }
-    return null;
+    return null
   } catch {
-    return null;
+    return null
   }
 }
 
 export interface OAuthConfig {
-  mcpBaseUrl: string; // e.g., http://localhost:3000/v1/links/abc123
-  redirectUri?: string; // Optional custom redirect URI for deeplinks
+  mcpBaseUrl: string // e.g., http://localhost:3000/v1/links/abc123
+  redirectUri?: string // Optional custom redirect URI for deeplinks
 }
 
 export interface OAuthTokens {
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt?: number;
-  tokenType: string;
+  accessToken: string
+  refreshToken?: string
+  expiresAt?: number
+  tokenType: string
 }
 
 export interface OAuthCallbacks {
-  onStatus: (message: string) => void;
-  onError: (error: string) => void;
+  onStatus: (message: string) => void
+  onError: (error: string) => void
 }
 
-const CALLBACK_PORT = 8914;
-const CALLBACK_PATH = '/callback';
+const CALLBACK_PORT = 8914
+const CALLBACK_PATH = "/callback"
 // Client names for OAuth registration
-// Some MCP servers (like Figma) have an allowlist - try '1code' first, fall back to 'Codex'
-const CLIENT_NAME = '1code';
-const FALLBACK_CLIENT_NAME = 'Codex';
+// Some MCP servers (like Figma) have an allowlist of known client names -
+// try mausCode's own name first, fall back to 'Codex' (a name on those lists).
+const CLIENT_NAME = "mauscode"
+const FALLBACK_CLIENT_NAME = "Codex"
 
 /**
  * Generate a styled OAuth callback page with terminal emulator aesthetic
  * Matches application design with Tokyo Night theme
  */
 function generateOAuthPage(options: {
-  title: string;
-  message: string;
-  isSuccess: boolean;
-  autoClose?: boolean;
-  errorDetail?: string;
+  title: string
+  message: string
+  isSuccess: boolean
+  autoClose?: boolean
+  errorDetail?: string
 }): string {
-  const { title, isSuccess, autoClose = false, errorDetail } = options;
+  const { title, isSuccess, autoClose = false, errorDetail } = options
 
   // Terminal output line type
   interface TerminalLine {
-    text: string;
-    status?: string;
-    statusClass?: string;
-    isHighlight?: boolean;
-    highlightColor?: 'green' | 'red';
-    hasCursor?: boolean;
-    isError?: boolean;
+    text: string
+    status?: string
+    statusClass?: string
+    isHighlight?: boolean
+    highlightColor?: "green" | "red"
+    hasCursor?: boolean
+    isError?: boolean
   }
 
   // Terminal output lines based on success/error
   const terminalLines: TerminalLine[] = isSuccess
     ? [
-        { text: 'initiating handshake sequence...' },
-        { text: 'verifying credentials', status: '[PROCESSING]', statusClass: 'status-wait' },
-        { text: 'token exchange completed', status: '[OK]', statusClass: 'status-ok' },
-        { text: 'AUTHORIZATION SUCCESSFUL', isHighlight: true, highlightColor: 'green' },
-        { text: 'closing connection', hasCursor: true },
+        { text: "initiating handshake sequence..." },
+        { text: "verifying credentials", status: "[PROCESSING]", statusClass: "status-wait" },
+        { text: "token exchange completed", status: "[OK]", statusClass: "status-ok" },
+        { text: "AUTHORIZATION SUCCESSFUL", isHighlight: true, highlightColor: "green" },
+        { text: "closing connection", hasCursor: true },
       ]
     : [
-        { text: 'initiating handshake sequence...' },
-        { text: 'verifying credentials', status: '[PROCESSING]', statusClass: 'status-wait' },
-        { text: 'token exchange failed', status: '[ERROR]', statusClass: 'status-error' },
-        { text: 'AUTHORIZATION FAILED', isHighlight: true, highlightColor: 'red' },
+        { text: "initiating handshake sequence..." },
+        { text: "verifying credentials", status: "[PROCESSING]", statusClass: "status-wait" },
+        { text: "token exchange failed", status: "[ERROR]", statusClass: "status-error" },
+        { text: "AUTHORIZATION FAILED", isHighlight: true, highlightColor: "red" },
         ...(errorDetail ? [{ text: `error: ${errorDetail}`, isError: true }] : []),
-      ];
+      ]
 
-  const terminalLinesHtml = terminalLines.map((line, i) => {
-    let content = '';
-    if (line.isHighlight) {
-      const color = line.highlightColor === 'green' ? 'var(--green)' : 'var(--red)';
-      const glow = line.highlightColor === 'green'
-        ? 'rgba(158, 206, 106, 0.4)'
-        : 'rgba(247, 118, 142, 0.4)';
-      content = `<span class="cmd-text" style="color: ${color}; text-shadow: 0 0 10px ${glow};">${line.text}</span>`;
-    } else if (line.isError) {
-      content = `<span class="cmd-text" style="color: var(--red);">${line.text}</span>`;
-    } else {
-      content = `<span class="cmd-text">${line.text}${line.status ? ` <span class="${line.statusClass}">${line.status}</span>` : ''}${line.hasCursor ? ' <span class="cursor"></span>' : ''}</span>`;
-    }
-    return `        <div class="line" style="animation-delay: ${0.2 + i * 0.4}s;">
+  const terminalLinesHtml = terminalLines
+    .map((line, i) => {
+      let content = ""
+      if (line.isHighlight) {
+        const color = line.highlightColor === "green" ? "var(--green)" : "var(--red)"
+        const glow =
+          line.highlightColor === "green" ? "rgba(158, 206, 106, 0.4)" : "rgba(247, 118, 142, 0.4)"
+        content = `<span class="cmd-text" style="color: ${color}; text-shadow: 0 0 10px ${glow};">${line.text}</span>`
+      } else if (line.isError) {
+        content = `<span class="cmd-text" style="color: var(--red);">${line.text}</span>`
+      } else {
+        content = `<span class="cmd-text">${line.text}${line.status ? ` <span class="${line.statusClass}">${line.status}</span>` : ""}${line.hasCursor ? ' <span class="cursor"></span>' : ""}</span>`
+      }
+      return `        <div class="line" style="animation-delay: ${0.2 + i * 0.4}s;">
           <span class="prompt">➜</span>
           <span class="path">~</span>
           ${content}
-        </div>`;
-  }).join('\n');
+        </div>`
+    })
+    .join("\n")
 
-  const progressSection = autoClose ? `
+  const progressSection = autoClose
+    ? `
       <div class="progress-section">
         <div class="timer-info">
           <span>Session Autokill</span>
@@ -121,9 +124,11 @@ function generateOAuthPage(options: {
         <div class="progress-bar">
           <div class="progress-fill" id="progress-fill"></div>
         </div>
-      </div>` : '';
+      </div>`
+    : ""
 
-  const autoCloseScript = autoClose ? `
+  const autoCloseScript = autoClose
+    ? `
     // Countdown Logic
     setTimeout(() => {
       const duration = 3000;
@@ -147,12 +152,11 @@ function generateOAuthPage(options: {
       };
 
       requestAnimationFrame(tick);
-    }, 2200);` : '';
+    }, 2200);`
+    : ""
 
-  const logoColor = isSuccess ? 'var(--blue)' : 'var(--red)';
-  const logoGlow = isSuccess
-    ? 'rgba(122, 162, 247, 0.3)'
-    : 'rgba(247, 118, 142, 0.3)';
+  const logoColor = isSuccess ? "var(--blue)" : "var(--red)"
+  const logoGlow = isSuccess ? "rgba(122, 162, 247, 0.3)" : "rgba(247, 118, 142, 0.3)"
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -494,79 +498,83 @@ ${progressSection}
 ${autoCloseScript}
   </script>
 </body>
-</html>`;
+</html>`
 }
 
 // Generate PKCE code verifier and challenge
 export function generatePKCE(): { verifier: string; challenge: string } {
-  const verifier = randomBytes(32).toString('base64url');
-  const challenge = createHash('sha256').update(verifier).digest('base64url');
-  return { verifier, challenge };
+  const verifier = randomBytes(32).toString("base64url")
+  const challenge = createHash("sha256").update(verifier).digest("base64url")
+  return { verifier, challenge }
 }
 
 // Generate random state for CSRF protection
 export function generateState(): string {
-  return randomBytes(16).toString('hex');
+  return randomBytes(16).toString("hex")
 }
 
 export class CraftOAuth {
-  private config: OAuthConfig;
-  private server: Server | null = null;
-  private callbacks: OAuthCallbacks;
+  private config: OAuthConfig
+  private server: Server | null = null
+  private callbacks: OAuthCallbacks
 
   constructor(config: OAuthConfig, callbacks: OAuthCallbacks) {
-    this.config = config;
-    this.callbacks = callbacks;
+    this.config = config
+    this.callbacks = callbacks
   }
 
   // Get OAuth server metadata
   private async getServerMetadata(): Promise<{
-    authorization_endpoint: string;
-    token_endpoint: string;
-    registration_endpoint?: string;
+    authorization_endpoint: string
+    token_endpoint: string
+    registration_endpoint?: string
   }> {
-    const metadataUrl = `${this.config.mcpBaseUrl}/.well-known/oauth-authorization-server`;
+    const metadataUrl = `${this.config.mcpBaseUrl}/.well-known/oauth-authorization-server`
 
-    const response = await fetch(metadataUrl);
+    const response = await fetch(metadataUrl)
     if (!response.ok) {
-      throw new Error(`Failed to get OAuth metadata: ${response.status}`);
+      throw new Error(`Failed to get OAuth metadata: ${response.status}`)
     }
 
     return response.json() as Promise<{
-      authorization_endpoint: string;
-      token_endpoint: string;
-      registration_endpoint?: string;
-    }>;
+      authorization_endpoint: string
+      token_endpoint: string
+      registration_endpoint?: string
+    }>
   }
 
   // Register OAuth client dynamically
-  private async registerClient(registrationEndpoint: string, clientName: string): Promise<{
-    client_id: string;
-    client_secret?: string;
+  private async registerClient(
+    registrationEndpoint: string,
+    clientName: string,
+  ): Promise<{
+    client_id: string
+    client_secret?: string
   }> {
-    const redirectUri = this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
+    const redirectUri =
+      this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`
 
     const response = await fetch(registrationEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         client_name: clientName,
         redirect_uris: [redirectUri],
-        grant_types: ['authorization_code', 'refresh_token'],
-        response_types: ['code'],
-        token_endpoint_auth_method: 'none', // Public client
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none", // Public client
       }),
-    });
+    })
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to register OAuth client: ${error}`);
+      const error = await response.text()
+      throw new Error(`Failed to register OAuth client: ${error}`)
     }
 
     return response.json() as Promise<{
-      client_id: string;
-      client_secret?: string;
-    }>;
+      client_id: string
+      client_secret?: string
+    }>
   }
 
   // Exchange authorization code for tokens
@@ -576,189 +584,192 @@ export class CraftOAuth {
     codeVerifier: string,
     clientId: string,
     redirectUri?: string,
-    clientSecret?: string
+    clientSecret?: string,
   ): Promise<OAuthTokens> {
-    const uri = redirectUri || this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
+    const uri =
+      redirectUri || this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`
 
     const params = new URLSearchParams({
-      grant_type: 'authorization_code',
+      grant_type: "authorization_code",
       code,
       redirect_uri: uri,
       client_id: clientId,
       code_verifier: codeVerifier,
-    });
+    })
 
     // Add client_secret if provided (some servers require it)
     if (clientSecret) {
-      params.set('client_secret', clientSecret);
+      params.set("client_secret", clientSecret)
     }
 
     const response = await fetch(tokenEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
-    });
+    })
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to exchange code for tokens: ${error}`);
+      const error = await response.text()
+      throw new Error(`Failed to exchange code for tokens: ${error}`)
     }
 
-    const data = await response.json() as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-      token_type?: string;
-    };
+    const data = (await response.json()) as {
+      access_token: string
+      refresh_token?: string
+      expires_in?: number
+      token_type?: string
+    }
 
     return {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
       expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
-      tokenType: data.token_type || 'Bearer',
-    };
+      tokenType: data.token_type || "Bearer",
+    }
   }
 
   // Refresh access token
-  async refreshAccessToken(
-    refreshToken: string,
-    clientId: string
-  ): Promise<OAuthTokens> {
-    const metadata = await this.getServerMetadata();
+  async refreshAccessToken(refreshToken: string, clientId: string): Promise<OAuthTokens> {
+    const metadata = await this.getServerMetadata()
 
     const params = new URLSearchParams({
-      grant_type: 'refresh_token',
+      grant_type: "refresh_token",
       refresh_token: refreshToken,
       client_id: clientId,
-    });
+    })
 
     const response = await fetch(metadata.token_endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
-    });
+    })
 
     if (!response.ok) {
-      throw new Error('Failed to refresh token');
+      throw new Error("Failed to refresh token")
     }
 
-    const data = await response.json() as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-      token_type?: string;
-    };
+    const data = (await response.json()) as {
+      access_token: string
+      refresh_token?: string
+      expires_in?: number
+      token_type?: string
+    }
 
     return {
       accessToken: data.access_token,
       refreshToken: data.refresh_token || refreshToken,
       expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
-      tokenType: data.token_type || 'Bearer',
-    };
+      tokenType: data.token_type || "Bearer",
+    }
   }
 
   // Check if the MCP server requires OAuth
   async checkAuthRequired(): Promise<boolean> {
-    const metadataUrl = `${this.config.mcpBaseUrl}/.well-known/oauth-authorization-server`;
-    this.callbacks.onStatus('Checking if authentication is required...');
+    const metadataUrl = `${this.config.mcpBaseUrl}/.well-known/oauth-authorization-server`
+    this.callbacks.onStatus("Checking if authentication is required...")
 
     try {
-      const response = await fetch(metadataUrl);
+      const response = await fetch(metadataUrl)
       if (response.ok) {
-        this.callbacks.onStatus('OAuth required - server has OAuth metadata');
-        return true;
+        this.callbacks.onStatus("OAuth required - server has OAuth metadata")
+        return true
       }
       // 404 or other error means no OAuth
-      this.callbacks.onStatus('No OAuth metadata found - server may be public');
-      return false;
-    } catch (error) {
-      this.callbacks.onStatus('Could not reach OAuth metadata - assuming public');
-      return false;
+      this.callbacks.onStatus("No OAuth metadata found - server may be public")
+      return false
+    } catch (_error) {
+      this.callbacks.onStatus("Could not reach OAuth metadata - assuming public")
+      return false
     }
   }
 
   // Start the OAuth flow
   async authenticate(): Promise<{ tokens: OAuthTokens; clientId: string }> {
-    this.callbacks.onStatus('Fetching OAuth server configuration...');
+    this.callbacks.onStatus("Fetching OAuth server configuration...")
 
     // Get server metadata
-    let metadata;
+    let metadata: OAuthMetadata
     try {
-      metadata = await this.getServerMetadata();
-      this.callbacks.onStatus(`Found OAuth endpoints at ${this.config.mcpBaseUrl}`);
+      metadata = await this.getServerMetadata()
+      this.callbacks.onStatus(`Found OAuth endpoints at ${this.config.mcpBaseUrl}`)
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      this.callbacks.onStatus(`Failed to get OAuth metadata: ${msg}`);
-      throw error;
+      const msg = error instanceof Error ? error.message : "Unknown error"
+      this.callbacks.onStatus(`Failed to get OAuth metadata: ${msg}`)
+      throw error
     }
 
     // Register client if endpoint available
-    let clientId: string;
+    let clientId: string
     if (metadata.registration_endpoint) {
       // Try primary client name first, fall back to alternative if rejected
-      this.callbacks.onStatus(`Registering client as '${CLIENT_NAME}'...`);
+      this.callbacks.onStatus(`Registering client as '${CLIENT_NAME}'...`)
       try {
-        const client = await this.registerClient(metadata.registration_endpoint, CLIENT_NAME);
-        clientId = client.client_id;
-        this.callbacks.onStatus(`Registered as client: ${clientId}`);
-      } catch (error) {
+        const client = await this.registerClient(metadata.registration_endpoint, CLIENT_NAME)
+        clientId = client.client_id
+        this.callbacks.onStatus(`Registered as client: ${clientId}`)
+      } catch (_error) {
         // Try fallback client name (some servers have allowlists)
-        this.callbacks.onStatus(`Registration as '${CLIENT_NAME}' failed, trying '${FALLBACK_CLIENT_NAME}'...`);
+        this.callbacks.onStatus(
+          `Registration as '${CLIENT_NAME}' failed, trying '${FALLBACK_CLIENT_NAME}'...`,
+        )
         try {
-          const client = await this.registerClient(metadata.registration_endpoint, FALLBACK_CLIENT_NAME);
-          clientId = client.client_id;
-          this.callbacks.onStatus(`Registered as client: ${clientId}`);
+          const client = await this.registerClient(
+            metadata.registration_endpoint,
+            FALLBACK_CLIENT_NAME,
+          )
+          clientId = client.client_id
+          this.callbacks.onStatus(`Registered as client: ${clientId}`)
         } catch (fallbackError) {
-          const msg = fallbackError instanceof Error ? fallbackError.message : 'Unknown error';
-          this.callbacks.onStatus(`Client registration failed: ${msg}`);
-          throw fallbackError;
+          const msg = fallbackError instanceof Error ? fallbackError.message : "Unknown error"
+          this.callbacks.onStatus(`Client registration failed: ${msg}`)
+          throw fallbackError
         }
       }
     } else {
       // Use a default client ID for public clients
-      clientId = 'craft-agent';
-      this.callbacks.onStatus(`Using default client ID: ${clientId}`);
+      clientId = "craft-agent"
+      this.callbacks.onStatus(`Using default client ID: ${clientId}`)
     }
 
     // Generate PKCE and state
-    const pkce = generatePKCE();
-    const state = generateState();
-    const redirectUri = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
-    this.callbacks.onStatus('Generated PKCE challenge and state');
+    const pkce = generatePKCE()
+    const state = generateState()
+    const redirectUri = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`
+    this.callbacks.onStatus("Generated PKCE challenge and state")
 
     // Build authorization URL
-    const authUrl = new URL(metadata.authorization_endpoint);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('client_id', clientId);
-    authUrl.searchParams.set('redirect_uri', redirectUri);
-    authUrl.searchParams.set('state', state);
-    authUrl.searchParams.set('code_challenge', pkce.challenge);
-    authUrl.searchParams.set('code_challenge_method', 'S256');
+    const authUrl = new URL(metadata.authorization_endpoint)
+    authUrl.searchParams.set("response_type", "code")
+    authUrl.searchParams.set("client_id", clientId)
+    authUrl.searchParams.set("redirect_uri", redirectUri)
+    authUrl.searchParams.set("state", state)
+    authUrl.searchParams.set("code_challenge", pkce.challenge)
+    authUrl.searchParams.set("code_challenge_method", "S256")
 
     // Start local server to receive callback
-    this.callbacks.onStatus(`Starting callback server on port ${CALLBACK_PORT}...`);
-    const codePromise = this.startCallbackServer(state);
+    this.callbacks.onStatus(`Starting callback server on port ${CALLBACK_PORT}...`)
+    const codePromise = this.startCallbackServer(state)
 
     // Open browser for authorization
-    this.callbacks.onStatus('Opening browser for authorization...');
-    await shell.openExternal(authUrl.toString());
+    this.callbacks.onStatus("Opening browser for authorization...")
+    await shell.openExternal(authUrl.toString())
 
     // Wait for the authorization code
-    this.callbacks.onStatus('Waiting for you to authorize in browser...');
-    const authCode = await codePromise;
-    this.callbacks.onStatus('Authorization code received!');
+    this.callbacks.onStatus("Waiting for you to authorize in browser...")
+    const authCode = await codePromise
+    this.callbacks.onStatus("Authorization code received!")
 
     // Exchange code for tokens
-    this.callbacks.onStatus('Exchanging authorization code for tokens...');
+    this.callbacks.onStatus("Exchanging authorization code for tokens...")
     const tokens = await this.exchangeCodeForTokens(
       metadata.token_endpoint,
       authCode,
       pkce.verifier,
-      clientId
-    );
-    this.callbacks.onStatus('Tokens received successfully!');
+      clientId,
+    )
+    this.callbacks.onStatus("Tokens received successfully!")
 
-    return { tokens, clientId };
+    return { tokens, clientId }
   }
 
   /**
@@ -767,51 +778,57 @@ export class CraftOAuth {
    * @param preloadedMetadata - Optional pre-fetched OAuth metadata to avoid duplicate fetch
    */
   async startAuthFlow(preloadedMetadata?: OAuthMetadata): Promise<{
-    authUrl: string;
-    state: string;
-    codeVerifier: string;
-    tokenEndpoint: string;
-    clientId: string;
-    clientSecret?: string;
+    authUrl: string
+    state: string
+    codeVerifier: string
+    tokenEndpoint: string
+    clientId: string
+    clientSecret?: string
   }> {
-    this.callbacks.onStatus('Fetching OAuth server configuration...');
-    const metadata = preloadedMetadata || await this.getServerMetadata();
+    this.callbacks.onStatus("Fetching OAuth server configuration...")
+    const metadata = preloadedMetadata || (await this.getServerMetadata())
 
     // Register client if endpoint available
-    let clientId: string;
-    let clientSecret: string | undefined;
+    let clientId: string
+    let clientSecret: string | undefined
     if (metadata.registration_endpoint) {
       // Try primary client name first, fall back to alternative if rejected
-      this.callbacks.onStatus(`Registering client as '${CLIENT_NAME}'...`);
+      this.callbacks.onStatus(`Registering client as '${CLIENT_NAME}'...`)
       try {
-        const client = await this.registerClient(metadata.registration_endpoint, CLIENT_NAME);
-        clientId = client.client_id;
-        clientSecret = client.client_secret;
-        this.callbacks.onStatus(`Registered as client: ${clientId}`);
-      } catch (error) {
+        const client = await this.registerClient(metadata.registration_endpoint, CLIENT_NAME)
+        clientId = client.client_id
+        clientSecret = client.client_secret
+        this.callbacks.onStatus(`Registered as client: ${clientId}`)
+      } catch (_error) {
         // Try fallback client name (some servers have allowlists)
-        this.callbacks.onStatus(`Registration as '${CLIENT_NAME}' failed, trying '${FALLBACK_CLIENT_NAME}'...`);
-        const client = await this.registerClient(metadata.registration_endpoint, FALLBACK_CLIENT_NAME);
-        clientId = client.client_id;
-        clientSecret = client.client_secret;
-        this.callbacks.onStatus(`Registered as client: ${clientId}`);
+        this.callbacks.onStatus(
+          `Registration as '${CLIENT_NAME}' failed, trying '${FALLBACK_CLIENT_NAME}'...`,
+        )
+        const client = await this.registerClient(
+          metadata.registration_endpoint,
+          FALLBACK_CLIENT_NAME,
+        )
+        clientId = client.client_id
+        clientSecret = client.client_secret
+        this.callbacks.onStatus(`Registered as client: ${clientId}`)
       }
     } else {
       // No registration endpoint - use default client ID
-      clientId = '1code';
+      clientId = "mauscode"
     }
 
-    const pkce = generatePKCE();
-    const state = generateState();
-    const redirectUri = this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
+    const pkce = generatePKCE()
+    const state = generateState()
+    const redirectUri =
+      this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`
 
-    const authUrl = new URL(metadata.authorization_endpoint);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('client_id', clientId);
-    authUrl.searchParams.set('redirect_uri', redirectUri);
-    authUrl.searchParams.set('state', state);
-    authUrl.searchParams.set('code_challenge', pkce.challenge);
-    authUrl.searchParams.set('code_challenge_method', 'S256');
+    const authUrl = new URL(metadata.authorization_endpoint)
+    authUrl.searchParams.set("response_type", "code")
+    authUrl.searchParams.set("client_id", clientId)
+    authUrl.searchParams.set("redirect_uri", redirectUri)
+    authUrl.searchParams.set("state", state)
+    authUrl.searchParams.set("code_challenge", pkce.challenge)
+    authUrl.searchParams.set("code_challenge_method", "S256")
 
     return {
       authUrl: authUrl.toString(),
@@ -820,7 +837,7 @@ export class CraftOAuth {
       tokenEndpoint: metadata.token_endpoint,
       clientId,
       clientSecret,
-    };
+    }
   }
 
   /**
@@ -831,112 +848,128 @@ export class CraftOAuth {
     codeVerifier: string,
     tokenEndpoint: string,
     clientId: string,
-    clientSecret?: string
+    clientSecret?: string,
   ): Promise<OAuthTokens> {
-    const redirectUri = this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
-    return this.exchangeCodeForTokens(tokenEndpoint, code, codeVerifier, clientId, redirectUri, clientSecret);
+    const redirectUri =
+      this.config.redirectUri || `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`
+    return this.exchangeCodeForTokens(
+      tokenEndpoint,
+      code,
+      codeVerifier,
+      clientId,
+      redirectUri,
+      clientSecret,
+    )
   }
 
   // Start local HTTP server to receive OAuth callback
   private startCallbackServer(expectedState: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.stopServer();
-        reject(new Error('OAuth timeout - no callback received'));
-      }, 300000); // 5 minute timeout
+        this.stopServer()
+        reject(new Error("OAuth timeout - no callback received"))
+      }, 300000) // 5 minute timeout
 
       this.server = createServer((req, res) => {
-        const url = new URL(req.url || '/', `http://localhost:${CALLBACK_PORT}`);
+        const url = new URL(req.url || "/", `http://localhost:${CALLBACK_PORT}`)
 
         if (url.pathname === CALLBACK_PATH) {
-          const code = url.searchParams.get('code');
-          const state = url.searchParams.get('state');
-          const error = url.searchParams.get('error');
+          const code = url.searchParams.get("code")
+          const state = url.searchParams.get("state")
+          const error = url.searchParams.get("error")
 
           if (error) {
-            res.writeHead(400, { 'Content-Type': 'text/html' });
-            res.end(generateOAuthPage({
-              title: 'Authorization Failed',
-              message: 'You can close this window.',
-              isSuccess: false,
-              errorDetail: error,
-            }));
-            clearTimeout(timeout);
-            this.stopServer();
-            reject(new Error(`OAuth error: ${error}`));
-            return;
+            res.writeHead(400, { "Content-Type": "text/html" })
+            res.end(
+              generateOAuthPage({
+                title: "Authorization Failed",
+                message: "You can close this window.",
+                isSuccess: false,
+                errorDetail: error,
+              }),
+            )
+            clearTimeout(timeout)
+            this.stopServer()
+            reject(new Error(`OAuth error: ${error}`))
+            return
           }
 
           if (state !== expectedState) {
-            res.writeHead(400, { 'Content-Type': 'text/html' });
-            res.end(generateOAuthPage({
-              title: 'Security Error',
-              message: 'State mismatch - possible CSRF attack.',
-              isSuccess: false,
-            }));
-            clearTimeout(timeout);
-            this.stopServer();
-            reject(new Error('OAuth state mismatch'));
-            return;
+            res.writeHead(400, { "Content-Type": "text/html" })
+            res.end(
+              generateOAuthPage({
+                title: "Security Error",
+                message: "State mismatch - possible CSRF attack.",
+                isSuccess: false,
+              }),
+            )
+            clearTimeout(timeout)
+            this.stopServer()
+            reject(new Error("OAuth state mismatch"))
+            return
           }
 
           if (!code) {
-            res.writeHead(400, { 'Content-Type': 'text/html' });
-            res.end(generateOAuthPage({
-              title: 'Authorization Failed',
-              message: 'No authorization code received.',
-              isSuccess: false,
-            }));
-            clearTimeout(timeout);
-            this.stopServer();
-            reject(new Error('No authorization code'));
-            return;
+            res.writeHead(400, { "Content-Type": "text/html" })
+            res.end(
+              generateOAuthPage({
+                title: "Authorization Failed",
+                message: "No authorization code received.",
+                isSuccess: false,
+              }),
+            )
+            clearTimeout(timeout)
+            this.stopServer()
+            reject(new Error("No authorization code"))
+            return
           }
 
           // Success!
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(generateOAuthPage({
-            title: 'Authorization Successful',
-            message: 'You can close this window and return to the terminal.',
-            isSuccess: true,
-            autoClose: true,
-          }));
+          res.writeHead(200, { "Content-Type": "text/html" })
+          res.end(
+            generateOAuthPage({
+              title: "Authorization Successful",
+              message: "You can close this window and return to the terminal.",
+              isSuccess: true,
+              autoClose: true,
+            }),
+          )
 
-          clearTimeout(timeout);
-          this.stopServer();
-          resolve(code);
+          clearTimeout(timeout)
+          this.stopServer()
+          resolve(code)
         } else {
-          res.writeHead(404);
-          res.end('Not found');
+          res.writeHead(404)
+          res.end("Not found")
         }
-      });
+      })
 
       this.server.listen(CALLBACK_PORT, () => {
         // Server started
-      });
+      })
 
-      this.server.on('error', (err) => {
-        clearTimeout(timeout);
-        reject(new Error(`Failed to start callback server: ${err.message}`));
-      });
-    });
+      this.server.on("error", (err) => {
+        clearTimeout(timeout)
+        reject(new Error(`Failed to start callback server: ${err.message}`))
+      })
+    })
   }
 
   private stopServer(): void {
     if (this.server) {
-      this.server.close();
-      this.server = null;
+      this.server.close()
+      this.server = null
     }
   }
 
   // Cancel the OAuth flow
   cancel(): void {
-    this.stopServer();
+    this.stopServer()
   }
 }
 
 // Helper to extract the base MCP URL from a full MCP URL
 export function getMcpBaseUrl(mcpUrl: string): string {
   // Remove /mcp or /sse suffix if present
-  return mcpUrl.replace(/\/(mcp|sse)\/?$/, '');
+  return mcpUrl.replace(/\/(mcp|sse)\/?$/, "")
 }

@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": "error",
+  "final": "",
+  "payloads": [],
+  "model": null,
+  "provider": null,
+  "sessionId": "62b4db51-9818-48c7-8415-e71fc5e838be",
+  "error": {
+    "message": "No route-compatible authentication source is configured for openai.",
+    "kind": "exception"
+  }
+}

@@ -4,7 +4,7 @@
  * Exports the search engine, cache, and related utilities.
  */
 
-export { MentionCache, GitAwareCache, mentionCache, gitAwareCache } from "./cache"
 export type { MentionCacheOptions } from "./cache"
+export { GitAwareCache, gitAwareCache, MentionCache, mentionCache } from "./cache"
 
 export { MentionSearchEngine, mentionSearchEngine } from "./engine"

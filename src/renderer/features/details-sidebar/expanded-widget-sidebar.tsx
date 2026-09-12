@@ -1,26 +1,17 @@
 "use client"
 
-import { useCallback, useEffect, useMemo } from "react"
 import { useAtom } from "jotai"
 import { X } from "lucide-react"
-import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
+import { useCallback, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { Kbd } from "@/components/ui/kbd"
-import {
-  expandedWidgetAtomFamily,
-  expandedWidgetSidebarWidthAtom,
-  WIDGET_REGISTRY,
-  type WidgetId,
-} from "./atoms"
+import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { expandedWidgetAtomFamily, expandedWidgetSidebarWidthAtom, WIDGET_REGISTRY } from "./atoms"
+import { DiffSection } from "./sections/diff-section"
 import { InfoSection } from "./sections/info-section"
 import { PlanSection } from "./sections/plan-section"
 import { TerminalSection } from "./sections/terminal-section"
-import { DiffSection } from "./sections/diff-section"
 
 interface ExpandedWidgetSidebarProps {
   /** Workspace/chat ID */
@@ -46,16 +37,12 @@ export function ExpandedWidgetSidebar({
   planPath,
   planRefetchTrigger,
   activeSubChatId,
-  canOpenDiff,
   isDiffSidebarOpen,
   setIsDiffSidebarOpen,
   diffStats,
 }: ExpandedWidgetSidebarProps) {
   // Per-workspace expanded widget state
-  const expandedWidgetAtom = useMemo(
-    () => expandedWidgetAtomFamily(chatId),
-    [chatId],
-  )
+  const expandedWidgetAtom = useMemo(() => expandedWidgetAtomFamily(chatId), [chatId])
   const [expandedWidget, setExpandedWidget] = useAtom(expandedWidgetAtom)
 
   // Get widget config
@@ -87,13 +74,7 @@ export function ExpandedWidgetSidebar({
   const renderWidgetContent = () => {
     switch (expandedWidget) {
       case "info":
-        return (
-          <InfoSection
-            chatId={chatId}
-            worktreePath={worktreePath}
-            isExpanded
-          />
-        )
+        return <InfoSection chatId={chatId} worktreePath={worktreePath} isExpanded />
       case "plan":
         return (
           <PlanSection
@@ -105,12 +86,7 @@ export function ExpandedWidgetSidebar({
         )
       case "terminal":
         return worktreePath ? (
-          <TerminalSection
-            chatId={chatId}
-            cwd={worktreePath}
-            workspaceId={chatId}
-            isExpanded
-          />
+          <TerminalSection chatId={chatId} cwd={worktreePath} workspaceId={chatId} isExpanded />
         ) : null
       case "diff":
         return (
@@ -173,9 +149,7 @@ export function ExpandedWidgetSidebar({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {renderWidgetContent()}
-        </div>
+        <div className="flex-1 overflow-y-auto">{renderWidgetContent()}</div>
       </div>
     </ResizableSidebar>
   )

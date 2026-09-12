@@ -48,8 +48,7 @@ export const overlayItemHighlighted =
   "data-[highlighted]:bg-accent dark:data-[highlighted]:bg-neutral-800 data-[highlighted]:text-accent-foreground"
 
 /** Item disabled state */
-export const overlayItemDisabled =
-  "data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+export const overlayItemDisabled = "data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
 
 /** Item transition */
 export const overlayItemTransition = "transition-colors"
@@ -80,8 +79,7 @@ export const overlayCheckableItem =
   "relative flex items-center gap-1.5 min-h-[32px] py-[5px] pl-7 pr-1.5 mx-1 rounded-md text-sm cursor-default select-none outline-none transition-colors dark:hover:bg-neutral-800 hover:bg-accent hover:text-foreground focus:bg-accent dark:focus:bg-neutral-800 focus:text-accent-foreground data-[highlighted]:bg-accent dark:data-[highlighted]:bg-neutral-800 data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
 
 /** Indicator container (positioned left) */
-export const overlayItemIndicator =
-  "absolute left-2 flex h-3.5 w-3.5 items-center justify-center"
+export const overlayItemIndicator = "absolute left-2 flex h-3.5 w-3.5 items-center justify-center"
 
 // =============================================================================
 // Supporting Elements

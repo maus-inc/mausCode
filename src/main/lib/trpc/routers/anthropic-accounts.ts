@@ -1,33 +1,21 @@
+/**
+ * NOTE (transplant): AccountSource + the system-keychain account fallback in
+ * list/getActive were transplanted from erenbertr/1code (Apache-2.0). Their
+ * encrypt/decrypt re-inline was NOT taken — this tree keeps token-crypto.
+ */
 import { eq, sql } from "drizzle-orm"
-import { safeStorage } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
+import { getValidExistingClaudeToken } from "../../claude-token"
 import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../../db"
 import { createId } from "../../db/utils"
+import { decryptToken, encryptToken } from "../../token-crypto"
 import { publicProcedure, router } from "../index"
 import { clearClaudeCaches } from "./claude"
 
-/**
- * Encrypt token using Electron's safeStorage
- */
-function encryptToken(token: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn("[AnthropicAccounts] Encryption not available, storing as base64")
-    return Buffer.from(token).toString("base64")
-  }
-  return safeStorage.encryptString(token).toString("base64")
-}
+const SYSTEM_KEYCHAIN_ACCOUNT_ID = "system-keychain"
 
-/**
- * Decrypt token using Electron's safeStorage
- */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
-}
+type AccountSource = "db" | "legacy" | "system"
 
 /**
  * Multi-account Anthropic management router
@@ -36,7 +24,7 @@ export const anthropicAccountsRouter = router({
   /**
    * List all stored Anthropic accounts
    */
-  list: publicProcedure.query(() => {
+  list: publicProcedure.query(async () => {
     const db = getDatabase()
 
     try {
@@ -58,6 +46,7 @@ export const anthropicAccountsRouter = router({
           ...acc,
           connectedAt: acc.connectedAt?.toISOString() ?? null,
           lastUsedAt: acc.lastUsedAt?.toISOString() ?? null,
+          source: "db" as AccountSource,
         }))
       }
     } catch {
@@ -73,16 +62,35 @@ export const anthropicAccountsRouter = router({
         .get()
 
       if (legacyCred?.oauthToken) {
-        return [{
-          id: "legacy-default",
-          email: null,
-          displayName: "Anthropic Account",
-          connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
-          lastUsedAt: null,
-        }]
+        return [
+          {
+            id: "legacy-default",
+            email: null,
+            displayName: "Anthropic Account",
+            connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
+            lastUsedAt: null,
+            source: "legacy" as AccountSource,
+          },
+        ]
       }
     } catch {
       // Legacy table also doesn't exist
+    }
+
+    // Final fallback: surface the local Claude Code CLI credential
+    // (macOS Keychain / ~/.claude/.credentials.json) so the user sees
+    // an active connection in Settings even though it's not in our DB.
+    if ((await getValidExistingClaudeToken())?.trim()) {
+      return [
+        {
+          id: SYSTEM_KEYCHAIN_ACCOUNT_ID,
+          email: null,
+          displayName: "Local Claude Code",
+          connectedAt: null,
+          lastUsedAt: null,
+          source: "system" as AccountSource,
+        },
+      ]
     }
 
     return []
@@ -91,7 +99,7 @@ export const anthropicAccountsRouter = router({
   /**
    * Get currently active account info
    */
-  getActive: publicProcedure.query(() => {
+  getActive: publicProcedure.query(async () => {
     const db = getDatabase()
 
     try {
@@ -117,6 +125,7 @@ export const anthropicAccountsRouter = router({
           return {
             ...account,
             connectedAt: account.connectedAt?.toISOString() ?? null,
+            source: "db" as AccountSource,
           }
         }
       }
@@ -138,10 +147,22 @@ export const anthropicAccountsRouter = router({
           email: null,
           displayName: "Anthropic Account",
           connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
+          source: "legacy" as AccountSource,
         }
       }
     } catch {
       // Legacy table also doesn't exist
+    }
+
+    // Final fallback: local Claude Code CLI credential
+    if ((await getValidExistingClaudeToken())?.trim()) {
+      return {
+        id: SYSTEM_KEYCHAIN_ACCOUNT_ID,
+        email: null,
+        displayName: "Local Claude Code",
+        connectedAt: null,
+        source: "system" as AccountSource,
+      }
     }
 
     return null
@@ -184,63 +205,59 @@ export const anthropicAccountsRouter = router({
   /**
    * Switch to a different account
    */
-  setActive: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .mutation(({ input }) => {
-      const db = getDatabase()
+  setActive: publicProcedure.input(z.object({ accountId: z.string() })).mutation(({ input }) => {
+    const db = getDatabase()
 
-      // Verify account exists
-      const account = db
-        .select()
-        .from(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, input.accountId))
-        .get()
+    // Verify account exists
+    const account = db
+      .select()
+      .from(anthropicAccounts)
+      .where(eq(anthropicAccounts.id, input.accountId))
+      .get()
 
-      if (!account) {
-        throw new Error("Account not found")
-      }
+    if (!account) {
+      throw new Error("Account not found")
+    }
 
-      // Update or insert settings
-      db.insert(anthropicSettings)
-        .values({
-          id: "singleton",
+    // Update or insert settings
+    db.insert(anthropicSettings)
+      .values({
+        id: "singleton",
+        activeAccountId: input.accountId,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: anthropicSettings.id,
+        set: {
           activeAccountId: input.accountId,
           updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: anthropicSettings.id,
-          set: {
-            activeAccountId: input.accountId,
-            updatedAt: new Date(),
-          },
-        })
-        .run()
+        },
+      })
+      .run()
 
-      // Update lastUsedAt on the account
-      db.update(anthropicAccounts)
-        .set({ lastUsedAt: new Date() })
-        .where(eq(anthropicAccounts.id, input.accountId))
-        .run()
+    // Update lastUsedAt on the account
+    db.update(anthropicAccounts)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(anthropicAccounts.id, input.accountId))
+      .run()
 
-      // Sync legacy table so all code paths use the correct token
-      db.delete(claudeCodeCredentials)
-        .where(eq(claudeCodeCredentials.id, "default"))
-        .run()
+    // Sync legacy table so all code paths use the correct token
+    db.delete(claudeCodeCredentials).where(eq(claudeCodeCredentials.id, "default")).run()
 
-      db.insert(claudeCodeCredentials)
-        .values({
-          id: "default",
-          oauthToken: account.oauthToken,
-          connectedAt: new Date(),
-        })
-        .run()
+    db.insert(claudeCodeCredentials)
+      .values({
+        id: "default",
+        oauthToken: account.oauthToken,
+        connectedAt: new Date(),
+      })
+      .run()
 
-      // Clear cached SDK state to ensure fresh token is used
-      clearClaudeCaches()
+    // Clear cached SDK state to ensure fresh token is used
+    clearClaudeCaches()
 
-      console.log(`[AnthropicAccounts] Switched to account: ${input.accountId}`)
-      return { success: true }
-    }),
+    console.log(`[AnthropicAccounts] Switched to account: ${input.accountId}`)
+    return { success: true }
+  }),
 
   /**
    * Add a new account (called after OAuth flow)
@@ -251,7 +268,7 @@ export const anthropicAccountsRouter = router({
         oauthToken: z.string().min(1),
         email: z.string().optional(),
         displayName: z.string().optional(),
-      })
+      }),
     )
     .mutation(({ input }) => {
       const db = getDatabase()
@@ -273,10 +290,7 @@ export const anthropicAccountsRouter = router({
         .run()
 
       // Count accounts
-      const countResult = db
-        .select({ count: sql<number>`count(*)` })
-        .from(anthropicAccounts)
-        .get()
+      const countResult = db.select({ count: sql<number>`count(*)` }).from(anthropicAccounts).get()
 
       // Automatically set as active if it's the first account
       if (countResult?.count === 1) {
@@ -308,7 +322,7 @@ export const anthropicAccountsRouter = router({
       z.object({
         accountId: z.string(),
         displayName: z.string().min(1),
-      })
+      }),
     )
     .mutation(({ input }) => {
       const db = getDatabase()
@@ -323,70 +337,61 @@ export const anthropicAccountsRouter = router({
         throw new Error("Account not found")
       }
 
-      console.log(`[AnthropicAccounts] Renamed account ${input.accountId} to "${input.displayName}"`)
+      console.log(
+        `[AnthropicAccounts] Renamed account ${input.accountId} to "${input.displayName}"`,
+      )
       return { success: true }
     }),
 
   /**
    * Remove an account
    */
-  remove: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .mutation(({ input }) => {
-      const db = getDatabase()
+  remove: publicProcedure.input(z.object({ accountId: z.string() })).mutation(({ input }) => {
+    const db = getDatabase()
 
-      // Check if this is the active account
-      const settings = db
-        .select()
-        .from(anthropicSettings)
-        .where(eq(anthropicSettings.id, "singleton"))
-        .get()
+    // Check if this is the active account
+    const settings = db
+      .select()
+      .from(anthropicSettings)
+      .where(eq(anthropicSettings.id, "singleton"))
+      .get()
 
-      // Delete the account
-      db.delete(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, input.accountId))
-        .run()
+    // Delete the account
+    db.delete(anthropicAccounts).where(eq(anthropicAccounts.id, input.accountId)).run()
 
-      // If deleted account was active, set another account as active
-      if (settings?.activeAccountId === input.accountId) {
-        const firstRemaining = db
-          .select()
-          .from(anthropicAccounts)
-          .limit(1)
-          .get()
+    // If deleted account was active, set another account as active
+    if (settings?.activeAccountId === input.accountId) {
+      const firstRemaining = db.select().from(anthropicAccounts).limit(1).get()
 
-        if (firstRemaining) {
-          db.update(anthropicSettings)
-            .set({
-              activeAccountId: firstRemaining.id,
-              updatedAt: new Date(),
-            })
-            .where(eq(anthropicSettings.id, "singleton"))
-            .run()
-        } else {
-          db.update(anthropicSettings)
-            .set({
-              activeAccountId: null,
-              updatedAt: new Date(),
-            })
-            .where(eq(anthropicSettings.id, "singleton"))
-            .run()
-        }
+      if (firstRemaining) {
+        db.update(anthropicSettings)
+          .set({
+            activeAccountId: firstRemaining.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(anthropicSettings.id, "singleton"))
+          .run()
+      } else {
+        db.update(anthropicSettings)
+          .set({
+            activeAccountId: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(anthropicSettings.id, "singleton"))
+          .run()
       }
+    }
 
-      console.log(`[AnthropicAccounts] Removed account: ${input.accountId}`)
-      return { success: true }
-    }),
+    console.log(`[AnthropicAccounts] Removed account: ${input.accountId}`)
+    return { success: true }
+  }),
 
   /**
    * Check if any accounts are connected
    */
   hasAccounts: publicProcedure.query(() => {
     const db = getDatabase()
-    const countResult = db
-      .select({ count: sql<number>`count(*)` })
-      .from(anthropicAccounts)
-      .get()
+    const countResult = db.select({ count: sql<number>`count(*)` }).from(anthropicAccounts).get()
 
     return { hasAccounts: (countResult?.count ?? 0) > 0 }
   }),

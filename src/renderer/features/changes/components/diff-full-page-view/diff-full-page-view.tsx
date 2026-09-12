@@ -1,7 +1,7 @@
 "use client"
 
 import { AnimatePresence, motion } from "motion/react"
-import { useEffect, useCallback } from "react"
+import { useCallback, useEffect } from "react"
 
 interface DiffFullPageViewProps {
   isOpen: boolean
@@ -9,11 +9,7 @@ interface DiffFullPageViewProps {
   children: React.ReactNode
 }
 
-export function DiffFullPageView({
-  isOpen,
-  onClose,
-  children,
-}: DiffFullPageViewProps) {
+export function DiffFullPageView({ isOpen, onClose, children }: DiffFullPageViewProps) {
   // Close on Escape key
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -22,7 +18,7 @@ export function DiffFullPageView({
         onClose()
       }
     },
-    [onClose]
+    [onClose],
   )
 
   useEffect(() => {

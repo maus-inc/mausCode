@@ -1,33 +1,31 @@
 // Components
-export { LinearIcon } from "./linear-icon"
-export { PlatformIcon } from "./platform-icon"
-export { TemplateCard } from "./template-card"
-export { AutomationCard } from "./automation-card"
-export { TabToggle } from "./tab-toggle"
 
+export { AutomationCard, type AutomationCardProps } from "./automation-card"
 // Constants
 export {
-  GITHUB_TRIGGER_OPTIONS,
-  LINEAR_TRIGGER_OPTIONS,
   AUTOMATION_TABS,
   CLAUDE_MODELS,
+  GITHUB_TRIGGER_OPTIONS,
+  LINEAR_TRIGGER_OPTIONS,
 } from "./constants"
+export { LinearIcon } from "./linear-icon"
+export { PlatformIcon } from "./platform-icon"
+export { TabToggle } from "./tab-toggle"
+export { TemplateCard } from "./template-card"
 
 // Templates
 export { AUTOMATION_TEMPLATES } from "./templates"
-
-// Utils
-export { getTriggerLabel, getAutomationDescription } from "./utils"
-
 // Types
 export type {
-  GitHubTriggerType,
-  LinearTriggerType,
-  TriggerType,
-  Platform,
-  ViewTab,
-  TriggerFilter,
-  TriggerConfig,
   AutomationTemplate,
   ClaudeModel,
+  GitHubTriggerType,
+  LinearTriggerType,
+  Platform,
+  TriggerConfig,
+  TriggerFilter,
+  TriggerType,
+  ViewTab,
 } from "./types"
+// Utils
+export { getAutomationDescription, getTriggerLabel } from "./utils"

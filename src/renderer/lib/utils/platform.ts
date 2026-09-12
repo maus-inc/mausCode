@@ -52,10 +52,7 @@ export function isLinux(): boolean {
  * @param webShortcut - Shortcut string for web browser (e.g., "⌥⌘N")
  * @param desktopShortcut - Shortcut string for desktop app (e.g., "⌘N")
  */
-export function getShortcutDisplay(
-  webShortcut: string,
-  desktopShortcut: string,
-): string {
+export function getShortcutDisplay(webShortcut: string, desktopShortcut: string): string {
   return isDesktopApp() ? desktopShortcut : webShortcut
 }
 

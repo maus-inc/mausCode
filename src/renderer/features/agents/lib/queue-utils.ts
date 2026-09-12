@@ -3,7 +3,7 @@
  * Adapted from canvas chat queue implementation
  */
 
-import type { UploadedImage, UploadedFile } from "../hooks/use-agents-file-upload"
+import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 
 export interface QueuedImage {
@@ -88,7 +88,7 @@ export function createQueueItem(
   files?: QueuedFile[],
   textContexts?: QueuedTextContext[],
   diffTextContexts?: QueuedDiffTextContext[],
-  pastedTexts?: QueuedPastedText[]
+  pastedTexts?: QueuedPastedText[],
 ): AgentQueueItem {
   return {
     id,
@@ -96,34 +96,28 @@ export function createQueueItem(
     images: images && images.length > 0 ? images : undefined,
     files: files && files.length > 0 ? files : undefined,
     textContexts: textContexts && textContexts.length > 0 ? textContexts : undefined,
-    diffTextContexts: diffTextContexts && diffTextContexts.length > 0 ? diffTextContexts : undefined,
+    diffTextContexts:
+      diffTextContexts && diffTextContexts.length > 0 ? diffTextContexts : undefined,
     pastedTexts: pastedTexts && pastedTexts.length > 0 ? pastedTexts : undefined,
     timestamp: new Date(),
     status: "pending",
   }
 }
 
-export function getNextQueueItem(
-  queue: AgentQueueItem[]
-): AgentQueueItem | null {
+export function getNextQueueItem(queue: AgentQueueItem[]): AgentQueueItem | null {
   return queue.find((item) => item.status === "pending") || null
 }
 
-export function removeQueueItem(
-  queue: AgentQueueItem[],
-  itemId: string
-): AgentQueueItem[] {
+export function removeQueueItem(queue: AgentQueueItem[], itemId: string): AgentQueueItem[] {
   return queue.filter((item) => item.id !== itemId)
 }
 
 export function updateQueueItemStatus(
   queue: AgentQueueItem[],
   itemId: string,
-  status: AgentQueueItem["status"]
+  status: AgentQueueItem["status"],
 ): AgentQueueItem[] {
-  return queue.map((item) =>
-    item.id === itemId ? { ...item, status } : item
-  )
+  return queue.map((item) => (item.id === itemId ? { ...item, status } : item))
 }
 
 // Helper to convert UploadedImage to QueuedImage
@@ -184,5 +178,5 @@ export function toQueuedPastedText(pt: PastedTextFile): QueuedPastedText {
 export function createTextPreview(text: string, maxLength: number = 50): string {
   const trimmed = text.trim().replace(/\s+/g, " ")
   if (trimmed.length <= maxLength) return trimmed
-  return trimmed.slice(0, maxLength) + "..."
+  return `${trimmed.slice(0, maxLength)}...`
 }

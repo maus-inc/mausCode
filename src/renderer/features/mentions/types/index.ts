@@ -6,24 +6,29 @@
  */
 
 // Core types
-export type { MentionProviderId, MentionTrigger, MentionCategory, MentionItem } from "./core"
-export { createProviderId, MENTION_PREFIXES, getMentionPrefix, isMentionType } from "./core"
-export type { MentionPrefix } from "./core"
+export type {
+  MentionCategory,
+  MentionItem,
+  MentionPrefix,
+  MentionProviderId,
+  MentionTrigger,
+} from "./core"
+export { createProviderId, getMentionPrefix, isMentionType, MENTION_PREFIXES } from "./core"
 
 // Provider types
 export type {
   MentionProvider,
-  TypedMentionProvider,
   MentionProviderOptions,
+  TypedMentionProvider,
 } from "./provider"
 export { createMentionProvider } from "./provider"
 
 // Search types
 export type {
-  MentionSearchContext,
-  MentionSearchResult,
   AggregatedSearchResult,
+  MentionSearchContext,
   MentionSearchOptions,
+  MentionSearchResult,
   RelevanceScore,
 } from "./search"
 export { calculateRelevance, sortByRelevance } from "./search"

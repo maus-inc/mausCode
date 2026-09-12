@@ -20,6 +20,7 @@ const Checkbox = React.forwardRef<
     <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
       {props.checked === "indeterminate" ? (
         <svg
+          aria-hidden="true"
           width="9"
           height="9"
           viewBox="0 0 9 9"
@@ -34,6 +35,7 @@ const Checkbox = React.forwardRef<
         </svg>
       ) : (
         <svg
+          aria-hidden="true"
           width="9"
           height="9"
           viewBox="0 0 9 9"

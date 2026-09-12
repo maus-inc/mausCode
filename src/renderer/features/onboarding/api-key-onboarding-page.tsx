@@ -1,20 +1,22 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { useState, useEffect } from "react"
-import { ChevronLeft } from "lucide-react"
+import { useEffect, useState } from "react"
 
-import { IconSpinner, KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
+import { KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
 import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Logo } from "../../components/ui/logo"
 import {
   apiKeyOnboardingCompletedAtom,
   billingMethodAtom,
-  customClaudeConfigAtom,
   type CustomClaudeConfig,
+  customClaudeConfigAtom,
 } from "../../lib/atoms"
-import { cn } from "../../lib/utils"
+import { OnboardingButton } from "./components/onboarding-button"
+import { OnboardingCodeInput } from "./components/onboarding-code-input"
+import { OnboardingHeader } from "./components/onboarding-header"
+import { OnboardingShell } from "./components/onboarding-shell"
 
 // Check if the key looks like a valid Anthropic API key
 const isValidApiKey = (key: string) => {
@@ -48,7 +50,7 @@ export function ApiKeyOnboardingPage() {
     }
     if (storedConfig.model) setModel(storedConfig.model)
     if (storedConfig.baseUrl) setBaseUrl(storedConfig.baseUrl)
-  }, [])
+  }, [storedConfig.token, storedConfig.model, storedConfig.baseUrl])
 
   const handleBack = () => {
     setBillingMethod(null)
@@ -108,179 +110,122 @@ export function ApiKeyOnboardingPage() {
     }
   }
 
-  const canSubmitCustomModel = Boolean(
-    model.trim() && token.trim() && baseUrl.trim()
-  )
+  const canSubmitCustomModel = Boolean(model.trim() && token.trim() && baseUrl.trim())
 
   // Simple API key input mode
   if (!isCustomModel) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
-        {/* Draggable title bar area */}
-        <div
-          className="fixed top-0 left-0 right-0 h-10"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-        />
-
-        {/* Back button - fixed in top left corner below traffic lights */}
-        <button
-          onClick={handleBack}
-          className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-
-        <div className="w-full max-w-[440px] space-y-8 px-4">
-          {/* Header with dual icons */}
-          <div className="text-center space-y-4">
+      <OnboardingShell onBack={handleBack}>
+        <OnboardingHeader
+          icon={
             <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
               <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                <Logo className="w-5 h-5" fill="white" />
+                <Logo className="w-5 h-5 invert" />
               </div>
               <div className="w-10 h-10 rounded-full bg-foreground flex items-center justify-center">
                 <KeyFilledIcon className="w-5 h-5 text-background" />
               </div>
             </div>
-            <div className="space-y-1">
-              <h1 className="text-base font-semibold tracking-tight">
-                Enter API Key
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Get your API key from{" "}
-                <a
-                  href="https://console.anthropic.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-foreground hover:underline"
-                >
-                  console.anthropic.com
-                </a>
-              </p>
-            </div>
-          </div>
+          }
+          title="Enter API Key"
+          subtitle={
+            <>
+              Get your API key from{" "}
+              <a
+                href="https://console.anthropic.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground hover:underline"
+              >
+                console.anthropic.com
+              </a>
+            </>
+          }
+        />
 
-          {/* API Key Input */}
-          <div className="space-y-4">
-            <div className="relative">
-              <Input
-                value={apiKey}
-                onChange={handleApiKeyChange}
-                onKeyDown={handleApiKeyKeyDown}
-                placeholder="sk-ant-..."
-                className="font-mono text-center pr-10"
-                autoFocus
-                disabled={isSubmitting}
-              />
-              {isSubmitting && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <IconSpinner className="h-4 w-4" />
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Your API key starts with sk-ant-
-            </p>
-          </div>
+        {/* API Key Input */}
+        <div className="space-y-4">
+          <OnboardingCodeInput
+            value={apiKey}
+            onChange={handleApiKeyChange}
+            onKeyDown={handleApiKeyKeyDown}
+            placeholder="sk-ant-..."
+            busy={isSubmitting}
+          />
+          <p className="text-xs text-muted-foreground text-center">
+            Your API key starts with sk-ant-
+          </p>
         </div>
-      </div>
+      </OnboardingShell>
     )
   }
 
   // Custom model mode with all fields
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
-      {/* Draggable title bar area */}
-      <div
-        className="fixed top-0 left-0 right-0 h-10"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-      />
-
-      {/* Back button - fixed in top left corner below traffic lights */}
-      <button
-        onClick={handleBack}
-        className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
-      >
-        <ChevronLeft className="h-5 w-5" />
-      </button>
-
-      <div className="w-full max-w-[440px] space-y-8 px-4">
-        {/* Header with dual icons */}
-        <div className="text-center space-y-4">
+    <OnboardingShell onBack={handleBack}>
+      <OnboardingHeader
+        icon={
           <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
             <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-              <Logo className="w-5 h-5" fill="white" />
+              <Logo className="w-5 h-5 invert" />
             </div>
             <div className="w-10 h-10 rounded-full bg-foreground flex items-center justify-center">
               <SettingsFilledIcon className="w-5 h-5 text-background" />
             </div>
           </div>
-          <div className="space-y-1">
-            <h1 className="text-base font-semibold tracking-tight">
-              Configure Custom Model
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Enter your custom model configuration
-            </p>
-          </div>
+        }
+        title="Configure Custom Model"
+        subtitle="Enter your custom model configuration"
+      />
+
+      {/* Form Fields */}
+      <div className="space-y-4">
+        {/* Model Name */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Model name</Label>
+          <Input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="claude-sonnet-4-6"
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">Model identifier for API requests</p>
         </div>
 
-        {/* Form Fields */}
-        <div className="space-y-4">
-          {/* Model Name */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Model name</Label>
-            <Input
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="claude-sonnet-4-6"
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              Model identifier for API requests
-            </p>
-          </div>
-
-          {/* API Token */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">API token</Label>
-            <Input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="sk-ant-..."
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              Your API key or token
-            </p>
-          </div>
-
-          {/* Base URL */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Base URL</Label>
-            <Input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.anthropic.com"
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">API endpoint URL</p>
-          </div>
+        {/* API Token */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">API token</Label>
+          <Input
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="sk-ant-..."
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">Your API key or token</p>
         </div>
 
-        {/* Continue Button */}
-        <button
-          onClick={submitCustomModel}
-          disabled={!canSubmitCustomModel || isSubmitting}
-          className={cn(
-            "w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] flex items-center justify-center",
-            (!canSubmitCustomModel || isSubmitting) &&
-              "opacity-50 cursor-not-allowed"
-          )}
-        >
-          {isSubmitting ? <IconSpinner className="h-4 w-4" /> : "Continue"}
-        </button>
+        {/* Base URL */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Base URL</Label>
+          <Input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="https://api.anthropic.com"
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">API endpoint URL</p>
+        </div>
       </div>
-    </div>
+
+      <OnboardingButton
+        onClick={submitCustomModel}
+        disabled={!canSubmitCustomModel || isSubmitting}
+        loading={isSubmitting}
+        className="w-full px-3"
+      >
+        Continue
+      </OnboardingButton>
+    </OnboardingShell>
   )
 }

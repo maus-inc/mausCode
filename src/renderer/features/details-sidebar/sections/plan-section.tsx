@@ -1,9 +1,9 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef } from "react"
 import { useAtom } from "jotai"
-import { IconSpinner, PlanIcon } from "@/components/ui/icons"
+import { memo, useCallback, useEffect, useMemo, useRef } from "react"
 import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
+import { IconSpinner } from "@/components/ui/icons"
 import { trpc } from "@/lib/trpc"
 import { planContentCacheAtomFamily } from "../atoms"
 
@@ -39,7 +39,7 @@ export const PlanSection = memo(function PlanSection({
     isLoading,
     error,
     refetch,
-  } = trpc.files.readFile.useQuery({ filePath: planPath! }, { enabled: !!planPath })
+  } = trpc.files.readFile.useQuery({ filePath: planPath ?? "" }, { enabled: !!planPath })
 
   // Update cache when content loads successfully
   useEffect(() => {
@@ -98,6 +98,7 @@ export const PlanSection = memo(function PlanSection({
   }, [updateScrollGradients])
 
   // Also update gradients when content changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: planContent intentionally re-measures gradients when content changes.
   useEffect(() => {
     updateScrollGradients()
   }, [planContent, updateScrollGradients])
@@ -120,13 +121,6 @@ export const PlanSection = memo(function PlanSection({
   // Only show error if we have no content to display at all
   const showError = error && !displayContent
 
-  // Extract plan title from markdown (first H1)
-  const planTitle = useMemo(() => {
-    if (!displayContent) return "Plan"
-    const match = displayContent.match(/^#\s+(.+)$/m)
-    return match ? match[1] : "Plan"
-  }, [displayContent])
-
   // No plan path - don't render anything (parent should hide the widget)
   if (!planPath) {
     return null
@@ -145,9 +139,7 @@ export const PlanSection = memo(function PlanSection({
   if (showError) {
     return (
       <div className="px-3 py-4 text-center">
-        <p className="text-xs text-muted-foreground">
-          Failed to load plan
-        </p>
+        <p className="text-xs text-muted-foreground">Failed to load plan</p>
       </div>
     )
   }
@@ -186,8 +178,7 @@ export const PlanSection = memo(function PlanSection({
           className="absolute bottom-0 left-0 right-0 h-6 pointer-events-none z-10 transition-opacity duration-150"
           style={{
             opacity: 1,
-            background:
-              "linear-gradient(to top, hsl(var(--background)) 0%, transparent 100%)",
+            background: "linear-gradient(to top, hsl(var(--background)) 0%, transparent 100%)",
           }}
         />
       </div>

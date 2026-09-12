@@ -1,24 +1,23 @@
 "use client"
 
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "@radix-ui/react-icons"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import * as React from "react"
-
-import { cn } from "../../lib/utils"
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "@radix-ui/react-icons"
 import {
-  overlayContentBase,
-  overlayMaxHeight,
   overlayAnimation,
-  overlaySlideIn,
+  overlayContentBase,
   overlayItemBase,
-  overlayItemHover,
-  overlayItemFocus,
   overlayItemDisabled,
-  overlayItemTransition,
+  overlayItemFocus,
+  overlayItemHover,
   overlayItemIndicator,
+  overlayItemTransition,
   overlayLabel,
+  overlayMaxHeight,
   overlaySeparator,
+  overlaySlideIn,
 } from "../../lib/overlay-styles"
+import { cn } from "../../lib/utils"
 
 const Select = SelectPrimitive.Root
 
@@ -93,8 +92,7 @@ const SelectScrollDownButton = React.forwardRef<
     />
   </SelectPrimitive.ScrollDownButton>
 ))
-SelectScrollDownButton.displayName =
-  SelectPrimitive.ScrollDownButton.displayName
+SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName
 
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
@@ -135,11 +133,7 @@ const SelectLabel = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Label>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>
 >(({ className, ...props }, ref) => (
-  <SelectPrimitive.Label
-    ref={ref}
-    className={cn(overlayLabel, className)}
-    {...props}
-  />
+  <SelectPrimitive.Label ref={ref} className={cn(overlayLabel, className)} {...props} />
 ))
 SelectLabel.displayName = SelectPrimitive.Label.displayName
 
@@ -193,11 +187,7 @@ const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <SelectPrimitive.Separator
-    ref={ref}
-    className={cn(overlaySeparator, className)}
-    {...props}
-  />
+  <SelectPrimitive.Separator ref={ref} className={cn(overlaySeparator, className)} {...props} />
 ))
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName
 

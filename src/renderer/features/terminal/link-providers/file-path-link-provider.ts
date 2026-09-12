@@ -1,5 +1,5 @@
 import type { IBufferLine, ILink, ILinkProvider, Terminal as XTerm } from "xterm"
-import { isModifierPressed, showLinkPopup, removeLinkPopup } from "./link-popup"
+import { isModifierPressed, removeLinkPopup, showLinkPopup } from "./link-popup"
 
 /**
  * File path link provider for xterm.js.
@@ -21,7 +21,7 @@ import { isModifierPressed, showLinkPopup, removeLinkPopup } from "./link-popup"
 // - Relative paths starting with ./ or ../
 // - Optionally followed by :line or :line:column
 const FILE_PATH_PATTERN =
-  /(?:^|[\s'"({\[])((?:\.\.?\/|\/)[^\s:'")\]}>]+?)(?::(\d+))?(?::(\d+))?(?=[\s'")\]}>]|$)/g
+  /(?:^|[\s'"({[])((?:\.\.?\/|\/)[^\s:'")\]}>]+?)(?::(\d+))?(?::(\d+))?(?=[\s'")\]}>]|$)/g
 
 /**
  * Get the text content of a buffer line.
@@ -74,18 +74,10 @@ function looksLikeFile(path: string): boolean {
 export class FilePathLinkProvider implements ILinkProvider {
   constructor(
     private xterm: XTerm,
-    private onClick: (
-      event: MouseEvent,
-      path: string,
-      line?: number,
-      column?: number
-    ) => void
+    private onClick: (event: MouseEvent, path: string, line?: number, column?: number) => void,
   ) {}
 
-  provideLinks(
-    bufferLineNumber: number,
-    callback: (links: ILink[] | undefined) => void
-  ): void {
+  provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
     const buffer = this.xterm.buffer.active
     const line = buffer.getLine(bufferLineNumber)
 
@@ -100,7 +92,11 @@ export class FilePathLinkProvider implements ILinkProvider {
     let match: RegExpExecArray | null
     FILE_PATH_PATTERN.lastIndex = 0
 
-    while ((match = FILE_PATH_PATTERN.exec(lineText)) !== null) {
+    for (
+      match = FILE_PATH_PATTERN.exec(lineText);
+      match !== null;
+      match = FILE_PATH_PATTERN.exec(lineText)
+    ) {
       const fullMatch = match[0]
       const path = match[1]
       const lineNum = match[2] ? parseInt(match[2], 10) : undefined
@@ -112,7 +108,11 @@ export class FilePathLinkProvider implements ILinkProvider {
       }
 
       // Calculate the actual start position (accounting for leading whitespace/quote)
-      const leadingChars = fullMatch.length - path.length - (match[2] ? match[2].length + 1 : 0) - (match[3] ? match[3].length + 1 : 0)
+      const leadingChars =
+        fullMatch.length -
+        path.length -
+        (match[2] ? match[2].length + 1 : 0) -
+        (match[3] ? match[3].length + 1 : 0)
       const startX = match.index + leadingChars
 
       // Build the link text (path with optional :line:col)

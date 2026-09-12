@@ -1,20 +1,6 @@
-import {
-  memo,
-  useRef,
-  useCallback,
-  useEffect,
-  useState,
-  forwardRef,
-} from "react"
 import { X } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { forwardRef, memo, useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { PlusIcon, CustomTerminalIcon } from "@/components/ui/icons"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -22,6 +8,9 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { CustomTerminalIcon, PlusIcon } from "@/components/ui/icons"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 import type { TerminalInstance } from "./types"
 
 /**
@@ -173,6 +162,7 @@ const TerminalTab = memo(
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <button
+            type="button"
             ref={ref}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
@@ -213,9 +203,7 @@ const TerminalTab = memo(
                 className="relative z-0 text-left flex-1 min-w-0 pr-1 overflow-hidden flex items-center gap-1.5 whitespace-nowrap select-none cursor-[inherit]"
               >
                 <span>{terminal.name}</span>
-                {shortPath && (
-                  <span className="text-muted-foreground">{shortPath}</span>
-                )}
+                {shortPath && <span className="text-muted-foreground">{shortPath}</span>}
               </span>
             )}
 
@@ -255,14 +243,9 @@ const TerminalTab = memo(
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-48">
-          <ContextMenuItem onClick={onStartRename}>
-            Rename terminal
-          </ContextMenuItem>
+          <ContextMenuItem onClick={onStartRename}>Rename terminal</ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem
-            onClick={() => onClose(terminal.id)}
-            disabled={isOnly}
-          >
+          <ContextMenuItem onClick={() => onClose(terminal.id)} disabled={isOnly}>
             Close terminal
           </ContextMenuItem>
           <ContextMenuItem onClick={onCloseOthers} disabled={!canCloseOthers}>
@@ -316,10 +299,8 @@ export const TerminalTabs = memo(function TerminalTabs({
   const textRefs = useRef<Map<string, HTMLSpanElement>>(new Map())
   const [truncatedTabs, setTruncatedTabs] = useState<Set<string>>(new Set())
   const [showLeftGradient, setShowLeftGradient] = useState(false)
-  const [showRightGradient, setShowRightGradient] = useState(false)
-  const [editingTerminalId, setEditingTerminalId] = useState<string | null>(
-    null,
-  )
+  const [_showRightGradient, setShowRightGradient] = useState(false)
+  const [editingTerminalId, setEditingTerminalId] = useState<string | null>(null)
 
   const isOnly = terminals.length === 1
 
@@ -327,12 +308,9 @@ export const TerminalTabs = memo(function TerminalTabs({
     setEditingTerminalId(terminalId)
   }, [])
 
-  const handleEditingChange = useCallback(
-    (terminalId: string, isEditing: boolean) => {
-      setEditingTerminalId(isEditing ? terminalId : null)
-    },
-    [],
-  )
+  const handleEditingChange = useCallback((terminalId: string, isEditing: boolean) => {
+    setEditingTerminalId(isEditing ? terminalId : null)
+  }, [])
 
   // Check scroll position for gradients
   const checkScrollPosition = useCallback(() => {
@@ -343,9 +321,7 @@ export const TerminalTabs = memo(function TerminalTabs({
     const isScrollable = scrollWidth > clientWidth
 
     setShowLeftGradient(isScrollable && scrollLeft > 0)
-    setShowRightGradient(
-      isScrollable && scrollLeft < scrollWidth - clientWidth - 1,
-    )
+    setShowRightGradient(isScrollable && scrollLeft < scrollWidth - clientWidth - 1)
   }, [])
 
   // Update gradients on scroll
@@ -362,7 +338,7 @@ export const TerminalTabs = memo(function TerminalTabs({
   // Update gradients when tabs change
   useEffect(() => {
     checkScrollPosition()
-  }, [terminals, checkScrollPosition])
+  }, [checkScrollPosition])
 
   // Update gradients on window resize
   useEffect(() => {
@@ -387,8 +363,7 @@ export const TerminalTabs = memo(function TerminalTabs({
         const isTabRightOfView = tabRect.right > containerRect.right
 
         if (isTabLeftOfView || isTabRightOfView) {
-          const tabCenter =
-            activeTabElement.offsetLeft + activeTabElement.offsetWidth / 2
+          const tabCenter = activeTabElement.offsetLeft + activeTabElement.offsetWidth / 2
           const containerCenter = container.offsetWidth / 2
           const targetScroll = tabCenter - containerCenter
           const maxScroll = container.scrollWidth - container.offsetWidth
@@ -401,7 +376,7 @@ export const TerminalTabs = memo(function TerminalTabs({
         }
       }, 0)
     }
-  }, [activeTerminalId, terminals])
+  }, [activeTerminalId])
 
   // Check if text is truncated for each tab
   useEffect(() => {
@@ -421,7 +396,7 @@ export const TerminalTabs = memo(function TerminalTabs({
     textRefs.current.forEach((el) => el && resizeObserver.observe(el))
 
     return () => resizeObserver.disconnect()
-  }, [terminals, activeTerminalId])
+  }, [])
 
   // Cleanup refs for closed tabs to prevent memory leaks
   useEffect(() => {
@@ -490,9 +465,7 @@ export const TerminalTabs = memo(function TerminalTabs({
               onCloseOthers={() => onCloseOtherTerminals(terminal.id)}
               onCloseToRight={() => onCloseTerminalsToRight(terminal.id)}
               onRename={onRenameTerminal}
-              onEditingChange={(isEditing) =>
-                handleEditingChange(terminal.id, isEditing)
-              }
+              onEditingChange={(isEditing) => handleEditingChange(terminal.id, isEditing)}
               onStartRename={() => handleStartRename(terminal.id)}
               textRef={(el) => {
                 if (el) {
@@ -524,10 +497,7 @@ export const TerminalTabs = memo(function TerminalTabs({
                 : undefined,
             }}
           />
-          <div
-            className="h-full flex items-center pr-1"
-            style={{ backgroundColor: terminalBg }}
-          >
+          <div className="h-full flex items-center pr-1" style={{ backgroundColor: terminalBg }}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

@@ -1,5 +1,5 @@
 import { initTRPC } from "@trpc/server"
-import { BrowserWindow } from "electron"
+import type { BrowserWindow } from "electron"
 import superjson from "superjson"
 
 /**

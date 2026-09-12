@@ -1,33 +1,27 @@
 "use client"
 
-import React, { useMemo, useRef, useEffect, useState, useCallback, memo } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import type React from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  ArchiveIcon,
+  CloudIcon,
+  GitHubLogo,
+  SearchIcon,
+  UnarchiveIcon,
+} from "../../../components/ui/icons"
+import { Input } from "../../../components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover"
+import { chatSourceModeAtom, showWorkspaceIconAtom } from "../../../lib/atoms"
+import { useRemoteArchivedChats, useRestoreRemoteChat } from "../../../lib/hooks/use-remote-chats"
 import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 import {
   archivePopoverOpenAtom,
   archiveSearchQueryAtom,
   selectedAgentChatIdAtom,
   selectedChatIsRemoteAtom,
 } from "../atoms"
-import { showWorkspaceIconAtom, chatSourceModeAtom } from "../../../lib/atoms"
-import {
-  useRemoteArchivedChats,
-  useRestoreRemoteChat,
-} from "../../../lib/hooks/use-remote-chats"
-import { Input } from "../../../components/ui/input"
-import {
-  SearchIcon,
-  ArchiveIcon,
-  UnarchiveIcon,
-  GitHubLogo,
-  CloudIcon,
-} from "../../../components/ui/icons"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../../components/ui/popover"
-import { cn } from "../../../lib/utils"
 
 // GitHub avatar with loading placeholder
 function GitHubAvatar({
@@ -50,13 +44,15 @@ function GitHubAvatar({
   return (
     <div className={cn(className, "relative flex-shrink-0")}>
       {/* Placeholder background while loading */}
-      {!isLoaded && (
-        <div className="absolute inset-0 rounded-sm bg-muted" />
-      )}
+      {!isLoaded && <div className="absolute inset-0 rounded-sm bg-muted" />}
       <img
         src={`https://github.com/${gitOwner}.png?size=64`}
         alt={gitOwner}
-        className={cn(className, "rounded-sm flex-shrink-0", isLoaded ? 'opacity-100' : 'opacity-0')}
+        className={cn(
+          className,
+          "rounded-sm flex-shrink-0",
+          isLoaded ? "opacity-100" : "opacity-0",
+        )}
         onLoad={handleLoad}
         onError={handleError}
       />
@@ -103,7 +99,10 @@ interface ArchiveChatItemProps {
   isSelected: boolean
   isCurrentChat: boolean
   showIcon: boolean
-  projectsMap: Map<string, { gitOwner: string | null; gitRepo: string | null; gitProvider: string | null; name: string }>
+  projectsMap: Map<
+    string,
+    { gitOwner: string | null; gitRepo: string | null; gitProvider: string | null; name: string }
+  >
   stats?: { additions: number; deletions: number }
   onSelect: (id: string) => void
   onRestore: (id: string) => void
@@ -141,19 +140,35 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
     onSelect(chat.id)
   }, [onSelect, chat.id])
 
-  const handleRestore = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    onRestore(chat.id)
-  }, [onRestore, chat.id])
+  const handleRestore = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      onRestore(chat.id)
+    },
+    [onRestore, chat.id],
+  )
 
-  const handleRef = useCallback((el: HTMLDivElement | null) => {
-    setRef(index, el)
-  }, [setRef, index])
+  const handleRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      setRef(index, el)
+    },
+    [setRef, index],
+  )
 
   return (
     <div
       ref={handleRef}
       onClick={handleClick}
+      role="option"
+      aria-selected={isSelected || isCurrentChat}
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          e.stopPropagation()
+          e.currentTarget.click()
+        }
+      }}
       className={cn(
         "w-[calc(100%-8px)] mx-1 text-left min-h-[32px] py-[5px] px-1.5 rounded-md transition-colors duration-75 cursor-pointer group relative",
         "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
@@ -171,9 +186,7 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
               <GitHubLogo
                 className={cn(
                   "h-4 w-4 flex-shrink-0 transition-colors duration-75",
-                  isSelected
-                    ? "text-foreground"
-                    : "text-muted-foreground",
+                  isSelected ? "text-foreground" : "text-muted-foreground",
                 )}
               />
             )}
@@ -182,13 +195,10 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
           <div className="flex items-center gap-1">
             <span className="truncate block text-sm leading-tight flex-1">
-              {chat.name || (
-                <span className="text-muted-foreground/50">
-                  New workspace
-                </span>
-              )}
+              {chat.name || <span className="text-muted-foreground/50">New workspace</span>}
             </span>
             <button
+              type="button"
               onClick={handleRestore}
               className="flex-shrink-0 text-muted-foreground hover:text-foreground active:text-foreground transition-[color,transform] duration-150 ease-out active:scale-[0.97]"
               aria-label="Restore chat"
@@ -199,9 +209,7 @@ const ArchiveChatItem = memo(function ArchiveChatItem({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 truncate min-w-0">
               {/* Cloud icon for remote chats */}
-              {chat.isRemote && (
-                <CloudIcon className="h-2.5 w-2.5 flex-shrink-0" />
-              )}
+              {chat.isRemote && <CloudIcon className="h-2.5 w-2.5 flex-shrink-0" />}
               <span className="truncate">{displayText}</span>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
@@ -287,7 +295,9 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
   // Create map for quick file stats lookup by chat id
   const fileStatsMap = useMemo(() => {
     if (!fileStatsData) return new Map<string, { additions: number; deletions: number }>()
-    return new Map(fileStatsData.map((s) => [s.chatId, { additions: s.additions, deletions: s.deletions }]))
+    return new Map(
+      fileStatsData.map((s) => [s.chatId, { additions: s.additions, deletions: s.deletions }]),
+    )
   }, [fileStatsData])
 
   // Local restore mutation
@@ -392,55 +402,63 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
   useEffect(() => {
     if (open && filteredChats.length > 0) {
       // Find index of currently selected chat, default to 0 if not found
-      const currentIndex = filteredChats.findIndex(
-        (chat) => chat.id === selectedChatId,
-      )
+      const currentIndex = filteredChats.findIndex((chat) => chat.id === selectedChatId)
       setSelectedIndex(currentIndex >= 0 ? currentIndex : 0)
     }
   }, [open, filteredChats, selectedChatId])
 
   // Keyboard navigation - memoized to prevent recreation
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (filteredChats.length === 0) return
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (filteredChats.length === 0) return
 
-    if (e.key === "ArrowDown") {
-      e.preventDefault()
-      setSelectedIndex((prev) => (prev + 1) % filteredChats.length)
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault()
-      setSelectedIndex(
-        (prev) => (prev - 1 + filteredChats.length) % filteredChats.length,
-      )
-    } else if (e.key === "Enter") {
-      e.preventDefault()
-      const chat = filteredChats[selectedIndex]
-      if (chat) {
-        if (chat.isRemote) {
-          // Extract original ID from prefixed remote ID
-          const originalId = chat.id.replace(/^remote_/, '')
-          remoteRestoreMutation.mutate(originalId, {
-            onSuccess: () => {
-              setSelectedChatId(originalId)
-              setSelectedChatIsRemote(true)
-              setChatSourceMode("sandbox")
-            },
-          })
-        } else {
-          localRestoreMutation.mutate({ id: chat.id })
-          setSelectedChatId(chat.id)
-          setSelectedChatIsRemote(false)
-          setChatSourceMode("local")
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setSelectedIndex((prev) => (prev + 1) % filteredChats.length)
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setSelectedIndex((prev) => (prev - 1 + filteredChats.length) % filteredChats.length)
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        const chat = filteredChats[selectedIndex]
+        if (chat) {
+          if (chat.isRemote) {
+            // Extract original ID from prefixed remote ID
+            const originalId = chat.id.replace(/^remote_/, "")
+            remoteRestoreMutation.mutate(originalId, {
+              onSuccess: () => {
+                setSelectedChatId(originalId)
+                setSelectedChatIsRemote(true)
+                setChatSourceMode("sandbox")
+              },
+            })
+          } else {
+            localRestoreMutation.mutate({ id: chat.id })
+            setSelectedChatId(chat.id)
+            setSelectedChatIsRemote(false)
+            setChatSourceMode("local")
+          }
+          setOpen(false)
         }
-        setOpen(false)
       }
-    }
-  }, [filteredChats, selectedIndex, localRestoreMutation, remoteRestoreMutation, setSelectedChatId, setSelectedChatIsRemote, setChatSourceMode, setOpen])
+    },
+    [
+      filteredChats,
+      selectedIndex,
+      localRestoreMutation,
+      remoteRestoreMutation,
+      setSelectedChatId,
+      setSelectedChatIsRemote,
+      setChatSourceMode,
+      setOpen,
+    ],
+  )
 
   // Reset selected index and clear refs when search changes
   useEffect(() => {
     setSelectedIndex(0)
     chatItemRefs.current = []
-  }, [searchQuery])
+  }, [])
 
   // Scroll selected item into view
   useEffect(() => {
@@ -461,44 +479,59 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
   }, [normalizedChats, open, setOpen])
 
   // Memoized callbacks for chat items
-  const handleSelectChat = useCallback((id: string) => {
-    const isRemote = id.startsWith('remote_')
-    const originalId = isRemote ? id.replace(/^remote_/, '') : id
-    setSelectedChatId(originalId)
-    setSelectedChatIsRemote(isRemote)
-    // Sync chatSourceMode for ChatView to load data from correct source
-    setChatSourceMode(isRemote ? "sandbox" : "local")
-  }, [setSelectedChatId, setSelectedChatIsRemote, setChatSourceMode])
+  const handleSelectChat = useCallback(
+    (id: string) => {
+      const isRemote = id.startsWith("remote_")
+      const originalId = isRemote ? id.replace(/^remote_/, "") : id
+      setSelectedChatId(originalId)
+      setSelectedChatIsRemote(isRemote)
+      // Sync chatSourceMode for ChatView to load data from correct source
+      setChatSourceMode(isRemote ? "sandbox" : "local")
+    },
+    [setSelectedChatId, setSelectedChatIsRemote, setChatSourceMode],
+  )
 
-  const handleRestoreChat = useCallback((id: string) => {
-    // Check if this is a remote chat by its prefixed ID
-    const isRemote = id.startsWith('remote_')
-    if (isRemote) {
-      // Extract original ID from prefixed remote ID
-      const originalId = id.replace(/^remote_/, '')
-      remoteRestoreMutation.mutate(originalId, {
-        onSuccess: () => {
-          setSelectedChatId(originalId)
-          setSelectedChatIsRemote(true)
-          setChatSourceMode("sandbox")
-        },
-      })
-    } else {
-      localRestoreMutation.mutate({ id })
-      setSelectedChatId(id)
-      setSelectedChatIsRemote(false)
-      setChatSourceMode("local")
-    }
-  }, [localRestoreMutation, remoteRestoreMutation, setSelectedChatId, setSelectedChatIsRemote, setChatSourceMode])
+  const handleRestoreChat = useCallback(
+    (id: string) => {
+      // Check if this is a remote chat by its prefixed ID
+      const isRemote = id.startsWith("remote_")
+      if (isRemote) {
+        // Extract original ID from prefixed remote ID
+        const originalId = id.replace(/^remote_/, "")
+        remoteRestoreMutation.mutate(originalId, {
+          onSuccess: () => {
+            setSelectedChatId(originalId)
+            setSelectedChatIsRemote(true)
+            setChatSourceMode("sandbox")
+          },
+        })
+      } else {
+        localRestoreMutation.mutate({ id })
+        setSelectedChatId(id)
+        setSelectedChatIsRemote(false)
+        setChatSourceMode("local")
+      }
+    },
+    [
+      localRestoreMutation,
+      remoteRestoreMutation,
+      setSelectedChatId,
+      setSelectedChatIsRemote,
+      setChatSourceMode,
+    ],
+  )
 
   const handleSetRef = useCallback((index: number, el: HTMLDivElement | null) => {
     chatItemRefs.current[index] = el
   }, [])
 
   // Memoized search input handler
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value)
-  }, [setSearchQuery])
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchQuery(e.target.value)
+    },
+    [setSearchQuery],
+  )
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -536,30 +569,30 @@ export const ArchivePopover = memo(function ArchivePopover({ trigger }: ArchiveP
           ) : filteredChats.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <ArchiveIcon className="h-6 w-6 mb-2 text-muted-foreground opacity-40" />
-              <p className="text-xs text-muted-foreground opacity-40 pb-10">
-                No archived agents
-              </p>
+              <p className="text-xs text-muted-foreground opacity-40 pb-10">No archived agents</p>
             </div>
           ) : (
             filteredChats.map((chat, index) => {
               // For remote chats, compare without prefix
-              const chatOriginalId = chat.isRemote ? chat.id.replace(/^remote_/, '') : chat.id
-              const isCurrentChat = selectedChatId === chatOriginalId && selectedChatIsRemote === chat.isRemote
+              const chatOriginalId = chat.isRemote ? chat.id.replace(/^remote_/, "") : chat.id
+              const isCurrentChat =
+                selectedChatId === chatOriginalId && selectedChatIsRemote === chat.isRemote
               return (
-              <ArchiveChatItem
-                key={chat.id}
-                chat={chat}
-                index={index}
-                isSelected={index === selectedIndex}
-                isCurrentChat={isCurrentChat}
-                showIcon={showWorkspaceIcon}
-                projectsMap={projectsMap}
-                stats={fileStatsMap.get(chat.id)}
-                onSelect={handleSelectChat}
-                onRestore={handleRestoreChat}
-                setRef={handleSetRef}
-              />
-            )})
+                <ArchiveChatItem
+                  key={chat.id}
+                  chat={chat}
+                  index={index}
+                  isSelected={index === selectedIndex}
+                  isCurrentChat={isCurrentChat}
+                  showIcon={showWorkspaceIcon}
+                  projectsMap={projectsMap}
+                  stats={fileStatsMap.get(chat.id)}
+                  onSelect={handleSelectChat}
+                  onRestore={handleRestoreChat}
+                  setRef={handleSetRef}
+                />
+              )
+            })
           )}
         </div>
       </PopoverContent>

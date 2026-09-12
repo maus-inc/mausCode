@@ -10,16 +10,16 @@
  */
 
 import { mentionRegistry } from "../registry"
-import { MentionCache } from "./cache"
 import type {
-  MentionProvider,
-  MentionItem,
-  MentionSearchContext,
-  MentionSearchResult,
-  MentionSearchOptions,
   AggregatedSearchResult,
+  MentionItem,
+  MentionProvider,
+  MentionSearchContext,
+  MentionSearchOptions,
+  MentionSearchResult,
 } from "../types"
 import { sortByRelevance } from "../types"
+import { MentionCache } from "./cache"
 
 /**
  * Default search options
@@ -51,7 +51,7 @@ export class MentionSearchEngine {
     trigger: string,
     query: string,
     baseContext: Omit<MentionSearchContext, "query" | "signal" | "limit">,
-    options: MentionSearchOptions = {}
+    options: MentionSearchOptions = {},
   ): Promise<AggregatedSearchResult> {
     const startTime = performance.now()
     const opts = { ...DEFAULT_OPTIONS, ...options }
@@ -79,7 +79,7 @@ export class MentionSearchEngine {
 
       // Filter by availability
       providers = providers.filter(
-        (p) => p.isAvailable?.({ projectPath: baseContext.projectPath }) ?? true
+        (p) => p.isAvailable?.({ projectPath: baseContext.projectPath }) ?? true,
       )
 
       if (providers.length === 0) {
@@ -113,7 +113,7 @@ export class MentionSearchEngine {
   async searchProvider(
     provider: MentionProvider,
     context: MentionSearchContext,
-    options: MentionSearchOptions = {}
+    options: MentionSearchOptions = {},
   ): Promise<MentionSearchResult> {
     const opts = { ...DEFAULT_OPTIONS, ...options }
 
@@ -177,7 +177,7 @@ export class MentionSearchEngine {
   private async searchParallel(
     providers: MentionProvider[],
     context: MentionSearchContext,
-    options: MentionSearchOptions
+    options: MentionSearchOptions,
   ): Promise<Map<string, MentionSearchResult>> {
     const results = new Map<string, MentionSearchResult>()
 
@@ -196,7 +196,7 @@ export class MentionSearchEngine {
   private async searchSequential(
     providers: MentionProvider[],
     context: MentionSearchContext,
-    options: MentionSearchOptions
+    options: MentionSearchOptions,
   ): Promise<Map<string, MentionSearchResult>> {
     const results = new Map<string, MentionSearchResult>()
 
@@ -216,7 +216,7 @@ export class MentionSearchEngine {
   private aggregateResults(
     resultsByProvider: Map<string, MentionSearchResult>,
     query: string,
-    startTime: number
+    startTime: number,
   ): AggregatedSearchResult {
     const allItems: MentionItem[] = []
     const warnings: string[] = []
@@ -259,7 +259,7 @@ export class MentionSearchEngine {
    */
   private createCancellableTimeout(
     ms: number,
-    onTimeoutId: (id: NodeJS.Timeout) => void
+    onTimeoutId: (id: NodeJS.Timeout) => void,
   ): Promise<never> {
     return new Promise((_, reject) => {
       const timeoutId = setTimeout(() => {

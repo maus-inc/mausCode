@@ -1,9 +1,9 @@
-import * as fs from "fs/promises"
-import * as path from "path"
-import * as os from "os"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import matter from "gray-matter"
-import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { resolveDirentType } from "../../fs/dirent"
+import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { getEnabledPlugins } from "./claude-settings"
 
 // Valid model values for agents
@@ -39,10 +39,7 @@ export interface FileAgent extends ParsedAgent {
  *
  * You are a code reviewer. When invoked...
  */
-export function parseAgentMd(
-  content: string,
-  filename: string
-): Partial<ParsedAgent> {
+export function parseAgentMd(content: string, filename: string): Partial<ParsedAgent> {
   try {
     const { data, content: body } = matter(content)
 
@@ -70,13 +67,10 @@ export function parseAgentMd(
 
     // Validate model
     const model =
-      data.model && VALID_AGENT_MODELS.includes(data.model)
-        ? (data.model as AgentModel)
-        : undefined
+      data.model && VALID_AGENT_MODELS.includes(data.model) ? (data.model as AgentModel) : undefined
 
     return {
-      name:
-        typeof data.name === "string" ? data.name : filename.replace(".md", ""),
+      name: typeof data.name === "string" ? data.name : filename.replace(".md", ""),
       description: typeof data.description === "string" ? data.description : "",
       prompt: body.trim(),
       tools,
@@ -120,10 +114,7 @@ export function generateAgentMd(agent: {
  * Load agent definition from filesystem by name
  * Searches in user (~/.claude/agents/) and project (.claude/agents/) directories
  */
-export async function loadAgent(
-  name: string,
-  cwd?: string
-): Promise<ParsedAgent | null> {
+export async function loadAgent(name: string, cwd?: string): Promise<ParsedAgent | null> {
   const locations = [
     path.join(os.homedir(), ".claude", "agents"),
     ...(cwd ? [path.join(cwd, ".claude", "agents")] : []),
@@ -145,9 +136,7 @@ export async function loadAgent(
           model: parsed.model,
         }
       }
-    } catch {
-      continue
-    }
+    } catch {}
   }
 
   // Search in plugin directories
@@ -155,9 +144,7 @@ export async function loadAgent(
     getEnabledPlugins(),
     discoverInstalledPlugins(),
   ])
-  const enabledPlugins = installedPlugins.filter(
-    (p) => enabledPluginSources.includes(p.source),
-  )
+  const enabledPlugins = installedPlugins.filter((p) => enabledPluginSources.includes(p.source))
   const pluginResults = await Promise.all(
     enabledPlugins.map(async (plugin) => {
       const paths = getPluginComponentPaths(plugin)
@@ -189,7 +176,7 @@ export async function loadAgent(
 export async function scanAgentsDirectory(
   dir: string,
   source: "user" | "project" | "plugin",
-  basePath?: string // For project agents, the cwd to make paths relative to
+  basePath?: string, // For project agents, the cwd to make paths relative to
 ): Promise<FileAgent[]> {
   const agents: FileAgent[] = []
 
@@ -199,11 +186,7 @@ export async function scanAgentsDirectory(
 
     for (const entry of entries) {
       // Validate entry name for security (prevent path traversal)
-      if (
-        entry.name.includes("..") ||
-        entry.name.includes("/") ||
-        entry.name.includes("\\")
-      ) {
+      if (entry.name.includes("..") || entry.name.includes("/") || entry.name.includes("\\")) {
         console.warn(`[agents] Skipping invalid filename: ${entry.name}`)
         continue
       }
@@ -225,7 +208,7 @@ export async function scanAgentsDirectory(
               // For user agents, show ~/.claude/agents/... format
               const homeDir = os.homedir()
               displayPath = agentPath.startsWith(homeDir)
-                ? "~" + agentPath.slice(homeDir.length)
+                ? `~${agentPath.slice(homeDir.length)}`
                 : agentPath
             }
 
@@ -273,12 +256,9 @@ export function clearAgentCache() {
  */
 export async function buildAgentsOption(
   agentNames: string[],
-  cwd?: string
+  cwd?: string,
 ): Promise<
-  Record<
-    string,
-    { description: string; prompt: string; tools?: string[]; model?: AgentModel }
-  >
+  Record<string, { description: string; prompt: string; tools?: string[]; model?: AgentModel }>
 > {
   if (agentNames.length === 0) return {}
 

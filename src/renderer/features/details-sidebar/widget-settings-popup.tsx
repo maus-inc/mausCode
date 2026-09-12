@@ -1,22 +1,18 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
 import { useAtom } from "jotai"
-import { GripVertical, Box, TerminalSquare, ListTodo } from "lucide-react"
+import { Box, GripVertical, ListTodo, TerminalSquare } from "lucide-react"
+import { useCallback, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
-import { PlanIcon, DiffIcon, OriginalMCPIcon } from "@/components/ui/icons"
+import { DiffIcon, OriginalMCPIcon, PlanIcon } from "@/components/ui/icons"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import {
   WIDGET_REGISTRY,
-  widgetVisibilityAtomFamily,
-  widgetOrderAtomFamily,
   type WidgetId,
+  widgetOrderAtomFamily,
+  widgetVisibilityAtomFamily,
 } from "./atoms"
 
 interface WidgetSettingsPopupProps {
@@ -45,15 +41,12 @@ function getWidgetIcon(widgetId: WidgetId) {
   }
 }
 
-export function WidgetSettingsPopup({ workspaceId, isRemoteChat = false }: WidgetSettingsPopupProps) {
-  const visibilityAtom = useMemo(
-    () => widgetVisibilityAtomFamily(workspaceId),
-    [workspaceId],
-  )
-  const orderAtom = useMemo(
-    () => widgetOrderAtomFamily(workspaceId),
-    [workspaceId],
-  )
+export function WidgetSettingsPopup({
+  workspaceId,
+  isRemoteChat = false,
+}: WidgetSettingsPopupProps) {
+  const visibilityAtom = useMemo(() => widgetVisibilityAtomFamily(workspaceId), [workspaceId])
+  const orderAtom = useMemo(() => widgetOrderAtomFamily(workspaceId), [workspaceId])
   const [visibleWidgets, setVisibleWidgets] = useAtom(visibilityAtom)
   const [widgetOrder, setWidgetOrder] = useAtom(orderAtom)
 
@@ -70,9 +63,7 @@ export function WidgetSettingsPopup({ workspaceId, isRemoteChat = false }: Widge
         // Add widget - preserve current order
         const newVisibleWidgets = [...visibleWidgets, widgetId]
         // Sort by widgetOrder
-        newVisibleWidgets.sort(
-          (a, b) => widgetOrder.indexOf(a) - widgetOrder.indexOf(b),
-        )
+        newVisibleWidgets.sort((a, b) => widgetOrder.indexOf(a) - widgetOrder.indexOf(b))
         setVisibleWidgets(newVisibleWidgets)
       }
     },
@@ -80,14 +71,11 @@ export function WidgetSettingsPopup({ workspaceId, isRemoteChat = false }: Widge
   )
 
   // Drag handlers
-  const handleDragStart = useCallback(
-    (e: React.DragEvent, widgetId: WidgetId) => {
-      setDraggedWidget(widgetId)
-      e.dataTransfer.effectAllowed = "move"
-      e.dataTransfer.setData("text/plain", widgetId)
-    },
-    [],
-  )
+  const handleDragStart = useCallback((e: React.DragEvent, widgetId: WidgetId) => {
+    setDraggedWidget(widgetId)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", widgetId)
+  }, [])
 
   const handleDragOver = useCallback(
     (e: React.DragEvent, widgetId: WidgetId) => {
@@ -126,9 +114,9 @@ export function WidgetSettingsPopup({ workspaceId, isRemoteChat = false }: Widge
         setWidgetOrder(newOrder)
 
         // Also update visible widgets order
-        const newVisibleWidgets = visibleWidgets.slice().sort(
-          (a, b) => newOrder.indexOf(a) - newOrder.indexOf(b),
-        )
+        const newVisibleWidgets = visibleWidgets
+          .slice()
+          .sort((a, b) => newOrder.indexOf(a) - newOrder.indexOf(b))
         setVisibleWidgets(newVisibleWidgets)
       }
 
@@ -148,9 +136,7 @@ export function WidgetSettingsPopup({ workspaceId, isRemoteChat = false }: Widge
     const widgets = isRemoteChat
       ? WIDGET_REGISTRY.filter((w) => w.id !== "terminal")
       : WIDGET_REGISTRY
-    return [...widgets].sort(
-      (a, b) => widgetOrder.indexOf(a.id) - widgetOrder.indexOf(b.id),
-    )
+    return [...widgets].sort((a, b) => widgetOrder.indexOf(a.id) - widgetOrder.indexOf(b.id))
   }, [widgetOrder, isRemoteChat])
 
   return (
@@ -164,15 +150,9 @@ export function WidgetSettingsPopup({ workspaceId, isRemoteChat = false }: Widge
           Edit widgets
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-56 p-2"
-        sideOffset={8}
-      >
+      <PopoverContent align="end" className="w-56 p-2" sideOffset={8}>
         <div className="space-y-1">
-          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-            Widgets
-          </div>
+          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Widgets</div>
           {orderedWidgets.map((widget) => {
             const isVisible = visibleWidgets.includes(widget.id)
             const Icon = getWidgetIcon(widget.id)
@@ -180,6 +160,7 @@ export function WidgetSettingsPopup({ workspaceId, isRemoteChat = false }: Widge
             const isDragOver = dragOverWidget === widget.id
 
             return (
+              /* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */
               <div
                 key={widget.id}
                 draggable={draggableWidget === widget.id}
@@ -187,8 +168,19 @@ export function WidgetSettingsPopup({ workspaceId, isRemoteChat = false }: Widge
                 onDragOver={(e) => handleDragOver(e, widget.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, widget.id)}
-                onDragEnd={() => { handleDragEnd(); setDraggableWidget(null) }}
+                onDragEnd={() => {
+                  handleDragEnd()
+                  setDraggableWidget(null)
+                }}
                 onClick={() => toggleWidget(widget.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    e.currentTarget.click()
+                  }
+                }}
                 className={cn(
                   "flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted transition-colors cursor-pointer",
                   isDragging && "opacity-50",

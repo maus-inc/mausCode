@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 
 // Module-level cache for local file icons: projectId → blob URL
 const fileIconCache = new Map<string, string>()
@@ -118,7 +118,7 @@ export function useProjectIcon(project: ProjectIconData | null | undefined): Use
     return () => {
       cancelled = true
     }
-  }, [project?.id, project?.iconPath, project?.updatedAt, project?.gitOwner, project?.gitProvider])
+  }, [project])
 
   return { src, isLoading, hasError }
 }

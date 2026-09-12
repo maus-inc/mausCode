@@ -1,16 +1,16 @@
 "use client"
 
-import { AnimatePresence, motion } from "motion/react"
-import { useEffect, useState, useRef, useCallback } from "react"
-import { createPortal } from "react-dom"
-import { Button } from "../../../components/ui/button"
-import { trpc } from "../../../lib/trpc"
-import { toast } from "sonner"
 import { useSetAtom } from "jotai"
-import { selectedAgentChatIdAtom, desktopViewAtom } from "../atoms"
+import { Check, Download, Folder } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { toast } from "sonner"
+import { Button } from "../../../components/ui/button"
 import { chatSourceModeAtom } from "../../../lib/atoms"
 import type { RemoteChat } from "../../../lib/remote-api"
-import { Folder, Download, Check } from "lucide-react"
+import { trpc } from "../../../lib/trpc"
+import { desktopViewAtom, selectedAgentChatIdAtom } from "../atoms"
 
 interface Project {
   id: string
@@ -37,7 +37,6 @@ export function OpenLocallyDialog({
   onClose,
   remoteChat,
   matchingProjects,
-  allProjects,
   remoteSubChatId,
 }: OpenLocallyDialogProps) {
   const [mounted, setMounted] = useState(false)
@@ -93,8 +92,11 @@ export function OpenLocallyDialog({
     },
   })
 
-  const isAnyLoading = importMutation.isPending || locateMutation.isPending ||
-    pickDestMutation.isPending || cloneMutation.isPending
+  const isAnyLoading =
+    importMutation.isPending ||
+    locateMutation.isPending ||
+    pickDestMutation.isPending ||
+    cloneMutation.isPending
 
   useEffect(() => {
     setMounted(true)
@@ -134,7 +136,7 @@ export function OpenLocallyDialog({
   // Handler: Locate existing project
   const handleLocateProject = useCallback(async () => {
     const repoString = remoteChat?.meta?.repository || remoteChat?.meta?.github_repo
-    if (!repoString) return
+    if (!repoString || !remoteChat?.sandbox_id) return
 
     const [owner, repo] = repoString.split("/")
     if (!owner || !repo) return
@@ -147,7 +149,7 @@ export function OpenLocallyDialog({
     if (result.success && result.project) {
       // Now import into this project
       importMutation.mutate({
-        sandboxId: remoteChat.sandbox_id!,
+        sandboxId: remoteChat.sandbox_id,
         remoteChatId: remoteChat.id,
         remoteSubChatId: remoteSubChatId ?? undefined,
         projectId: result.project.id,
@@ -255,6 +257,7 @@ export function OpenLocallyDialog({
                       <div className="space-y-2">
                         {/* Option 1: Locate existing clone */}
                         <button
+                          type="button"
                           onClick={handleLocateProject}
                           disabled={isAnyLoading}
                           className="w-full p-3 rounded-lg text-left bg-muted/50 hover:bg-muted transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
@@ -274,6 +277,7 @@ export function OpenLocallyDialog({
 
                         {/* Option 2: Clone from sandbox */}
                         <button
+                          type="button"
                           onClick={handleCloneFromSandbox}
                           disabled={isAnyLoading}
                           className="w-full p-3 rounded-lg text-left bg-muted/50 hover:bg-muted transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"

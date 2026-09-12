@@ -1,12 +1,12 @@
 export {
-	GitWatcher,
-	gitWatcherRegistry,
-	type FileChange,
-	type FileChangeType,
-	type GitWatchEvent,
-} from "./git-watcher";
+  type FileChange,
+  type FileChangeType,
+  type GitWatchEvent,
+  GitWatcher,
+  gitWatcherRegistry,
+} from "./git-watcher"
 
 export {
-	registerGitWatcherIPC,
-	cleanupGitWatchers,
-} from "./ipc-bridge";
+  cleanupGitWatchers,
+  registerGitWatcherIPC,
+} from "./ipc-bridge"

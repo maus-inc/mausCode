@@ -1,4 +1,4 @@
-import { GITHUB_TRIGGER_OPTIONS, LINEAR_TRIGGER_OPTIONS } from "./constants"
+import type { GITHUB_TRIGGER_OPTIONS, LINEAR_TRIGGER_OPTIONS } from "./constants"
 
 export type GitHubTriggerType = (typeof GITHUB_TRIGGER_OPTIONS)[number]["value"]
 export type LinearTriggerType = (typeof LINEAR_TRIGGER_OPTIONS)[number]["value"]

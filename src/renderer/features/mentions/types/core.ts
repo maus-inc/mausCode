@@ -202,9 +202,6 @@ export function getMentionPrefix(id: string): MentionPrefix | null {
 /**
  * Check if a mention ID belongs to a specific type
  */
-export function isMentionType(
-  id: string,
-  type: keyof typeof MENTION_PREFIXES
-): boolean {
+export function isMentionType(id: string, type: keyof typeof MENTION_PREFIXES): boolean {
   return id.startsWith(MENTION_PREFIXES[type])
 }

@@ -10,19 +10,63 @@ export interface MessagePart {
   text?: string
   toolCallId?: string
   state?: string
-  input?: any
-  output?: any
-  result?: any
-  [key: string]: any
+  input?: unknown
+  output?: unknown
+  result?: unknown
+  error?: unknown
+  errorText?: string
+  [key: string]: unknown
+}
+
+/**
+ * Minimal message view shared by AI SDK messages and store messages.
+ * Used at boundaries (sync atom, search) that accept both shapes.
+ */
+export interface SyncableMessagePart {
+  type?: string
+  text?: string
+  state?: string
+  input?: unknown
+}
+
+export interface SyncableMessage {
+  id: string
+  role: string
+  parts?: SyncableMessagePart[]
+  metadata?: unknown
+}
+
+/** Flat usage/metadata shape produced by the message transform. */
+export interface MessageMetadata {
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadInputTokens?: number
+  cacheCreationInputTokens?: number
+  reasoningTokens?: number
+  sdkMessageUuid?: string
+  [key: string]: unknown
 }
 
 export interface Message {
   id: string
   role: "user" | "assistant" | "system"
   parts?: MessagePart[]
-  metadata?: any
+  metadata?: MessageMetadata
   createdAt?: Date
 }
+
+/** MessagePart carrying a `data-image` payload. */
+export type ImagePartData = {
+  base64Data?: string
+  mediaType?: string
+  url?: string
+  filename?: string
+}
+
+export type DataImagePart = MessagePart & { data?: ImagePartData }
+
+/** Minimal view of an image part for message bubbles (store or SDK parts). */
+export type ImagePartLike = { data?: ImagePartData }
 
 // ============================================================================
 // MESSAGE STORE - OPTIMIZED ARCHITECTURE
@@ -50,9 +94,7 @@ export const getPerChatMessageKey = (subChatId: string, messageId: string) =>
   `${subChatId}:::${messageId}`
 
 // This is the key optimization: updating one message doesn't affect others.
-export const messageAtomFamily = atomFamily((_messageKey: string) =>
-  atom<Message | null>(null)
-)
+export const messageAtomFamily = atomFamily((_messageKey: string) => atom<Message | null>(null))
 
 // Track active message IDs per subChat for cleanup
 const activeMessageIdsByChat = new Map<string, Set<string>>()
@@ -65,12 +107,10 @@ export const messageIdsAtom = atom<string[]>([])
 const messageRolesAtom = atom<Map<string, "user" | "assistant" | "system">>(new Map())
 
 // Per-subChat atoms for split-pane rendering. Each pane reads only its own IDs/roles.
-export const messageIdsPerChatAtom = atomFamily((_subChatId: string) =>
-  atom<string[]>([])
-)
+export const messageIdsPerChatAtom = atomFamily((_subChatId: string) => atom<string[]>([]))
 
 const messageRolesPerChatAtom = atomFamily((_subChatId: string) =>
-  atom<Map<string, "user" | "assistant" | "system">>(new Map())
+  atom<Map<string, "user" | "assistant" | "system">>(new Map()),
 )
 
 // Currently streaming message ID (null if not streaming)
@@ -97,7 +137,7 @@ export const lastMessageIdAtom = atom((get) => {
 
 // Check if a specific message is the last one
 export const isLastMessageAtomFamily = atomFamily((messageId: string) =>
-  atom((get) => get(lastMessageIdAtom) === messageId)
+  atom((get) => get(lastMessageIdAtom) === messageId),
 )
 
 // Per-subchat version for split panes.
@@ -119,7 +159,7 @@ export const isMessageStreamingAtomFamily = atomFamily((messageId: string) =>
     const lastId = get(lastMessageIdAtom)
     // A message is streaming if it's the last message and there's active streaming
     return messageId === lastId && streamingId === messageId
-  })
+  }),
 )
 
 // ============================================================================
@@ -141,13 +181,13 @@ export const textPartAtomFamily = atomFamily((key: string) => {
   const sepIdx = key.lastIndexOf(":")
   const messageKey = key.slice(0, sepIdx)
   const partIndexStr = key.slice(sepIdx + 1)
-  const partIndex = parseInt(partIndexStr!, 10)
+  const partIndex = parseInt(partIndexStr, 10)
 
   return atom((get) => {
     const message = get(messageAtomFamily(messageKey))
     const parts = message?.parts || []
     const part = parts[partIndex]
-    const text = part?.type === "text" ? (part.text || "") : ""
+    const text = part?.type === "text" ? part.text || "" : ""
 
     // Return cached value if text hasn't changed (stable reference)
     const cached = textPartCache.get(key)
@@ -190,7 +230,7 @@ interface MessageStructure {
   id: string
   role: "user" | "assistant" | "system"
   partsStructure: PartStructure[]
-  metadata?: any
+  metadata?: MessageMetadata
 }
 
 // Cache for message structure
@@ -202,7 +242,7 @@ export const messageStructureAtomFamily = atomFamily((messageKey: string) =>
     if (!message) return null
 
     // Build structure without text content
-    const partsStructure: PartStructure[] = (message.parts || []).map((part: any) => {
+    const partsStructure: PartStructure[] = (message.parts || []).map((part) => {
       const structure: PartStructure = {
         type: part.type,
       }
@@ -255,7 +295,7 @@ export const messageStructureAtomFamily = atomFamily((messageKey: string) =>
 
     messageStructureCache.set(messageKey, newStructure)
     return newStructure
-  })
+  }),
 )
 
 // ============================================================================
@@ -304,7 +344,7 @@ export const userMessageIdsPerChatAtom = atomFamily((subChatId: string) =>
 
     userMessageIdsPerChatCache.set(subChatId, newUserIds)
     return newUserIds
-  })
+  }),
 )
 
 // ============================================================================
@@ -415,7 +455,7 @@ const messageGroupsPerChatAtom = atomFamily((subChatId: string) =>
 
     messageGroupsPerChatCache.set(subChatId, groups)
     return groups
-  })
+  }),
 )
 
 // ============================================================================
@@ -435,11 +475,7 @@ export const assistantIdsPerChatAtomFamily = atomFamily((key: string) => {
     const newIds = group?.assistantMsgIds ?? []
     const cached = assistantIdsPerChatCache.get(key)
 
-    if (
-      cached &&
-      cached.length === newIds.length &&
-      cached.every((id, i) => id === newIds[i])
-    ) {
+    if (cached && cached.length === newIds.length && cached.every((id, i) => id === newIds[i])) {
       return cached
     }
 
@@ -470,17 +506,13 @@ export const assistantIdsForUserMsgAtomFamily = atomFamily((userMsgId: string) =
     // Return cached array if content is the same
     const cacheKey = `${subChatId}:${userMsgId}`
     const cached = assistantIdsCacheByChat.get(cacheKey)
-    if (
-      cached &&
-      cached.length === newIds.length &&
-      cached.every((id, i) => id === newIds[i])
-    ) {
+    if (cached && cached.length === newIds.length && cached.every((id, i) => id === newIds[i])) {
       return cached
     }
 
     assistantIdsCacheByChat.set(cacheKey, newIds)
     return newIds
-  })
+  }),
 )
 
 // Is this user message the last one?
@@ -488,7 +520,7 @@ export const isLastUserMessageAtomFamily = atomFamily((userMsgId: string) =>
   atom((get) => {
     const userIds = get(userMessageIdsAtom)
     return userIds[userIds.length - 1] === userMsgId
-  })
+  }),
 )
 
 // Is this user message the first one? (used to hide rollback button on first message)
@@ -496,12 +528,12 @@ export const isFirstUserMessageAtomFamily = atomFamily((userMsgId: string) =>
   atom((get) => {
     const userIds = get(userMessageIdsAtom)
     return userIds[0] === userMsgId
-  })
+  }),
 )
 
-type RollbackLookupMessage = {
+export type RollbackLookupMessage = {
   role: "user" | "assistant" | "system"
-  metadata?: any
+  metadata?: MessageMetadata
   parts?: MessagePart[]
 }
 
@@ -522,7 +554,7 @@ export function findRollbackTargetSdkUuidForUserIndex(
   let targetAssistantMessage: RollbackLookupMessage | null | undefined = null
   for (let i = userMsgIndex - 1; i >= 0; i--) {
     const message = getMessageAt(i)
-    if (!message || message.role !== "assistant") continue
+    if (message?.role !== "assistant") continue
     targetAssistantIndex = i
     targetAssistantMessage = message
     break
@@ -534,14 +566,14 @@ export function findRollbackTargetSdkUuidForUserIndex(
   // this assistant is already behind compact and cannot be a rollback target.
   for (let i = targetAssistantIndex; i < totalMessageCount; i++) {
     const message = getMessageAt(i)
-    if (!message || message.role !== "assistant") continue
+    if (message?.role !== "assistant") continue
     if (hasCompactToolUsePart(message.parts)) {
       return null
     }
   }
 
   // 3) No compact after target assistant: allow rollback only if target has SDK UUID.
-  const sdkUuid = (targetAssistantMessage.metadata as any)?.sdkMessageUuid
+  const sdkUuid = targetAssistantMessage.metadata?.sdkMessageUuid
   return typeof sdkUuid === "string" && sdkUuid.length > 0 ? sdkUuid : null
 }
 
@@ -598,7 +630,7 @@ export const rollbackTargetSdkUuidForUserMsgAtomFamily = atomFamily((userMsgId: 
       const subChatId = get(currentSubChatIdAtom)
       return get(messageAtomFamily(getPerChatMessageKey(subChatId, messageId)))
     })
-  })
+  }),
 )
 
 // ============================================================================
@@ -632,8 +664,10 @@ export const lastAssistantMessageAtom = atom((get) => {
   // Find the last assistant ID
   let lastAssistantId: string | null = null
   for (let i = ids.length - 1; i >= 0; i--) {
-    if (roles.get(ids[i]!) === "assistant") {
-      lastAssistantId = ids[i]!
+    const id = ids[i]
+    if (id === undefined) continue
+    if (roles.get(id) === "assistant") {
+      lastAssistantId = id
       break
     }
   }
@@ -706,10 +740,10 @@ export const messageTokenDataAtom = atom((get) => {
   const lastId = ids[ids.length - 1]
   const lastMsg = lastId ? get(messageAtomFamily(getPerChatMessageKey(subChatId, lastId))) : null
   // Note: metadata has flat structure (metadata.outputTokens), not nested (metadata.usage.outputTokens)
-  const lastMsgOutputTokens = (lastMsg?.metadata as any)?.outputTokens || 0
-  const lastMsgParts = (lastMsg as any)?.parts as Array<{ type?: string; state?: string }> | undefined
+  const lastMsgOutputTokens = lastMsg?.metadata?.outputTokens || 0
+  const lastMsgParts = lastMsg?.parts as Array<{ type?: string; state?: string }> | undefined
   const lastPart = lastMsgParts?.[lastMsgParts.length - 1]
-  const lastMsgPartsKey = `${lastMsgParts?.length ?? 0}:${lastPart?.type ?? ""}:${(lastPart as any)?.state ?? ""}`
+  const lastMsgPartsKey = `${lastMsgParts?.length ?? 0}:${lastPart?.type ?? ""}:${lastPart?.state ?? ""}`
 
   const cached = tokenDataCacheByChat.get(subChatId)
 
@@ -728,8 +762,10 @@ export const messageTokenDataAtom = atom((get) => {
   // Recalculate token data (since last completed compact boundary)
   let startIndex = 0
   for (let i = 0; i < ids.length; i++) {
-    const msg = get(messageAtomFamily(getPerChatMessageKey(subChatId, ids[i]!)))
-    const parts = (msg as any)?.parts as Array<{ type?: string; state?: string }> | undefined
+    const id = ids[i]
+    if (id === undefined) continue
+    const msg = get(messageAtomFamily(getPerChatMessageKey(subChatId, id)))
+    const parts = msg?.parts
     if (
       parts?.some(
         (part) =>
@@ -748,8 +784,10 @@ export const messageTokenDataAtom = atom((get) => {
   let cacheWriteTokens = 0
   let reasoningTokens = 0
   for (let i = startIndex; i < ids.length; i++) {
-    const msg = get(messageAtomFamily(getPerChatMessageKey(subChatId, ids[i]!)))
-    const metadata = msg?.metadata as any
+    const id = ids[i]
+    if (id === undefined) continue
+    const msg = get(messageAtomFamily(getPerChatMessageKey(subChatId, id)))
+    const metadata = msg?.metadata
     // Note: metadata has flat structure from transform.ts (metadata.inputTokens, metadata.outputTokens)
     // Extended fields like cacheReadInputTokens are not currently in MessageMetadata type
     if (metadata) {
@@ -799,15 +837,18 @@ export const messageTokenDataAtom = atom((get) => {
 // more comprehensive but slightly slower. Both are correct for their use cases:
 // - This (message-store): Jotai atom updates during high-frequency streaming
 // - messages-list.tsx: External store subscription for React render triggering
-const previousMessageState = new Map<string, {
-  partsLength: number
-  lastPartText: string | undefined
-  lastPartState: string | undefined
-  lastPartInputJson: string | undefined
-  metadataJson: string | undefined
-}>()
+const previousMessageState = new Map<
+  string,
+  {
+    partsLength: number
+    lastPartText: string | undefined
+    lastPartState: string | undefined
+    lastPartInputJson: string | undefined
+    metadataJson: string | undefined
+  }
+>()
 
-function hasMessageChanged(subChatId: string, msgId: string, msg: Message): boolean {
+function hasMessageChanged(subChatId: string, msgId: string, msg: SyncableMessage): boolean {
   const cacheKey = `${subChatId}:${msgId}`
   const prev = previousMessageState.get(cacheKey)
   const parts = msg.parts || []
@@ -844,7 +885,16 @@ function hasMessageChanged(subChatId: string, msgId: string, msg: Message): bool
 
 export const syncMessagesWithStatusAtom = atom(
   null,
-  (get, set, payload: { messages: Message[]; status: string; subChatId?: string; updateGlobal?: boolean }) => {
+  (
+    get,
+    set,
+    payload: {
+      messages: SyncableMessage[]
+      status: string
+      subChatId?: string
+      updateGlobal?: boolean
+    },
+  ) => {
     const { messages, status, subChatId, updateGlobal = true } = payload
 
     const prevSubChatId = get(currentSubChatIdAtom)
@@ -872,7 +922,7 @@ export const syncMessagesWithStatusAtom = atom(
     const newRoles = new Map<string, "user" | "assistant" | "system">()
 
     for (const msg of messages) {
-      newRoles.set(msg.id, msg.role)
+      newRoles.set(msg.id, msg.role as "user" | "assistant" | "system")
     }
 
     if (updateGlobal) {
@@ -881,8 +931,7 @@ export const syncMessagesWithStatusAtom = atom(
 
       // Check if IDs changed (new message added or removed)
       globalIdsChanged =
-        newIds.length !== currentIds.length ||
-        newIds.some((id, i) => id !== currentIds[i])
+        newIds.length !== currentIds.length || newIds.some((id, i) => id !== currentIds[i])
 
       if (globalIdsChanged) {
         set(messageIdsAtom, newIds)
@@ -907,8 +956,7 @@ export const syncMessagesWithStatusAtom = atom(
     // Always update per-subchat atoms so split panes can render independently.
     const perChatIds = get(messageIdsPerChatAtom(currentSubChatId))
     const perChatIdsChanged =
-      newIds.length !== perChatIds.length ||
-      newIds.some((id, i) => id !== perChatIds[i])
+      newIds.length !== perChatIds.length || newIds.some((id, i) => id !== perChatIds[i])
 
     if (perChatIdsChanged) {
       set(messageIdsPerChatAtom(currentSubChatId), newIds)
@@ -951,9 +999,12 @@ export const syncMessagesWithStatusAtom = atom(
         // Deep clone message with new parts array and new part objects
         const clonedMsg = {
           ...msg,
-          parts: msg.parts?.map((part: any) => ({ ...part, input: part.input ? { ...part.input } : undefined })),
+          parts: msg.parts?.map((part) => ({
+            ...part,
+            input: part.input ? { ...part.input } : undefined,
+          })),
         }
-        set(messageAtomFamily(messageKey), clonedMsg)
+        set(messageAtomFamily(messageKey), clonedMsg as Message)
       }
     }
 
@@ -986,17 +1037,13 @@ export const syncMessagesWithStatusAtom = atom(
         set(streamingMessageIdAtom, null)
       }
     }
-
-  }
+  },
 )
 
 // Legacy sync atom (not used, but kept for compatibility)
-export const syncMessagesAtom = atom(
-  null,
-  (get, set, messages: Message[]) => {
-    set(syncMessagesWithStatusAtom, { messages, status: get(chatStatusAtom) })
-  }
-)
+export const syncMessagesAtom = atom(null, (get, set, messages: Message[]) => {
+  set(syncMessagesWithStatusAtom, { messages, status: get(chatStatusAtom) })
+})
 
 // ============================================================================
 // CLEANUP - For clearing store when switching chats
@@ -1105,16 +1152,13 @@ export const ttsPlaybackRateAtom = atom<PlaybackSpeed>(
       }
     }
     return 1
-  })()
+  })(),
 )
 
 // Write atom that also persists to localStorage
-export const setTtsPlaybackRateAtom = atom(
-  null,
-  (_get, set, rate: PlaybackSpeed) => {
-    set(ttsPlaybackRateAtom, rate)
-    if (typeof window !== "undefined") {
-      localStorage.setItem("tts-playback-rate", String(rate))
-    }
+export const setTtsPlaybackRateAtom = atom(null, (_get, set, rate: PlaybackSpeed) => {
+  set(ttsPlaybackRateAtom, rate)
+  if (typeof window !== "undefined") {
+    localStorage.setItem("tts-playback-rate", String(rate))
   }
-)
+})

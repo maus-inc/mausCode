@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, memo } from "react"
+import { memo, useEffect, useRef, useState } from "react"
 import { cn } from "../../lib/utils"
 
 interface TypewriterTextProps {
@@ -91,9 +91,5 @@ export const TypewriterText = memo(function TypewriterText({
   // Typewriter animation in progress
   const visibleText = text.slice(0, typedLength)
 
-  return (
-    <span className={className}>
-      {visibleText}
-    </span>
-  )
+  return <span className={className}>{visibleText}</span>
 })

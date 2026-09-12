@@ -1,30 +1,33 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useAtom } from "jotai"
-import { Button } from "../../../components/ui/button"
 import { RotateCw } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Button } from "../../../components/ui/button"
 import {
   ExternalLinkIcon,
-  IconDoubleChevronRight,
   IconChatBubble,
+  IconDoubleChevronRight,
 } from "../../../components/ui/icons"
-import { PreviewUrlInput } from "./preview-url-input"
-import {
-  previewPathAtomFamily,
-  viewportModeAtomFamily,
-  previewScaleAtomFamily,
-  mobileDeviceAtomFamily,
-} from "../atoms"
+import { Logo } from "../../../components/ui/logo"
 import { cn } from "../../../lib/utils"
-import { ViewportToggle } from "./viewport-toggle"
-import { ScaleControl } from "./scale-control"
+import {
+  mobileDeviceAtomFamily,
+  previewPathAtomFamily,
+  previewScaleAtomFamily,
+  viewportModeAtomFamily,
+} from "../atoms"
+import { AGENTS_PREVIEW_CONSTANTS, DEVICE_PRESETS } from "../constants"
 import { DevicePresetsBar } from "./device-presets-bar"
-import { ResizeHandle } from "./resize-handle"
 import { MobileCopyLinkButton } from "./mobile-copy-link-button"
-import { DEVICE_PRESETS, AGENTS_PREVIEW_CONSTANTS } from "../constants"
+import { PreviewUrlInput } from "./preview-url-input"
+import { ResizeHandle } from "./resize-handle"
+import { ScaleControl } from "./scale-control"
+import { ViewportToggle } from "./viewport-toggle"
+
 // import { getSandboxPreviewUrl } from "@/app/(alpha)/canvas/{components}/settings-tabs/repositories/preview-url"
-const getSandboxPreviewUrl = (sandboxId: string, port: number, _type: string) => `https://${sandboxId}-${port}.csb.app` // Desktop mock
+const getSandboxPreviewUrl = (sandboxId: string, port: number, _type: string) =>
+  `https://${sandboxId}-${port}.csb.app` // Desktop mock
 interface AgentPreviewProps {
   chatId: string
   sandboxId: string
@@ -39,7 +42,6 @@ export function AgentPreview({
   chatId,
   sandboxId,
   port,
-  repository,
   hideHeader = false,
   onClose,
   isMobile = false,
@@ -52,20 +54,14 @@ export function AgentPreview({
   const resizeCleanupRef = useRef<(() => void) | null>(null)
 
   // Persisted state from Jotai atoms (per chatId)
-  const [persistedPath, setPersistedPath] = useAtom(
-    previewPathAtomFamily(chatId),
-  )
-  const [viewportMode, setViewportMode] = useAtom(
-    viewportModeAtomFamily(chatId),
-  )
+  const [persistedPath, setPersistedPath] = useAtom(previewPathAtomFamily(chatId))
+  const [viewportMode, setViewportMode] = useAtom(viewportModeAtomFamily(chatId))
   const [scale, setScale] = useAtom(previewScaleAtomFamily(chatId))
   const [device, setDevice] = useAtom(mobileDeviceAtomFamily(chatId))
 
   // Local state for resizing
   const [isResizing, setIsResizing] = useState(false)
-  const [maxWidth, setMaxWidth] = useState<number>(
-    AGENTS_PREVIEW_CONSTANTS.MAX_WIDTH,
-  )
+  const [maxWidth, setMaxWidth] = useState<number>(AGENTS_PREVIEW_CONSTANTS.MAX_WIDTH)
 
   // Dual state architecture:
   // - loadedPath: Controls iframe src (stable, only changes on manual navigation)
@@ -83,15 +79,8 @@ export function AgentPreview({
       }
     }
 
-    window.addEventListener(
-      "agent-preview-reload",
-      handleReload as EventListener,
-    )
-    return () =>
-      window.removeEventListener(
-        "agent-preview-reload",
-        handleReload as EventListener,
-      )
+    window.addEventListener("agent-preview-reload", handleReload as EventListener)
+    return () => window.removeEventListener("agent-preview-reload", handleReload as EventListener)
   }, [chatId])
 
   // Listen for navigation events from external header
@@ -105,15 +94,9 @@ export function AgentPreview({
       }
     }
 
-    window.addEventListener(
-      "agent-preview-navigate",
-      handleNavigate as EventListener,
-    )
+    window.addEventListener("agent-preview-navigate", handleNavigate as EventListener)
     return () =>
-      window.removeEventListener(
-        "agent-preview-navigate",
-        handleNavigate as EventListener,
-      )
+      window.removeEventListener("agent-preview-navigate", handleNavigate as EventListener)
   }, [chatId, setPersistedPath])
 
   // Dispatch path updates to header
@@ -159,10 +142,7 @@ export function AgentPreview({
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Verify source is our iframe
-      if (
-        !iframeRef.current ||
-        event.source !== iframeRef.current.contentWindow
-      ) {
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) {
         return
       }
 
@@ -261,10 +241,7 @@ export function AgentPreview({
           delta = -delta
         }
         const newWidth = Math.round(
-          Math.max(
-            AGENTS_PREVIEW_CONSTANTS.MIN_WIDTH,
-            Math.min(maxWidth, startWidth + delta * 2),
-          ),
+          Math.max(AGENTS_PREVIEW_CONSTANTS.MIN_WIDTH, Math.min(maxWidth, startWidth + delta * 2)),
         )
         frame.style.width = `${newWidth}px`
         setDevice({
@@ -290,9 +267,9 @@ export function AgentPreview({
       }
 
       const cleanup = () => {
-        handle.removeEventListener("pointermove", handlePointerMove as any)
-        handle.removeEventListener("pointerup", handlePointerUp as any)
-        handle.removeEventListener("pointercancel", handlePointerCancel as any)
+        handle.removeEventListener("pointermove", handlePointerMove)
+        handle.removeEventListener("pointerup", handlePointerUp)
+        handle.removeEventListener("pointercancel", handlePointerCancel)
         document.body.style.userSelect = ""
         document.body.style.cursor = ""
         resizeCleanupRef.current = null
@@ -300,21 +277,16 @@ export function AgentPreview({
 
       document.body.style.userSelect = "none"
       document.body.style.cursor = "ew-resize"
-      handle.addEventListener("pointermove", handlePointerMove as any)
-      handle.addEventListener("pointerup", handlePointerUp as any)
-      handle.addEventListener("pointercancel", handlePointerCancel as any)
+      handle.addEventListener("pointermove", handlePointerMove)
+      handle.addEventListener("pointerup", handlePointerUp)
+      handle.addEventListener("pointercancel", handlePointerCancel)
       resizeCleanupRef.current = cleanup
     },
     [device, maxWidth, setDevice],
   )
 
   return (
-    <div
-      className={cn(
-        "flex flex-col bg-tl-background",
-        isMobile ? "h-full w-full" : "h-full",
-      )}
-    >
+    <div className={cn("flex flex-col bg-tl-background", isMobile ? "h-full w-full" : "h-full")}>
       {/* Mobile Header */}
       {isMobile && !hideHeader && (
         <div
@@ -351,9 +323,7 @@ export function AgentPreview({
               disabled={isRefreshing}
               className="h-7 w-7 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0 rounded-md"
             >
-              <RotateCw
-                className={cn("h-4 w-4", isRefreshing && "animate-spin")}
-              />
+              <RotateCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             </Button>
 
             {/* URL Input - centered, flexible */}
@@ -389,10 +359,7 @@ export function AgentPreview({
               className="h-7 w-7 p-0 hover:bg-muted transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] rounded-md"
             >
               <RotateCw
-                className={cn(
-                  "h-3.5 w-3.5 text-muted-foreground",
-                  isRefreshing && "animate-spin",
-                )}
+                className={cn("h-3.5 w-3.5 text-muted-foreground", isRefreshing && "animate-spin")}
               />
             </Button>
 
@@ -488,22 +455,7 @@ export function AgentPreview({
             {!isLoaded && (
               <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
                 <div className="w-6 h-6 animate-pulse">
-                  <svg
-                    width="100%"
-                    height="100%"
-                    viewBox="0 0 400 400"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-label="21st logo"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      clipRule="evenodd"
-                      d="M358.333 0C381.345 0 400 18.6548 400 41.6667V295.833C400 298.135 398.134 300 395.833 300H270.833C268.532 300 266.667 301.865 266.667 304.167V395.833C266.667 398.134 264.801 400 262.5 400H41.6667C18.6548 400 0 381.345 0 358.333V304.72C0 301.793 1.54269 299.081 4.05273 297.575L153.76 207.747C157.159 205.708 156.02 200.679 152.376 200.065L151.628 200H4.16667C1.86548 200 6.71103e-08 198.135 0 195.833V104.167C1.07376e-06 101.865 1.86548 100 4.16667 100H162.5C164.801 100 166.667 98.1345 166.667 95.8333V4.16667C166.667 1.86548 168.532 1.00666e-07 170.833 0H358.333ZM170.833 100C168.532 100 166.667 101.865 166.667 104.167V295.833C166.667 298.135 168.532 300 170.833 300H262.5C264.801 300 266.667 298.135 266.667 295.833V104.167C266.667 101.865 264.801 100 262.5 100H170.833Z"
-                      fill="currentColor"
-                      className="text-muted-foreground"
-                    />
-                  </svg>
+                  <Logo className="w-full h-full opacity-50" />
                 </div>
               </div>
             )}
@@ -512,11 +464,7 @@ export function AgentPreview({
           <>
             {/* Left resize handle - only in mobile viewport mode (not on actual mobile devices) */}
             {viewportMode === "mobile" && (
-              <ResizeHandle
-                side="left"
-                onPointerDown={handleResizeStart}
-                isResizing={isResizing}
-              />
+              <ResizeHandle side="left" onPointerDown={handleResizeStart} isResizing={isResizing} />
             )}
 
             {/* Frame with dynamic size */}
@@ -524,18 +472,13 @@ export function AgentPreview({
               ref={frameRef}
               className={cn(
                 "relative overflow-hidden flex-shrink-0 bg-background",
-                !isResizing &&
-                  "transition-[width,height,margin] duration-300 ease-in-out",
-                viewportMode === "desktop"
-                  ? "border-[0.5px] rounded-sm"
-                  : "shadow-lg border",
+                !isResizing && "transition-[width,height,margin] duration-300 ease-in-out",
+                viewportMode === "desktop" ? "border-[0.5px] rounded-sm" : "shadow-lg border",
               )}
               style={{
-                width:
-                  viewportMode === "desktop" ? "100%" : `${device.width}px`,
+                width: viewportMode === "desktop" ? "100%" : `${device.width}px`,
                 height: "100%",
-                maxHeight:
-                  viewportMode === "mobile" ? `${device.height}px` : "100%",
+                maxHeight: viewportMode === "mobile" ? `${device.height}px` : "100%",
                 marginLeft: viewportMode === "mobile" ? "16px" : "0",
                 marginRight: viewportMode === "mobile" ? "16px" : "0",
                 borderRadius: viewportMode === "desktop" ? "8px" : "24px",
@@ -575,22 +518,7 @@ export function AgentPreview({
                 {!isLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center bg-background z-10 rounded-[inherit]">
                     <div className="w-6 h-6 animate-pulse">
-                      <svg
-                        width="100%"
-                        height="100%"
-                        viewBox="0 0 400 400"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        aria-label="21st logo"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          clipRule="evenodd"
-                          d="M358.333 0C381.345 0 400 18.6548 400 41.6667V295.833C400 298.135 398.134 300 395.833 300H270.833C268.532 300 266.667 301.865 266.667 304.167V395.833C266.667 398.134 264.801 400 262.5 400H41.6667C18.6548 400 0 381.345 0 358.333V304.72C0 301.793 1.54269 299.081 4.05273 297.575L153.76 207.747C157.159 205.708 156.02 200.679 152.376 200.065L151.628 200H4.16667C1.86548 200 6.71103e-08 198.135 0 195.833V104.167C1.07376e-06 101.865 1.86548 100 4.16667 100H162.5C164.801 100 166.667 98.1345 166.667 95.8333V4.16667C166.667 1.86548 168.532 1.00666e-07 170.833 0H358.333ZM170.833 100C168.532 100 166.667 101.865 166.667 104.167V295.833C166.667 298.135 168.532 300 170.833 300H262.5C264.801 300 266.667 298.135 266.667 295.833V104.167C266.667 101.865 264.801 100 262.5 100H170.833Z"
-                          fill="currentColor"
-                          className="text-muted-foreground"
-                        />
-                      </svg>
+                      <Logo className="w-full h-full opacity-50" />
                     </div>
                   </div>
                 )}

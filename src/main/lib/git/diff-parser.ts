@@ -115,7 +115,7 @@ function validateDiffHunk(diffText: string): { valid: boolean; reason?: string }
   // Must have at least one hunk header after +++ line
   let hasHunk = false
   for (let i = plusLineIdx + 1; i < lines.length; i++) {
-    if (hunkHeaderRegex.test(lines[i]!)) {
+    if (hunkHeaderRegex.test(lines[i] ?? "")) {
       hasHunk = true
       break
     }
@@ -132,7 +132,7 @@ function validateDiffHunk(diffText: string): { valid: boolean; reason?: string }
  * Split a unified diff into separate file diffs
  */
 export function splitUnifiedDiffByFile(diffText: string): ParsedDiffFile[] {
-  if (!diffText || !diffText.trim()) {
+  if (!diffText?.trim()) {
     return []
   }
 
@@ -180,8 +180,9 @@ export function splitUnifiedDiffByFile(diffText: string): ParsedDiffFile[] {
         // Needed for binary files that don't have ---/+++ lines
         const match = line.match(/^diff --git a\/(.+) b\/(.+)$/)
         if (match) {
-          if (!oldPath) oldPath = match[1]!
-          if (!newPath) newPath = match[2]!
+          const [, oldMatch, newMatch] = match
+          if (!oldPath && oldMatch) oldPath = oldMatch
+          if (!newPath && newMatch) newPath = newMatch
         }
       }
 

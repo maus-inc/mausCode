@@ -1,14 +1,14 @@
 "use client"
 
-import { Button } from "../../../components/ui/button"
 import { AlignJustify } from "lucide-react"
+import { Button } from "../../../components/ui/button"
+import { Kbd } from "../../../components/ui/kbd"
 import {
   Tooltip,
   TooltipContent,
-  TooltipTrigger,
   TooltipProvider,
+  TooltipTrigger,
 } from "../../../components/ui/tooltip"
-import { Kbd } from "../../../components/ui/kbd"
 import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 
 interface AgentsHeaderControlsProps {

@@ -1,7 +1,7 @@
 import * as shiki from "shiki"
+import type { VSCodeFullTheme } from "../atoms"
 import { isBuiltinTheme } from "../vscode-themes"
 import { getBuiltinThemeById } from "./builtin-themes"
-import type { VSCodeFullTheme } from "../atoms"
 
 /**
  * Shared Shiki highlighter instance
@@ -92,9 +92,9 @@ const DEFAULT_THEMES: shiki.BundledTheme[] = [
  * Only themes WITHOUT tokenColors need mapping - themes with tokenColors use their own
  */
 const THEME_TO_SHIKI_MAP: Record<string, shiki.BundledTheme> = {
-  // 21st themes use GitHub themes (no tokenColors)
-  "21st-dark": "github-dark",
-  "21st-light": "github-light",
+  // mausCode themes use GitHub themes (no tokenColors)
+  "mauscode-dark": "github-dark",
+  "mauscode-light": "github-light",
   // Claude themes use GitHub themes (no tokenColors)
   "claude-dark": "github-dark",
   "claude-light": "github-light",
@@ -124,7 +124,8 @@ export async function getHighlighter(): Promise<shiki.Highlighter> {
 }
 
 // Cache for full themes (from the new full theme system)
-const fullThemesCache = new Map<string, any>()
+// Values are only ever checked with .has() — the loaded theme lives in Shiki.
+const fullThemesCache = new Map<string, object>()
 
 /**
  * Load a full VS Code theme into Shiki
@@ -139,12 +140,12 @@ export async function loadFullTheme(theme: VSCodeFullTheme): Promise<void> {
   const highlighter = await getHighlighter()
 
   try {
-    // Create a Shiki-compatible theme object
+    // Create a Shiki-compatible theme object (settings defaulted: Shiki requires the key)
     const shikiTheme = {
       name: theme.id,
       type: theme.type,
       colors: theme.colors,
-      tokenColors: theme.tokenColors || [],
+      tokenColors: (theme.tokenColors || []).map((tc) => ({ ...tc, settings: tc.settings || {} })),
     }
 
     await highlighter.loadTheme(shikiTheme)
@@ -172,17 +173,17 @@ function getShikiThemeForHighlighting(themeId: string): string {
   if (themeId in THEME_TO_SHIKI_MAP) {
     return THEME_TO_SHIKI_MAP[themeId]
   }
-  
+
   // If it's already a shiki bundled theme, use it directly
   if (isShikiBundledTheme(themeId)) {
     return themeId
   }
-  
+
   // If the theme is loaded in our cache (has tokenColors), use it directly
   if (fullThemesCache.has(themeId)) {
     return themeId
   }
-  
+
   // Check the theme type and use appropriate default
   const builtinTheme = getBuiltinThemeById(themeId)
   if (builtinTheme) {
@@ -192,7 +193,7 @@ function getShikiThemeForHighlighting(themeId: string): string {
     }
     return builtinTheme.type === "light" ? "github-light" : "github-dark"
   }
-  
+
   // Default to github-dark
   return "github-dark"
 }
@@ -227,18 +228,6 @@ export async function ensureThemeLoaded(themeId: string): Promise<void> {
 
   // Theme not found - this is an error case
   console.warn(`Theme ${themeId} not found, falling back to github-dark`)
-}
-
-/**
- * Check if a theme is available (loaded or can be loaded)
- */
-function isThemeAvailable(themeId: string): boolean {
-  return (
-    isShikiBundledTheme(themeId) ||
-    fullThemesCache.has(themeId) ||
-    !!getBuiltinThemeById(themeId) ||
-    isBuiltinTheme(themeId)
-  )
 }
 
 /**

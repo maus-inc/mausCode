@@ -25,7 +25,7 @@ export function suppressQueryResponses(xterm: XTerm): () => void {
     // DSR (Device Status Report) response: CSI row ; col R
     /^\x1b\[\d+;\d+R$/,
     // DECRQSS (Request Selection or Setting) responses
-    /^\x1bP[\d\$r].*\x1b\\$/,
+    /^\x1bP[\d$r].*\x1b\\$/,
   ]
 
   /**

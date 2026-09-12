@@ -34,13 +34,14 @@ export function useListKeyboardNav<T extends string>({
 
       if (nextIndex === currentIndex && currentIndex !== -1) return
 
-      const nextItem = items[nextIndex]!
+      const nextItem = items[nextIndex]
+      if (nextItem === undefined) return
       onSelect(nextItem)
 
       // Focus the item and scroll into view
       requestAnimationFrame(() => {
         const el = containerRef.current?.querySelector<HTMLElement>(
-          `[data-item-id="${CSS.escape(nextItem)}"]`
+          `[data-item-id="${CSS.escape(nextItem)}"]`,
         )
         if (el) {
           el.focus()
@@ -48,7 +49,7 @@ export function useListKeyboardNav<T extends string>({
         }
       })
     },
-    [items, selectedItem, onSelect]
+    [items, selectedItem, onSelect],
   )
 
   return { containerRef, onKeyDown }

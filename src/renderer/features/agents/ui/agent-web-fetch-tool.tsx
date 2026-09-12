@@ -1,20 +1,16 @@
 "use client"
 
 import { memo, useState } from "react"
-import {
-  GlobeIcon,
-  IconSpinner,
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
+import { CollapseIcon, ExpandIcon, GlobeIcon, IconSpinner } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
-import { getToolStatus } from "./agent-tool-registry"
-import { AgentToolInterrupted } from "./agent-tool-interrupted"
-import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
+import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { getToolStatus } from "./agent-tool-registry"
+import type { ToolPartLike } from "./agent-tool-state"
+import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface AgentWebFetchToolProps {
-  part: any
+  part: ToolPartLike
   chatStatus?: string
 }
 
@@ -25,10 +21,12 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
   const [isExpanded, setIsExpanded] = useState(false)
   const { isPending, isError, isInterrupted } = getToolStatus(part, chatStatus)
 
-  const url = part.input?.url || ""
-  const result = part.output?.result || ""
-  const bytes = part.output?.bytes || 0
-  const statusCode = part.output?.code
+  const toolInput = part.input as { url?: string } | undefined
+  const toolOutput = part.output as { result?: string; bytes?: number; code?: number } | undefined
+  const url = toolInput?.url || ""
+  const result = toolOutput?.result || ""
+  const bytes = toolOutput?.bytes || 0
+  const statusCode = toolOutput?.code
   const isSuccess = statusCode === 200
 
   // Extract hostname for display
@@ -56,28 +54,36 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
   return (
     <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
       {/* Header - clickable to toggle expand */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
         onClick={() => hasContent && !isPending && setIsExpanded(!isExpanded)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
         className={cn(
           "flex items-center justify-between px-2.5 h-7",
-          hasContent && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          hasContent &&
+            !isPending &&
+            "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
         <div className="flex items-center gap-1.5 text-xs truncate flex-1 min-w-0">
           <GlobeIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
-          
+
           {isPending ? (
-            <TextShimmer
-              as="span"
-              duration={1.2}
-              className="text-xs text-muted-foreground"
-            >
+            <TextShimmer as="span" duration={1.2} className="text-xs text-muted-foreground">
               Fetching
             </TextShimmer>
           ) : (
             <span className="text-xs text-muted-foreground">Fetched</span>
           )}
-          
+
           <span className="truncate text-foreground">{hostname}</span>
         </div>
 
@@ -91,9 +97,7 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
                 {statusCode ? `Error ${statusCode}` : "Failed"}
               </span>
             ) : (
-              <span className="text-muted-foreground">
-                {formatBytes(bytes)}
-              </span>
+              <span className="text-muted-foreground">{formatBytes(bytes)}</span>
             )}
           </div>
 
@@ -128,4 +132,3 @@ export const AgentWebFetchTool = memo(function AgentWebFetchTool({
     </div>
   )
 }, areToolPropsEqual)
-

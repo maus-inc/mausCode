@@ -2,46 +2,34 @@
 
 /**
  * VS Code Theme Provider
- * 
+ *
  * Provides full VS Code theme support for the application:
  * - Applies CSS variables for UI theming
  * - Provides terminal theme for xterm.js
  * - Integrates with Shiki for syntax highlighting
  */
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useCallback,
-  type ReactNode,
-} from "react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { useTheme } from "next-themes"
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from "react"
 import type { ITheme } from "xterm"
 
 import {
-  selectedFullThemeIdAtom,
   fullThemeDataAtom,
-  systemLightThemeIdAtom,
-  systemDarkThemeIdAtom,
   importedThemesAtom,
+  selectedFullThemeIdAtom,
+  systemDarkThemeIdAtom,
+  systemLightThemeIdAtom,
   type VSCodeFullTheme,
 } from "../atoms"
-import {
-  generateCSSVariables,
-  applyCSSVariables,
-  removeCSSVariables,
-  getThemeTypeFromColors,
-} from "./vscode-to-css-mapping"
+import { BUILTIN_THEMES, getBuiltinThemeById } from "./builtin-themes"
 import { extractTerminalTheme } from "./terminal-theme-mapper"
 import {
-  BUILTIN_THEMES,
-  getBuiltinThemeById,
-  DEFAULT_DARK_THEME_ID,
-  DEFAULT_LIGHT_THEME_ID,
-} from "./builtin-themes"
+  applyCSSVariables,
+  generateCSSVariables,
+  getThemeTypeFromColors,
+  removeCSSVariables,
+} from "./vscode-to-css-mapping"
 
 /**
  * Theme context value
@@ -50,19 +38,19 @@ interface ThemeContextValue {
   // Current theme
   currentTheme: VSCodeFullTheme | null
   currentThemeId: string | null
-  
+
   // Theme type (light/dark)
   isDark: boolean
-  
+
   // Terminal theme for xterm.js
   terminalTheme: ITheme
-  
+
   // All available themes
   allThemes: VSCodeFullTheme[]
-  
+
   // Theme actions
   setThemeById: (id: string | null) => void
-  
+
   // Shiki theme name (for syntax highlighting)
   shikiThemeName: string
 }
@@ -140,7 +128,7 @@ interface VSCodeThemeProviderProps {
  */
 export function VSCodeThemeProvider({ children }: VSCodeThemeProviderProps) {
   const { resolvedTheme, setTheme: setNextTheme } = useTheme()
-  
+
   // Atoms
   const [selectedThemeId, setSelectedThemeId] = useAtom(selectedFullThemeIdAtom)
   const [fullThemeData, setFullThemeData] = useAtom(fullThemeDataAtom)
@@ -149,11 +137,8 @@ export function VSCodeThemeProvider({ children }: VSCodeThemeProviderProps) {
   const importedThemes = useAtomValue(importedThemesAtom)
 
   // Combine builtin and imported themes
-  const allThemes = useMemo(
-    () => [...BUILTIN_THEMES, ...importedThemes],
-    [importedThemes],
-  )
-  
+  const allThemes = useMemo(() => [...BUILTIN_THEMES, ...importedThemes], [importedThemes])
+
   // Determine if we're in dark mode (from next-themes or theme type)
   const isDark = useMemo(() => {
     if (fullThemeData) {
@@ -161,18 +146,20 @@ export function VSCodeThemeProvider({ children }: VSCodeThemeProviderProps) {
     }
     return resolvedTheme === "dark"
   }, [fullThemeData, resolvedTheme])
-  
+
   // Find the current theme by ID (considering system mode)
   const currentTheme = useMemo(() => {
     if (selectedThemeId === null) {
       // System mode - use the appropriate theme based on system preference
       const systemThemeId = resolvedTheme === "dark" ? systemDarkThemeId : systemLightThemeId
       // First check in all themes (includes imported), then fallback to builtin
-      return allThemes.find((t) => t.id === systemThemeId) || getBuiltinThemeById(systemThemeId) || null
+      return (
+        allThemes.find((t) => t.id === systemThemeId) || getBuiltinThemeById(systemThemeId) || null
+      )
     }
     return allThemes.find((t) => t.id === selectedThemeId) || null
   }, [selectedThemeId, allThemes, resolvedTheme, systemLightThemeId, systemDarkThemeId])
-  
+
   // Update fullThemeData when theme changes
   useEffect(() => {
     if (currentTheme) {
@@ -181,14 +168,14 @@ export function VSCodeThemeProvider({ children }: VSCodeThemeProviderProps) {
       setFullThemeData(null)
     }
   }, [currentTheme, setFullThemeData])
-  
+
   // Apply CSS variables when theme changes
   useEffect(() => {
     if (fullThemeData?.colors) {
       // Generate and apply CSS variables
       const cssVars = generateCSSVariables(fullThemeData.colors)
       applyCSSVariables(cssVars)
-      
+
       // For system mode, let next-themes handle the class
       if (selectedThemeId === null) {
         setNextTheme("system")
@@ -208,13 +195,13 @@ export function VSCodeThemeProvider({ children }: VSCodeThemeProviderProps) {
       // Remove custom CSS variables when no theme is selected
       removeCSSVariables()
     }
-    
+
     return () => {
       // Cleanup on unmount
       removeCSSVariables()
     }
   }, [fullThemeData, selectedThemeId, setNextTheme])
-  
+
   // Get terminal theme
   const terminalTheme = useMemo((): ITheme => {
     if (fullThemeData?.colors) {
@@ -223,7 +210,7 @@ export function VSCodeThemeProvider({ children }: VSCodeThemeProviderProps) {
     // Fallback to default themes
     return isDark ? DEFAULT_TERMINAL_THEME_DARK : DEFAULT_TERMINAL_THEME_LIGHT
   }, [fullThemeData, isDark])
-  
+
   // Get Shiki theme name for syntax highlighting
   const shikiThemeName = useMemo(() => {
     if (fullThemeData) {
@@ -238,35 +225,37 @@ export function VSCodeThemeProvider({ children }: VSCodeThemeProviderProps) {
     // Default based on system theme
     return isDark ? "github-dark" : "github-light"
   }, [fullThemeData, isDark])
-  
+
   // Theme actions
-  const setThemeById = useCallback((id: string | null) => {
-    setSelectedThemeId(id)
-  }, [setSelectedThemeId])
-  
-  const contextValue = useMemo((): ThemeContextValue => ({
-    currentTheme: fullThemeData,
-    currentThemeId: selectedThemeId,
-    isDark,
-    terminalTheme,
-    allThemes,
-    setThemeById,
-    shikiThemeName,
-  }), [
-    fullThemeData,
-    selectedThemeId,
-    isDark,
-    terminalTheme,
-    allThemes,
-    setThemeById,
-    shikiThemeName,
-  ])
-  
-  return (
-    <ThemeContext.Provider value={contextValue}>
-      {children}
-    </ThemeContext.Provider>
+  const setThemeById = useCallback(
+    (id: string | null) => {
+      setSelectedThemeId(id)
+    },
+    [setSelectedThemeId],
   )
+
+  const contextValue = useMemo(
+    (): ThemeContextValue => ({
+      currentTheme: fullThemeData,
+      currentThemeId: selectedThemeId,
+      isDark,
+      terminalTheme,
+      allThemes,
+      setThemeById,
+      shikiThemeName,
+    }),
+    [
+      fullThemeData,
+      selectedThemeId,
+      isDark,
+      terminalTheme,
+      allThemes,
+      setThemeById,
+      shikiThemeName,
+    ],
+  )
+
+  return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>
 }
 
 /**

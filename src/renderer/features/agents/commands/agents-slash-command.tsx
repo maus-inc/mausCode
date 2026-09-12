@@ -1,24 +1,13 @@
 "use client"
 
-import { cn } from "../../../lib/utils"
-import { trpc } from "../../../lib/trpc"
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  memo,
-} from "react"
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { IconSpinner } from "../../../components/ui/icons"
-import type { SlashCommandOption, SlashTriggerPayload } from "./types"
-import {
-  filterBuiltinCommands,
-  BUILTIN_SLASH_COMMANDS,
-} from "./builtin-commands"
+import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 import type { AgentMode } from "../atoms"
+import { filterBuiltinCommands } from "./builtin-commands"
+import type { SlashCommandOption } from "./types"
 
 interface AgentsSlashCommandProps {
   isOpen: boolean
@@ -79,7 +68,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   }, [fileCommands])
 
   // State for loading command content
-  const [isLoadingContent, setIsLoadingContent] = useState(false)
+  const [_isLoadingContent, setIsLoadingContent] = useState(false)
 
   // tRPC utils for fetching command content
   const trpcUtils = trpc.useUtils()
@@ -119,27 +108,24 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         onSelect(option)
       }
     },
-    [onSelect, onClose, trpcUtils],
+    [onSelect, onClose, trpcUtils, projectPath],
   )
 
   // Combine builtin and repository commands, filtered by search
   const options: SlashCommandOption[] = useMemo(() => {
     let builtinFiltered = filterBuiltinCommands(debouncedSearchText)
 
-    // Hide /plan when already in Plan mode, hide /agent when already in Agent mode
+    // Hide the mode-switch command matching the current mode
     if (mode !== undefined) {
       builtinFiltered = builtinFiltered.filter((cmd) => {
-        if (mode === "plan" && cmd.name === "plan") return false
-        if (mode === "agent" && cmd.name === "agent") return false
+        if (cmd.name === mode) return false
         return true
       })
     }
 
     // Filter out disabled commands
     if (disabledCommands?.length) {
-      builtinFiltered = builtinFiltered.filter(
-        (cmd) => !disabledCommands.includes(cmd.name),
-      )
+      builtinFiltered = builtinFiltered.filter((cmd) => !disabledCommands.includes(cmd.name))
     }
 
     // Filter custom commands by search
@@ -148,8 +134,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
       const query = debouncedSearchText.toLowerCase()
       customFiltered = customCommands.filter(
         (cmd) =>
-          cmd.name.toLowerCase().includes(query) ||
-          cmd.command.toLowerCase().includes(query),
+          cmd.name.toLowerCase().includes(query) || cmd.command.toLowerCase().includes(query),
       )
     }
 
@@ -210,9 +195,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
           e.stopImmediatePropagation()
           // Guard against modulo by zero when no options
           if (options.length > 0) {
-            setSelectedIndex(
-              (prev) => (prev - 1 + options.length) % options.length,
-            )
+            setSelectedIndex((prev) => (prev - 1 + options.length) % options.length)
           }
           break
         case "Enter":
@@ -242,8 +225,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     }
 
     window.addEventListener("keydown", handleKeyDown, { capture: true })
-    return () =>
-      window.removeEventListener("keydown", handleKeyDown, { capture: true })
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true })
   }, [isOpen, options, selectedIndex, handleSelect, onClose])
 
   // Auto-scroll selected item into view
@@ -267,10 +249,7 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
     if (!isOpen) return
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         onClose()
       }
     }
@@ -283,38 +262,33 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
 
   // Calculate dropdown dimensions (matching file mention style)
   const dropdownWidth = 320
-  const itemHeight = 28  // h-7 = 28px to match file mention
+  const itemHeight = 28 // h-7 = 28px to match file mention
   const headerHeight = 24
   // Single "Commands" header for all options
   const headersCount = options.length > 0 ? 1 : 0
   const requestedHeight = Math.min(
     options.length * itemHeight + headersCount * headerHeight + 8,
-    200,  // Match file mention maxHeight
+    200, // Match file mention maxHeight
   )
   const gap = 8
 
   // Decide placement like Radix Popover (auto-flip top/bottom)
   const safeMargin = 10
   const caretOffsetBelow = 20
-  const availableBelow =
-    window.innerHeight - (position.top + caretOffsetBelow) - safeMargin
+  const availableBelow = window.innerHeight - (position.top + caretOffsetBelow) - safeMargin
   const availableAbove = position.top - safeMargin
 
   // Compute desired placement, but lock it for the duration of the open state
   if (placementRef.current === null) {
-    const condition1 =
-      availableAbove >= requestedHeight && availableBelow < requestedHeight
-    const condition2 =
-      availableAbove > availableBelow && availableAbove >= requestedHeight
+    const condition1 = availableAbove >= requestedHeight && availableBelow < requestedHeight
+    const condition2 = availableAbove > availableBelow && availableAbove >= requestedHeight
     const shouldPlaceAbove = condition1 || condition2
     placementRef.current = shouldPlaceAbove ? "above" : "below"
   }
   const placeAbove = placementRef.current === "above"
 
   // Compute final top based on placement
-  let finalTop = placeAbove
-    ? position.top - gap
-    : position.top + gap + caretOffsetBelow
+  const finalTop = placeAbove ? position.top - gap : position.top + gap + caretOffsetBelow
 
   // Slight left bias to better align with '/'
   const leftOffset = -4
@@ -331,26 +305,27 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
   // Compute actual maxHeight based on available space on the chosen side
   const computedMaxHeight = Math.max(
     80,
-    Math.min(
-      requestedHeight,
-      placeAbove ? availableAbove - gap : availableBelow - gap,
-    ),
+    Math.min(requestedHeight, placeAbove ? availableAbove - gap : availableBelow - gap),
   )
   const transformY = placeAbove ? "translateY(-100%)" : "translateY(0)"
 
   return createPortal(
     <div
       ref={dropdownRef}
+      role="listbox"
+      aria-label="Commands"
       className="fixed z-[99999] overflow-y-auto rounded-[10px] border border-border bg-popover py-1 text-xs text-popover-foreground shadow-lg dark [&::-webkit-scrollbar]:hidden"
-      style={{
-        top: finalTop,
-        left: finalLeft,
-        width: `${dropdownWidth}px`,
-        maxHeight: `${computedMaxHeight}px`,
-        transform: transformY,
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none',
-      } as React.CSSProperties}
+      style={
+        {
+          top: finalTop,
+          left: finalLeft,
+          width: `${dropdownWidth}px`,
+          maxHeight: `${computedMaxHeight}px`,
+          transform: transformY,
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        } as React.CSSProperties
+      }
     >
       {/* All commands in one section - custom first, then builtin */}
       {options.length > 0 && (
@@ -364,6 +339,9 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
               <div
                 key={option.id}
                 data-option-index={index}
+                role="option"
+                aria-selected={isSelected}
+                tabIndex={-1}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -380,12 +358,8 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
                 )}
               >
                 <span className="flex items-center gap-1 w-full min-w-0">
-                  <span className="shrink-0 whitespace-nowrap font-medium">
-                    {option.command}
-                  </span>
-                  <span
-                    className="text-muted-foreground flex-1 min-w-0 ml-2 overflow-hidden text-[10px] truncate"
-                  >
+                  <span className="shrink-0 whitespace-nowrap font-medium">{option.command}</span>
+                  <span className="text-muted-foreground flex-1 min-w-0 ml-2 overflow-hidden text-[10px] truncate">
                     {option.description}
                   </span>
                 </span>
@@ -412,6 +386,6 @@ export const AgentsSlashCommand = memo(function AgentsSlashCommand({
         </div>
       )}
     </div>,
-    document.body
+    document.body,
   )
 })

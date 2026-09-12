@@ -1,47 +1,30 @@
 "use client"
 
+import { parseDiffFromFile, type SupportedLanguages } from "@pierre/diffs"
+import { FileDiff, PatchDiff } from "@pierre/diffs/react"
+import { useVirtualizer } from "@tanstack/react-virtual"
+import { applyPatch, parsePatch, reversePatch } from "diff"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { atomWithStorage } from "jotai/utils"
+import { AlertTriangle, Check, ChevronDown, Columns2, Rows2 } from "lucide-react"
+import { useTheme } from "next-themes"
 import {
   Component,
+  type ErrorInfo,
+  forwardRef,
   memo,
+  type ReactNode,
+  startTransition,
   useCallback,
+  useDeferredValue,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
-  forwardRef,
-  useImperativeHandle,
-  startTransition,
-  useDeferredValue,
-  type ReactNode,
-  type ErrorInfo,
 } from "react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { atomWithStorage } from "jotai/utils"
-import { agentsFocusedDiffFileAtom, filteredDiffFilesAtom, viewedFilesAtomFamily, fileViewerOpenAtomFamily, diffViewDisplayModeAtom, diffSidebarOpenAtomFamily, type ViewedFileState } from "../atoms"
-import { preferredEditorAtom } from "../../../lib/atoms"
-import { APP_META } from "../../../../shared/external-apps"
-import { PatchDiff, FileDiff } from "@pierre/diffs/react"
-import { parseDiffFromFile } from "@pierre/diffs"
-import { applyPatch, reversePatch, parsePatch } from "diff"
-import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
-import { getShikiTheme } from "../../../lib/themes/diff-view-highlighter"
-import { useTheme } from "next-themes"
 import { toast } from "sonner"
-import {
-  AlertTriangle,
-  Check,
-  ChevronDown,
-  Columns2,
-  Rows2,
-} from "lucide-react"
-import {
-  ClipboardIcon,
-  ExternalLinkIcon,
-  FolderIcon,
-  UndoIcon,
-} from "../../../components/ui/icons"
-import { useVirtualizer } from "@tanstack/react-virtual"
-import { getFileIconByExtension } from "../mentions/agents-file-mention"
+import { APP_META } from "../../../../shared/external-apps"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -52,33 +35,43 @@ import {
 } from "../../../components/ui/alert-dialog"
 import { Button } from "../../../components/ui/button"
 import {
-  IconSpinner,
-  PullRequestIcon,
-  IconChatBubble,
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
-import { Kbd } from "../../../components/ui/kbd"
-import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu"
-// e2b API routes are used instead of useSandboxManager for agents
-// import { useIsHydrated } from "@/hooks/use-is-hydrated"
-const useIsHydrated = () => true // Desktop is always hydrated
+import {
+  ClipboardIcon,
+  CollapseIcon,
+  ExpandIcon,
+  ExternalLinkIcon,
+  FolderIcon,
+  IconChatBubble,
+  IconSpinner,
+} from "../../../components/ui/icons"
+import { Kbd } from "../../../components/ui/kbd"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
+import { preferredEditorAtom } from "../../../lib/atoms"
+import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
+import { getShikiTheme } from "../../../lib/themes/diff-view-highlighter"
+import {
+  agentsFocusedDiffFileAtom,
+  diffSidebarOpenAtomFamily,
+  diffViewDisplayModeAtom,
+  fileViewerOpenAtomFamily,
+  filteredDiffFilesAtom,
+  type ViewedFileState,
+  viewedFilesAtomFamily,
+} from "../atoms"
+import { getFileIconByExtension } from "../mentions/agents-file-mention"
+
+const useIsHydrated = () => true
+
+import { remoteApi } from "../../../lib/remote-api"
+import { trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
-import { api } from "../../../lib/mock-api"
-import { trpcClient } from "../../../lib/trpc"
-import { remoteApi } from "../../../lib/remote-api"
 export type DiffViewMode = "unified" | "split"
 
 const LARGE_DIFF_LINE_THRESHOLD = 2000
@@ -87,7 +80,7 @@ const LARGE_DIFF_LINE_THRESHOLD = 2000
 function hashString(str: string): string {
   let hash = 5381
   for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash) + str.charCodeAt(i)
+    hash = (hash << 5) + hash + str.charCodeAt(i)
   }
   // Convert to base36 for compact string representation
   return (hash >>> 0).toString(36)
@@ -107,10 +100,7 @@ interface DiffErrorBoundaryState {
   prevRawDiff: string | undefined
 }
 
-class DiffErrorBoundary extends Component<
-  DiffErrorBoundaryProps,
-  DiffErrorBoundaryState
-> {
+class DiffErrorBoundary extends Component<DiffErrorBoundaryProps, DiffErrorBoundaryState> {
   constructor(props: DiffErrorBoundaryProps) {
     super(props)
     this.state = { hasError: false, error: null, prevRawDiff: props.rawDiff }
@@ -122,7 +112,7 @@ class DiffErrorBoundary extends Component<
 
   static getDerivedStateFromProps(
     props: DiffErrorBoundaryProps,
-    state: DiffErrorBoundaryState
+    state: DiffErrorBoundaryState,
   ): Partial<DiffErrorBoundaryState> | null {
     // Reset error state when rawDiff changes (different file)
     if (props.rawDiff !== state.prevRawDiff) {
@@ -131,7 +121,7 @@ class DiffErrorBoundary extends Component<
     return null
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
     // Error already captured in state, no need to log
   }
 
@@ -139,23 +129,28 @@ class DiffErrorBoundary extends Component<
     if (this.state.hasError) {
       // Show raw diff as fallback when library fails to parse
       if (this.props.rawDiff) {
-        const lines = this.props.rawDiff.split('\n')
+        const lines = this.props.rawDiff.split("\n")
         // Find first hunk header to skip diff metadata
-        const firstHunkIdx = lines.findIndex(l => l.startsWith('@@'))
+        const firstHunkIdx = lines.findIndex((l) => l.startsWith("@@"))
         const contentLines = firstHunkIdx > 0 ? lines.slice(firstHunkIdx) : lines
 
         return (
           <div className="text-xs font-mono overflow-x-auto">
             {contentLines.map((line, i) => {
               let className = "block px-3 py-px min-h-[20px]"
-              if (line.startsWith('+') && !line.startsWith('+++')) {
+              if (line.startsWith("+") && !line.startsWith("+++")) {
                 className += " text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
-              } else if (line.startsWith('-') && !line.startsWith('---')) {
+              } else if (line.startsWith("-") && !line.startsWith("---")) {
                 className += " text-red-600 dark:text-red-400 bg-red-500/10"
-              } else if (line.startsWith('@@')) {
+              } else if (line.startsWith("@@")) {
                 className += " text-muted-foreground bg-blue-500/5 py-1 mt-1 first:mt-0"
               }
-              return <code key={i} className={className}>{line || ' '}</code>
+              return (
+                /* biome-ignore lint/suspicious/noArrayIndexKey: diff lines render statically and never reorder. */
+                <code key={i} className={className}>
+                  {line || " "}
+                </code>
+              )
             })}
           </div>
         )
@@ -164,8 +159,7 @@ class DiffErrorBoundary extends Component<
         <div className="flex items-center gap-2 p-4 text-sm text-yellow-600 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-950/30 rounded-md">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           <span>
-            Failed to render diff for this file. The diff format may be
-            corrupted or truncated.
+            Failed to render diff for this file. The diff format may be corrupted or truncated.
           </span>
         </div>
       )
@@ -174,7 +168,6 @@ class DiffErrorBoundary extends Component<
     return this.props.children
   }
 }
-
 
 export type ParsedDiffFile = {
   key: string
@@ -191,24 +184,20 @@ export type ParsedDiffFile = {
   isDeletedFile?: boolean
 }
 
-export const diffViewModeAtom = atomWithStorage<DiffViewMode>(
-  "agents-diff:view-mode-v2",
-  "unified",
-)
+export const diffViewModeAtom = atomWithStorage<DiffViewMode>("agents-diff:view-mode-v2", "unified")
 
 /**
  * Reconstruct old file content by reverse-applying a unified diff patch.
  * Uses the `diff` library to parse, reverse, and apply the patch.
  */
-function reconstructOldContent(
-  newContent: string,
-  patchText: string,
-): string | null {
+function reconstructOldContent(newContent: string, patchText: string): string | null {
   try {
     const patches = parsePatch(patchText)
     if (patches.length === 0) return null
     const reversed = reversePatch(patches)
-    const result = applyPatch(newContent, reversed[0]!)
+    const firstReversed = reversed[0]
+    if (!firstReversed) return null
+    const result = applyPatch(newContent, firstReversed)
     // applyPatch returns false if the patch couldn't be applied
     if (result === false) return null
     return result
@@ -324,9 +313,7 @@ const PIERRE_DIFFS_THEME_CSS = `
 // Validate if a diff hunk has valid structure
 // This is a lenient validator - only reject clearly malformed diffs
 // Don't count lines strictly since edge cases are hard to handle
-const validateDiffHunk = (
-  diffText: string,
-): { valid: boolean; reason?: string } => {
+const validateDiffHunk = (diffText: string): { valid: boolean; reason?: string } => {
   if (!diffText || diffText.trim().length === 0) {
     return { valid: false, reason: "empty diff" }
   }
@@ -362,7 +349,7 @@ const validateDiffHunk = (
   // Must have at least one hunk header after +++ line
   let hasHunk = false
   for (let i = plusLineIdx + 1; i < lines.length; i++) {
-    if (hunkHeaderRegex.test(lines[i]!)) {
+    if (hunkHeaderRegex.test(lines[i] ?? "")) {
       hasHunk = true
       break
     }
@@ -422,8 +409,9 @@ export const splitUnifiedDiffByFile = (diffText: string): ParsedDiffFile[] => {
         // Needed for binary files that don't have ---/+++ lines
         const match = line.match(/^diff --git a\/(.+) b\/(.+)$/)
         if (match) {
-          if (!oldPath) oldPath = match[1]!
-          if (!newPath) newPath = match[2]!
+          const [, oldMatch, newMatch] = match
+          if (!oldPath && oldMatch) oldPath = oldMatch
+          if (!newPath && newMatch) newPath = newMatch
         }
       }
 
@@ -494,10 +482,7 @@ interface FileDiffCardProps {
 }
 
 // Custom comparator to prevent unnecessary re-renders
-const fileDiffCardAreEqual = (
-  prev: FileDiffCardProps,
-  next: FileDiffCardProps,
-): boolean => {
+const fileDiffCardAreEqual = (prev: FileDiffCardProps, next: FileDiffCardProps): boolean => {
   // Key comparison - file identity
   if (prev.file.key !== next.file.key) return false
   // Diff content changes should re-render even when the file key is stable.
@@ -545,7 +530,9 @@ const FileDiffCard = memo(function FileDiffCard({
 
   // Build FileDiffMetadata from file content (enables clickable "N unmodified lines" sections)
   // Computed whenever fileContent is available, not just when fully expanded
-  const [fileDiffMeta, setFileDiffMeta] = useState<ReturnType<typeof parseDiffFromFile> | null>(null)
+  const [fileDiffMeta, setFileDiffMeta] = useState<ReturnType<typeof parseDiffFromFile> | null>(
+    null,
+  )
   const [isExpandLoading, setIsExpandLoading] = useState(false)
 
   useEffect(() => {
@@ -570,14 +557,31 @@ const FileDiffCard = memo(function FileDiffCard({
         const displayPath = file.newPath || file.oldPath || "file"
         const ext = displayPath.split(".").pop()?.toLowerCase() || ""
         const langMap: Record<string, string> = {
-          ts: "typescript", tsx: "tsx", js: "javascript", jsx: "jsx",
-          css: "css", json: "json", md: "markdown", html: "html",
-          py: "python", rs: "rust", go: "go", rb: "ruby",
+          ts: "typescript",
+          tsx: "tsx",
+          js: "javascript",
+          jsx: "jsx",
+          css: "css",
+          json: "json",
+          md: "markdown",
+          html: "html",
+          py: "python",
+          rs: "rust",
+          go: "go",
+          rb: "ruby",
         }
         const lang = langMap[ext] || ext || undefined
         const result = parseDiffFromFile(
-          { name: file.oldPath || displayPath, contents: oldContent, lang: lang as any },
-          { name: file.newPath || displayPath, contents: fileContent, lang: lang as any },
+          {
+            name: file.oldPath || displayPath,
+            contents: oldContent,
+            lang: lang as SupportedLanguages | undefined,
+          },
+          {
+            name: file.newPath || displayPath,
+            contents: fileContent,
+            lang: lang as SupportedLanguages | undefined,
+          },
         )
         setFileDiffMeta(result)
       } catch {
@@ -599,18 +603,12 @@ const FileDiffCard = memo(function FileDiffCard({
   const editorMeta = APP_META[preferredEditor]
 
   // File viewer (file preview sidebar)
-  const fileViewerAtom = useMemo(
-    () => fileViewerOpenAtomFamily(chatId || ""),
-    [chatId],
-  )
+  const fileViewerAtom = useMemo(() => fileViewerOpenAtomFamily(chatId || ""), [chatId])
   const setFileViewerPath = useSetAtom(fileViewerAtom)
 
   // Diff sidebar state (to close dialog/fullscreen when opening file preview)
   const diffDisplayMode = useAtomValue(diffViewDisplayModeAtom)
-  const diffSidebarAtom = useMemo(
-    () => diffSidebarOpenAtomFamily(chatId || ""),
-    [chatId],
-  )
+  const diffSidebarAtom = useMemo(() => diffSidebarOpenAtomFamily(chatId || ""), [chatId])
   const setDiffSidebarOpen = useSetAtom(diffSidebarAtom)
 
   // Extract filename and directory from path
@@ -649,7 +647,7 @@ const FileDiffCard = memo(function FileDiffCard({
     }
   }
 
-  const handleOpenInEditor = () => {
+  const _handleOpenInEditor = () => {
     if (absolutePath && worktreePath) {
       openInEditorMutation({ path: absolutePath, cwd: worktreePath })
     }
@@ -677,26 +675,28 @@ const FileDiffCard = memo(function FileDiffCard({
   }
 
   const headerContent = (
-    <header
-      className={cn(
-        "group pl-3 pr-2 py-1 font-mono text-xs bg-muted cursor-pointer",
-        // Sticky header within the scroll container
-        "sticky top-0 z-10",
-        "border-b transition-colors",
-        "hover:bg-accent",
-        isCollapsed ? "border-b-transparent" : "border-b-border",
-      )}
-      onClick={() => toggleCollapsed(file.key)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          toggleCollapsed(file.key)
-        }
-      }}
-      aria-expanded={!isCollapsed}
-    >
+    <>
+      {/* biome-ignore lint/a11y/useSemanticElements: block-level header layout cannot be wrapped in a native button; role/tabIndex/Enter-Space/aria pattern implemented */}
+      <header
+        role="button"
+        className={cn(
+          "group pl-3 pr-2 py-1 font-mono text-xs bg-muted cursor-pointer",
+          // Sticky header within the scroll container
+          "sticky top-0 z-10",
+          "border-b transition-colors",
+          "hover:bg-accent",
+          isCollapsed ? "border-b-transparent" : "border-b-border",
+        )}
+        onClick={() => toggleCollapsed(file.key)}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            toggleCollapsed(file.key)
+          }
+        }}
+        aria-expanded={!isCollapsed}
+      >
         <div className="flex items-center gap-2">
           {/* Collapse toggle + file info */}
           <div className="flex-1 flex items-center gap-2 text-left min-w-0 min-h-[22px]">
@@ -716,9 +716,7 @@ const FileDiffCard = memo(function FileDiffCard({
 
             {/* File name + path + status */}
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="font-medium text-foreground shrink-0">
-                {fileName}
-              </span>
+              <span className="font-medium text-foreground shrink-0">{fileName}</span>
               {dirPath && (
                 <span className="text-muted-foreground truncate text-[11px] min-w-0">
                   {dirPath}
@@ -744,9 +742,7 @@ const FileDiffCard = memo(function FileDiffCard({
                 </span>
               )}
               {file.deletions > 0 && (
-                <span className="text-red-600 dark:text-red-400">
-                  -{file.deletions}
-                </span>
+                <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
               )}
             </span>
           </div>
@@ -776,17 +772,13 @@ const FileDiffCard = memo(function FileDiffCard({
                         <ExpandIcon
                           className={cn(
                             "absolute inset-0 w-3.5 h-3.5 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                            isFullExpanded
-                              ? "opacity-0 scale-75"
-                              : "opacity-100 scale-100",
+                            isFullExpanded ? "opacity-0 scale-75" : "opacity-100 scale-100",
                           )}
                         />
                         <CollapseIcon
                           className={cn(
                             "absolute inset-0 w-3.5 h-3.5 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                            isFullExpanded
-                              ? "opacity-100 scale-100"
-                              : "opacity-0 scale-75",
+                            isFullExpanded ? "opacity-100 scale-100" : "opacity-0 scale-75",
                           )}
                         />
                       </>
@@ -795,19 +787,20 @@ const FileDiffCard = memo(function FileDiffCard({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                {isExpandLoading ? "Expanding..." : isFullExpanded ? "Show changes only" : "Show full file"}
+                {isExpandLoading
+                  ? "Expanding..."
+                  : isFullExpanded
+                    ? "Show changes only"
+                    : "Show full file"}
               </TooltipContent>
             </Tooltip>
           )}
           {/* Show loading spinner while content is being fetched */}
-          {!isCollapsed &&
-            !file.isBinary &&
-            !hasContent &&
-            isLoadingContent && (
-              <div className="shrink-0 p-1">
-                <IconSpinner className="w-3.5 h-3.5 text-muted-foreground" />
-              </div>
-            )}
+          {!isCollapsed && !file.isBinary && !hasContent && isLoadingContent && (
+            <div className="shrink-0 p-1">
+              <IconSpinner className="w-3.5 h-3.5 text-muted-foreground" />
+            </div>
+          )}
 
           {/* Viewed checkbox with label - GitHub style (hidden for sandboxes) */}
           {showViewed && (
@@ -827,12 +820,14 @@ const FileDiffCard = memo(function FileDiffCard({
                   )}
                   aria-pressed={isViewed}
                 >
-                  <div className={cn(
-                    "size-4 rounded flex items-center justify-center transition-all duration-150",
-                    isViewed
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-muted-foreground/40",
-                  )}>
+                  <div
+                    className={cn(
+                      "size-4 rounded flex items-center justify-center transition-all duration-150",
+                      isViewed
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-muted-foreground/40",
+                    )}
+                  >
                     {isViewed && <Check className="size-3" strokeWidth={2.5} />}
                   </div>
                   <span>Viewed</span>
@@ -846,6 +841,7 @@ const FileDiffCard = memo(function FileDiffCard({
           )}
         </div>
       </header>
+    </>
   )
 
   return (
@@ -856,9 +852,7 @@ const FileDiffCard = memo(function FileDiffCard({
     >
       {worktreePath ? (
         <ContextMenu>
-          <ContextMenuTrigger asChild>
-            {headerContent}
-          </ContextMenuTrigger>
+          <ContextMenuTrigger asChild>{headerContent}</ContextMenuTrigger>
           <ContextMenuContent className="w-56">
             <ContextMenuItem onClick={handleCopyPath} className="text-xs">
               <ClipboardIcon className="mr-2 size-3.5" />
@@ -915,9 +909,7 @@ const FileDiffCard = memo(function FileDiffCard({
           ) : isLargeDiff ? (
             <div className="px-3 py-3 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  File is too large to display here
-                </div>
+                <div className="min-w-0 flex-1">File is too large to display here</div>
                 {absolutePath && (
                   <div className="flex shrink-0 items-center gap-0 text-xs">
                     <button
@@ -944,8 +936,7 @@ const FileDiffCard = memo(function FileDiffCard({
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-950/30">
               <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
               <span>
-                Diff format appears truncated or corrupted. Unable to render
-                this file's changes.
+                Diff format appears truncated or corrupted. Unable to render this file's changes.
               </span>
             </div>
           ) : (
@@ -1018,10 +1009,7 @@ interface AgentDiffViewProps {
   /** Callback to close the diff view (for mobile back button) */
   onClose?: () => void
   /** Callback when collapsed state changes - reports if all collapsed/all expanded */
-  onCollapsedStateChange?: (state: {
-    allCollapsed: boolean
-    allExpanded: boolean
-  }) => void
+  onCollapsedStateChange?: (state: { allCollapsed: boolean; allExpanded: boolean }) => void
   /** Callback to select next file in the file list (when marking as viewed) */
   onSelectNextFile?: (filePath: string) => void
   /** Callback when viewed count changes (for stable header updates) */
@@ -1048,14 +1036,10 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       chatId,
       sandboxId,
       worktreePath,
-      repository,
       onStatsChange,
       initialDiff,
       initialParsedFiles,
       prefetchedFileContents,
-      showFooter = true,
-      onCreatePr: externalOnCreatePr,
-      isCreatingPr: externalIsCreatingPr,
       isMobile = false,
       onClose,
       onCollapsedStateChange,
@@ -1072,18 +1056,13 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     // Loading if initialDiff not provided, or if it's null AND no parsed files array provided
     // Note: empty array [] means "no changes", null/undefined means "still loading"
     const [isLoadingDiff, setIsLoadingDiff] = useState(
-      initialDiff === undefined ||
-        (initialDiff === null && !Array.isArray(initialParsedFiles)),
+      initialDiff === undefined || (initialDiff === null && !Array.isArray(initialParsedFiles)),
     )
 
     const [diffError, setDiffError] = useState<string | null>(null)
     // Use local state for collapsed - faster than atom for frequent updates
-    const [collapsedByFileKey, setCollapsedByFileKey] = useState<
-      Record<string, boolean>
-    >({})
-    const [fullExpandedByFileKey, setFullExpandedByFileKey] = useState<
-      Record<string, boolean>
-    >({})
+    const [collapsedByFileKey, setCollapsedByFileKey] = useState<Record<string, boolean>>({})
+    const [fullExpandedByFileKey, setFullExpandedByFileKey] = useState<Record<string, boolean>>({})
     const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
 
     // Discard changes state and mutation
@@ -1097,15 +1076,20 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     const [viewedFiles, setViewedFiles] = useAtom(viewedFilesAtomFamily(chatId))
 
     // Undo stack for viewed actions (stores previous viewedFiles states)
-    const viewedUndoStackRef = useRef<Array<{ fileKey: string; previousState: ViewedFileState | undefined }>>([])
+    const viewedUndoStackRef = useRef<
+      Array<{ fileKey: string; previousState: ViewedFileState | undefined }>
+    >([])
 
     // Check if file is viewed (and content hasn't changed since marking as viewed)
-    const isFileViewed = useCallback((fileKey: string, diffText: string): boolean => {
-      const viewedState = viewedFiles[fileKey]
-      if (!viewedState?.viewed) return false
-      // If content hash changed, file is no longer "viewed"
-      return viewedState.contentHash === hashString(diffText)
-    }, [viewedFiles])
+    const isFileViewed = useCallback(
+      (fileKey: string, diffText: string): boolean => {
+        const viewedState = viewedFiles[fileKey]
+        if (!viewedState?.viewed) return false
+        // If content hash changed, file is no longer "viewed"
+        return viewedState.contentHash === hashString(diffText)
+      },
+      [viewedFiles],
+    )
 
     // Pre-fetched file contents for expand functionality
     // Use prefetched data if available, otherwise start empty
@@ -1116,10 +1100,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
 
     // Sync with prefetched file contents when they arrive after mount
     useEffect(() => {
-      if (
-        prefetchedFileContents &&
-        Object.keys(prefetchedFileContents).length > 0
-      ) {
+      if (prefetchedFileContents && Object.keys(prefetchedFileContents).length > 0) {
         setFileContents(prefetchedFileContents)
       }
     }, [prefetchedFileContents])
@@ -1132,7 +1113,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     // Height for collapsed header (file name + stats)
     const COLLAPSED_HEIGHT = 44
     // Estimated height for expanded diff
-    const EXPANDED_HEIGHT_ESTIMATE = 300
+    const _EXPANDED_HEIGHT_ESTIMATE = 300
 
     // Fetch diff on mount (only if initialDiff not provided)
     useEffect(() => {
@@ -1141,8 +1122,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         setDiff(initialDiff)
         // Only mark as not loading if we have actual data or parsed files array
         // Note: empty array [] means "no changes", null/undefined means "still loading"
-        const parentStillLoading =
-          initialDiff === null && !Array.isArray(initialParsedFiles)
+        const parentStillLoading = initialDiff === null && !Array.isArray(initialParsedFiles)
         setIsLoadingDiff(parentStillLoading)
         return
       }
@@ -1156,9 +1136,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
             const diffContent = result.diff || ""
             setDiff(diffContent.trim() ? diffContent : "")
           } catch (error) {
-            setDiffError(
-              error instanceof Error ? error.message : "Failed to fetch diff",
-            )
+            setDiffError(error instanceof Error ? error.message : "Failed to fetch diff")
           } finally {
             setIsLoadingDiff(false)
           }
@@ -1189,9 +1167,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
             setDiff("")
           }
         } catch (error) {
-          setDiffError(
-            error instanceof Error ? error.message : "Failed to fetch diff",
-          )
+          setDiffError(error instanceof Error ? error.message : "Failed to fetch diff")
         } finally {
           setIsLoadingDiff(false)
         }
@@ -1228,9 +1204,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
           setDiff("")
         }
       } catch (error) {
-        setDiffError(
-          error instanceof Error ? error.message : "Failed to fetch diff",
-        )
+        setDiffError(error instanceof Error ? error.message : "Failed to fetch diff")
       } finally {
         setIsLoadingDiff(false)
       }
@@ -1267,24 +1241,25 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
 
     // Filter files if filteredDiffFiles is set (for sub-chat Review)
     // Use initialSelectedFile as fallback for first render before atom updates
-    const effectiveFilter = filteredDiffFiles ?? (initialSelectedFile ? [initialSelectedFile] : null)
+    const effectiveFilter =
+      filteredDiffFiles ?? (initialSelectedFile ? [initialSelectedFile] : null)
 
     const fileDiffs = useMemo(() => {
       // First, filter out invalid files without proper paths (file-N keys indicate parse failure)
       const validFiles = allFileDiffs.filter((file) => {
         // Skip files that failed to parse (have generic file-N keys and no real paths)
-        if (file.key.startsWith('file-') && !file.oldPath && !file.newPath) {
+        if (file.key.startsWith("file-") && !file.oldPath && !file.newPath) {
           return false
         }
         // Also skip files with only /dev/null paths (shouldn't happen but be safe)
-        if (file.oldPath === '/dev/null' && file.newPath === '/dev/null') {
+        if (file.oldPath === "/dev/null" && file.newPath === "/dev/null") {
           return false
         }
         return true
       })
 
       // Filter out /dev/null from filter paths (it's not a real file path)
-      const validFilterPaths = effectiveFilter?.filter(p => p && p !== '/dev/null') || []
+      const validFilterPaths = effectiveFilter?.filter((p) => p && p !== "/dev/null") || []
 
       if (validFilterPaths.length === 0) {
         return validFiles
@@ -1292,7 +1267,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       // Filter to only show files matching the filter paths
       return validFiles.filter((file) => {
         // Use the actual file path (prefer newPath for new/modified, oldPath for deleted)
-        const filePath = file.newPath !== '/dev/null' ? file.newPath : file.oldPath
+        const filePath = file.newPath !== "/dev/null" ? file.newPath : file.oldPath
         // Match by exact path or by path suffix (to handle sandbox path prefixes)
         return validFilterPaths.some(
           (filterPath) =>
@@ -1309,22 +1284,30 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
 
       try {
         // Check if this is a new file (untracked) - needs delete instead of discard
-        const file = fileDiffs.find(f => {
+        const file = fileDiffs.find((f) => {
           const path = f.newPath !== "/dev/null" ? f.newPath : f.oldPath
           return path === discardFilePath
         })
         const isNewFile = file?.oldPath === "/dev/null"
 
         if (isNewFile) {
-          await trpcClient.changes.deleteUntracked.mutate({ worktreePath, filePath: discardFilePath })
+          await trpcClient.changes.deleteUntracked.mutate({
+            worktreePath,
+            filePath: discardFilePath,
+          })
         } else {
-          await trpcClient.changes.discardChanges.mutate({ worktreePath, filePath: discardFilePath })
+          await trpcClient.changes.discardChanges.mutate({
+            worktreePath,
+            filePath: discardFilePath,
+          })
         }
         toast.success("Changes discarded")
         // Refresh the diff
         handleRefresh()
       } catch (error) {
-        toast.error(`Failed to discard: ${error instanceof Error ? error.message : "Unknown error"}`)
+        toast.error(
+          `Failed to discard: ${error instanceof Error ? error.message : "Unknown error"}`,
+        )
       } finally {
         setDiscardFilePath(null)
       }
@@ -1440,11 +1423,21 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         markAllViewed,
         markAllUnviewed,
       }),
-      [expandAll, collapseAll, isAllCollapsed, isAllExpanded, getViewedCount, markAllViewed, markAllUnviewed],
+      [
+        expandAll,
+        collapseAll,
+        isAllCollapsed,
+        isAllExpanded,
+        getViewedCount,
+        markAllViewed,
+        markAllUnviewed,
+      ],
     )
 
     // Notify parent when collapsed state changes
-    const prevCollapseStateRef = useRef<{ allCollapsed: boolean; allExpanded: boolean } | null>(null)
+    const prevCollapseStateRef = useRef<{ allCollapsed: boolean; allExpanded: boolean } | null>(
+      null,
+    )
     useEffect(() => {
       const newState = {
         allCollapsed: isAllCollapsed(),
@@ -1459,7 +1452,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         onCollapsedStateChange?.(newState)
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable, excluding to prevent loops
-    }, [collapsedByFileKey, fileDiffs])
+    }, [isAllCollapsed, onCollapsedStateChange, isAllExpanded])
 
     // Proactively invalidate viewed state when file content changes (hash mismatch)
     // This ensures all consumers of viewedFilesAtomFamily (changes-view, changes-widget)
@@ -1493,7 +1486,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         onViewedCountChange?.(count)
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable, excluding to prevent loops
-    }, [fileDiffs, viewedFiles])
+    }, [getViewedCount, onViewedCountChange])
 
     // Auto-expand all files with lazy batching for performance
     // Track if we've already initialized the collapsed state for this set of files
@@ -1573,10 +1566,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       if (!worktreePath && !sandboxId) return
       // Skip if we already have enough contents
       const existingContentCount = Object.keys(fileContents).length
-      if (
-        existingContentCount >= Math.min(fileDiffs.length, MAX_PREFETCH_FILES)
-      )
-        return
+      if (existingContentCount >= Math.min(fileDiffs.length, MAX_PREFETCH_FILES)) return
 
       const fetchAllContents = async () => {
         setIsLoadingFileContents(true)
@@ -1591,9 +1581,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
           const filesToFetch = filesToProcess
             .map((file) => {
               const filePath =
-                file.newPath && file.newPath !== "/dev/null"
-                  ? file.newPath
-                  : file.oldPath
+                file.newPath && file.newPath !== "/dev/null" ? file.newPath : file.oldPath
               if (!filePath || filePath === "/dev/null") return null
               return { key: file.key, filePath }
             })
@@ -1606,11 +1594,10 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
 
           // Desktop: use batch tRPC call
           if (worktreePath) {
-            const results =
-              await trpcClient.changes.readMultipleWorkingFiles.query({
-                worktreePath,
-                files: filesToFetch,
-              })
+            const results = await trpcClient.changes.readMultipleWorkingFiles.query({
+              worktreePath,
+              files: filesToFetch,
+            })
 
             const newContents: Record<string, string> = {}
             for (const [key, result] of Object.entries(results)) {
@@ -1660,7 +1647,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       }
 
       fetchAllContents()
-    }, [fileDiffs, sandboxId, worktreePath]) // Note: fileContents intentionally not in deps
+    }, [fileDiffs, sandboxId, worktreePath, isLoadingFileContents, fileContents]) // Note: fileContents intentionally not in deps
 
     const toggleFileCollapsed = useCallback((fileKey: string) => {
       setCollapsedByFileKey((prev) => ({
@@ -1698,79 +1685,83 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
     // Toggle viewed state for a file
     // When marking as viewed, auto-navigate to the next UNVIEWED file
     // Uses allFileDiffs (unfiltered list) for navigation since filtered list may only contain current file
-    const handleToggleViewed = useCallback((fileKey: string, diffText: string) => {
-      const currentHash = hashString(diffText)
-      const isCurrentlyViewed = isFileViewed(fileKey, diffText)
-      const willBeViewed = !isCurrentlyViewed
+    const handleToggleViewed = useCallback(
+      (fileKey: string, diffText: string) => {
+        const currentHash = hashString(diffText)
+        const isCurrentlyViewed = isFileViewed(fileKey, diffText)
+        const willBeViewed = !isCurrentlyViewed
 
-      // Save to undo stack before changing
-      viewedUndoStackRef.current.push({
-        fileKey,
-        previousState: viewedFiles[fileKey],
-      })
-      // Limit undo stack size to 50
-      if (viewedUndoStackRef.current.length > 50) {
-        viewedUndoStackRef.current.shift()
-      }
-
-      // Build new viewed state
-      const newViewedFiles = {
-        ...viewedFiles,
-        [fileKey]: {
-          viewed: willBeViewed,
-          contentHash: currentHash,
-        },
-      }
-      setViewedFiles(newViewedFiles)
-
-      // Helper to check if file is viewed using new state (not stale closure)
-      const isFileViewedWithNewState = (fKey: string, fDiffText: string): boolean => {
-        const viewedState = newViewedFiles[fKey]
-        if (!viewedState?.viewed) return false
-        return viewedState.contentHash === hashString(fDiffText)
-      }
-
-      // When marking as viewed, find and select next UNVIEWED file
-      // Use allFileDiffs (unfiltered) for navigation, since filtered list may only show current file
-      if (willBeViewed && onSelectNextFile) {
-        const currentIndex = allFileDiffs.findIndex((f) => f.key === fileKey)
-        if (currentIndex === -1) return
-
-        // Find next unviewed file after current position
-        let nextUnviewedFile: ParsedDiffFile | null = null
-        for (let i = currentIndex + 1; i < allFileDiffs.length; i++) {
-          const file = allFileDiffs[i]
-          if (file && !isFileViewedWithNewState(file.key, file.diffText)) {
-            nextUnviewedFile = file
-            break
-          }
+        // Save to undo stack before changing
+        viewedUndoStackRef.current.push({
+          fileKey,
+          previousState: viewedFiles[fileKey],
+        })
+        // Limit undo stack size to 50
+        if (viewedUndoStackRef.current.length > 50) {
+          viewedUndoStackRef.current.shift()
         }
 
-        // If no unviewed file found after current, wrap around and search from beginning
-        if (!nextUnviewedFile) {
-          for (let i = 0; i < currentIndex; i++) {
+        // Build new viewed state
+        const newViewedFiles = {
+          ...viewedFiles,
+          [fileKey]: {
+            viewed: willBeViewed,
+            contentHash: currentHash,
+          },
+        }
+        setViewedFiles(newViewedFiles)
+
+        // Helper to check if file is viewed using new state (not stale closure)
+        const isFileViewedWithNewState = (fKey: string, fDiffText: string): boolean => {
+          const viewedState = newViewedFiles[fKey]
+          if (!viewedState?.viewed) return false
+          return viewedState.contentHash === hashString(fDiffText)
+        }
+
+        // When marking as viewed, find and select next UNVIEWED file
+        // Use allFileDiffs (unfiltered) for navigation, since filtered list may only show current file
+        if (willBeViewed && onSelectNextFile) {
+          const currentIndex = allFileDiffs.findIndex((f) => f.key === fileKey)
+          if (currentIndex === -1) return
+
+          // Find next unviewed file after current position
+          let nextUnviewedFile: ParsedDiffFile | null = null
+          for (let i = currentIndex + 1; i < allFileDiffs.length; i++) {
             const file = allFileDiffs[i]
             if (file && !isFileViewedWithNewState(file.key, file.diffText)) {
               nextUnviewedFile = file
               break
             }
           }
-        }
 
-        // If found an unviewed file, select it
-        if (nextUnviewedFile) {
-          // Get the actual file path (newPath for new/modified files, oldPath for deleted files)
-          const filePath = nextUnviewedFile.newPath && nextUnviewedFile.newPath !== "/dev/null"
-            ? nextUnviewedFile.newPath
-            : nextUnviewedFile.oldPath
-          if (filePath && filePath !== "/dev/null") {
-            // Select next file - this will update the filter and diff view
-            onSelectNextFile(filePath)
+          // If no unviewed file found after current, wrap around and search from beginning
+          if (!nextUnviewedFile) {
+            for (let i = 0; i < currentIndex; i++) {
+              const file = allFileDiffs[i]
+              if (file && !isFileViewedWithNewState(file.key, file.diffText)) {
+                nextUnviewedFile = file
+                break
+              }
+            }
           }
+
+          // If found an unviewed file, select it
+          if (nextUnviewedFile) {
+            // Get the actual file path (newPath for new/modified files, oldPath for deleted files)
+            const filePath =
+              nextUnviewedFile.newPath && nextUnviewedFile.newPath !== "/dev/null"
+                ? nextUnviewedFile.newPath
+                : nextUnviewedFile.oldPath
+            if (filePath && filePath !== "/dev/null") {
+              // Select next file - this will update the filter and diff view
+              onSelectNextFile(filePath)
+            }
+          }
+          // If all files are viewed, do nothing (stay where we are)
         }
-        // If all files are viewed, do nothing (stay where we are)
-      }
-    }, [isFileViewed, setViewedFiles, viewedFiles, allFileDiffs, onSelectNextFile])
+      },
+      [isFileViewed, setViewedFiles, viewedFiles, allFileDiffs, onSelectNextFile],
+    )
 
     // Undo last viewed action
     const undoLastViewed = useCallback(() => {
@@ -1794,9 +1785,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       // Navigate back to the file that was undone
       const file = allFileDiffs.find((f) => f.key === fileKey)
       if (file && onSelectNextFile) {
-        const filePath = file.newPath && file.newPath !== "/dev/null"
-          ? file.newPath
-          : file.oldPath
+        const filePath = file.newPath && file.newPath !== "/dev/null" ? file.newPath : file.oldPath
         if (filePath && filePath !== "/dev/null") {
           onSelectNextFile(filePath)
         }
@@ -1811,7 +1800,12 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
 
     // Report stats to parent - only when we have actual data and NO filter active
     // When filtering is active, parent already has correct stats from fetchDiffStats
-    const prevStatsRef = useRef<{ fileCount: number; additions: number; deletions: number; isLoading: boolean } | null>(null)
+    const prevStatsRef = useRef<{
+      fileCount: number
+      additions: number
+      deletions: number
+      isLoading: boolean
+    } | null>(null)
     useEffect(() => {
       // Don't report stats when filtering is active - parent already has correct totals
       if (filteredDiffFiles && filteredDiffFiles.length > 0) {
@@ -1842,13 +1836,14 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         isLoading: isLoadingDiff,
         hasChanges: allFileDiffs.length > 0,
       })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onStatsChange is stable setState, excluding to prevent loops
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- onStatsChange is stable setState, excluding to prevent loops
     }, [
       allFileDiffs.length,
       totalAdditions,
       totalDeletions,
       isLoadingDiff,
       filteredDiffFiles,
+      onStatsChange,
     ])
 
     // Scroll to focused file when atom changes (works with virtualized list)
@@ -1869,9 +1864,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       if (fileIndex === -1) {
         fileIndex = fileDiffs.findIndex((f) => {
           const path = f.newPath || f.oldPath || ""
-          return (
-            path.endsWith(focusedDiffFile) || focusedDiffFile.endsWith(path)
-          )
+          return path.endsWith(focusedDiffFile) || focusedDiffFile.endsWith(path)
         })
       }
 
@@ -1915,7 +1908,8 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
       isLoadingDiff,
       setFocusedDiffFile,
       fileDiffs,
-      collapsedByFileKey,
+      collapsedByFileKey, // Use virtualizer's scrollToIndex for proper scrolling
+      virtualizer.scrollToIndex,
     ])
 
     // Keyboard shortcut: V to mark current file as viewed
@@ -2037,9 +2031,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                         <span className="text-emerald-600 dark:text-emerald-400">
                           +{totalAdditions}
                         </span>
-                        <span className="text-red-600 dark:text-red-400">
-                          -{totalDeletions}
-                        </span>
+                        <span className="text-red-600 dark:text-red-400">-{totalDeletions}</span>
                       </>
                     )}
                   </>
@@ -2056,6 +2048,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                   }}
                 />
                 <button
+                  type="button"
                   onClick={() => setDiffMode("split")}
                   className="relative z-[2] px-1.5 flex items-center justify-center transition-colors duration-200 rounded text-muted-foreground"
                   title="Split view"
@@ -2063,6 +2056,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
                   <Columns2 className="h-3.5 w-3.5" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setDiffMode("unified")}
                   className="relative z-[2] px-1.5 flex items-center justify-center transition-colors duration-200 rounded text-muted-foreground"
                   title="Unified view"
@@ -2075,10 +2069,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         )}
 
         {/* Content */}
-        <div
-          ref={scrollContainerRef}
-          className="relative flex-1 overflow-auto p-2 select-text"
-        >
+        <div ref={scrollContainerRef} className="relative flex-1 overflow-auto p-2 select-text">
           {/* Sticky cover to hide content scrolling above cards */}
           <div
             className="sticky top-0 left-0 right-0 h-0 z-20 pointer-events-none"
@@ -2087,9 +2078,7 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
             <div className="absolute -top-2 left-0 right-0 h-2 bg-background" />
           </div>
 
-
-          {isLoadingDiff ||
-          (isLoadingFileContents && fileDiffs.length === 0) ? (
+          {isLoadingDiff || (isLoadingFileContents && fileDiffs.length === 0) ? (
             <div className="flex items-center justify-center h-full">
               <IconSpinner className="w-4 h-4" />
             </div>
@@ -2112,7 +2101,8 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
               }}
             >
               {virtualizer.getVirtualItems().map((virtualRow) => {
-                const file = deferredFileDiffs[virtualRow.index]!
+                const file = deferredFileDiffs[virtualRow.index]
+                if (!file) return null
                 return (
                   <div
                     key={file.key}
@@ -2159,7 +2149,10 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
         </div>
 
         {/* Discard confirmation dialog */}
-        <AlertDialog open={!!discardFilePath} onOpenChange={(open) => !open && setDiscardFilePath(null)}>
+        <AlertDialog
+          open={!!discardFilePath}
+          onOpenChange={(open) => !open && setDiscardFilePath(null)}
+        >
           <AlertDialogContent className="w-[340px]">
             <AlertDialogHeader>
               <AlertDialogTitle>
@@ -2170,18 +2163,10 @@ export const AgentDiffView = forwardRef<AgentDiffViewRef, AgentDiffViewProps>(
               This will revert all changes to this file. This action cannot be undone.
             </AlertDialogDescription>
             <AlertDialogFooter>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDiscardFilePath(null)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setDiscardFilePath(null)}>
                 Cancel
               </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleConfirmDiscard}
-              >
+              <Button variant="destructive" size="sm" onClick={handleConfirmDiscard}>
                 Discard
               </Button>
             </AlertDialogFooter>

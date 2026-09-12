@@ -1,14 +1,14 @@
-import { router, publicProcedure } from "../index"
-import * as fs from "fs/promises"
-import * as path from "path"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
 import matter from "gray-matter"
 import { resolveDirentType } from "../../fs/dirent"
 import {
-  discoverInstalledPlugins,
-  getPluginComponentPaths,
-  discoverPluginMcpServers,
   clearPluginCache,
+  discoverInstalledPlugins,
+  discoverPluginMcpServers,
+  getPluginComponentPaths,
 } from "../../plugins"
+import { publicProcedure, router } from "../index"
 import { getEnabledPlugins } from "./claude-settings"
 
 interface PluginComponent {
@@ -16,7 +16,7 @@ interface PluginComponent {
   description?: string
 }
 
-interface PluginWithComponents {
+export interface PluginWithComponents {
   name: string
   version: string
   description?: string
@@ -74,8 +74,7 @@ async function scanPluginCommands(dir: string): Promise<PluginComponent[]> {
           const baseName = entry.name.replace(/\.md$/, "")
           components.push({
             name: typeof data.name === "string" ? data.name : baseName,
-            description:
-              typeof data.description === "string" ? data.description : undefined,
+            description: typeof data.description === "string" ? data.description : undefined,
           })
         } catch {
           // Skip files that can't be read
@@ -116,8 +115,7 @@ async function scanPluginSkills(dir: string): Promise<PluginComponent[]> {
         const { data } = matter(content)
         components.push({
           name: typeof data.name === "string" ? data.name : entry.name,
-          description:
-            typeof data.description === "string" ? data.description : undefined,
+          description: typeof data.description === "string" ? data.description : undefined,
         })
       } catch {
         // Skill directory doesn't have SKILL.md - skip
@@ -158,8 +156,7 @@ async function scanPluginAgents(dir: string): Promise<PluginComponent[]> {
         const baseName = entry.name.replace(/\.md$/, "")
         components.push({
           name: typeof data.name === "string" ? data.name : baseName,
-          description:
-            typeof data.description === "string" ? data.description : undefined,
+          description: typeof data.description === "string" ? data.description : undefined,
         })
       } catch {
         // Skip files that can't be read
@@ -218,7 +215,7 @@ export const pluginsRouter = router({
             mcpServers: pluginMcpMap.get(plugin.source) || [],
           },
         }
-      })
+      }),
     )
 
     return pluginsWithComponents

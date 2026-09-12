@@ -1,17 +1,11 @@
 "use client"
 
-import { cn } from "../../../lib/utils"
-import {
-  motion,
-  AnimatePresence,
-  useMotionValue,
-  useTransform,
-  animate,
-} from "motion/react"
+import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { cn } from "../../../lib/utils"
 
 interface PreviewUrlInputProps {
-  /** The base host (e.g., "sandbox-3000.21st.sh") */
+  /** The base host (e.g., "sandbox-3000.example.com") */
   baseHost: string | null
   /** Current path (e.g., "/dashboard") */
   currentPath: string
@@ -121,7 +115,7 @@ export function PreviewUrlInput({
         const url = new URL(input)
         newPath = url.pathname + url.search + url.hash
       } else if (input.includes(".") && input.includes("/")) {
-        // It's host + path like "sandbox-3000.21st.sh/some/path"
+        // It's host + path like "sandbox-3000.example.com/some/path"
         const slashIndex = input.indexOf("/")
         newPath = input.slice(slashIndex)
       } else if (input.startsWith("/")) {
@@ -129,11 +123,11 @@ export function PreviewUrlInput({
         newPath = input
       } else {
         // Just a path without leading /
-        newPath = "/" + input
+        newPath = `/${input}`
       }
     } catch {
       // If parsing fails, treat as path
-      newPath = input.startsWith("/") ? input : "/" + input
+      newPath = input.startsWith("/") ? input : `/${input}`
     }
 
     if (!newPath) newPath = "/"

@@ -1,30 +1,22 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { useTheme } from "next-themes"
-import { fullThemeDataAtom } from "@/lib/atoms"
-import { motion } from "motion/react"
 import { ArrowUpRight } from "lucide-react"
+import { motion } from "motion/react"
+import { useTheme } from "next-themes"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { PlusIcon } from "@/components/ui/icons"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { Kbd } from "@/components/ui/kbd"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { activeTerminalIdAtom, terminalCwdAtom, terminalsAtom } from "@/features/terminal/atoms"
+import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import { Terminal } from "@/features/terminal/terminal"
 import { TerminalTabs } from "@/features/terminal/terminal-tabs"
-import { getDefaultTerminalBg } from "@/features/terminal/helpers"
-import {
-  terminalsAtom,
-  activeTerminalIdAtom,
-  terminalCwdAtom,
-} from "@/features/terminal/atoms"
-import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "@/features/terminal/types"
+import { fullThemeDataAtom } from "@/lib/atoms"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { trpc } from "@/lib/trpc"
 import { cn } from "@/lib/utils"
 
 interface TerminalWidgetProps {
@@ -50,8 +42,7 @@ function getNextTerminalName(terminals: TerminalInstance[]): string {
     })
     .filter((n) => n > 0)
 
-  const maxNumber =
-    existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
+  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
   return `Terminal ${maxNumber + 1}`
 }
 
@@ -90,15 +81,9 @@ export const TerminalWidget = memo(function TerminalWidget({
   }, [isDark, fullThemeData])
 
   // Get terminals for this chat
-  const terminals = useMemo(
-    () => allTerminals[chatId] || [],
-    [allTerminals, chatId],
-  )
+  const terminals = useMemo(() => allTerminals[chatId] || [], [allTerminals, chatId])
 
-  const activeTerminalId = useMemo(
-    () => allActiveIds[chatId] || null,
-    [allActiveIds, chatId],
-  )
+  const activeTerminalId = useMemo(() => allActiveIds[chatId] || null, [allActiveIds, chatId])
 
   const activeTerminal = useMemo(
     () => terminals.find((t) => t.id === activeTerminalId) || null,
@@ -185,9 +170,7 @@ export const TerminalWidget = memo(function TerminalWidget({
       const currentChatId = chatIdRef.current
       setAllTerminals((prev) => ({
         ...prev,
-        [currentChatId]: (prev[currentChatId] || []).map((t) =>
-          t.id === id ? { ...t, name } : t,
-        ),
+        [currentChatId]: (prev[currentChatId] || []).map((t) => (t.id === id ? { ...t, name } : t)),
       }))
     },
     [setAllTerminals],
@@ -238,14 +221,10 @@ export const TerminalWidget = memo(function TerminalWidget({
       }))
 
       const currentActiveId = activeTerminalIdRef.current
-      if (
-        currentActiveId &&
-        !remainingTerminals.find((t) => t.id === currentActiveId)
-      ) {
+      if (currentActiveId && !remainingTerminals.find((t) => t.id === currentActiveId)) {
         setAllActiveIds((prev) => ({
           ...prev,
-          [currentChatId]:
-            remainingTerminals[remainingTerminals.length - 1]?.id || null,
+          [currentChatId]: remainingTerminals[remainingTerminals.length - 1]?.id || null,
         }))
       }
     },

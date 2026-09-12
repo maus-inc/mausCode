@@ -1,20 +1,26 @@
 import { useSetAtom } from "jotai"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { subChatFilesAtom, subChatToChatMapAtom, type SubChatFileChange } from "../atoms"
+import { parseWorktreeRelativePath } from "../../../../shared/worktree-paths"
+import { type SubChatFileChange, subChatFilesAtom, subChatToChatMapAtom } from "../atoms"
+
 // import { REPO_ROOT_PATH } from "@/lib/codesandbox-constants"
 const REPO_ROOT_PATH = "/workspace" // Desktop mock
 
 interface MessagePart {
   type: string
-  input?: {
-    file_path?: string
-    old_string?: string
-    new_string?: string
-    content?: string
-  }
+  input?: unknown
 }
 
-interface Message {
+/** Tool input fields read for changed-file tracking. */
+interface TrackedToolInput {
+  file_path?: string
+  old_string?: string
+  new_string?: string
+  content?: string
+  toolName?: string
+}
+
+export interface Message {
   role: string
   parts?: MessagePart[]
 }
@@ -35,52 +41,52 @@ export function useChangedFilesTracking(
   const setSubChatToChatMap = useSetAtom(subChatToChatMapAtom)
 
   // Helper to get display path (removes sandbox prefixes and worktree paths)
-  const getDisplayPath = useCallback((filePath: string): string => {
-    if (!filePath) return ""
+  const getDisplayPath = useCallback(
+    (filePath: string): string => {
+      if (!filePath) return ""
 
-    // Strip project path prefix first (most reliable for desktop)
-    if (projectPath && filePath.startsWith(projectPath)) {
-      const relative = filePath.slice(projectPath.length)
-      return relative.startsWith("/") ? relative.slice(1) : relative
-    }
-
-    // Use constant from codesandbox-constants
-    const prefixes = [`${REPO_ROOT_PATH}/`, "/project/sandbox/", "/project/"]
-
-    for (const prefix of prefixes) {
-      if (filePath.startsWith(prefix)) {
-        return filePath.slice(prefix.length)
+      // Strip project path prefix first (most reliable for desktop)
+      if (projectPath && filePath.startsWith(projectPath)) {
+        const relative = filePath.slice(projectPath.length)
+        return relative.startsWith("/") ? relative.slice(1) : relative
       }
-    }
 
-    // Handle worktree paths: /Users/.../.21st/worktrees/{chatId}/{subChatId}/relativePath
-    // Extract everything after the subChatId directory
-    const worktreeMatch = filePath.match(/\.21st\/worktrees\/[^/]+\/[^/]+\/(.+)$/)
-    if (worktreeMatch) {
-      return worktreeMatch[1]
-    }
+      // Use constant from codesandbox-constants
+      const prefixes = [`${REPO_ROOT_PATH}/`, "/project/sandbox/", "/project/"]
 
-    // Heuristic: find common root directories
-    if (filePath.startsWith("/")) {
-      const parts = filePath.split("/")
-      const rootIndicators = ["apps", "packages", "src", "lib", "components"]
-      const rootIndex = parts.findIndex((p) => rootIndicators.includes(p))
-      if (rootIndex > 0) {
-        return parts.slice(rootIndex).join("/")
+      for (const prefix of prefixes) {
+        if (filePath.startsWith(prefix)) {
+          return filePath.slice(prefix.length)
+        }
       }
-    }
 
-    return filePath
-  }, [projectPath])
+      // Handle worktree paths: /Users/.../.mauscode/worktrees/{project}/{folder}/relativePath
+      // (legacy 1Code .21st/worktrees paths are matched too — see shared/worktree-paths)
+      const worktreeRelative = parseWorktreeRelativePath(filePath)
+      if (worktreeRelative) {
+        return worktreeRelative
+      }
+
+      // Heuristic: find common root directories
+      if (filePath.startsWith("/")) {
+        const parts = filePath.split("/")
+        const rootIndicators = ["apps", "packages", "src", "lib", "components"]
+        const rootIndex = parts.findIndex((p) => rootIndicators.includes(p))
+        if (rootIndex > 0) {
+          return parts.slice(rootIndex).join("/")
+        }
+      }
+
+      return filePath
+    },
+    [projectPath],
+  )
 
   // Calculate diff stats from old_string and new_string
   // For Edit: old_string lines are deletions, new_string lines are additions
   // For Write: counts lines in new content as additions
   const calculateDiffStats = useCallback(
-    (
-      oldStr: string,
-      newStr: string,
-    ): { additions: number; deletions: number } => {
+    (oldStr: string, newStr: string): { additions: number; deletions: number } => {
       if (oldStr === newStr) return { additions: 0, deletions: 0 }
 
       const oldLines = oldStr ? oldStr.split("\n").length : 0
@@ -130,15 +136,21 @@ export function useChangedFilesTracking(
       for (const msg of inputMessages) {
         if (msg.role !== "assistant") continue
         for (const part of msg.parts || []) {
-          if (part.type === "tool-Edit" || part.type === "tool-Write") {
-            const filePath = part.input?.file_path
+          const input = part.input as TrackedToolInput | undefined
+          const toolName = input?.toolName || part.type.replace("tool-", "")
+          const isEdit = part.type === "tool-Edit" || toolName === "replace" || toolName === "Edit"
+          const isWrite =
+            part.type === "tool-Write" || toolName === "write_file" || toolName === "Write"
+
+          if (isEdit || isWrite) {
+            const filePath = input?.file_path
             if (!filePath) continue
 
-          // Skip session/plan files stored in local app storage
-          if (isSessionFile(filePath)) continue
+            // Skip session/plan files stored in local app storage
+            if (isSessionFile(filePath)) continue
 
-          const oldString = part.input?.old_string || ""
-          const newString = part.input?.new_string || part.input?.content || ""
+            const oldString = input?.old_string || ""
+            const newString = input?.new_string || input?.content || ""
 
             const existing = fileStates.get(filePath)
             if (existing) {
@@ -148,7 +160,7 @@ export function useChangedFilesTracking(
               // First time seeing this file - record original state
               fileStates.set(filePath, {
                 // For Write (new file), original is null; for Edit, it's the old_string
-                originalContent: part.type === "tool-Write" ? null : oldString,
+                originalContent: isWrite ? null : oldString,
                 currentContent: newString,
                 displayPath: getDisplayPath(filePath),
               })
@@ -183,9 +195,7 @@ export function useChangedFilesTracking(
 
   const recomputeChangedFiles = useCallback(
     (overrideMessages?: Message[]) => {
-      const newChangedFiles = calculateChangedFiles(
-        overrideMessages ?? messages,
-      )
+      const newChangedFiles = calculateChangedFiles(overrideMessages ?? messages)
       setChangedFiles(newChangedFiles)
       isInitializedRef.current = true
     },

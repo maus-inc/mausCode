@@ -1,0 +1,22 @@
+{"ts":"2026-09-11T15:21:47.759Z","type":"hook_event","hookEventName":"agent_start","agentId":"agent_1789140107733_5bs4f6","taskId":"conv_1789140107749_6gvgg2w","parentAgentId":null}
+{"ts":"2026-09-11T15:21:47.764Z","type":"agent_event","event":{"type":"iteration_start","iteration":1}}
+{"ts":"2026-09-11T15:21:47.788Z","type":"agent_event","event":{"type":"usage","inputTokens":100,"outputTokens":30,"cacheReadTokens":0,"cacheWriteTokens":0,"cost":0,"totalInputTokens":100,"totalOutputTokens":30,"totalCacheReadTokens":0,"totalCacheWriteTokens":0,"totalCost":0}}
+{"ts":"2026-09-11T15:21:47.803Z","type":"hook_event","hookEventName":"tool_call","agentId":"agent_1789140107733_5bs4f6","taskId":"conv_1789140107749_6gvgg2w","parentAgentId":null}
+{"ts":"2026-09-11T15:21:47.807Z","type":"agent_event","event":{"type":"content_start","contentType":"tool","toolCallId":"call_1","toolName":"read_files","input":{"paths":["/tmp/cline-stub/probe-target.txt"]}}}
+{"ts":"2026-09-11T15:21:47.822Z","type":"hook_event","hookEventName":"tool_result","agentId":"agent_1789140107733_5bs4f6","taskId":"conv_1789140107749_6gvgg2w","parentAgentId":null}
+{"ts":"2026-09-11T15:21:47.826Z","type":"agent_event","event":{"type":"content_end","contentType":"tool","toolCallId":"call_1","toolName":"read_files","output":[{"query":"/tmp/cline-stub/probe-target.txt","result":"1 | probe target content","success":true}]}}
+{"ts":"2026-09-11T15:21:47.832Z","type":"agent_event","event":{"type":"iteration_end","iteration":1,"hadToolCalls":true,"toolCallCount":1}}
+{"ts":"2026-09-11T15:21:47.839Z","type":"agent_event","event":{"type":"iteration_start","iteration":2}}
+{"ts":"2026-09-11T15:21:47.859Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"Stub "}}
+{"ts":"2026-09-11T15:21:47.865Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"acknowledgement "}}
+{"ts":"2026-09-11T15:21:47.870Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"after "}}
+{"ts":"2026-09-11T15:21:47.876Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"tool "}}
+{"ts":"2026-09-11T15:21:47.880Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"round-trip "}}
+{"ts":"2026-09-11T15:21:47.883Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"(call "}}
+{"ts":"2026-09-11T15:21:47.887Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"2). "}}
+{"ts":"2026-09-11T15:21:47.894Z","type":"agent_event","event":{"type":"usage","inputTokens":100,"outputTokens":20,"cacheReadTokens":0,"cacheWriteTokens":0,"cost":0,"totalInputTokens":200,"totalOutputTokens":50,"totalCacheReadTokens":0,"totalCacheWriteTokens":0,"totalCost":0}}
+{"ts":"2026-09-11T15:21:47.900Z","type":"agent_event","event":{"type":"content_end","contentType":"text","text":"Stub acknowledgement after tool round-trip (call 2). "}}
+{"ts":"2026-09-11T15:21:47.904Z","type":"agent_event","event":{"type":"iteration_end","iteration":2,"hadToolCalls":false,"toolCallCount":0}}
+{"ts":"2026-09-11T15:21:47.910Z","type":"hook_event","hookEventName":"agent_end","agentId":"agent_1789140107733_5bs4f6","taskId":"conv_1789140107749_6gvgg2w","parentAgentId":null}
+{"ts":"2026-09-11T15:21:47.914Z","type":"agent_event","event":{"type":"done","reason":"completed","text":"Stub acknowledgement after tool round-trip (call 2). ","iterations":2,"usage":{"inputTokens":200,"outputTokens":50,"cacheReadTokens":0,"cacheWriteTokens":0,"totalCost":0}}}
+{"ts":"2026-09-11T15:21:47.945Z","type":"run_result","finishReason":"completed","iterations":2,"usage":{"inputTokens":200,"outputTokens":50,"cacheReadTokens":0,"cacheWriteTokens":0,"totalCost":0},"aggregateUsage":{"inputTokens":200,"outputTokens":50,"cacheReadTokens":0,"cacheWriteTokens":0,"totalCost":0},"durationMs":166,"text":"Stub acknowledgement after tool round-trip (call 2). ","model":{"id":"stub-model","provider":"openai-native"}}

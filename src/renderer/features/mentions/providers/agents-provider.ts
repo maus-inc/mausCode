@@ -8,10 +8,10 @@
 import { trpcClient } from "../../../lib/trpc"
 import {
   createMentionProvider,
+  MENTION_PREFIXES,
   type MentionItem,
   type MentionSearchContext,
   type MentionSearchResult,
-  MENTION_PREFIXES,
   sortByRelevance,
 } from "../types"
 
@@ -30,7 +30,7 @@ export interface AgentData {
   tools?: string[]
   disallowedTools?: string[]
   model?: AgentModel
-  source: "user" | "project"
+  source: "user" | "project" | "plugin"
   path: string
 }
 

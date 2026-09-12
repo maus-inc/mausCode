@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react"
+import { useCallback, useRef, useState } from "react"
 import { trpc } from "../../../lib/trpc"
 
 export interface PastedTextFile {
@@ -54,7 +54,7 @@ export function usePastedTextFiles(subChatId: string): UsePastedTextFilesReturn 
         console.error("[usePastedTextFiles] Failed to write:", error)
       }
     },
-    [subChatId, writePastedTextMutation]
+    [subChatId, writePastedTextMutation],
   )
 
   const removePastedText = useCallback((id: string) => {

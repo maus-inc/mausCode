@@ -1,5 +1,5 @@
 // File upload hook for desktop app with base64 conversion for Claude API
-import { useState, useCallback } from "react"
+import { useCallback, useState } from "react"
 
 export interface UploadedImage {
   id: string
@@ -17,25 +17,6 @@ export interface UploadedFile {
   isLoading: boolean
   size?: number
   type?: string
-}
-
-/**
- * Convert a blob URL to base64 data
- */
-async function blobUrlToBase64(blobUrl: string): Promise<string> {
-  const response = await fetch(blobUrl)
-  const blob = await response.blob()
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      const result = reader.result as string
-      // Remove the data:image/xxx;base64, prefix
-      const base64 = result.split(",")[1]
-      resolve(base64 || "")
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
 }
 
 /**
@@ -73,7 +54,7 @@ export function useAgentsFileUpload() {
         const filename = file.name || `screenshot-${Date.now()}.png`
         const mediaType = file.type || "image/png"
         const url = URL.createObjectURL(file)
-        
+
         // Convert to base64 for API
         let base64Data: string | undefined
         try {
@@ -90,7 +71,7 @@ export function useAgentsFileUpload() {
           isLoading: false,
           mediaType,
         }
-      })
+      }),
     )
 
     const newFiles: UploadedFile[] = otherFiles.map((file) => ({

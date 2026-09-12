@@ -21,6 +21,10 @@ export const terminalSidebarOpenAtomFamily = atomFamily((chatId: string) =>
   ),
 )
 
+// NOTE (transplant): dev-server running flag per terminal scope (sylvaindiv/1code, Apache-2.0).
+// Ephemeral (not persisted); the hook reconciles against trpc.terminal.getSession on mount.
+export const devServerRunningAtomFamily = atomFamily((_scopeKey: string) => atom(false))
+
 // Deprecated: Keep for backwards compatibility, but should not be used
 // Use terminalSidebarOpenAtomFamily(chatId) instead
 export const terminalSidebarOpenAtom = atom(false)
@@ -59,6 +63,15 @@ export const terminalBottomHeightAtom = atomWithStorage<number>(
 // Terminal search open state - maps paneId to search visibility
 export const terminalSearchOpenAtom = atom<Record<string, boolean>>({})
 
+// Terminal font size preference (persisted to localStorage)
+export type TerminalFontSize = 10 | 11 | 12 | 13 | 14 | 15 | 16 | 18 | 20 | 24
+export const terminalFontSizeAtom = atomWithStorage<TerminalFontSize>(
+  "preferences:terminal-font-size",
+  13, // Default matches the previous hardcoded value
+  undefined,
+  { getOnInit: true },
+)
+
 // ============================================================================
 // Multi-Terminal State Management
 // ============================================================================
@@ -68,15 +81,19 @@ export const terminalSearchOpenAtom = atom<Record<string, boolean>>({})
  * Window-scoped so each window manages its own terminal instances.
  * Key is scopeKey: "path:<dir>" for shared (local mode) or "ws:<chatId>" for isolated (worktree).
  */
-export const terminalsAtom = atomWithWindowStorage<
-  Record<string, TerminalInstance[]>
->("terminals-by-scope", {}, { getOnInit: true })
+export const terminalsAtom = atomWithWindowStorage<Record<string, TerminalInstance[]>>(
+  "terminals-by-scope",
+  {},
+  { getOnInit: true },
+)
 
 /**
  * Map of scopeKey -> active terminal id.
  * Window-scoped - tracks which terminal is currently active for each scope in this window.
  * Key is scopeKey: "path:<dir>" for shared (local mode) or "ws:<chatId>" for isolated (worktree).
  */
-export const activeTerminalIdAtom = atomWithWindowStorage<
-  Record<string, string | null>
->("active-terminal-by-scope", {}, { getOnInit: true })
+export const activeTerminalIdAtom = atomWithWindowStorage<Record<string, string | null>>(
+  "active-terminal-by-scope",
+  {},
+  { getOnInit: true },
+)

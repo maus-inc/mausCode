@@ -1,16 +1,13 @@
 "use client"
 
 import { memo } from "react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { cn } from "../../../lib/utils"
 
 // Claude model context windows
 const CONTEXT_WINDOWS = {
   opus: 200_000,
+  "opus[1m]": 1_000_000,
   sonnet: 200_000,
   haiku: 200_000,
 } as const
@@ -63,6 +60,7 @@ function CircularProgress({
 
   return (
     <svg
+      aria-hidden="true"
       width={size}
       height={size}
       className={cn("transform -rotate-90", className)}
@@ -112,13 +110,20 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
+        {/* biome-ignore lint/a11y/useSemanticElements: compact inline action; a native button would require style resets. */}
         <div
+          role="button"
           onClick={isClickable ? onCompact : undefined}
+          tabIndex={isClickable ? 0 : -1}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && isClickable) {
+              e.preventDefault()
+              onCompact()
+            }
+          }}
           className={cn(
             "h-4 w-4 flex items-center justify-center",
-            isClickable
-              ? "cursor-pointer hover:opacity-70 transition-opacity"
-              : "cursor-default",
+            isClickable ? "cursor-pointer hover:opacity-70 transition-opacity" : "cursor-default",
             disabled && "opacity-50",
             className,
           )}
@@ -144,8 +149,7 @@ export const AgentContextIndicator = memo(function AgentContextIndicator({
               </span>
               <span className="text-muted-foreground mx-1">·</span>
               <span className="text-muted-foreground">
-                {formatTokens(contextTokens)} /{" "}
-                {formatTokens(contextWindow)} context
+                {formatTokens(contextTokens)} / {formatTokens(contextWindow)} context
               </span>
             </>
           )}

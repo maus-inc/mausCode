@@ -1,20 +1,16 @@
 "use client"
 
-import { memo, useState, useMemo } from "react"
-import {
-  SearchIcon,
-  IconSpinner,
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
+import { memo, useMemo, useState } from "react"
+import { CollapseIcon, ExpandIcon, IconSpinner, SearchIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
-import { getToolStatus } from "./agent-tool-registry"
-import { AgentToolInterrupted } from "./agent-tool-interrupted"
-import { areToolPropsEqual } from "./agent-tool-utils"
 import { cn } from "../../../lib/utils"
+import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { getToolStatus } from "./agent-tool-registry"
+import type { ToolPartLike } from "./agent-tool-state"
+import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface AgentWebSearchToolProps {
-  part: any
+  part: ToolPartLike
   chatStatus?: string
 }
 
@@ -30,17 +26,22 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
   const [isExpanded, setIsExpanded] = useState(false)
   const { isPending, isError, isInterrupted } = getToolStatus(part, chatStatus)
 
-  const query = part.input?.query || ""
-  const truncatedQuery = query.length > 40 ? query.slice(0, 37) + "..." : query
-  
+  const toolInput = part.input as { query?: string } | undefined
+  const toolOutput = part.output as
+    | { results?: { content?: { title?: string; url?: string }[]; title?: string; url?: string }[] }
+    | undefined
+  const outputResults = toolOutput?.results
+  const query = toolInput?.query || ""
+  const truncatedQuery = query.length > 40 ? `${query.slice(0, 37)}...` : query
+
   // Parse results from output
   const results = useMemo(() => {
-    if (!part.output?.results) return []
-    
+    if (!outputResults) return []
+
     // Results can be nested in content array
-    const rawResults = part.output.results
+    const rawResults = outputResults
     const allResults: SearchResult[] = []
-    
+
     for (const result of rawResults) {
       if (result.content && Array.isArray(result.content)) {
         for (const item of result.content) {
@@ -52,9 +53,9 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
         allResults.push({ title: result.title, url: result.url })
       }
     }
-    
+
     return allResults
-  }, [part.output?.results])
+  }, [outputResults])
 
   const resultCount = results.length
   const hasResults = resultCount > 0
@@ -67,31 +68,37 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
   return (
     <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2">
       {/* Header - clickable to toggle expand */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
         onClick={() => hasResults && !isPending && setIsExpanded(!isExpanded)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
         className={cn(
           "flex items-center justify-between px-2.5 h-7",
-          hasResults && !isPending && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          hasResults &&
+            !isPending &&
+            "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
         <div className="flex items-center gap-1.5 text-xs truncate flex-1 min-w-0">
           <SearchIcon className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
-          
+
           {isPending ? (
-            <TextShimmer
-              as="span"
-              duration={1.2}
-              className="text-xs text-muted-foreground"
-            >
+            <TextShimmer as="span" duration={1.2} className="text-xs text-muted-foreground">
               Searching
             </TextShimmer>
           ) : (
             <span className="text-xs text-muted-foreground">Searched</span>
           )}
-          
-          <span className="truncate text-foreground">
-            {truncatedQuery}
-          </span>
+
+          <span className="truncate text-foreground">{truncatedQuery}</span>
         </div>
 
         {/* Status and expand button */}
@@ -147,4 +154,3 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
     </div>
   )
 }, areToolPropsEqual)
-

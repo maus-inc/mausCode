@@ -1,8 +1,8 @@
 import { ChevronRight, Pencil } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
+import { cn } from "../../../../lib/utils"
 import { Button } from "../../../ui/button"
 import { Switch } from "../../../ui/switch"
-import { cn } from "../../../../lib/utils"
 import type { McpServer } from "./types"
 
 function StatusDot({ status }: { status: string }) {
@@ -68,6 +68,7 @@ export function McpServerRow({
     <div className="rounded-lg border border-border bg-background overflow-hidden">
       {/* Header row */}
       <button
+        type="button"
         onClick={onToggle}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors cursor-pointer"
       >
@@ -79,13 +80,9 @@ export function McpServerRow({
         />
         <StatusDot status={server.status} />
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium text-foreground truncate block">
-            {server.name}
-          </span>
+          <span className="text-sm font-medium text-foreground truncate block">{server.name}</span>
           {server.serverInfo?.version && (
-            <span className="text-[10px] text-muted-foreground">
-              v{server.serverInfo.version}
-            </span>
+            <span className="text-[10px] text-muted-foreground">v{server.serverInfo.version}</span>
           )}
         </div>
         <span className="text-xs text-muted-foreground shrink-0">
@@ -177,9 +174,7 @@ export function McpServerRow({
           >
             <div className="px-3 pb-2.5">
               <div className="rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-2">
-                <p className="text-[11px] text-red-400 font-mono break-all">
-                  {server.error}
-                </p>
+                <p className="text-[11px] text-red-400 font-mono break-all">{server.error}</p>
               </div>
             </div>
           </motion.div>
@@ -189,4 +184,4 @@ export function McpServerRow({
   )
 }
 
-export { StatusDot, getStatusText }
+export { getStatusText, StatusDot }

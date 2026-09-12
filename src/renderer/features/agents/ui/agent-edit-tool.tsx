@@ -1,30 +1,24 @@
 "use client"
 
-import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { RawHtml } from "../../../components/raw-html"
+import { CollapseIcon, ExpandIcon, IconSpinner } from "../../../components/ui/icons"
+import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
 import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
-import {
-  IconSpinner,
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
-import { TextShimmer } from "../../../components/ui/text-shimmer"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
-import { getDisplayPath, getToolStatus } from "./agent-tool-registry"
-import { AgentToolInterrupted } from "./agent-tool-interrupted"
-import { areToolPropsEqual } from "./agent-tool-utils"
-import { getFileIconByExtension } from "../mentions/agents-file-mention"
-import { useFileOpen } from "../mentions"
-import { agentsDiffSidebarOpenAtom, agentsFocusedDiffFileAtom, selectedProjectAtom } from "../atoms"
 import { cn } from "../../../lib/utils"
+import { agentsDiffSidebarOpenAtom, agentsFocusedDiffFileAtom, selectedProjectAtom } from "../atoms"
+import { useFileOpen } from "../mentions"
+import { getFileIconByExtension } from "../mentions/agents-file-mention"
+import { AgentToolInterrupted } from "./agent-tool-interrupted"
+import { getDisplayPath, getToolStatus } from "./agent-tool-registry"
+import type { ToolPartLike } from "./agent-tool-state"
+import { areToolPropsEqual } from "./agent-tool-utils"
 
 interface AgentEditToolProps {
-  part: any
+  part: ToolPartLike
   messageId?: string
   partIndex?: number
   chatStatus?: string
@@ -77,12 +71,14 @@ function calculateDiffStatsFromPatch(
 type DiffLine = { type: "added" | "removed" | "context"; content: string }
 
 // Get all diff lines from structuredPatch
-function getDiffLines(patches: Array<{ lines: string[] }>): DiffLine[] {
+function getDiffLines(patches: Array<{ lines?: string[] }>): DiffLine[] {
   const result: DiffLine[] = []
 
   if (!patches) return result
 
   for (const patch of patches) {
+    // Skip patches without lines array
+    if (!patch.lines) continue
     for (const line of patch.lines) {
       if (line.startsWith("+")) {
         result.push({ type: "added", content: line.slice(1) })
@@ -105,13 +101,11 @@ function useBatchHighlight(
   themeId: string,
   isStreaming: boolean = false,
 ): Map<number, string> {
-  const [highlightedMap, setHighlightedMap] = useState<Map<number, string>>(
-    () => new Map(),
-  )
+  const [highlightedMap, setHighlightedMap] = useState<Map<number, string>>(() => new Map())
 
   // Create stable key from lines content to detect changes
   // Only compute when NOT streaming to avoid expensive join during animation
-  const linesKey = useMemo(
+  const _linesKey = useMemo(
     () => (isStreaming ? "" : lines.map((l) => l.content).join("\n")),
     [lines, isStreaming],
   )
@@ -160,7 +154,7 @@ function useBatchHighlight(
       cancelled = true
       clearTimeout(timer)
     }
-  }, [linesKey, language, themeId, lines.length, isStreaming])
+  }, [language, themeId, lines.length, isStreaming, lines])
 
   return highlightedMap
 }
@@ -187,9 +181,10 @@ const DiffLineRow = memo(
         )}
       >
         {highlightedHtml ? (
-          <span
+          <RawHtml
+            as="span"
+            html={highlightedHtml}
             className="whitespace-pre-wrap break-all [&_.shiki]:bg-transparent [&_pre]:bg-transparent [&_code]:bg-transparent"
-            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
           />
         ) : (
           <span
@@ -239,15 +234,21 @@ export const AgentEditTool = memo(function AgentEditTool({
   const isActivelyStreaming = chatStatus === "streaming" || chatStatus === "submitted"
   const isInputStreaming = part.state === "input-streaming" && isActivelyStreaming
 
-  const filePath = part.input?.file_path || ""
-  const oldString = part.input?.old_string || ""
-  const newString = part.input?.new_string || ""
+  const toolInput = part.input as
+    | { file_path?: string; old_string?: string; new_string?: string; content?: string }
+    | undefined
+  const toolOutput = part.output as
+    | { structuredPatch?: Array<{ lines?: string[] }>; content?: string }
+    | undefined
+  const filePath = toolInput?.file_path || ""
+  const _oldString = toolInput?.old_string || ""
+  const newString = toolInput?.new_string || ""
 
   // For Write mode, content is in input.content
-  const writeContent = part.input?.content || ""
+  const writeContent = toolInput?.content || ""
 
   // Get structuredPatch from output (only available when complete)
-  const structuredPatch = part.output?.structuredPatch
+  const structuredPatch = toolOutput?.structuredPatch
 
   // Extract filename from path
   const filename = filePath ? filePath.split("/").pop() || "file" : ""
@@ -258,7 +259,7 @@ export const AgentEditTool = memo(function AgentEditTool({
   }, [filePath, projectPath])
 
   // Handler to open diff sidebar and focus on this file
-  const handleOpenInDiff = useCallback(() => {
+  const _handleOpenInDiff = useCallback(() => {
     if (!displayPath) return
     setDiffSidebarOpen(true)
     setFocusedDiffFile(displayPath)
@@ -267,20 +268,23 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Memoized click handlers to prevent inline function re-creation
   const handleHeaderClick = useCallback(() => {
     if (!isPending && !isInputStreaming) {
-      setIsOutputExpanded(prev => !prev)
+      setIsOutputExpanded((prev) => !prev)
     }
   }, [isPending, isInputStreaming])
 
-  const handleFilenameClick = useCallback((e: React.MouseEvent) => {
-    if (filePath && onOpenFile) {
-      e.stopPropagation()
-      onOpenFile(filePath)
-    }
-  }, [filePath, onOpenFile])
+  const handleFilenameClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (filePath && onOpenFile) {
+        e.stopPropagation()
+        onOpenFile(filePath)
+      }
+    },
+    [filePath, onOpenFile],
+  )
 
   const handleExpandButtonClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    setIsOutputExpanded(prev => !prev)
+    setIsOutputExpanded((prev) => !prev)
   }, [])
 
   const handleContentClick = useCallback(() => {
@@ -299,7 +303,7 @@ export const AgentEditTool = memo(function AgentEditTool({
   // For Edit mode without structuredPatch, count new_string lines as preview
   const diffStats = useMemo(() => {
     if (isWriteMode) {
-      const content = writeContent || part.output?.content || ""
+      const content = writeContent || toolOutput?.content || ""
       const addedLines = content ? content.split("\n").length : 0
       return { addedLines, removedLines: 0 }
     }
@@ -311,20 +315,14 @@ export const AgentEditTool = memo(function AgentEditTool({
       return { addedLines: newString.split("\n").length, removedLines: 0 }
     }
     return null
-  }, [
-    structuredPatch,
-    isWriteMode,
-    writeContent,
-    part.output?.content,
-    newString,
-  ])
+  }, [structuredPatch, isWriteMode, writeContent, toolOutput?.content, newString])
 
   // Get diff lines for display (memoized)
   // For Write mode, treat all lines as added
   // For Edit mode without structuredPatch, show new_string as preview
   const diffLines = useMemo(() => {
     if (isWriteMode) {
-      const content = writeContent || part.output?.content || ""
+      const content = writeContent || toolOutput?.content || ""
       if (!content) return []
       return content.split("\n").map((line: string) => ({
         type: "added" as const,
@@ -343,13 +341,7 @@ export const AgentEditTool = memo(function AgentEditTool({
       }))
     }
     return []
-  }, [
-    structuredPatch,
-    isWriteMode,
-    writeContent,
-    part.output?.content,
-    newString,
-  ])
+  }, [structuredPatch, isWriteMode, writeContent, toolOutput?.content, newString])
 
   // For streaming state, get content being streamed
   const streamingContent = useMemo(() => {
@@ -392,8 +384,7 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Up to 3 lines: show from top; more than 3 lines: show last N lines for autoscroll effect
   const { streamingLines, shouldAlignBottom } = useMemo(() => {
     const content = throttledStreamingContent
-    if (!content)
-      return { streamingLines: [], shouldAlignBottom: false }
+    if (!content) return { streamingLines: [], shouldAlignBottom: false }
     const lines = content.split("\n")
     const totalLines = lines.length
     // If 3 or fewer lines, show all from top
@@ -413,8 +404,8 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Without useMemo, activeLines gets a new reference on every render, which triggers
   // firstChangeIndex -> displayLines -> useBatchHighlight -> setHighlightedMap -> re-render
   const activeLines = useMemo(
-    () => isInputStreaming && streamingLines.length > 0 ? streamingLines : diffLines,
-    [isInputStreaming, streamingLines, diffLines]
+    () => (isInputStreaming && streamingLines.length > 0 ? streamingLines : diffLines),
+    [isInputStreaming, streamingLines, diffLines],
   )
 
   // Find index of first change line (added or removed) to focus on when collapsed
@@ -430,22 +421,14 @@ export const AgentEditTool = memo(function AgentEditTool({
   const displayLines = useMemo(
     () =>
       !isOutputExpanded && firstChangeIndex > 0
-        ? [
-            ...activeLines.slice(firstChangeIndex),
-            ...activeLines.slice(0, firstChangeIndex),
-          ]
+        ? [...activeLines.slice(firstChangeIndex), ...activeLines.slice(0, firstChangeIndex)]
         : activeLines,
     [activeLines, isOutputExpanded, firstChangeIndex],
   )
 
   // Batch highlight all lines at once (instead of N×useEffect)
   // Pass isInputStreaming to use longer debounce during streaming for better FPS
-  const highlightedMap = useBatchHighlight(
-    displayLines,
-    language,
-    codeTheme,
-    isInputStreaming,
-  )
+  const highlightedMap = useBatchHighlight(displayLines, language, codeTheme, isInputStreaming)
 
   // Check if we have VISIBLE content to show
   // For streaming, only show content area if we have some content to display
@@ -493,32 +476,48 @@ export const AgentEditTool = memo(function AgentEditTool({
       className="rounded-lg border border-border bg-muted/30 overflow-hidden mx-2"
     >
       {/* Header - clickable to expand, fixed height to prevent layout shift */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
         onClick={hasVisibleContent ? handleHeaderClick : undefined}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOutputExpanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
         className={cn(
           "flex items-center justify-between pl-2.5 pr-0.5 h-7",
-          hasVisibleContent && !isPending && !isInputStreaming && "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
+          hasVisibleContent &&
+            !isPending &&
+            !isInputStreaming &&
+            "cursor-pointer hover:bg-muted/50 transition-colors duration-150",
         )}
       >
+        {/* biome-ignore lint/a11y/useSemanticElements: row contains icon and shimmer content; a native button would be invalid HTML. */}
         <div
+          role="button"
+          tabIndex={0}
           onClick={handleFilenameClick}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              e.currentTarget.click()
+            }
+          }}
           className={cn(
             "flex items-center gap-1.5 text-xs truncate flex-1 min-w-0",
             displayPath && "cursor-pointer hover:text-foreground",
           )}
         >
-          {FileIcon && (
-            <FileIcon className="w-2.5 h-2.5 flex-shrink-0 text-muted-foreground" />
-          )}
+          {FileIcon && <FileIcon className="w-2.5 h-2.5 flex-shrink-0 text-muted-foreground" />}
           {/* Filename with shimmer during progress */}
           <Tooltip>
             <TooltipTrigger asChild>
               {isPending || isInputStreaming ? (
-                <TextShimmer
-                  as="span"
-                  duration={1.2}
-                  className="truncate"
-                >
+                <TextShimmer as="span" duration={1.2} className="truncate">
                   {filename}
                 </TextShimmer>
               ) : (
@@ -541,13 +540,9 @@ export const AgentEditTool = memo(function AgentEditTool({
           {/* Diff stats - only show when not pending */}
           {!isPending && !isInputStreaming && diffStats && (
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-green-600 dark:text-green-400">
-                +{diffStats.addedLines}
-              </span>
+              <span className="text-green-600 dark:text-green-400">+{diffStats.addedLines}</span>
               {diffStats.removedLines > 0 && (
-                <span className="text-red-600 dark:text-red-400">
-                  -{diffStats.removedLines}
-                </span>
+                <span className="text-red-600 dark:text-red-400">-{diffStats.removedLines}</span>
               )}
             </div>
           )}
@@ -558,6 +553,7 @@ export const AgentEditTool = memo(function AgentEditTool({
               <IconSpinner className="w-3 h-3" />
             ) : hasVisibleContent ? (
               <button
+                type="button"
                 onClick={handleExpandButtonClick}
                 className="p-1 rounded-md hover:bg-accent transition-[background-color,transform] duration-150 ease-out active:scale-95"
               >
@@ -565,17 +561,13 @@ export const AgentEditTool = memo(function AgentEditTool({
                   <ExpandIcon
                     className={cn(
                       "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                      isOutputExpanded
-                        ? "opacity-0 scale-75"
-                        : "opacity-100 scale-100",
+                      isOutputExpanded ? "opacity-0 scale-75" : "opacity-100 scale-100",
                     )}
                   />
                   <CollapseIcon
                     className={cn(
                       "absolute inset-0 w-4 h-4 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
-                      isOutputExpanded
-                        ? "opacity-100 scale-100"
-                        : "opacity-0 scale-75",
+                      isOutputExpanded ? "opacity-100 scale-100" : "opacity-0 scale-75",
                     )}
                   />
                 </div>
@@ -587,30 +579,32 @@ export const AgentEditTool = memo(function AgentEditTool({
 
       {/* Content - git-style diff with syntax highlighting */}
       {hasVisibleContent && (
+        /* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */
         <div
           onClick={handleContentClick}
+          role="button"
+          tabIndex={0}
+          aria-expanded={isOutputExpanded}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              e.currentTarget.click()
+            }
+          }}
           className={cn(
             "border-t border-border transition-colors duration-150 font-mono text-xs",
-            isOutputExpanded
-              ? "max-h-[200px] overflow-y-auto"
-              : "h-[72px] overflow-hidden", // Fixed height when collapsed
+            isOutputExpanded ? "max-h-[200px] overflow-y-auto" : "h-[72px] overflow-hidden", // Fixed height when collapsed
             !isOutputExpanded &&
               !isPending &&
               !isInputStreaming &&
               "cursor-pointer hover:bg-muted/50",
             // When streaming with > 3 lines, use flex to push content to bottom
-            isInputStreaming &&
-              shouldAlignBottom &&
-              "flex flex-col justify-end",
+            isInputStreaming && shouldAlignBottom && "flex flex-col justify-end",
           )}
         >
           {/* Display lines - either streaming content or completed diff */}
           {displayLines.length > 0 ? (
-            <div
-              className={cn(
-                isInputStreaming && shouldAlignBottom && "flex-shrink-0",
-              )}
-            >
+            <div className={cn(isInputStreaming && shouldAlignBottom && "flex-shrink-0")}>
               {displayLines.map((line: DiffLine, idx: number) => (
                 <DiffLineRow
                   // Stable key: type + index is sufficient during streaming

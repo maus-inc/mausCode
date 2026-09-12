@@ -1,8 +1,8 @@
 "use client"
 
-import { cn } from "../../../lib/utils"
 import { Monitor, Smartphone } from "lucide-react"
 import { motion } from "motion/react"
+import { cn } from "../../../lib/utils"
 
 interface ViewportToggleProps {
   value: "desktop" | "mobile"
@@ -10,11 +10,7 @@ interface ViewportToggleProps {
   className?: string
 }
 
-export function ViewportToggle({
-  value,
-  onChange,
-  className,
-}: ViewportToggleProps) {
+export function ViewportToggle({ value, onChange, className }: ViewportToggleProps) {
   return (
     <motion.div
       layout
@@ -26,10 +22,7 @@ export function ViewportToggle({
         },
       }}
     >
-      <motion.div
-        layout
-        className="relative bg-muted rounded-lg h-7 p-0.5 flex"
-      >
+      <motion.div layout className="relative bg-muted rounded-lg h-7 p-0.5 flex">
         {/* Animated selector */}
         <motion.div
           className="absolute inset-y-0.5 rounded-md bg-background shadow transition-all duration-200 ease-in-out"
@@ -43,6 +36,7 @@ export function ViewportToggle({
           }}
         />
         <button
+          type="button"
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
@@ -64,6 +58,7 @@ export function ViewportToggle({
           <Monitor className="h-3.5 w-3.5" />
         </button>
         <button
+          type="button"
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
@@ -88,4 +83,3 @@ export function ViewportToggle({
     </motion.div>
   )
 }
-

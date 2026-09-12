@@ -127,6 +127,6 @@ export interface PlatformProvider {
   execCommand(
     command: string,
     args: string[],
-    options?: { timeout?: number; env?: Record<string, string> }
+    options?: { timeout?: number; env?: Record<string, string> },
   ): Promise<{ stdout: string; stderr: string }>
 }

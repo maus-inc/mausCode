@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { useEffect, useRef } from "react"
 
 /**
  * Hook that listens for file changes from Claude Write/Edit tools
@@ -53,7 +53,10 @@ export function useFileChangeListener(
 export function useGitWatcher(
   worktreePath: string | null | undefined,
   options?: {
-    onChange?: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void
+    onChange?: (data: {
+      worktreePath: string
+      changes: Array<{ path: string; type: "add" | "change" | "unlink" }>
+    }) => void
     debounceMs?: number
   },
 ) {
@@ -97,7 +100,7 @@ export function useGitWatcher(
 
         // Also invalidate parsed diff if files were modified
         const hasModifiedFiles = data.changes.some(
-          (change) => change.type === "change" || change.type === "add"
+          (change) => change.type === "change" || change.type === "add",
         )
         if (hasModifiedFiles) {
           queryClient.invalidateQueries({

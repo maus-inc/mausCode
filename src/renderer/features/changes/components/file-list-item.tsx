@@ -1,9 +1,8 @@
 "use client"
 
-import { memo } from "react"
 import { Eye } from "lucide-react"
+import { memo } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Kbd } from "@/components/ui/kbd"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -11,9 +10,10 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { Kbd } from "@/components/ui/kbd"
 import { cn } from "@/lib/utils"
-import { getStatusIndicator } from "../utils/status"
 import type { FileStatus } from "../../../../shared/changes-types"
+import { getStatusIndicator } from "../utils/status"
 
 export interface FileListItemProps {
   /** File path (relative) */
@@ -63,7 +63,6 @@ export interface FileListItemProps {
  * Memoized to prevent re-renders
  */
 export const FileListItem = memo(function FileListItem({
-  filePath,
   fileName,
   dirPath,
   status,
@@ -85,41 +84,50 @@ export const FileListItem = memo(function FileListItem({
   showContextMenu = true,
 }: FileListItemProps) {
   const content = (
-    <div
-      data-file-item
-      className={cn(
-        "flex items-center gap-2 px-2 py-1 cursor-pointer",
-        "hover:bg-muted/80 transition-colors",
-        isSelected && "bg-muted",
-      )}
-      onClick={onSelect}
-      onDoubleClick={onDoubleClick}
-    >
-      <Checkbox
-        checked={isChecked}
-        onCheckedChange={onCheckboxChange}
-        onClick={(e) => e.stopPropagation()}
-        className="size-4 shrink-0 border-muted-foreground/50"
-      />
-      <div className="flex-1 min-w-0 flex items-center overflow-hidden">
-        {dirPath && (
-          <span className="text-xs text-muted-foreground truncate flex-shrink min-w-0">
-            {dirPath}/
-          </span>
+    <>
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
+      <div
+        data-file-item
+        className={cn(
+          "flex items-center gap-2 px-2 py-1 cursor-pointer",
+          "hover:bg-muted/80 transition-colors",
+          isSelected && "bg-muted",
         )}
-        <span className="text-xs font-medium flex-shrink-0 whitespace-nowrap">
-          {fileName}
-        </span>
+        onClick={onSelect}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
+        onDoubleClick={onDoubleClick}
+      >
+        <Checkbox
+          checked={isChecked}
+          onCheckedChange={onCheckboxChange}
+          onClick={(e) => e.stopPropagation()}
+          className="size-4 shrink-0 border-muted-foreground/50"
+        />
+        <div className="flex-1 min-w-0 flex items-center overflow-hidden">
+          {dirPath && (
+            <span className="text-xs text-muted-foreground truncate flex-shrink min-w-0">
+              {dirPath}/
+            </span>
+          )}
+          <span className="text-xs font-medium flex-shrink-0 whitespace-nowrap">{fileName}</span>
+        </div>
+        <div className="shrink-0 flex items-center gap-1.5">
+          {isViewed && (
+            <div className="size-4 rounded bg-emerald-500/20 flex items-center justify-center">
+              <Eye className="size-2.5 text-emerald-500" />
+            </div>
+          )}
+          {getStatusIndicator(status)}
+        </div>
       </div>
-      <div className="shrink-0 flex items-center gap-1.5">
-        {isViewed && (
-          <div className="size-4 rounded bg-emerald-500/20 flex items-center justify-center">
-            <Eye className="size-2.5 text-emerald-500" />
-          </div>
-        )}
-        {getStatusIndicator(status)}
-      </div>
-    </div>
+    </>
   )
 
   if (!showContextMenu) {
@@ -130,29 +138,17 @@ export const FileListItem = memo(function FileListItem({
     <ContextMenu>
       <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
       <ContextMenuContent className="w-52">
-        {onCopyPath && (
-          <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>
-        )}
+        {onCopyPath && <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>}
         {onCopyRelativePath && (
-          <ContextMenuItem onClick={onCopyRelativePath}>
-            Copy Relative Path
-          </ContextMenuItem>
+          <ContextMenuItem onClick={onCopyRelativePath}>Copy Relative Path</ContextMenuItem>
         )}
-        {(onCopyPath || onCopyRelativePath) && onRevealInFinder && (
-          <ContextMenuSeparator />
-        )}
+        {(onCopyPath || onCopyRelativePath) && onRevealInFinder && <ContextMenuSeparator />}
         {onRevealInFinder && (
-          <ContextMenuItem onClick={onRevealInFinder}>
-            Reveal in Finder
-          </ContextMenuItem>
+          <ContextMenuItem onClick={onRevealInFinder}>Reveal in Finder</ContextMenuItem>
         )}
-        {(onOpenInFilePreview || onOpenInEditor) && (
-          <ContextMenuSeparator />
-        )}
+        {(onOpenInFilePreview || onOpenInEditor) && <ContextMenuSeparator />}
         {onOpenInFilePreview && (
-          <ContextMenuItem onClick={onOpenInFilePreview}>
-            Open in File Preview
-          </ContextMenuItem>
+          <ContextMenuItem onClick={onOpenInFilePreview}>Open in File Preview</ContextMenuItem>
         )}
         {onOpenInEditor && (
           <ContextMenuItem onClick={onOpenInEditor}>

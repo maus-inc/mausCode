@@ -1,12 +1,8 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
+import { Popover, PopoverAnchor, PopoverContent } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
-import { useRef, useState, useEffect } from "react"
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "../../../components/ui/popover"
 import { AGENTS_PREVIEW_CONSTANTS } from "../constants"
 
 interface ScaleControlProps {
@@ -34,9 +30,9 @@ export function ScaleControl({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^0-9]/g, "")
     setInputValue(raw)
-    const num = parseInt(raw)
+    const num = parseInt(raw, 10)
     if (
-      !isNaN(num) &&
+      !Number.isNaN(num) &&
       num >= AGENTS_PREVIEW_CONSTANTS.MIN_SCALE &&
       num <= AGENTS_PREVIEW_CONSTANTS.MAX_SCALE
     ) {
@@ -45,9 +41,9 @@ export function ScaleControl({
   }
 
   const handleCommit = () => {
-    const num = parseInt(inputValue)
+    const num = parseInt(inputValue, 10)
     if (
-      !isNaN(num) &&
+      !Number.isNaN(num) &&
       num >= AGENTS_PREVIEW_CONSTANTS.MIN_SCALE &&
       num <= AGENTS_PREVIEW_CONSTANTS.MAX_SCALE
     ) {
@@ -82,6 +78,8 @@ export function ScaleControl({
       }}
     >
       <PopoverAnchor asChild>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: click forwarder that focuses the input; keyboard users tab into the input directly. */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: click forwarder that focuses the input; keyboard users tab into the input directly. */}
         <div
           className={cn(
             "flex items-center h-7 px-1.5 ml-1 rounded-md cursor-text transition-colors",
@@ -122,6 +120,7 @@ export function ScaleControl({
       >
         {presets.map((preset) => (
           <button
+            type="button"
             key={preset}
             onClick={() => {
               onChange(preset)
@@ -141,4 +140,3 @@ export function ScaleControl({
     </Popover>
   )
 }
-

@@ -1,13 +1,14 @@
 "use client"
 
-import { ChevronsUpDown } from "lucide-react"
 import { useSetAtom } from "jotai"
+import { ChevronsUpDown } from "lucide-react"
 import { memo, useEffect, useMemo, useState } from "react"
 import { CheckIcon, PlanIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { cn } from "../../../lib/utils"
 import { currentTaskToolsAtomFamily } from "../atoms"
 import { getToolStatus } from "./agent-tool-registry"
+import type { ToolPartLike } from "./agent-tool-state"
 
 /**
  * Format a task subject with its ID prefix.
@@ -95,8 +96,30 @@ interface TaskInfo {
   owner?: string
 }
 
+/** Task object shape carried by task-tool outputs. */
+type TaskOutputInfo = Partial<TaskInfo> & { activeForm?: string }
+
+/** Tool part carrying task-tool input/output. */
+export type TaskToolPart = ToolPartLike & {
+  input?: {
+    subject?: string
+    description?: string
+    activeForm?: string
+    taskId?: string
+    status?: "pending" | "in_progress" | "completed" | "deleted"
+    addBlockedBy?: string[]
+    addBlocks?: string[]
+  }
+  output?: {
+    task?: TaskOutputInfo
+    tasks?: TaskOutputInfo[]
+    statusChange?: { from?: TaskSnapshot["status"]; to?: TaskSnapshot["status"] }
+    updatedFields?: string[]
+  }
+}
+
 interface AgentTaskToolsGroupProps {
-  parts: any[]
+  parts: TaskToolPart[]
   chatStatus?: string
   isStreaming: boolean
   subChatId: string
@@ -105,7 +128,6 @@ interface AgentTaskToolsGroupProps {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
 
 /**
  * Merge arrays for dependency updates (adds new items to existing)
@@ -123,8 +145,8 @@ function mergeArrays(existing?: string[], toAdd?: string[]): string[] | undefine
  * TaskList/TaskGet are read operations that don't add new state information.
  */
 function updateTaskSnapshotFromParts(
-  parts: any[],
-  existingSnapshot: Map<string, TaskSnapshot>
+  parts: TaskToolPart[],
+  existingSnapshot: Map<string, TaskSnapshot>,
 ): Map<string, TaskSnapshot> {
   const tasks = new Map(existingSnapshot)
 
@@ -180,7 +202,7 @@ function updateTaskSnapshotFromParts(
             id,
             subject: task.subject ?? "Task",
             description: task.description ?? existing?.description,
-            activeForm: task.activeForm ?? existing?.activeForm,  // Preserve UI-only field
+            activeForm: task.activeForm ?? existing?.activeForm, // Preserve UI-only field
             status: task.status ?? "pending",
             blockedBy: task.blockedBy,
             blocks: task.blocks,
@@ -199,7 +221,7 @@ function updateTaskSnapshotFromParts(
           id,
           subject: task.subject ?? "Task",
           description: task.description ?? existing?.description,
-          activeForm: task.activeForm ?? existing?.activeForm,  // Preserve UI-only field
+          activeForm: task.activeForm ?? existing?.activeForm, // Preserve UI-only field
           status: task.status ?? "pending",
           blockedBy: task.blockedBy,
           blocks: task.blocks,
@@ -217,7 +239,7 @@ function updateTaskSnapshotFromParts(
 function compareTaskIds(a: string, b: string): number {
   const numA = parseInt(a, 10)
   const numB = parseInt(b, 10)
-  if (!isNaN(numA) && !isNaN(numB)) {
+  if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
     return numA - numB
   }
   return a.localeCompare(b)
@@ -229,8 +251,8 @@ interface ExtractedChanges {
 }
 
 interface ExtractedReadData {
-  taskList: TaskInfo[] | null  // From TaskList
-  taskGet: TaskInfo | null     // From TaskGet
+  taskList: TaskInfo[] | null // From TaskList
+  taskGet: TaskInfo | null // From TaskGet
 }
 
 /**
@@ -241,8 +263,8 @@ interface ExtractedReadData {
  * @param snapshotSubjects - Optional map of task subjects from snapshot history (for cross-group resolution)
  */
 function extractChangesFromParts(
-  parts: any[],
-  snapshotSubjects?: Map<string, string>
+  parts: TaskToolPart[],
+  snapshotSubjects?: Map<string, string>,
 ): ExtractedChanges {
   if (!parts || !Array.isArray(parts)) return { changes: [], taskSubjects: new Map() }
 
@@ -329,10 +351,10 @@ function extractChangesFromParts(
       const inputSubject = part.input?.subject
       const subject = inputSubject
         ? formatTaskSubject(taskId, inputSubject)
-        : taskSubjects.get(taskId) ?? formatTaskSubject(taskId, `Task #${taskId}`)
+        : (taskSubjects.get(taskId) ?? formatTaskSubject(taskId, `Task #${taskId}`))
 
       // Check if this task was already in our changes (e.g., created then updated in same group)
-      let existingIdx = changes.findIndex(c => c.id === taskId)
+      const existingIdx = changes.findIndex((c) => c.id === taskId)
 
       if (part.input?.status === "deleted") {
         if (existingIdx !== -1) {
@@ -358,7 +380,7 @@ function extractChangesFromParts(
       if (existingIdx === -1) {
         // Check if this is a status change - either from output.statusChange or input.status
         const inputStatus = part.input?.status
-        const isStatusChange = statusChange || (inputStatus && inputStatus !== "deleted")
+        const isStatusChange = statusChange || inputStatus
 
         const newChange: TaskChange = {
           id: taskId,
@@ -368,7 +390,7 @@ function extractChangesFromParts(
         if (statusChange) {
           newChange.oldStatus = statusChange.from
           newChange.newStatus = statusChange.to
-        } else if (inputStatus && inputStatus !== "deleted") {
+        } else if (inputStatus) {
           // Fallback to input status when API doesn't return statusChange
           newChange.newStatus = inputStatus
         }
@@ -412,7 +434,7 @@ function extractChangesFromParts(
 /**
  * Extract read-only task data from TaskList and TaskGet parts
  */
-function extractReadDataFromParts(parts: any[]): ExtractedReadData {
+function extractReadDataFromParts(parts: TaskToolPart[]): ExtractedReadData {
   if (!parts || !Array.isArray(parts)) return { taskList: null, taskGet: null }
 
   let taskList: TaskInfo[] | null = null
@@ -423,7 +445,7 @@ function extractReadDataFromParts(parts: any[]): ExtractedReadData {
 
     // TaskList - extract all tasks
     if (part.type === "tool-TaskList" && Array.isArray(part.output?.tasks)) {
-      taskList = part.output.tasks.map((task: any) => {
+      taskList = part.output.tasks.map((task: TaskOutputInfo) => {
         const id = task.id ?? ""
         const rawSubject = task.subject ?? "Task"
         return {
@@ -511,6 +533,7 @@ const InProgressIcon = ({ size = 14 }: { size?: number }) => {
 
   return (
     <svg
+      aria-hidden="true"
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
@@ -619,7 +642,7 @@ const BlockingTasksList = memo(function BlockingTasksList({
 
   return (
     <div className="mt-2 space-y-1.5">
-      {sortedIds.map(id => {
+      {sortedIds.map((id) => {
         const subject = taskSubjects.get(id) ?? `#${id}`
         // Get actual status from snapshot, fallback to pending
         const status = taskSnapshot.get(id)?.status ?? "pending"
@@ -627,9 +650,7 @@ const BlockingTasksList = memo(function BlockingTasksList({
         return (
           <div key={id} className="flex items-center gap-2">
             <TaskStatusIcon status={status} />
-            <span className="text-xs text-muted-foreground/70">
-              {subject}
-            </span>
+            <span className="text-xs text-muted-foreground/70">{subject}</span>
           </div>
         )
       })}
@@ -658,42 +679,29 @@ const TaskInfoItem = memo(function TaskInfoItem({
   // Build "blocks" text (keep as text since it's less important)
   let blocksDesc: string | null = null
   if (task.blocks && task.blocks.length > 0) {
-    const deps = task.blocks
-      .map(id => taskSubjects.get(id) ?? `#${id}`)
-      .join(", ")
+    const deps = task.blocks.map((id) => taskSubjects.get(id) ?? `#${id}`).join(", ")
     blocksDesc = `blocks ${deps}`
   }
 
   return (
     <div
-      className={cn(
-        "flex items-start gap-2 px-2.5 py-2",
-        !isLast && "border-b border-border/30",
-      )}
+      className={cn("flex items-start gap-2 px-2.5 py-2", !isLast && "border-b border-border/30")}
     >
       <div className="h-4 flex items-center flex-shrink-0">
         <TaskStatusIcon status={task.status} />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
-        <span className="text-xs text-muted-foreground">
-          {task.subject}
-        </span>
+        <span className="text-xs text-muted-foreground">{task.subject}</span>
         {hasBlockedBy && (
           <BlockingTasksList
-            blockedByIds={task.blockedBy!}
+            blockedByIds={task.blockedBy ?? []}
             taskSubjects={taskSubjects}
             taskSnapshot={taskSnapshot}
           />
         )}
-        {blocksDesc && (
-          <p className="text-xs text-muted-foreground/70 mt-0.5">
-            {blocksDesc}
-          </p>
-        )}
+        {blocksDesc && <p className="text-xs text-muted-foreground/70 mt-0.5">{blocksDesc}</p>}
         {task.owner && (
-          <p className="text-xs text-muted-foreground/70 mt-0.5">
-            owner: {task.owner}
-          </p>
+          <p className="text-xs text-muted-foreground/70 mt-0.5">owner: {task.owner}</p>
         )}
       </div>
     </div>
@@ -716,9 +724,8 @@ const ChangeItem = memo(function ChangeItem({
   taskSnapshot: Map<string, TaskSnapshot>
 }) {
   const statusSuffix = getChangeDescription(change)
-  const displayText = change.newStatus === "in_progress" && change.activeForm
-    ? change.activeForm
-    : change.subject
+  const displayText =
+    change.newStatus === "in_progress" && change.activeForm ? change.activeForm : change.subject
 
   // Check for blockedBy dependencies
   const hasBlockedBy = change.blockedByIds && change.blockedByIds.length > 0
@@ -726,32 +733,21 @@ const ChangeItem = memo(function ChangeItem({
   // Build "blocks" text (keep as text since it's less important)
   let blocksDesc: string | null = null
   if (change.blocksIds && change.blocksIds.length > 0) {
-    const deps = change.blocksIds
-      .map(id => taskSubjects.get(id) ?? `#${id}`)
-      .join(", ")
+    const deps = change.blocksIds.map((id) => taskSubjects.get(id) ?? `#${id}`).join(", ")
     blocksDesc = `blocks ${deps}`
   }
 
   return (
     <div
-      className={cn(
-        "flex items-start gap-2 px-2.5 py-2",
-        !isLast && "border-b border-border/30",
-      )}
+      className={cn("flex items-start gap-2 px-2.5 py-2", !isLast && "border-b border-border/30")}
     >
       <div className="h-4 flex items-center flex-shrink-0">
         <ChangeStatusIcon change={change} />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-muted-foreground">
-            {displayText}
-          </span>
-          {statusSuffix && (
-            <span className="text-xs text-muted-foreground/60">
-              {statusSuffix}
-            </span>
-          )}
+          <span className="text-xs text-muted-foreground">{displayText}</span>
+          {statusSuffix && <span className="text-xs text-muted-foreground/60">{statusSuffix}</span>}
         </div>
         {change.description && change.changeType === "created" && (
           <p className="text-xs text-muted-foreground/70 mt-0.5 line-clamp-2">
@@ -760,16 +756,12 @@ const ChangeItem = memo(function ChangeItem({
         )}
         {hasBlockedBy && (
           <BlockingTasksList
-            blockedByIds={change.blockedByIds!}
+            blockedByIds={change.blockedByIds ?? []}
             taskSubjects={taskSubjects}
             taskSnapshot={taskSnapshot}
           />
         )}
-        {blocksDesc && (
-          <p className="text-xs text-muted-foreground/70 mt-0.5">
-            {blocksDesc}
-          </p>
-        )}
+        {blocksDesc && <p className="text-xs text-muted-foreground/70 mt-0.5">{blocksDesc}</p>}
       </div>
     </div>
   )
@@ -795,7 +787,7 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
       return { previousSnapshot: emptySnapshot, currentSnapshot: emptySnapshot }
     }
 
-    const groupKey = parts[0]?.toolCallId ?? ''
+    const groupKey = parts[0]?.toolCallId ?? ""
     if (!groupKey) {
       return { previousSnapshot: emptySnapshot, currentSnapshot: emptySnapshot }
     }
@@ -876,11 +868,11 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
     tasks.sort((a, b) => {
       const numA = parseInt(a.id, 10)
       const numB = parseInt(b.id, 10)
-      if (!isNaN(numA) && !isNaN(numB)) return numA - numB
+      if (!Number.isNaN(numA) && !Number.isNaN(numB)) return numA - numB
       return a.id.localeCompare(b.id)
     })
     setTaskToolsState({ tasks })
-  }, [currentSnapshot, subChatId, setTaskToolsState])
+  }, [subChatId, setTaskToolsState])
 
   // Build snapshot subjects map for cross-group task name resolution
   // This needs to be computed BEFORE extractChangesFromParts so it can be passed in
@@ -904,7 +896,7 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
   // Pass snapshotSubjects for cross-group task name resolution
   const { changes, taskSubjects } = useMemo(
     () => extractChangesFromParts(parts, snapshotSubjects),
-    [parts, snapshotSubjects]
+    [parts, snapshotSubjects],
   )
 
   // Enhanced taskSubjects: merge snapshot subjects with current group's extracted data
@@ -970,9 +962,9 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
 
   if (hasChanges) {
     // Count changes by type for header
-    const createdCount = changes.filter(c => c.changeType === "created").length
-    const completedCount = changes.filter(c => c.newStatus === "completed").length
-    const startedCount = changes.filter(c => c.newStatus === "in_progress").length
+    const createdCount = changes.filter((c) => c.changeType === "created").length
+    const completedCount = changes.filter((c) => c.newStatus === "completed").length
+    const startedCount = changes.filter((c) => c.newStatus === "in_progress").length
 
     if (createdCount > 0 && createdCount === changes.length) {
       headerText = `Created ${createdCount} task${createdCount > 1 ? "s" : ""}`
@@ -984,11 +976,11 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
       headerText = `${changes.length} task update${changes.length > 1 ? "s" : ""}`
     }
   } else if (hasTaskList) {
-    headerText = `List ${taskList!.length} task${taskList!.length > 1 ? "s" : ""}`
+    headerText = `List ${taskList?.length} task${taskList?.length > 1 ? "s" : ""}`
   } else if (hasTaskGet) {
     // For TaskGet, we'll use a custom header with bold "Read task" prefix
     // The headerText will be used as a flag to trigger special rendering
-    headerText = `__TASK_GET__${taskGet!.id}__${taskGet!.rawSubject ?? taskGet!.subject}`
+    headerText = `__TASK_GET__${taskGet?.id}__${taskGet?.rawSubject ?? taskGet?.subject}`
   }
 
   // Determine items to render
@@ -1003,29 +995,23 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
     for (const change of sortedChanges) {
       itemsToRender.push({ type: "change", data: change })
     }
-  } else if (hasTaskList) {
+  } else if (hasTaskList && taskList) {
     // Sort task list by task ID
-    const sortedTasks = [...taskList!].sort((a, b) => compareTaskIds(a.id, b.id))
+    const sortedTasks = [...taskList].sort((a, b) => compareTaskIds(a.id, b.id))
     for (const task of sortedTasks) {
       itemsToRender.push({ type: "task", data: task })
     }
-  } else if (hasTaskGet) {
-    itemsToRender.push({ type: "task", data: taskGet! })
+  } else if (hasTaskGet && taskGet) {
+    itemsToRender.push({ type: "task", data: taskGet })
   }
 
   return (
     <div
-      className={cn(
-        "mx-2",
-        isStreaming && "sticky z-[5] bg-background",
-      )}
-      style={
-        isStreaming
-          ? { top: "calc(var(--user-message-height, 28px) - 29px)" }
-          : undefined
-      }
+      className={cn("mx-2", isStreaming && "sticky z-[5] bg-background")}
+      style={isStreaming ? { top: "calc(var(--user-message-height, 28px) - 29px)" } : undefined}
     >
       {/* Header */}
+      {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
       <div
         className={cn(
           "border border-border bg-muted/30 px-2.5 py-1.5",
@@ -1033,6 +1019,16 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
           isReadOnly && "cursor-pointer hover:bg-muted/50 transition-colors",
         )}
         onClick={isReadOnly ? () => setIsExpanded(!isExpanded) : undefined}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        aria-disabled={!isReadOnly}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.currentTarget.click()
+          }
+        }}
       >
         <div className="flex items-center gap-1.5">
           <PlanIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
@@ -1049,9 +1045,7 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
               </span>
             </span>
           ) : (
-            <span className="text-xs font-medium text-foreground flex-1">
-              {headerText}
-            </span>
+            <span className="text-xs font-medium text-foreground flex-1">{headerText}</span>
           )}
           {isReadOnly && (
             <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
@@ -1061,34 +1055,34 @@ export const AgentTaskToolsGroup = memo(function AgentTaskToolsGroup({
 
       {/* Items list */}
       {(!isReadOnly || isExpanded) && (
-      <div className="rounded-b-lg border border-border bg-muted/20 shadow-xl shadow-background max-h-[400px] overflow-y-auto">
-        {itemsToRender.map((item, idx) => {
-          const isLast = idx === itemsToRender.length - 1
-          if (item.type === "change") {
-            const change = item.data as TaskChange
-            return (
-              <ChangeItem
-                key={`${change.id}-${change.changeType}`}
-                change={change}
-                isLast={isLast}
-                taskSubjects={enhancedTaskSubjects}
-                taskSnapshot={currentSnapshot}
-              />
-            )
-          } else {
-            const task = item.data as TaskInfo
-            return (
-              <TaskInfoItem
-                key={`task-${task.id}`}
-                task={task}
-                isLast={isLast}
-                taskSubjects={enhancedTaskSubjects}
-                taskSnapshot={currentSnapshot}
-              />
-            )
-          }
-        })}
-      </div>
+        <div className="rounded-b-lg border border-border bg-muted/20 shadow-xl shadow-background max-h-[400px] overflow-y-auto">
+          {itemsToRender.map((item, idx) => {
+            const isLast = idx === itemsToRender.length - 1
+            if (item.type === "change") {
+              const change = item.data as TaskChange
+              return (
+                <ChangeItem
+                  key={`${change.id}-${change.changeType}`}
+                  change={change}
+                  isLast={isLast}
+                  taskSubjects={enhancedTaskSubjects}
+                  taskSnapshot={currentSnapshot}
+                />
+              )
+            } else {
+              const task = item.data as TaskInfo
+              return (
+                <TaskInfoItem
+                  key={`task-${task.id}`}
+                  task={task}
+                  isLast={isLast}
+                  taskSubjects={enhancedTaskSubjects}
+                  taskSnapshot={currentSnapshot}
+                />
+              )
+            }
+          })}
+        </div>
       )}
     </div>
   )

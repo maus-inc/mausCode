@@ -1,0 +1,408 @@
+bun audit v1.4.2 (744846f84)
+
+@ai-sdk/provider-utils@4.0.8
+  @ai-sdk/react > @ai-sdk/provider-utils
+  ai > @ai-sdk/gateway > @ai-sdk/provider-utils
+  low: @ai-sdk/provider-utils has an Uncontrolled Resource Consumption issue (>=4.0.0-beta.10 <4.0.33) - https://github.com/advisories/GHSA-866g-f22w-33x8
+
+@babel/core@7.28.6
+  @vitejs/plugin-react > @babel/plugin-transform-react-jsx-source > @babel/core > @babel/helper-module-transforms
+  electron-vite > @babel/plugin-transform-arrow-functions > @babel/core > @babel/helper-module-transforms
+  jotai > @babel/core > @babel/helper-module-transforms
+  low: @babel/core: Arbitrary File Read via sourceMappingURL Comment (<=7.29.0) - https://github.com/advisories/GHSA-4x5r-pxfx-6jf8
+
+@hono/node-server@1.19.9
+  @modelcontextprotocol/sdk > @hono/node-server
+  high: @hono/node-server has authorization bypass for protected static paths via encoded slashes in Serve Static Middleware (<1.19.10) - https://github.com/advisories/GHSA-wc8c-qw6v-h7f6
+  moderate: @hono/node-server: Middleware bypass via repeated slashes in serveStatic (<1.19.13) - https://github.com/advisories/GHSA-92pp-h63x-v22m
+  moderate: Node.js Adapter for Hono: Path traversal in `serve-static` on Windows via encoded backslash (`%5C`) (<1.19.15) - https://github.com/advisories/GHSA-frvp-7c67-39w9
+
+@isaacs/brace-expansion@5.0.0
+  @sentry/electron > @sentry/node > minimatch > @isaacs/brace-expansion
+  electron-builder > dmg-builder > app-builder-lib > @electron/universal > @electron/asar > minimatch > @isaacs/brace-expansion
+  @electron/rebuild > node-gyp > rimraf > glob > minimatch > @isaacs/brace-expansion
+  high: @isaacs/brace-expansion has Uncontrolled Resource Consumption (<=5.0.0) - https://github.com/advisories/GHSA-7h2j-956f-4vf2
+
+@modelcontextprotocol/sdk@1.25.3
+  (direct dependency)
+  @mcpc-tech/acp-ai-provider > @modelcontextprotocol/sdk
+  high: @modelcontextprotocol/sdk has cross-client data leak via shared server/transport instance reuse (>=1.10.0 <=1.25.3) - https://github.com/advisories/GHSA-345p-7cg4-v4c7
+
+@opentelemetry/core@2.5.0, 2.2.0
+  posthog-js > @opentelemetry/sdk-logs > @opentelemetry/resources > @opentelemetry/core
+  @sentry/electron > @sentry/node > @opentelemetry/sdk-trace-base > @opentelemetry/resources > @opentelemetry/core
+  moderate: OpenTelemetry Core: Unbounded memory allocation in W3C Baggage propagation (<2.8.0) - https://github.com/advisories/GHSA-8988-4f7v-96qf
+
+@protobufjs/utf8@1.1.0
+  posthog-js > @opentelemetry/exporter-logs-otlp-http > @opentelemetry/otlp-transformer > protobufjs > @protobufjs/utf8
+  moderate: protobufjs has overlong UTF-8 decoding (<=1.1.0) - https://github.com/advisories/GHSA-q6x5-8v7m-xcrf
+
+@tootallnate/once@2.0.0
+  electron-builder > dmg-builder > app-builder-lib > builder-util > http-proxy-agent > @tootallnate/once
+  @electron/rebuild > node-gyp > make-fetch-happen > @npmcli/agent > http-proxy-agent > @tootallnate/once
+  low: @tootallnate/once vulnerable to Incorrect Control Flow Scoping (<2.0.1) - https://github.com/advisories/GHSA-vpq2-c234-7xj6
+
+@xmldom/xmldom@0.8.11
+  electron-builder > dmg-builder > app-builder-lib > @electron/universal > plist > @xmldom/xmldom
+  moderate: xmldom: XML fragment injection via invalid EntityReference.nodeName during requireWellFormed serialization (>=0.7.0 <=0.8.14) - https://github.com/advisories/GHSA-6gmq-8vp8-gcm6
+  high: xmldom: XML injection via unsafe CDATA serialization allows attacker-controlled markup insertion (<0.8.12) - https://github.com/advisories/GHSA-wh4c-j3r5-mjhp
+  high: xmldom: Uncontrolled recursion in XML serialization leads to DoS (<0.8.13) - https://github.com/advisories/GHSA-2v35-w6hq-6mfw
+  high: xmldom has XML injection through unvalidated DocumentType serialization (<0.8.13) - https://github.com/advisories/GHSA-f6ww-3ggp-fr8h
+  high: xmldom has XML node injection through unvalidated processing instruction serialization (<0.8.13) - https://github.com/advisories/GHSA-x6wf-f3px-wcqx
+  high: xmldom has XML node injection through unvalidated comment serialization (<0.8.13) - https://github.com/advisories/GHSA-j759-j44w-7fr8
+  high: xmldom: Element name injection via createElement() bypasses requireWellFormed (>=0.7.0 <=0.8.13) - https://github.com/advisories/GHSA-w2rr-34g9-rvrj
+  high: xmldom: Attribute name injection via setAttribute() bypasses requireWellFormed (>=0.7.0 <=0.8.13) - https://github.com/advisories/GHSA-4w3w-2rp5-g8jm
+  high: xmldom: Processing Instruction Target Injection Bypasses requireWellFormed (>=0.7.0 <=0.8.14) - https://github.com/advisories/GHSA-c7q8-3ch8-vqpv
+  high: xmldom: DocType `name` Injection Bypasses requireWellFormed (>=0.7.0 <=0.8.14) - https://github.com/advisories/GHSA-27p8-2357-5qqv
+  moderate: xmldom: Parser silently accepts a not-well-formed end tag whose name is followed by a line break and trailing content (>=0.7.0 <=0.8.14) - https://github.com/advisories/GHSA-6h8r-xr42-gp59
+  high: xmldom: Quadratic-time attribute deduplication (>=0.7.0 <=0.8.14) - https://github.com/advisories/GHSA-8344-3jmq-59r6
+  high: xmldom: End-tag Whitespace-Trim Regex ReDoS — quadratic backtracking in the 0.8.x end-tag parser (>=0.7.0 <=0.8.14) - https://github.com/advisories/GHSA-x4fp-j954-r2f4
+  high: xmldom: Quadratic-memory consumption (>=0.7.0 <=0.8.14) - https://github.com/advisories/GHSA-965w-775f-mr7g
+  high: xmldom: Quadratic-time parsing via the malformed-input recovery path — `parseElementStartPart` re-scan and `normalize()` adjacent-text merge (>=0.7.0 <=0.8.14) - https://github.com/advisories/GHSA-93r5-fhx6-vmg9
+
+ajv@8.17.1, 6.12.6
+  @modelcontextprotocol/sdk > ajv
+  electron-builder > dmg-builder > app-builder-lib > @develar/schema-utils > ajv
+  moderate: ajv has ReDoS when using `$data` option (<6.14.0) - https://github.com/advisories/GHSA-2g4f-4pwh-qvx6
+  moderate: ajv has ReDoS when using `$data` option (>=7.0.0-alpha.0 <8.18.0) - https://github.com/advisories/GHSA-2g4f-4pwh-qvx6
+
+app-builder-lib@25.1.8
+  electron-builder > dmg-builder > app-builder-lib
+  high: electron-updater: Uncontrolled search path elements within `AppImage` built by `app-builder-lib` (<26.15.0) - https://github.com/advisories/GHSA-7g7r-gx96-252g
+
+baseline-browser-mapping@2.9.17
+  autoprefixer > browserslist > baseline-browser-mapping
+  @vitejs/plugin-react > @babel/plugin-transform-react-jsx-source > @babel/core > @babel/helper-compilation-targets > browserslist > baseline-browser-mapping
+  electron-vite > @babel/plugin-transform-arrow-functions > @babel/core > @babel/helper-compilation-targets > browserslist > baseline-browser-mapping
+  jotai > @babel/core > @babel/helper-compilation-targets > browserslist > baseline-browser-mapping
+  moderate: baseline-browser-mapping process termination on invalid input causes denial of service (>=2.0.0 <2.11.0) - https://github.com/advisories/GHSA-w5vr-8v7q-w6rv
+
+body-parser@2.2.2
+  @modelcontextprotocol/sdk > express > body-parser
+  low: body-parser vulnerable to denial of service when invalid limit value silently disables size enforcement (>=2.0.0 <2.3.0) - https://github.com/advisories/GHSA-v422-hmwv-36x6
+
+brace-expansion@2.0.2, 1.1.12
+  @sentry/electron > @sentry/node > minimatch > brace-expansion
+  electron-builder > dmg-builder > app-builder-lib > @electron/universal > @electron/asar > minimatch > brace-expansion
+  @electron/rebuild > node-gyp > rimraf > glob > minimatch > brace-expansion
+  high: brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash (<1.1.17) - https://github.com/advisories/GHSA-mh99-v99m-4gvg
+  high: brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash (>=2.0.0 <2.1.3) - https://github.com/advisories/GHSA-mh99-v99m-4gvg
+  high: brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation (>=2.0.0 <2.1.4) - https://github.com/advisories/GHSA-rgw5-rvv9-x895
+  high: brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation (<1.1.18) - https://github.com/advisories/GHSA-rgw5-rvv9-x895
+  moderate: brace-expansion: Zero-step sequence causes process hang and memory exhaustion (<1.1.13) - https://github.com/advisories/GHSA-f886-m6hf-6m8v
+  moderate: brace-expansion: Zero-step sequence causes process hang and memory exhaustion (>=2.0.0 <2.0.3) - https://github.com/advisories/GHSA-f886-m6hf-6m8v
+  high: brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups (>=2.0.0 <2.1.2) - https://github.com/advisories/GHSA-3jxr-9vmj-r5cp
+  high: brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups (<1.1.16) - https://github.com/advisories/GHSA-3jxr-9vmj-r5cp
+
+browserslist@4.28.1
+  autoprefixer > browserslist
+  @vitejs/plugin-react > @babel/plugin-transform-react-jsx-source > @babel/core > @babel/helper-compilation-targets > browserslist > update-browserslist-db
+  electron-vite > @babel/plugin-transform-arrow-functions > @babel/core > @babel/helper-compilation-targets > browserslist > update-browserslist-db
+  jotai > @babel/core > @babel/helper-compilation-targets > browserslist > update-browserslist-db
+  high: Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM (<=4.28.6) - https://github.com/advisories/GHSA-c83g-rgw3-j3cx
+  high: Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats) (<=4.28.6) - https://github.com/advisories/GHSA-73wf-gq98-2v4g
+
+builder-util-runtime@9.2.10, 9.5.1
+  electron-builder > dmg-builder > builder-util > builder-util-runtime
+  electron-updater > builder-util-runtime
+  high: electron-updater: Cross-origin redirect leaks `PRIVATE-TOKEN` and mixed-case `Authorization` credentials in `builder-util-runtime` (<9.7.0) - https://github.com/advisories/GHSA-p2f4-r6v6-j797
+
+dompurify@3.3.1, 3.2.7
+  mermaid > dompurify
+  monaco-editor > dompurify
+  posthog-js > dompurify
+  moderate: DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks (<=3.4.5) - https://github.com/advisories/GHSA-hpcv-96wg-7vj8
+  moderate: DOMPurify: IN_PLACE mode preserves attributes of a clobbered root element, allowing XSS via attacker-controlled root DOM (<=3.4.5) - https://github.com/advisories/GHSA-r47g-fvhr-h676
+  moderate: DOMPurify IN_PLACE Sanitization Bypass via Attached Shadow Root Inside <template>.content (<=3.4.6) - https://github.com/advisories/GHSA-rp9w-3fw7-7cwq
+  moderate: DOMPurify contains a Cross-site Scripting vulnerability (>=3.1.3 <=3.3.1) - https://github.com/advisories/GHSA-v2wj-7wpq-c8vv
+  moderate: DOMPurify: FORBID_TAGS bypassed by function-based ADD_TAGS predicate (asymmetry with FORBID_ATTR fix) (<3.4.0) - https://github.com/advisories/GHSA-h7mw-gpvr-xq4m
+  moderate: DOMPurify has a SAFE_FOR_TEMPLATES bypass in RETURN_DOM mode (>=1.0.10 <3.4.0) - https://github.com/advisories/GHSA-crv5-9vww-q3g8
+  moderate: DOMPurify: Prototype Pollution to XSS Bypass via CUSTOM_ELEMENT_HANDLING Fallback (>=3.0.1 <3.4.0) - https://github.com/advisories/GHSA-v9jr-rg53-9pgp
+  low: DOMPurify: `CUSTOM_ELEMENT_HANDLING` bypasses `afterSanitizeElements` for allowed custom elements. (<=3.4.11) - https://github.com/advisories/GHSA-c2j3-45gr-mqc4
+  moderate: DOMPurify: Permanent `ALLOWED_ATTR` pollution via `setConfig()` bypassing the hook clone-guard (incomplete fix of the 3.4.7 hook-pollution patch) (<=3.4.10) - https://github.com/advisories/GHSA-cmwh-pvxp-8882
+  low: DOMPurify: Trusted Types policy survives `clearConfig()` and can poison later `RETURN_TRUSTED_TYPE` output (<3.4.9) - https://github.com/advisories/GHSA-vxr8-fq34-vvx9
+  low: DOMPurify: SAFE_FOR_TEMPLATES bypass - template expressions survive sanitization inside <template> content when using DOM output modes (>=3.0.0 <=3.4.7) - https://github.com/advisories/GHSA-gvmj-g25r-r7wr
+  low: DOMPurify: `IN_PLACE` mode trusts attacker-controlled `nodeName` on live non-form nodes, allowing script retention and XSS via attacker-supplied DOM objects (<=3.4.6) - https://github.com/advisories/GHSA-x4vx-rjvf-j5p4
+  moderate: DOMPurify: Hook mutation of `data.allowedTags` / `data.allowedAttributes` permanently pollutes `DEFAULT_ALLOWED_TAGS` / `DEFAULT_ALLOWED_ATTR` (<3.4.7) - https://github.com/advisories/GHSA-76mc-f452-cxcm
+  moderate: DOMPurify's ADD_TAGS function form bypasses FORBID_TAGS due to short-circuit evaluation (<=3.3.3) - https://github.com/advisories/GHSA-39q2-94rc-95cp
+  moderate: DOMPurify ADD_ATTR predicate skips URI validation (<=3.3.1) - https://github.com/advisories/GHSA-cjmm-f4jc-qw8r
+  moderate: DOMPurify USE_PROFILES prototype pollution allows event handlers (<=3.3.1) - https://github.com/advisories/GHSA-cj63-jhhr-wcxv
+  moderate: DOMPurify is vulnerable to mutation-XSS via Re-Contextualization  (<3.3.2) - https://github.com/advisories/GHSA-h8r8-wccr-v5f2
+  moderate: DOMPurify: IN_PLACE hook removal leaves a detached subtree executable, causing XSS (<=3.4.12) - https://github.com/advisories/GHSA-55q2-fjhq-7xh7
+
+drizzle-orm@0.45.1
+  (direct dependency)
+  high: Drizzle ORM has SQL injection via improperly escaped SQL identifiers (<0.45.2) - https://github.com/advisories/GHSA-gpj5-g38j-94v9
+
+electron@39.4.0
+  (direct dependency)
+  @electron-toolkit/preload > electron
+  @electron-toolkit/utils > electron
+  trpc-electron > electron
+  moderate: Electron: AppleScript injection in app.moveToApplicationsFolder on macOS (>=39.0.0-alpha.1 <39.8.1) - https://github.com/advisories/GHSA-5rqw-r77c-jp79
+  moderate: Electron: Service worker can spoof executeJavaScript IPC replies (>=39.0.0-alpha.1 <39.8.1) - https://github.com/advisories/GHSA-xj5x-m3f3-5x3h
+  moderate: Electron: Incorrect origin passed to permission request handler for iframe requests (>=39.0.0-alpha.1 <39.8.1) - https://github.com/advisories/GHSA-r5p7-gp4j-qhrx
+  moderate: Electron: Out-of-bounds read in second-instance IPC on macOS and Linux (>=39.0.0-alpha.1 <39.8.1) - https://github.com/advisories/GHSA-3c8v-cfp5-9885
+  moderate: Electron: nodeIntegrationInWorker not correctly scoped in shared renderer processes (>=39.0.0-alpha.1 <39.8.4) - https://github.com/advisories/GHSA-xwr5-m59h-vwqr
+  high: Electron: Use-after-free in offscreen child window paint callback (<39.8.1) - https://github.com/advisories/GHSA-532v-xpq5-8h95
+  moderate: Electron: Registry key path injection in app.setAsDefaultProtocolClient on Windows (>=39.0.0-alpha.1 <39.8.1) - https://github.com/advisories/GHSA-mwmh-mq4g-g6gr
+  moderate: Electron: Use-after-free in download save dialog callback (>=39.0.0-alpha.1 <39.8.0) - https://github.com/advisories/GHSA-9w97-2464-8783
+  high: Electron: Use-after-free in WebContents fullscreen, pointer-lock, and keyboard-lock permission callbacks (>=39.0.0-alpha.1 <39.8.0) - https://github.com/advisories/GHSA-8337-3p73-46f4
+  high: Electron: Use-after-free in PowerMonitor on Windows and macOS (>=39.0.0-alpha.1 <39.8.1) - https://github.com/advisories/GHSA-jjp3-mq3x-295m
+  low: Electron: Unquoted executable path in app.setLoginItemSettings on Windows (>=39.0.0-alpha.1 <39.8.1) - https://github.com/advisories/GHSA-jfqx-fxh3-c62j
+  moderate: Electron: HTTP Response Header Injection in custom protocol handlers and webRequest (>=39.0.0-alpha.1 <39.8.3) - https://github.com/advisories/GHSA-4p4r-m79c-wq3v
+  low: Electron: USB device selection not validated against filtered device list (>=39.0.0-alpha.1 <39.8.0) - https://github.com/advisories/GHSA-9899-m83m-qhpj
+  low: Electron: Use-after-free in offscreen shared texture release() callback (>=33.0.0-alpha.1 <39.8.5) - https://github.com/advisories/GHSA-8x5q-pvf5-64mp
+  low: Electron: Crash in clipboard.readImage() on malformed clipboard image data (<39.8.5) - https://github.com/advisories/GHSA-f37v-82c4-4x64
+  moderate: Electron: Named window.open targets not scoped to the opener's browsing context (<39.8.5) - https://github.com/advisories/GHSA-f3pv-wv63-48x8
+  high: Electron: Context Isolation bypass via contextBridge VideoFrame transfer (>=39.0.0-alpha.1 <39.8.0) - https://github.com/advisories/GHSA-jfqg-hf23-qpw2
+  high: Electron: Renderer command-line switch injection via undocumented commandLineSwitches webPreference (>=39.0.0-alpha.1 <39.8.0) - https://github.com/advisories/GHSA-9wfr-w7mm-pc7f
+  high: Electron: Custom protocol with supportFetchAPI but not corsEnabled allows cross-origin reads (<39.8.10) - https://github.com/advisories/GHSA-v3j7-r9gq-3gjw
+  moderate: Electron: Parent process code-sign check is spoofable (<39.8.8) - https://github.com/advisories/GHSA-jm7p-cc5g-qwxx
+  moderate: Electron: Extension tab APIs operate across session boundaries (<39.8.8) - https://github.com/advisories/GHSA-m55f-7gqj-fr98
+  moderate: Electron: shell.openPath path validation bypass via embedded null byte (<39.8.6) - https://github.com/advisories/GHSA-5c9j-mhmv-5xgx
+  high: Electron: Context isolation bypass via Function.prototype.bind hijack (<39.8.9) - https://github.com/advisories/GHSA-h7rp-cf8h-j98x
+  low: Electron: Cross-origin iframe can position native autofill popup (<39.8.8) - https://github.com/advisories/GHSA-x8rc-wpg4-grpf
+  moderate: Electron: Permission Check Handler Receives Main Frame Origin Instead of Requesting Iframe Origin (<39.8.7) - https://github.com/advisories/GHSA-9pf5-hg6p-4pwp
+  low: Electron: Off-screen rendering trusts GPU-supplied geometry over shared-memory size (<39.8.10) - https://github.com/advisories/GHSA-pfmc-3mgc-p6fp
+  moderate: Electron: HTTP redirect followed into local file loader (<39.8.8) - https://github.com/advisories/GHSA-v64r-4m7r-3mvq
+  moderate: Electron: window.open features string controls some window options considered privileged (<39.8.8) - https://github.com/advisories/GHSA-v93f-fgjr-hjrj
+  high: Electron: Sandboxed iframe can bypass the allow-popups restriction via the OpenURL navigation path (<39.8.10) - https://github.com/advisories/GHSA-9f4c-93c8-jc8g
+  moderate: Electron: Sandboxed iframes can launch external protocol handlers (<39.8.8) - https://github.com/advisories/GHSA-p2rr-rvmm-c5fp
+  moderate: Electron: DevTools embedder handler executes arbitrary files via shell open (<39.8.9) - https://github.com/advisories/GHSA-f2r8-jv7c-xqmp
+  moderate: Electron: contextBridge object copy honors prototype setters (<39.8.9) - https://github.com/advisories/GHSA-ff2p-hmqr-hxm4
+  moderate: Electron: DevTools JavaScript Injection via Unsanitized Dock State Parameter (<39.8.7) - https://github.com/advisories/GHSA-4f78-qhmw-8j8m
+
+esbuild@0.25.12, 0.18.20
+  drizzle-kit > esbuild
+  electron-vite > esbuild
+  vite > esbuild
+  moderate: esbuild enables any website to send any requests to the development server and read the response (<=0.24.2) - https://github.com/advisories/GHSA-67mh-4wv8-2f99
+
+extract-zip@2.0.1
+  electron > extract-zip
+  high: extract-zip unvalidated symlink path traversal (<=2.0.1) - https://github.com/advisories/GHSA-jmr9-qjv8-65gv
+  high: extract-zip allows arbitrary file writes through symlink archive entries (<=2.0.1) - https://github.com/advisories/GHSA-7pqw-9j4j-h8q3
+
+fast-uri@3.1.0
+  @modelcontextprotocol/sdk > ajv > fast-uri
+  electron-builder > dmg-builder > app-builder-lib > @develar/schema-utils > ajv > fast-uri
+  high: fast-uri vulnerable to server-side request forgery via malformed IPv6 normalization (>=3.0.0 <3.1.6) - https://github.com/advisories/GHSA-f65p-4m7j-42xc
+  high: fast-uri vulnerable to host confusion via percent-encoded scheme normalization (>=3.0.0 <3.1.6) - https://github.com/advisories/GHSA-jqff-g426-hqxp
+  high: fast-uri vulnerable to host confusion via backslash authority introducer (>=3.0.0 <3.1.5) - https://github.com/advisories/GHSA-7p8r-x3mc-p8w7
+  high: fast-uri vulnerable to host confusion via literal backslash authority delimiter (>=3.0.0 <=3.1.3) - https://github.com/advisories/GHSA-v2hh-gcrm-f6hx
+  high: fast-uri vulnerable to path traversal via percent-encoded dot segments (>=3.0.0 <=3.1.0) - https://github.com/advisories/GHSA-q3j6-qgpj-74h6
+  high: fast-uri vulnerable to host confusion via failed IDN canonicalization (>=3.0.0 <3.1.3) - https://github.com/advisories/GHSA-4c8g-83qw-93j6
+  high: fast-uri vulnerable to host confusion via percent-encoded authority delimiters (>=3.0.0 <=3.1.1) - https://github.com/advisories/GHSA-v39h-62p7-jpjc
+
+fflate@0.4.8
+  posthog-js > fflate
+  moderate: fflate unzipSync can enter an infinite loop when parsing malformed ZIP64 archives (>=0.4.5 <0.4.9) - https://github.com/advisories/GHSA-px8p-9vwx-vf98
+
+form-data@4.0.5
+  electron-builder > dmg-builder > app-builder-lib > form-data
+  high: form-data: CRLF injection in form-data via unescaped multipart field names and filenames (>=4.0.0 <4.0.6) - https://github.com/advisories/GHSA-hmw2-7cc7-3qxx
+
+hono@4.11.5
+  @modelcontextprotocol/sdk > @hono/node-server > hono
+  moderate: Hono has CSS Declaration Injection via Style Object Values in JSX SSR (<4.12.18) - https://github.com/advisories/GHSA-qp7p-654g-cw7p
+  low: Hono has improper validation of NumericDate claims (exp, nbf, iat) in JWT verify() (<4.12.18) - https://github.com/advisories/GHSA-hm8q-7f3q-5f36
+  moderate: Hono's Cache Middleware ignores Vary: Authorization / Vary: Cookie leading to cross-user cache leakage (<4.12.18) - https://github.com/advisories/GHSA-p77w-8qqv-26rm
+  moderate: Hono: bodyLimit() can be bypassed for chunked / unknown-length requests (<4.12.16) - https://github.com/advisories/GHSA-9vqf-7f2p-gf9v
+  moderate: hono/jsx has Unvalidated JSX Tag Names that May Allow HTML Injection (<4.12.16) - https://github.com/advisories/GHSA-69xw-7hcm-h432
+  moderate: Hono vulnerable to XSS through ErrorBoundary component  (<4.11.7) - https://github.com/advisories/GHSA-9r54-q6cx-xmh5
+  moderate: Hono cache middleware ignores "Cache-Control: private" leading to Web Cache Deception (<4.11.7) - https://github.com/advisories/GHSA-6wqw-2p9w-4vw4
+  moderate: Hono IPv4 address validation bypass in IP Restriction Middleware allows IP spoofing (<4.11.7) - https://github.com/advisories/GHSA-r354-f388-2fhh
+  moderate: Hono has an Arbitrary Key Read in Serve static Middleware (Cloudflare Workers Adapter) (<4.11.7) - https://github.com/advisories/GHSA-w332-q679-j88p
+  low: Hono added timing comparison hardening in basicAuth and bearerAuth (<4.11.10) - https://github.com/advisories/GHSA-gq3j-xvxp-8hrf
+  moderate: Hono: IP Restriction bypasses static deny rules for non-canonical IPv6  (<4.12.21) - https://github.com/advisories/GHSA-xrhx-7g5j-rcj5
+  moderate: Hono: Cookie helper does not sanitize sameSite and priority, allowing Set-Cookie injection (<4.12.21) - https://github.com/advisories/GHSA-3hrh-pfw6-9m5x
+  moderate: Hono: JWT middleware accepts any Authorization scheme, not only Bearer (<4.12.21) - https://github.com/advisories/GHSA-f577-qrjj-4474
+  moderate: Hono: app.mount() strips mount prefix using undecoded path, causing incorrect routing for percent-encoded paths (<4.12.21) - https://github.com/advisories/GHSA-2gcr-mfcq-wcc3
+  moderate: Hono Vulnerable to Cookie Attribute Injection via Unsanitized domain and path in setCookie() (<4.12.4) - https://github.com/advisories/GHSA-5pq2-9x2x-5p6w
+  moderate: Hono Vulnerable to SSE Control Field Injection via CR/LF in writeSSE() (<4.12.4) - https://github.com/advisories/GHSA-p6xx-57qc-3wxr
+  high: Hono vulnerable to arbitrary file access via serveStatic vulnerability  (<4.12.4) - https://github.com/advisories/GHSA-q5qw-h33p-qvwr
+  moderate: Hono vulnerable to Prototype Pollution possible through __proto__ key allowed in parseBody({ dot: true }) (<4.12.7) - https://github.com/advisories/GHSA-v8w9-8mx6-g223
+  moderate: Hono: ReDoS in CORS middleware via Access-Control-Request-Headers (<4.12.34) - https://github.com/advisories/GHSA-8j4g-w8fx-2239
+  moderate: hono Improperly Handles JSX Attribute Names Allows HTML Injection in hono/jsx SSR (<4.12.14) - https://github.com/advisories/GHSA-458j-xx4x-4375
+  moderate: Hono missing validation of cookie name on write path in setCookie() (<4.12.12) - https://github.com/advisories/GHSA-26pp-8wgv-hjvm
+  moderate: Hono: Non-breaking space prefix bypass in cookie name handling in getCookie() (<4.12.12) - https://github.com/advisories/GHSA-r5rp-j6wh-rvv4
+  moderate: Hono: Path traversal in toSSG() allows writing files outside the output directory (>=4.0.0 <=4.12.11) - https://github.com/advisories/GHSA-xf4j-xp2r-rqqx
+  moderate: Hono: Middleware bypass via repeated slashes in serveStatic (<4.12.12) - https://github.com/advisories/GHSA-wmmm-f939-6g9c
+  moderate: Hono has incorrect IP matching in ipRestriction() for IPv4-mapped IPv6 addresses (<4.12.12) - https://github.com/advisories/GHSA-xpcf-pg52-r92g
+  moderate: hono: Body Limit Middleware can be bypassed on AWS Lambda by understating `Content-Length` (<4.12.25) - https://github.com/advisories/GHSA-rv63-4mwf-qqc2
+  moderate: hono: Lambda@Edge adapter keeps only the last value of a repeated request header, dropping the rest (<4.12.25) - https://github.com/advisories/GHSA-wgpf-jwqj-8h8p
+  high: hono: CORS Middleware reflects any Origin with credentials when `origin` defaults to the wildcard (<4.12.25) - https://github.com/advisories/GHSA-88fw-hqm2-52qc
+  moderate: hono: Path traversal in `serve-static` on Windows via encoded backslash (`%5C`) (<4.12.25) - https://github.com/advisories/GHSA-wwfh-h76j-fc44
+  moderate: hono: AWS Lambda adapter merges multiple `Set-Cookie` headers into one value, dropping cookies on ALB single-header and Lattice (<4.12.25) - https://github.com/advisories/GHSA-j6c9-x7qj-28xf
+  moderate: Hono: API Gateway v1 adapter can drop a distinct repeated request header value during de-duplication (>=4.3.3 <4.12.27) - https://github.com/advisories/GHSA-xgm2-5f3f-mvvc
+  moderate: Hono: Server-Side XSS via JSX Escaping Bypass in cx() Utility (>=4.0.0 <4.12.27) - https://github.com/advisories/GHSA-w62v-xxxg-mg59
+  moderate: Hono: `memo()` retains SSR output across requests, leading to cross-user data disclosure (>=3.8.0 <4.12.34) - https://github.com/advisories/GHSA-f23p-vx2j-j53r
+  low: Hono: Proxy Helper does not remove response headers listed in the `Connection` header (>=4.7.0 <4.12.34) - https://github.com/advisories/GHSA-79qm-7rj5-m7r9
+  moderate: Hono: Incomplete fix for CVE-2026-39408: `toSSG()` still writes files outside the output directory (<4.13.5) - https://github.com/advisories/GHSA-gqvv-2mrq-wpjv
+  moderate: Hono: Unbounded dot-notation nesting in `parseBody()` can cause memory exhaustion (<4.13.5) - https://github.com/advisories/GHSA-g6gw-c38x-mqfc
+  moderate: Hono: Query parser reads parameters after the URL fragment, causing cache-key and proxy interpretation differentials (<4.13.5) - https://github.com/advisories/GHSA-crvj-82cr-hjcx
+
+ip-address@10.1.0
+  @electron/rebuild > node-gyp > make-fetch-happen > @npmcli/agent > socks-proxy-agent > socks > ip-address
+  moderate: ip-address has XSS in Address6 HTML-emitting methods (<=10.1.0) - https://github.com/advisories/GHSA-v2v4-37r5-5v8g
+  high: ip-address: Address4 decodes leading-zero octets as decimal while resolvers decode them as octal, allowing SSRF and trust-boundary bypass (<=10.3.0) - https://github.com/advisories/GHSA-mwp4-54f8-5fhr
+
+js-yaml@4.1.1, 3.14.2
+  electron-updater > js-yaml
+  gray-matter > js-yaml
+  electron-builder > dmg-builder > builder-util > js-yaml
+  moderate: JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases (<3.15.0) - https://github.com/advisories/GHSA-h67p-54hq-rp68
+  moderate: JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases (>=4.0.0 <=4.1.1) - https://github.com/advisories/GHSA-h67p-54hq-rp68
+  high: js-yaml: YAML merge-key chains can force quadratic CPU consumption (>=4.0.0 <4.3.0) - https://github.com/advisories/GHSA-52cp-r559-cp3m
+  high: js-yaml: YAML merge-key chains can force quadratic CPU consumption (>=3.0.0 <3.15.0) - https://github.com/advisories/GHSA-52cp-r559-cp3m
+  high: JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported (>=3.0.0 <3.15.1) - https://github.com/advisories/GHSA-5p4m-2wfm-xmqj
+  high: JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported (>=4.0.0 <4.3.1) - https://github.com/advisories/GHSA-5p4m-2wfm-xmqj
+  high: js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources (>=3.0.0 <3.15.2) - https://github.com/advisories/GHSA-2883-xcg3-v3hh
+  high: js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources (>=4.0.0 <4.3.2) - https://github.com/advisories/GHSA-2883-xcg3-v3hh
+
+lodash@4.17.23
+  @welldone-software/why-did-you-render > lodash
+  electron-builder > dmg-builder > app-builder-lib > @malept/flatpak-bundler > lodash
+  high: lodash vulnerable to Code Injection via `_.template` imports key names (>=4.0.0 <=4.17.23) - https://github.com/advisories/GHSA-r5fr-rjxr-66jc
+  moderate: lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit` (<=4.17.23) - https://github.com/advisories/GHSA-f23m-r3pf-42rh
+
+lodash-es@4.17.23, 4.17.21
+  mermaid > dagre-d3-es > lodash-es
+  moderate: Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions (>=4.0.0 <=4.17.22) - https://github.com/advisories/GHSA-xxjr-mmjv-4gpg
+  high: lodash vulnerable to Code Injection via `_.template` imports key names (>=4.0.0 <=4.17.23) - https://github.com/advisories/GHSA-r5fr-rjxr-66jc
+  moderate: lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit` (<=4.17.23) - https://github.com/advisories/GHSA-f23m-r3pf-42rh
+
+mermaid@11.12.2
+  (direct dependency)
+  moderate: Mermaid: Improper sanitization of `classDef` in state diagrams leads to HTML injection (>=11.0.0-alpha.1 <=11.14.0) - https://github.com/advisories/GHSA-ghcm-xqfw-q4vr
+  moderate: Mermaid: Improper sanitization of `classDefs` in diagrams leads to CSS injection (>=11.0.0-alpha.1 <=11.14.0) - https://github.com/advisories/GHSA-xcj9-5m2h-648r
+  moderate: Mermaid Gantt Charts are vulnerable to an Infinite Loop DoS (>=11.0.0-alpha.1 <=11.14.0) - https://github.com/advisories/GHSA-6m6c-36f7-fhxh
+  moderate: Mermaid: Improper sanitization of configuration leads to CSS injection (>=11.0.0-alpha.1 <=11.14.0) - https://github.com/advisories/GHSA-87f9-hvmw-gh4p
+  low: Mermaid configuration APIs allow prototype pollution (>=11.0.0-alpha.1 <11.16.1) - https://github.com/advisories/GHSA-c4c3-pg64-4m4v
+  moderate: Mermaid allows CSS injection applying to sibling elements of the diagram (>=11.0.0-alpha.1 <11.16.1) - https://github.com/advisories/GHSA-6x64-9x62-f2gx
+  moderate: Mermaid Architecture diagrams are vulnerable to prototype pollution (>=11.5.0 <11.16.1) - https://github.com/advisories/GHSA-3rrr-jr9j-h3q3
+  moderate: Mermaid XY Charts are vulnerable to an infinite loop DoS (>=11.0.0-alpha.1 <11.16.1) - https://github.com/advisories/GHSA-2v8p-3f2j-5mp7
+  moderate: Mermaid radar diagrams are vulnerable to DoS (>=11.6.0 <11.16.1) - https://github.com/advisories/GHSA-rhh3-jpg6-66xh
+
+minimatch@10.1.1, 3.1.2, 9.0.5, 5.1.6
+  @sentry/electron > @sentry/node > minimatch
+  electron-builder > dmg-builder > app-builder-lib > @electron/universal > @electron/asar > minimatch
+  @electron/rebuild > node-gyp > rimraf > glob > minimatch
+  high: minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern (<3.1.3) - https://github.com/advisories/GHSA-3ppc-4f35-3m26
+  high: minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern (>=5.0.0 <5.1.7) - https://github.com/advisories/GHSA-3ppc-4f35-3m26
+  high: minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern (>=9.0.0 <9.0.6) - https://github.com/advisories/GHSA-3ppc-4f35-3m26
+  high: minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern (>=10.0.0 <10.2.1) - https://github.com/advisories/GHSA-3ppc-4f35-3m26
+  high: minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments (<3.1.3) - https://github.com/advisories/GHSA-7r86-cg39-jmmj
+  high: minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments (>=5.0.0 <5.1.8) - https://github.com/advisories/GHSA-7r86-cg39-jmmj
+  high: minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments (>=9.0.0 <9.0.7) - https://github.com/advisories/GHSA-7r86-cg39-jmmj
+  high: minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments (>=10.0.0 <10.2.3) - https://github.com/advisories/GHSA-7r86-cg39-jmmj
+  high: minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions (<3.1.4) - https://github.com/advisories/GHSA-23c5-xmqv-rm74
+  high: minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions (>=5.0.0 <5.1.8) - https://github.com/advisories/GHSA-23c5-xmqv-rm74
+  high: minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions (>=9.0.0 <9.0.7) - https://github.com/advisories/GHSA-23c5-xmqv-rm74
+  high: minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions (>=10.0.0 <10.2.3) - https://github.com/advisories/GHSA-23c5-xmqv-rm74
+
+nanoid@3.3.11
+  postcss > nanoid
+  high: nanoid: non-secure generators can loop indefinitely with negative size (<3.3.16) - https://github.com/advisories/GHSA-28wg-ghj8-5hjv
+  high: nanoid: custom generators can loop indefinitely when size is zero (<3.3.18) - https://github.com/advisories/GHSA-2v37-7h3g-55p8
+  high: nanoid: Integer Overflow or Wraparound (<3.3.12) - https://github.com/advisories/GHSA-xwg4-73v4-xw9w
+
+path-to-regexp@8.3.0
+  @modelcontextprotocol/sdk > express > router > path-to-regexp
+  high: path-to-regexp vulnerable to Denial of Service via sequential optional groups (>=8.0.0 <8.4.0) - https://github.com/advisories/GHSA-j3q9-mxjg-w52f
+  moderate: path-to-regexp vulnerable to Regular Expression Denial of Service via multiple wildcards (>=8.0.0 <8.4.0) - https://github.com/advisories/GHSA-27v5-c462-wpq7
+
+picomatch@4.0.3, 2.3.1
+  vite > tinyglobby > fdir > picomatch
+  chokidar > readdirp > picomatch
+  tailwindcss > fast-glob > micromatch > picomatch
+  @electron/rebuild > node-gyp > tinyglobby > fdir > picomatch
+  moderate: Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching (<2.3.2) - https://github.com/advisories/GHSA-3v7f-55p6-f55p
+  moderate: Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching (>=4.0.0 <4.0.4) - https://github.com/advisories/GHSA-3v7f-55p6-f55p
+  high: Picomatch has a ReDoS vulnerability via extglob quantifiers (<2.3.2) - https://github.com/advisories/GHSA-c2c7-rcm5-vvqj
+  high: Picomatch has a ReDoS vulnerability via extglob quantifiers (>=4.0.0 <4.0.4) - https://github.com/advisories/GHSA-c2c7-rcm5-vvqj
+
+postcss@8.5.6
+  (direct dependency)
+  autoprefixer > postcss
+  tailwindcss > postcss-nested > postcss
+  vite > postcss
+  moderate: PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset (<=8.5.22) - https://github.com/advisories/GHSA-fxqj-rqcc-2cmp
+  moderate: PostCSS has XSS via Unescaped </style> in its CSS Stringify Output (<8.5.10) - https://github.com/advisories/GHSA-qx2v-qp2m-jg93
+  high: PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments (<=8.5.11) - https://github.com/advisories/GHSA-6g55-p6wh-862q
+  high: PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure (<=8.5.17) - https://github.com/advisories/GHSA-r28c-9q8g-f849
+
+postcss-selector-parser@6.1.2, 6.0.10
+  @tailwindcss/typography > postcss-selector-parser
+  tailwindcss > postcss-nested > postcss-selector-parser
+  low: postcss-selector-parser allows denial of service through uncontrolled AST recursion (>=6.1.0 <6.1.3) - https://github.com/advisories/GHSA-w9m9-85wc-3x92
+
+protobufjs@7.5.4
+  posthog-js > @opentelemetry/exporter-logs-otlp-http > @opentelemetry/otlp-transformer > protobufjs
+  high: protobuf.js: Code injection through bytes field defaults in generated toObject code (<=7.5.5) - https://github.com/advisories/GHSA-66ff-xgx4-vchm
+  moderate: protobuf.js: Denial of service from crafted field names in generated code (<=7.5.5) - https://github.com/advisories/GHSA-2pr8-phx7-x9h3
+  moderate: protobuf.js: Prototype injection in generated message constructors (<=7.5.5) - https://github.com/advisories/GHSA-fx83-v9x8-x52w
+  high: protobuf.js: Code generation gadget after prototype pollution (<=7.5.5) - https://github.com/advisories/GHSA-75px-5xx7-5xc7
+  high: protobuf.js: Process-wide denial of service through unsafe option paths (<=7.5.5) - https://github.com/advisories/GHSA-jvwf-75h9-cwgg
+  high: protobuf.js: Denial of service through unbounded protobuf recursion (<=7.5.5) - https://github.com/advisories/GHSA-685m-2w69-288q
+  moderate: protobufjs has overlong UTF-8 decoding (<=7.5.5) - https://github.com/advisories/GHSA-q6x5-8v7m-xcrf
+  moderate: protobufjs: Denial of Service via unbounded recursive JSON descriptor expansion (<=7.5.7) - https://github.com/advisories/GHSA-jggg-4jg4-v7c6
+  critical: Arbitrary code execution in protobufjs (<7.5.5) - https://github.com/advisories/GHSA-xq3m-2v4x-88gg
+  high: protobufjs: Denial of service through unbounded Any expansion during JSON conversion (<=7.6.0) - https://github.com/advisories/GHSA-wcpc-wj8m-hjx6
+  moderate: protobufjs : Schema-derived names can shadow runtime-significant properties (<=7.6.2) - https://github.com/advisories/GHSA-f38q-mgvj-vph7
+  moderate: protobufjs: Denial of Service via infinite loop in .proto option parsing (>=7.5.0 <=7.6.4) - https://github.com/advisories/GHSA-j3f2-48v5-ccww
+
+qs@6.14.1
+  @modelcontextprotocol/sdk > express > body-parser > qs
+  moderate: qs: Denial of Service via Attacker Controlled isBuffer (>=2.2.5 <6.16.0) - https://github.com/advisories/GHSA-4mjr-xmp4-gh2g
+  moderate: qs has a remotely triggerable DoS: qs.stringify crashes with TypeError on null/undefined entries in comma-format arrays when encodeValuesOnly is set (>=6.11.1 <=6.15.1) - https://github.com/advisories/GHSA-q8mj-m7cp-5q26
+  low: qs's arrayLimit bypass in comma parsing allows denial of service (>=6.7.0 <=6.14.1) - https://github.com/advisories/GHSA-w7fw-mjwx-w883
+
+rollup@4.56.0
+  vite > rollup
+  high: Rollup 4 has Arbitrary File Write via Path Traversal (>=4.0.0 <4.59.0) - https://github.com/advisories/GHSA-mw96-cpmx-2vgc
+
+simple-git@3.30.0
+  (direct dependency)
+  high: simple-git Affected by Command Execution via Option-Parsing Bypass (<3.32.0) - https://github.com/advisories/GHSA-jcxm-m3jx-f287
+  critical: simple-git has blockUnsafeOperationsPlugin bypass via case-insensitive protocol.allow config key enables RCE (>=3.15.0 <3.32.3) - https://github.com/advisories/GHSA-r275-fr43-pm7q
+  high: simple-git is vulnerable to Remote Code Execution (<3.36.0) - https://github.com/advisories/GHSA-hffm-xvc3-vprc
+
+tar@7.5.7, 6.2.1
+  @electron/rebuild > tar
+  electron-builder > dmg-builder > app-builder-lib > tar
+  high: node-tar Vulnerable to Arbitrary File Creation/Overwrite via Hardlink Path Traversal (<7.5.7) - https://github.com/advisories/GHSA-34x7-hfp2-rc4v
+  high: node-tar is Vulnerable to Arbitrary File Overwrite and Symlink Poisoning via Insufficient Path Sanitization (<=7.5.2) - https://github.com/advisories/GHSA-8qq5-rm4j-mr97
+  high: Arbitrary File Read/Write via Hardlink Target Escape Through Symlink Chain in node-tar Extraction (<7.5.8) - https://github.com/advisories/GHSA-83g3-92jg-28cx
+  high: tar has Hardlink Path Traversal via Drive-Relative Linkpath (<=7.5.9) - https://github.com/advisories/GHSA-qffp-2rhf-9h96
+  high: node-tar Symlink Path Traversal via Drive-Relative Linkpath (<=7.5.10) - https://github.com/advisories/GHSA-9ppj-qmqm-q256
+  moderate: node-tar applies PAX size override to intermediary GNU long-name/long-link headers, causing tar parser interpretation differential (file smuggling) (<=7.5.15) - https://github.com/advisories/GHSA-vmf3-w455-68vh
+  high: Race Condition in node-tar Path Reservations via Unicode Ligature Collisions on macOS APFS (<=7.5.3) - https://github.com/advisories/GHSA-r6q2-hw4h-h46w
+  moderate: node-tar: Process crash via PAX numeric path type confusion (<=7.5.17) - https://github.com/advisories/GHSA-w8wr-v893-vjvp
+  critical: node-tar: Decompression/parse DoS via unlimited input (<=7.5.18) - https://github.com/advisories/GHSA-23hp-3jrh-7fpw
+  high: node-tar: Negative tar entry size causes infinite loop in archive replace (<=7.5.17) - https://github.com/advisories/GHSA-8x88-c5mf-7j5w
+  moderate: node-tar: Uncaught Exception DoS via NUL byte in PAX path/linkpath records (<=7.5.16) - https://github.com/advisories/GHSA-gvwx-54wh-qm9j
+  high: node-tar: Uncontrolled recursion in mapHas/filesFilter allows uncatchable stack-overflow DoS via crafted long-path tar with member selection (<=7.5.20) - https://github.com/advisories/GHSA-r292-9mhp-454m
+
+tmp@0.2.5
+  electron-builder > dmg-builder > app-builder-lib > @malept/flatpak-bundler > tmp-promise > tmp
+  high: tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape (<0.2.6) - https://github.com/advisories/GHSA-ph9p-34f9-6g65
+
+uuid@11.1.0
+  mermaid > uuid
+  moderate: uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided (<11.1.1) - https://github.com/advisories/GHSA-w5hq-g745-h8pq
+
+vite@6.4.1
+  (direct dependency)
+  @vitejs/plugin-react > vite
+  electron-vite > vite
+  moderate: launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows (<=6.4.2) - https://github.com/advisories/GHSA-v6wh-96g9-6wx3
+  moderate: Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling (<=6.4.1) - https://github.com/advisories/GHSA-4w7w-66w2-5vf9
+  high: Vite Vulnerable to Arbitrary File Read via Vite Dev Server WebSocket (>=6.0.0 <=6.4.1) - https://github.com/advisories/GHSA-p9ff-h696-f583
+  high: vite: `server.fs.deny` bypass on Windows alternate paths (<=6.4.2) - https://github.com/advisories/GHSA-fx2h-pf6j-xcff
+
+229 vulnerabilities (3 critical, 95 high, 111 moderate, 20 low)
+
+  bun audit fix           upgrade the vulnerable packages within their ranges
+  bun audit fix --latest  also cross major versions

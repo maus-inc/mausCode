@@ -11,12 +11,7 @@
  */
 
 import type { ReactNode } from "react"
-import type {
-  MentionProviderId,
-  MentionCategory,
-  MentionTrigger,
-  MentionItem,
-} from "./core"
+import type { MentionCategory, MentionItem, MentionProviderId, MentionTrigger } from "./core"
 import type { MentionSearchContext, MentionSearchResult } from "./search"
 
 /**
@@ -95,7 +90,7 @@ export interface MentionProvider<TData = unknown> {
    */
   getChildren?(
     item: MentionItem<TData>,
-    context: MentionSearchContext
+    context: MentionSearchContext,
   ): Promise<MentionSearchResult<TData>>
 
   /**
@@ -178,7 +173,7 @@ export interface MentionProviderOptions<TData = unknown> {
  * Factory function to create a provider with sensible defaults
  */
 export function createMentionProvider<TData = unknown>(
-  options: MentionProviderOptions<TData>
+  options: MentionProviderOptions<TData>,
 ): MentionProvider<TData> {
   return {
     id: options.id as MentionProviderId,

@@ -170,8 +170,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
       settings: { fontStyle: "italic", foreground: "#E4E4E45E" },
     },
     {
-      scope:
-        "string, punctuation.definition.string.begin, punctuation.definition.string.end",
+      scope: "string, punctuation.definition.string.begin, punctuation.definition.string.end",
       settings: { foreground: "#e394dc" },
     },
     {
@@ -206,8 +205,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
       settings: { foreground: "#CCCCCC" },
     },
     {
-      scope:
-        "entity.name.function, meta.require, support.function, variable.function",
+      scope: "entity.name.function, meta.require, support.function, variable.function",
       settings: { foreground: "#efb080" },
     },
     { scope: "entity.name.type", settings: { foreground: "#efb080" } },
@@ -216,8 +214,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
       settings: { foreground: "#efb080" },
     },
     {
-      scope:
-        "entity.name.class, variable.other.class.js, variable.other.class.ts",
+      scope: "entity.name.class, variable.other.class.js, variable.other.class.ts",
       settings: { foreground: "#efb080" },
     },
     {
@@ -304,8 +301,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
     },
     { scope: "markup.heading", settings: { foreground: "#d6d6dd" } },
     {
-      scope:
-        "markup.heading punctuation.definition.heading, entity.name.section",
+      scope: "markup.heading punctuation.definition.heading, entity.name.section",
       settings: { foreground: "#aaa0fa" },
     },
     { scope: "markup.bold, todo.bold", settings: { foreground: "#f8c762" } },
@@ -318,8 +314,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
       settings: { foreground: "#e394dc" },
     },
     {
-      scope:
-        "markup.underline.link.markdown, markup.underline.link.image.markdown",
+      scope: "markup.underline.link.markdown, markup.underline.link.image.markdown",
       settings: { foreground: "#82D2CE" },
     },
     { scope: "markup.quote.markdown", settings: { foreground: "#E4E4E45E" } },
@@ -330,8 +325,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
     },
     { scope: "keyword.other.unit", settings: { foreground: "#ebc88d" } },
     {
-      scope:
-        "invalid.illegal, invalid.broken, invalid.deprecated, invalid.unimplemented",
+      scope: "invalid.illegal, invalid.broken, invalid.deprecated, invalid.unimplemented",
       settings: { foreground: "#d6d6dd" },
     },
     { scope: "token.info-token", settings: { foreground: "#aaa0fa" } },
@@ -429,8 +423,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
     },
     { scope: "source.java", settings: { foreground: "#d6d6dd" } },
     {
-      scope:
-        "storage.modifier.import.java, storage.type.java, storage.type.generic.java",
+      scope: "storage.modifier.import.java, storage.type.java, storage.type.generic.java",
       settings: { foreground: "#efb080" },
     },
     {
@@ -454,8 +447,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
     },
     // Vue
     {
-      scope:
-        "entity.name.tag.template, entity.name.tag.script, entity.name.tag.style",
+      scope: "entity.name.tag.template, entity.name.tag.script, entity.name.tag.style",
       settings: { foreground: "#AAA0FA" },
     },
     // HTML
@@ -495,8 +487,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
       settings: { foreground: "#efb080" },
     },
     {
-      scope:
-        "meta.function-call.php, meta.function-call.object.php, meta.function-call.static.php",
+      scope: "meta.function-call.php, meta.function-call.object.php, meta.function-call.static.php",
       settings: { foreground: "#aaa0fa" },
     },
     {
@@ -506,8 +497,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
     },
     // CSS
     {
-      scope:
-        "keyword.operator.css, keyword.operator.scss, keyword.operator.less",
+      scope: "keyword.operator.css, keyword.operator.scss, keyword.operator.less",
       settings: { foreground: "#d6d6dd" },
     },
     {
@@ -549,8 +539,7 @@ export const CURSOR_DARK: VSCodeFullTheme = {
     // Misc
     { scope: "support.constant.edge", settings: { foreground: "#82D2CE" } },
     {
-      scope:
-        "entity.name.type.module, support.module.node, support.type.object.module",
+      scope: "entity.name.type.module, support.module.node, support.type.object.module",
       settings: { foreground: "#efb080" },
     },
   ],
@@ -732,8 +721,7 @@ export const CURSOR_LIGHT: VSCodeFullTheme = {
       settings: { fontStyle: "italic", foreground: "#1414147A" },
     },
     {
-      scope:
-        "string, punctuation.definition.string.begin, punctuation.definition.string.end",
+      scope: "string, punctuation.definition.string.begin, punctuation.definition.string.end",
       settings: { foreground: "#9E94D5" },
     },
     {
@@ -758,8 +746,7 @@ export const CURSOR_LIGHT: VSCodeFullTheme = {
     { scope: "storage, token.storage", settings: { foreground: "#206595" } },
     { scope: "storage.type", settings: { foreground: "#206595" } },
     {
-      scope:
-        "entity.name.function, meta.require, support.function, variable.function",
+      scope: "entity.name.function, meta.require, support.function, variable.function",
       settings: { foreground: "#6049B3" },
     },
     { scope: "entity.name.type", settings: { foreground: "#B3003F" } },
@@ -801,8 +788,7 @@ export const CURSOR_LIGHT: VSCodeFullTheme = {
     { scope: "variable.other.constant", settings: { foreground: "#6F9BA6" } },
     { scope: "variable.language", settings: { foreground: "#B8448B" } },
     {
-      scope:
-        "variable.parameter.function.python, variable.parameter.function.language.python",
+      scope: "variable.parameter.function.python, variable.parameter.function.language.python",
       settings: { foreground: "#DB704B" },
     },
     {
@@ -862,29 +848,24 @@ export const CURSOR_LIGHT: VSCodeFullTheme = {
     },
     { scope: "markup.inline.raw", settings: { foreground: "#1F8A65" } },
     {
-      scope:
-        "markup.underline.link.markdown, markup.underline.link.image.markdown",
+      scope: "markup.underline.link.markdown, markup.underline.link.image.markdown",
       settings: { foreground: "#141414AD" },
     },
     {
-      scope:
-        "punctuation.definition.list.begin.markdown, punctuation.definition.list.markdown",
+      scope: "punctuation.definition.list.begin.markdown, punctuation.definition.list.markdown",
       settings: { foreground: "#141414AD" },
     },
     {
-      scope:
-        "string.other.link.title.markdown, string.other.link.description.markdown",
+      scope: "string.other.link.title.markdown, string.other.link.description.markdown",
       settings: { foreground: "#141414AD" },
     },
     { scope: "keyword.other.unit", settings: { foreground: "#6F9BA6" } },
     {
-      scope:
-        "markup.deleted, meta.diff.header.from-file, punctuation.definition.deleted",
+      scope: "markup.deleted, meta.diff.header.from-file, punctuation.definition.deleted",
       settings: { foreground: "#B3003F" },
     },
     {
-      scope:
-        "markup.inserted, meta.diff.header.to-file, punctuation.definition.inserted",
+      scope: "markup.inserted, meta.diff.header.to-file, punctuation.definition.inserted",
       settings: { foreground: "#1F8A65" },
     },
     {
@@ -898,8 +879,7 @@ export const CURSOR_LIGHT: VSCodeFullTheme = {
     { scope: "meta.diff.range", settings: { foreground: "#6049B3" } },
     { scope: "meta.diff.header", settings: { foreground: "#206595" } },
     {
-      scope:
-        "invalid.broken, invalid.deprecated, invalid.illegal, invalid.unimplemented",
+      scope: "invalid.broken, invalid.deprecated, invalid.illegal, invalid.unimplemented",
       settings: { fontStyle: "italic", foreground: "#B3003F" },
     },
     { scope: "token.info-token", settings: { foreground: "#6F9BA6" } },
@@ -946,8 +926,7 @@ export const CURSOR_LIGHT: VSCodeFullTheme = {
     },
     // Java
     {
-      scope:
-        "storage.modifier.package, storage.modifier.import, storage.type.java",
+      scope: "storage.modifier.package, storage.modifier.import, storage.type.java",
       settings: { foreground: "#141414EB" },
     },
     { scope: "variable.parameter.java", settings: { foreground: "#141414EB" } },
@@ -961,16 +940,14 @@ export const CURSOR_LIGHT: VSCodeFullTheme = {
     },
     { scope: "storage.type.java", settings: { foreground: "#206595" } },
     {
-      scope:
-        "storage.modifier.import.java, storage.type.java, storage.type.generic.java",
+      scope: "storage.modifier.import.java, storage.type.java, storage.type.generic.java",
       settings: { foreground: "#B3003F" },
     },
     // Go
     { scope: "entity.name.package.go", settings: { foreground: "#B3003F" } },
     // Vue
     {
-      scope:
-        "entity.name.tag.template, entity.name.tag.script, entity.name.tag.style",
+      scope: "entity.name.tag.template, entity.name.tag.script, entity.name.tag.style",
       settings: { foreground: "#6049B3" },
     },
     // YAML
@@ -989,8 +966,7 @@ export const CURSOR_LIGHT: VSCodeFullTheme = {
       settings: { foreground: "#141414AD" },
     },
     {
-      scope:
-        "punctuation.section.embedded.begin, punctuation.section.embedded.end",
+      scope: "punctuation.section.embedded.begin, punctuation.section.embedded.end",
       settings: { foreground: "#6F9BA6" },
     },
   ],
@@ -1214,8 +1190,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#81A1C1" },
     },
     {
-      scope:
-        "source.c meta.preprocessor.include, source.c string.quoted.other.lt-gt.include",
+      scope: "source.c meta.preprocessor.include, source.c string.quoted.other.lt-gt.include",
       settings: { foreground: "#8FBCBB" },
     },
     {
@@ -1249,8 +1224,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#EBCB8B" },
     },
     {
-      scope:
-        "source.java comment.block.documentation.javadoc punctuation.definition.entity.html",
+      scope: "source.java comment.block.documentation.javadoc punctuation.definition.entity.html",
       settings: { foreground: "#81A1C1" },
     },
     {
@@ -1266,8 +1240,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#88C0D0" },
     },
     {
-      scope:
-        "source.java storage.modifier.import, source.java storage.modifier.package",
+      scope: "source.java storage.modifier.import, source.java storage.modifier.package",
       settings: { foreground: "#8FBCBB" },
     },
     { scope: "source.java storage.type", settings: { foreground: "#8FBCBB" } },
@@ -1276,8 +1249,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#D08770" },
     },
     {
-      scope:
-        "source.java storage.type.generic, source.java storage.type.primitive",
+      scope: "source.java storage.type.generic, source.java storage.type.primitive",
       settings: { foreground: "#81A1C1" },
     },
     {
@@ -1294,8 +1266,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#8FBCBB" },
     },
     {
-      scope:
-        "source.js string.template punctuation.definition.template-expression",
+      scope: "source.js string.template punctuation.definition.template-expression",
       settings: { foreground: "#5E81AC" },
     },
     {
@@ -1331,8 +1302,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#7B88A1" },
     },
     {
-      scope:
-        "text.html.markdown markup.fenced_code.block punctuation.definition",
+      scope: "text.html.markdown markup.fenced_code.block punctuation.definition",
       settings: { foreground: "#D8DEE9" },
     },
     {
@@ -1380,8 +1350,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#88C0D0" },
     },
     {
-      scope:
-        "source.php meta.function-call, source.php meta.function-call.object",
+      scope: "source.php meta.function-call, source.php meta.function-call.object",
       settings: { foreground: "#88C0D0" },
     },
     {
@@ -1390,8 +1359,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#D08770" },
     },
     {
-      scope:
-        "source.python meta.function-call, source.python meta.function-call.generic",
+      scope: "source.python meta.function-call, source.python meta.function-call.generic",
       settings: { foreground: "#88C0D0" },
     },
     {
@@ -1422,8 +1390,7 @@ export const CURSOR_MIDNIGHT: VSCodeFullTheme = {
       settings: { foreground: "#D08770" },
     },
     {
-      scope:
-        "source.ts meta.object-literal.key, source.tsx meta.object-literal.key",
+      scope: "source.ts meta.object-literal.key, source.tsx meta.object-literal.key",
       settings: { foreground: "#D8DEE9" },
     },
     {

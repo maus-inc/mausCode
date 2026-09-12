@@ -4,6 +4,7 @@ import { useAtom, type WritableAtom } from "jotai"
 import { AnimatePresence, motion } from "motion/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal, flushSync } from "react-dom"
+import { EASE_OUT_EXPO } from "../../lib/motion"
 import { Kbd } from "./kbd"
 
 interface ResizableSidebarProps {
@@ -85,7 +86,7 @@ export function ResizableSidebar({
       x,
       y: tooltipY,
     }
-  }, [tooltipY, currentWidth, side])
+  }, [tooltipY, side])
 
   useEffect(() => {
     // When sidebar closes, reset hasOpenedOnce so animation plays on next open
@@ -138,15 +139,7 @@ export function ResizableSidebar({
     onClose()
     setIsHoveringResizeHandle(false)
     setTooltipY(null)
-  }, [
-    onClose,
-    isOpen,
-    shouldAnimate,
-    isResizing,
-    localWidth,
-    isHoveringResizeHandle,
-    isTooltipDismissed,
-  ])
+  }, [onClose, isResizing, localWidth, isHoveringResizeHandle, isTooltipDismissed])
 
   // Cleanup tooltip timeout on unmount or when sidebar closes
   useEffect(() => {
@@ -176,9 +169,7 @@ export function ResizableSidebar({
     const handleDocumentClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       const tooltipElement = target.closest('[data-tooltip="true"]')
-      const isClickOnTooltip =
-        tooltipElement ||
-        (tooltipRef.current && tooltipRef.current.contains(target))
+      const isClickOnTooltip = tooltipElement || tooltipRef.current?.contains(target)
 
       // Check if click is on tooltip
       if (isClickOnTooltip) {
@@ -217,11 +208,9 @@ export function ResizableSidebar({
       let hasMoved = false
       let currentLocalWidth: number | null = null
 
-      const handleElement =
-        resizeHandleRef.current ?? (event.currentTarget as HTMLElement)
+      const handleElement = resizeHandleRef.current ?? (event.currentTarget as HTMLElement)
 
-      const clampWidth = (width: number) =>
-        Math.max(minWidth, Math.min(maxWidth, width))
+      const clampWidth = (width: number) => Math.max(minWidth, Math.min(maxWidth, width))
 
       handleElement.setPointerCapture?.(pointerId)
       // Clear tooltip timeout when starting resize
@@ -244,9 +233,7 @@ export function ResizableSidebar({
 
       const handlePointerMove = (pointerEvent: PointerEvent) => {
         const delta = Math.abs(
-          side === "left"
-            ? pointerEvent.clientX - startX
-            : startX - pointerEvent.clientX,
+          side === "left" ? pointerEvent.clientX - startX : startX - pointerEvent.clientX,
         )
         if (!hasMoved && delta >= 3) {
           hasMoved = true
@@ -272,9 +259,7 @@ export function ResizableSidebar({
           handleClose()
         } else if (hasMoved && pointerEvent) {
           const delta =
-            side === "left"
-              ? pointerEvent.clientX - startX
-              : startX - pointerEvent.clientX
+            side === "left" ? pointerEvent.clientX - startX : startX - pointerEvent.clientX
           const finalWidth = clampWidth(startWidth + delta)
           // Save final width to persisted atom (triggers localStorage sync)
           setSidebarWidth(finalWidth)
@@ -342,214 +327,238 @@ export function ResizableSidebar({
   }, [side])
 
   return (
-    <>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            ref={sidebarRef}
-            initial={
-              !shouldAnimate
-                ? {
-                    width: currentWidth,
-                    opacity: 1,
-                  }
-                : {
-                    width: initialWidth,
-                    opacity: 0,
-                  }
-            }
-            animate={{
-              width: currentWidth,
-              opacity: 1,
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          ref={sidebarRef}
+          initial={!shouldAnimate ? { width: currentWidth } : { width: initialWidth }}
+          animate={{ width: currentWidth }}
+          exit={{ width: exitWidth }}
+          transition={{
+            duration: isResizing ? 0 : animationDuration,
+            ease: EASE_OUT_EXPO,
+          }}
+          className={`bg-transparent flex flex-col text-xs h-full relative ${className}`}
+          style={{ minWidth: minWidth, overflow: "hidden", ...style }}
+          {...(dataAttributes
+            ? Object.fromEntries(
+                Object.entries(dataAttributes).map(([key, value]) => [`data-${key}`, value]),
+              )
+            : {})}
+        >
+          {/* Extended hover area */}
+          <div
+            data-extended-hover-area
+            role="slider"
+            tabIndex={0}
+            aria-label="Sidebar width"
+            aria-orientation="vertical"
+            aria-valuemin={minWidth}
+            aria-valuemax={maxWidth}
+            aria-valuenow={Math.round(sidebarWidth)}
+            className="absolute top-0 bottom-0 cursor-col-resize"
+            style={{
+              ...extendedHoverAreaStyle,
+              pointerEvents: isResizing ? "none" : "auto",
+              zIndex: isResizing ? 5 : 10,
             }}
-            exit={{
-              width: exitWidth,
-              opacity: 0,
+            onPointerDown={handleResizePointerDown}
+            onKeyDown={(e) => {
+              const step = e.shiftKey ? 50 : 10
+              const dir = side === "left" ? 1 : -1
+              if (e.key === "ArrowRight") {
+                e.preventDefault()
+                setSidebarWidth(Math.max(minWidth, Math.min(maxWidth, sidebarWidth + dir * step)))
+              } else if (e.key === "ArrowLeft") {
+                e.preventDefault()
+                setSidebarWidth(Math.max(minWidth, Math.min(maxWidth, sidebarWidth - dir * step)))
+              }
             }}
-            transition={{
-              duration: isResizing ? 0 : animationDuration,
-              ease: [0.4, 0, 0.2, 1],
+            onMouseEnter={(e) => {
+              if (isResizing) {
+                return
+              }
+              // Clear any existing timeout
+              if (tooltipTimeoutRef.current) {
+                clearTimeout(tooltipTimeoutRef.current)
+              }
+              // Set Y position immediately for positioning
+              if (!tooltipY) {
+                setTooltipY(e.clientY)
+              }
+              // Delay showing tooltip
+              tooltipTimeoutRef.current = setTimeout(() => {
+                setIsHoveringResizeHandle(true)
+              }, 300)
             }}
-            className={`bg-transparent flex flex-col text-xs h-full relative ${className}`}
-            style={{ minWidth: minWidth, overflow: "hidden", ...style }}
-            {...(dataAttributes ? Object.fromEntries(
-              Object.entries(dataAttributes).map(([key, value]) => [`data-${key}`, value])
-            ) : {})}
-          >
-            {/* Extended hover area */}
-            <div
-              data-extended-hover-area
-              className="absolute top-0 bottom-0 cursor-col-resize"
-              style={{
-                ...extendedHoverAreaStyle,
-                pointerEvents: isResizing ? "none" : "auto",
-                zIndex: isResizing ? 5 : 10,
-              }}
-              onPointerDown={handleResizePointerDown}
-              onMouseEnter={(e) => {
-                if (isResizing) {
-                  return
-                }
-                // Clear any existing timeout
-                if (tooltipTimeoutRef.current) {
-                  clearTimeout(tooltipTimeoutRef.current)
-                }
-                // Set Y position immediately for positioning
-                if (!tooltipY) {
-                  setTooltipY(e.clientY)
-                }
-                // Delay showing tooltip
-                tooltipTimeoutRef.current = setTimeout(() => {
-                  setIsHoveringResizeHandle(true)
-                }, 300)
-              }}
-              onMouseLeave={(e) => {
-                if (isResizing) return
-                // Clear timeout if mouse leaves before tooltip appears
-                if (tooltipTimeoutRef.current) {
-                  clearTimeout(tooltipTimeoutRef.current)
-                  tooltipTimeoutRef.current = null
-                }
-                const relatedTarget = e.relatedTarget
-                // Check if relatedTarget is a Node (not window or null)
-                if (
-                  relatedTarget instanceof Node &&
-                  (resizeHandleRef.current?.contains(relatedTarget) ||
-                    resizeHandleRef.current === relatedTarget)
-                ) {
-                  return
-                }
-                setIsHoveringResizeHandle(false)
-                setTooltipY(null)
-                setIsTooltipDismissed(false)
-              }}
-            />
+            onMouseLeave={(e) => {
+              if (isResizing) return
+              // Clear timeout if mouse leaves before tooltip appears
+              if (tooltipTimeoutRef.current) {
+                clearTimeout(tooltipTimeoutRef.current)
+                tooltipTimeoutRef.current = null
+              }
+              const relatedTarget = e.relatedTarget
+              // Check if relatedTarget is a Node (not window or null)
+              if (
+                relatedTarget instanceof Node &&
+                (resizeHandleRef.current?.contains(relatedTarget) ||
+                  resizeHandleRef.current === relatedTarget)
+              ) {
+                return
+              }
+              setIsHoveringResizeHandle(false)
+              setTooltipY(null)
+              setIsTooltipDismissed(false)
+            }}
+          />
 
-            {/* Resize Handle */}
-            <div
-              ref={resizeHandleRef}
-              onPointerDown={handleResizePointerDown}
-              onMouseEnter={(e) => {
-                // Clear any existing timeout
-                if (tooltipTimeoutRef.current) {
-                  clearTimeout(tooltipTimeoutRef.current)
-                }
-                // Set Y position immediately for positioning
-                if (!tooltipY) {
-                  setTooltipY(e.clientY)
-                }
-                // Delay showing tooltip
-                tooltipTimeoutRef.current = setTimeout(() => {
-                  setIsHoveringResizeHandle(true)
-                }, 300)
-              }}
-              onMouseLeave={(e) => {
-                // Clear timeout if mouse leaves before tooltip appears
-                if (tooltipTimeoutRef.current) {
-                  clearTimeout(tooltipTimeoutRef.current)
-                  tooltipTimeoutRef.current = null
-                }
-                const relatedTarget = e.relatedTarget
-                // Check if relatedTarget is an Element (not window or null)
-                if (
-                  relatedTarget instanceof Element &&
-                  relatedTarget.closest("[data-extended-hover-area]")
-                ) {
-                  return
-                }
-                setIsHoveringResizeHandle(false)
-                setTooltipY(null)
-                setIsTooltipDismissed(false)
-              }}
-              className={`absolute top-0 bottom-0 cursor-col-resize z-10`}
-              style={resizeHandleStyle}
-            />
+          {/* Resize Handle */}
+          {/* biome-ignore lint/a11y/useSemanticElements: resize separator; no native element expresses an adjustable splitter. */}
+          <div
+            ref={resizeHandleRef}
+            role="separator"
+            aria-orientation="vertical"
+            aria-valuenow={Math.round(currentWidth)}
+            aria-valuemin={minWidth}
+            aria-valuemax={maxWidth}
+            aria-valuetext={`${Math.round(currentWidth)} pixels`}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+                e.preventDefault()
+                setSidebarWidth(Math.max(minWidth, Math.min(maxWidth, currentWidth + 20)))
+              } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+                e.preventDefault()
+                setSidebarWidth(Math.max(minWidth, Math.min(maxWidth, currentWidth - 20)))
+              } else if (e.key === "Home") {
+                e.preventDefault()
+                setSidebarWidth(minWidth)
+              } else if (e.key === "End") {
+                e.preventDefault()
+                setSidebarWidth(maxWidth)
+              }
+            }}
+            onPointerDown={handleResizePointerDown}
+            onMouseEnter={(e) => {
+              // Clear any existing timeout
+              if (tooltipTimeoutRef.current) {
+                clearTimeout(tooltipTimeoutRef.current)
+              }
+              // Set Y position immediately for positioning
+              if (!tooltipY) {
+                setTooltipY(e.clientY)
+              }
+              // Delay showing tooltip
+              tooltipTimeoutRef.current = setTimeout(() => {
+                setIsHoveringResizeHandle(true)
+              }, 300)
+            }}
+            onMouseLeave={(e) => {
+              // Clear timeout if mouse leaves before tooltip appears
+              if (tooltipTimeoutRef.current) {
+                clearTimeout(tooltipTimeoutRef.current)
+                tooltipTimeoutRef.current = null
+              }
+              const relatedTarget = e.relatedTarget
+              // Check if relatedTarget is an Element (not window or null)
+              if (
+                relatedTarget instanceof Element &&
+                relatedTarget.closest("[data-extended-hover-area]")
+              ) {
+                return
+              }
+              setIsHoveringResizeHandle(false)
+              setTooltipY(null)
+              setIsTooltipDismissed(false)
+            }}
+            className={`absolute top-0 bottom-0 cursor-col-resize z-10`}
+            style={resizeHandleStyle}
+          />
 
-            {/* Hover Tooltip - Notion style */}
-            {showResizeTooltip &&
-              isHoveringResizeHandle &&
-              !isResizing &&
-              !isTooltipDismissed &&
-              tooltipPosition &&
-              typeof window !== "undefined" &&
-              createPortal(
-                <AnimatePresence>
-                  {tooltipPosition && (
-                    <motion.div
-                      key="tooltip"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.05, ease: "easeOut" }}
-                      className="fixed z-10"
-                      style={{
-                        left: `${tooltipPosition.x}px`,
-                        top: `${tooltipPosition.y}px`,
-                        transform:
-                          side === "left"
-                            ? "translateY(-50%)"
-                            : "translateX(-100%) translateY(-50%)",
-                        transformOrigin:
-                          side === "left" ? "left center" : "right center",
-                        pointerEvents: "none",
-                      }}
-                    >
-                      <div
-                        ref={tooltipRef}
-                        role="dialog"
-                        data-tooltip="true"
-                        className="relative rounded-md border border-border bg-popover px-2 py-1 flex flex-col items-start gap-0.5 text-xs text-popover-foreground shadow-lg dark pointer-events-auto"
-                        onPointerDown={(e) => {
-                          e.stopPropagation()
-                          if (e.button === 0) {
-                            // Left mouse button
-                            flushSync(() => {
-                              setIsTooltipDismissed(true)
-                            })
-                            // Directly call handleClose - same as button
-                            handleClose()
-                          }
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          e.preventDefault()
+          {/* Hover Tooltip - Notion style */}
+          {showResizeTooltip &&
+            isHoveringResizeHandle &&
+            !isResizing &&
+            !isTooltipDismissed &&
+            tooltipPosition &&
+            typeof window !== "undefined" &&
+            createPortal(
+              <AnimatePresence>
+                {tooltipPosition && (
+                  <motion.div
+                    key="tooltip"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.05, ease: "easeOut" }}
+                    className="fixed z-10"
+                    style={{
+                      left: `${tooltipPosition.x}px`,
+                      top: `${tooltipPosition.y}px`,
+                      transform:
+                        side === "left" ? "translateY(-50%)" : "translateX(-100%) translateY(-50%)",
+                      transformOrigin: side === "left" ? "left center" : "right center",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {/* biome-ignore lint/a11y/useKeyWithClickEvents: hover tooltip; click dismisses it, and the panel close button is the keyboard path. */}
+                    <div
+                      ref={tooltipRef}
+                      role="dialog"
+                      tabIndex={-1}
+                      data-tooltip="true"
+                      className="relative rounded-md border border-border bg-popover px-2 py-1 flex flex-col items-start gap-0.5 text-xs text-popover-foreground shadow-lg dark pointer-events-auto"
+                      onPointerDown={(e) => {
+                        e.stopPropagation()
+                        if (e.button === 0) {
+                          // Left mouse button
                           flushSync(() => {
                             setIsTooltipDismissed(true)
                           })
                           // Directly call handleClose - same as button
                           handleClose()
-                        }}
-                      >
-                        {!disableClickToClose && (
-                          <div className="flex items-center gap-1 text-xs">
-                            <span>Close</span>
-                            <span className="text-muted-foreground inline-flex items-center gap-1">
-                              <span>Click</span>
-                              {closeHotkey && (
-                                <>
-                                  <span>or</span>
-                                  <Kbd>{closeHotkey}</Kbd>
-                                </>
-                              )}
-                            </span>
-                          </div>
-                        )}
+                        }
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        flushSync(() => {
+                          setIsTooltipDismissed(true)
+                        })
+                        // Directly call handleClose - same as button
+                        handleClose()
+                      }}
+                    >
+                      {!disableClickToClose && (
                         <div className="flex items-center gap-1 text-xs">
-                          <span>Resize</span>
-                          <span className="text-muted-foreground">Drag</span>
+                          <span>Close</span>
+                          <span className="text-muted-foreground inline-flex items-center gap-1">
+                            <span>Click</span>
+                            {closeHotkey && (
+                              <>
+                                <span>or</span>
+                                <Kbd>{closeHotkey}</Kbd>
+                              </>
+                            )}
+                          </span>
                         </div>
+                      )}
+                      <div className="flex items-center gap-1 text-xs">
+                        <span>Resize</span>
+                        <span className="text-muted-foreground">Drag</span>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>,
-                document.body,
-              )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>,
+              document.body,
+            )}
 
-            {/* Children content */}
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+          {/* Children content */}
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

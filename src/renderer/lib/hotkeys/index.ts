@@ -1,36 +1,35 @@
 // Types
-export type {
-  ShortcutActionId,
-  ShortcutCategory,
-  ShortcutAction,
-  CustomHotkeysConfig,
-  ShortcutConflict,
-} from "./types"
 
 // Registry
 export {
   ALL_SHORTCUT_ACTIONS,
-  getShortcutsByCategory,
-  getShortcutAction,
-  keysToHotkeyString,
-  hotkeyStringToKeys,
+  CATEGORY_LABELS,
+  detectConflicts,
   getResolvedHotkey,
   getResolvedKeys,
-  isCustomHotkey,
-  normalizeHotkey,
-  detectConflicts,
-  keyToDisplay,
+  getShortcutAction,
+  getShortcutsByCategory,
+  hotkeyStringToKeys,
   hotkeyToDisplay,
+  isCustomHotkey,
   keysToDisplay,
-  CATEGORY_LABELS,
+  keysToHotkeyString,
+  keyToDisplay,
+  normalizeHotkey,
 } from "./shortcut-registry"
-
-// Hooks
-export { useHotkeyRecorder } from "./use-hotkey-recorder"
+export type {
+  CustomHotkeysConfig,
+  ShortcutAction,
+  ShortcutActionId,
+  ShortcutCategory,
+  ShortcutConflict,
+} from "./types"
 export type {
   UseHotkeyRecorderOptions,
   UseHotkeyRecorderResult,
 } from "./use-hotkey-recorder"
+// Hooks
+export { useHotkeyRecorder } from "./use-hotkey-recorder"
 
 export {
   useResolvedHotkeyDisplay,

@@ -11,9 +11,10 @@
  * - No state updates after unmount
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { ToolsSearchContext } from "../providers"
 import { mentionSearchEngine } from "../search"
-import type { MentionItem, AggregatedSearchResult } from "../types"
+import type { AggregatedSearchResult, MentionItem } from "../types"
 
 /**
  * Debounce delay before starting search
@@ -132,7 +133,7 @@ export interface UseMentionSearchResult {
  */
 export function useMentionSearch(
   query: string,
-  options: UseMentionSearchOptions = {}
+  options: UseMentionSearchOptions = {},
 ): UseMentionSearchResult {
   const {
     trigger = "@",
@@ -242,10 +243,10 @@ export function useMentionSearch(
             // Pass MCP context for tools provider
             ...(mcpTools && { mcpTools }),
             ...(mcpServers && { mcpServers }),
-          } as any, // Extended context
+          } as Omit<ToolsSearchContext, "query" | "signal" | "limit">,
           {
             providerIds,
-          }
+          },
         )
 
         // Check if aborted or unmounted

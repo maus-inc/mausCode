@@ -43,71 +43,65 @@
  * ```
  */
 
+// Hooks
+export {
+  type UseMentionSearchOptions,
+  type UseMentionSearchResult,
+  useMentionSearch,
+} from "./hooks"
+export type { AgentData, FileData, SkillData, ToolData, ToolsSearchContext } from "./providers"
+// Providers
+export {
+  agentsProvider,
+  builtInProviders,
+  filesProvider,
+  registerBuiltInProviders,
+  registerProvider,
+  skillsProvider,
+  toolsProvider,
+} from "./providers"
+// Registry
+export {
+  mentionProvidersAtom,
+  mentionRegistry,
+  syncedMentionProvidersAtom,
+  useAvailableMentionProviders,
+  useMentionCategories,
+  useMentionProvider,
+  useMentionProviders,
+  useMentionProvidersByTrigger,
+} from "./registry"
+// Search
+export {
+  GitAwareCache,
+  gitAwareCache,
+  MentionCache,
+  MentionSearchEngine,
+  mentionCache,
+  mentionSearchEngine,
+} from "./search"
 // Types
 export type {
-  MentionProviderId,
-  MentionTrigger,
+  AggregatedSearchResult,
   MentionCategory,
   MentionItem,
   MentionPrefix,
   MentionProvider,
-  TypedMentionProvider,
+  MentionProviderId,
   MentionProviderOptions,
   MentionSearchContext,
-  MentionSearchResult,
-  AggregatedSearchResult,
   MentionSearchOptions,
+  MentionSearchResult,
+  MentionTrigger,
   RelevanceScore,
+  TypedMentionProvider,
 } from "./types"
-
 export {
+  calculateRelevance,
+  createMentionProvider,
   createProviderId,
-  MENTION_PREFIXES,
   getMentionPrefix,
   isMentionType,
-  createMentionProvider,
-  calculateRelevance,
+  MENTION_PREFIXES,
   sortByRelevance,
 } from "./types"
-
-// Registry
-export {
-  mentionRegistry,
-  mentionProvidersAtom,
-  syncedMentionProvidersAtom,
-  useMentionProviders,
-  useMentionProvidersByTrigger,
-  useAvailableMentionProviders,
-  useMentionCategories,
-  useMentionProvider,
-} from "./registry"
-
-// Providers
-export {
-  filesProvider,
-  skillsProvider,
-  agentsProvider,
-  toolsProvider,
-  builtInProviders,
-  registerBuiltInProviders,
-  registerProvider,
-} from "./providers"
-
-export type { FileData, SkillData, AgentData, ToolData, ToolsSearchContext } from "./providers"
-
-// Search
-export {
-  MentionCache,
-  GitAwareCache,
-  mentionCache,
-  gitAwareCache,
-  MentionSearchEngine,
-  mentionSearchEngine,
-} from "./search"
-
-// Hooks
-export {
-  useMentionSearch,
-  type UseMentionSearchOptions,
-  type UseMentionSearchResult,
-} from "./hooks"

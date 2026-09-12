@@ -1,24 +1,21 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect } from "react"
 import { useAtomValue } from "jotai"
+import { memo, useCallback, useEffect, useState } from "react"
 import {
-  GitBranchFilledIcon,
-  FolderFilledIcon,
-  GitPullRequestFilledIcon,
   ExternalLinkIcon,
+  FolderFilledIcon,
+  GitBranchFilledIcon,
+  GitPullRequestFilledIcon,
 } from "@/components/ui/icons"
 import { Kbd } from "@/components/ui/kbd"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { trpc } from "@/lib/trpc"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { preferredEditorAtom } from "@/lib/atoms"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { APP_META } from "../../../../shared/external-apps"
 import { EDITOR_ICONS } from "@/lib/editor-icons"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { trpc } from "@/lib/trpc"
+import { APP_META } from "../../../../shared/external-apps"
+import { isWorktreePath } from "../../../../shared/worktree-paths"
 
 interface InfoSectionProps {
   chatId: string
@@ -91,18 +88,14 @@ function PropertyRow({
       <div className="flex-1 min-w-0 pl-2 truncate">
         {copyable ? (
           <Tooltip open={showCopied ? true : undefined}>
-            <TooltipTrigger asChild>
-              {valueEl}
-            </TooltipTrigger>
+            <TooltipTrigger asChild>{valueEl}</TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
               {showCopied ? "Copied" : "Click to copy"}
             </TooltipContent>
           </Tooltip>
         ) : tooltip ? (
           <Tooltip delayDuration={500}>
-            <TooltipTrigger asChild>
-              {valueEl}
-            </TooltipTrigger>
+            <TooltipTrigger asChild>{valueEl}</TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
               {tooltip}
             </TooltipContent>
@@ -123,7 +116,6 @@ function PropertyRow({
 export const InfoSection = memo(function InfoSection({
   chatId,
   worktreePath,
-  isExpanded = false,
   remoteInfo,
 }: InfoSectionProps) {
   // Extract folder name from path
@@ -143,7 +135,7 @@ export const InfoSection = memo(function InfoSection({
   // Fetch branch data directly (only for local chats)
   const { data: branchData, isLoading: isBranchLoading } = trpc.changes.getBranches.useQuery(
     { worktreePath: worktreePath || "" },
-    { enabled: !!worktreePath }
+    { enabled: !!worktreePath },
   )
 
   // Get PR status for current branch (only for local chats)
@@ -152,7 +144,7 @@ export const InfoSection = memo(function InfoSection({
     {
       refetchInterval: 30000, // Poll every 30 seconds
       enabled: !!chatId && !!worktreePath, // Only enable for local chats
-    }
+    },
   )
 
   // For local chats: use fetched branch data
@@ -171,7 +163,7 @@ export const InfoSection = memo(function InfoSection({
     }
   }
 
-  const isWorktree = !!worktreePath && worktreePath.includes(".21st/worktrees")
+  const isWorktree = !!worktreePath && isWorktreePath(worktreePath)
   const openInEditorHotkey = useResolvedHotkeyDisplay("open-in-editor")
 
   const handleOpenInEditor = useCallback(() => {
@@ -200,13 +192,6 @@ export const InfoSection = memo(function InfoSection({
         ? remoteInfo.repository
         : `https://github.com/${remoteInfo.repository}`
       window.desktopApi.openExternal(repoUrl)
-    }
-  }
-
-  const handleOpenSandbox = () => {
-    if (remoteInfo?.sandboxId) {
-      const sandboxUrl = `https://3003-${remoteInfo.sandboxId}.e2b.app`
-      window.desktopApi.openExternal(sandboxUrl)
     }
   }
 
@@ -241,9 +226,7 @@ export const InfoSection = memo(function InfoSection({
   if (!hasContent) {
     return (
       <div className="px-2 py-2">
-        <div className="text-xs text-muted-foreground">
-          No workspace info available
-        </div>
+        <div className="text-xs text-muted-foreground">No workspace info available</div>
       </div>
     )
   }
@@ -287,7 +270,7 @@ export const InfoSection = memo(function InfoSection({
           tooltip="Open in Finder"
         />
       )}
-      {/* Open in Editor - only for actual git worktrees (under ~/.21st/worktrees/) */}
+      {/* Open in Editor - only for actual git worktrees (under ~/.mauscode/worktrees/) */}
       {isWorktree && (
         <div className="flex items-center min-h-[28px]">
           <div className="flex items-center gap-1.5 w-[100px] flex-shrink-0">
@@ -314,7 +297,9 @@ export const InfoSection = memo(function InfoSection({
               </TooltipTrigger>
               <TooltipContent>
                 Open in {editorMeta.label}
-                {openInEditorHotkey && <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>}
+                {openInEditorHotkey && (
+                  <Kbd className="normal-case font-sans">{openInEditorHotkey}</Kbd>
+                )}
               </TooltipContent>
             </Tooltip>
           </div>

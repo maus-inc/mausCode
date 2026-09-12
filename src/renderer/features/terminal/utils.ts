@@ -57,7 +57,7 @@ export function shellEscapePaths(paths: string[]): string {
  */
 export function debounce<T extends (...args: unknown[]) => void>(
   fn: T,
-  delay: number
+  delay: number,
 ): T & { cancel: () => void } {
   let timeoutId: ReturnType<typeof setTimeout> | null = null
 

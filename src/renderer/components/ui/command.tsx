@@ -1,10 +1,7 @@
 import * as React from "react"
+import { overlayItem, overlaySeparator } from "../../lib/overlay-styles"
 import { cn } from "../../lib/utils"
 import { SearchIcon } from "./icons"
-import {
-  overlayItem,
-  overlaySeparator,
-} from "../../lib/overlay-styles"
 
 // Context for keyboard navigation
 interface CommandContextValue {
@@ -29,21 +26,18 @@ const Command = React.forwardRef<HTMLDivElement, CommandProps>(
     const itemsRef = React.useRef<Map<string, HTMLDivElement>>(new Map())
     const orderedKeysRef = React.useRef<string[]>([])
 
-    const registerItem = React.useCallback(
-      (value: string, element: HTMLDivElement | null) => {
-        if (element) {
-          itemsRef.current.set(value, element)
-          // Keep track of order based on registration
-          if (!orderedKeysRef.current.includes(value)) {
-            orderedKeysRef.current.push(value)
-          }
-        } else {
-          itemsRef.current.delete(value)
-          orderedKeysRef.current = orderedKeysRef.current.filter(k => k !== value)
+    const registerItem = React.useCallback((value: string, element: HTMLDivElement | null) => {
+      if (element) {
+        itemsRef.current.set(value, element)
+        // Keep track of order based on registration
+        if (!orderedKeysRef.current.includes(value)) {
+          orderedKeysRef.current.push(value)
         }
-      },
-      [],
-    )
+      } else {
+        itemsRef.current.delete(value)
+        orderedKeysRef.current = orderedKeysRef.current.filter((k) => k !== value)
+      }
+    }, [])
 
     const getItems = React.useCallback(() => itemsRef.current, [])
 
@@ -73,8 +67,9 @@ const Command = React.forwardRef<HTMLDivElement, CommandProps>(
             if (keys.length > 0) {
               const nextIndex = currentIndex + 1 >= keys.length ? 0 : currentIndex + 1
               const nextKey = keys[nextIndex]
-              setSelectedValue(nextKey!)
-              itemsRef.current.get(nextKey!)?.scrollIntoView({ block: "nearest" })
+              if (nextKey === undefined) break
+              setSelectedValue(nextKey)
+              itemsRef.current.get(nextKey)?.scrollIntoView({ block: "nearest" })
             }
             break
           case "ArrowUp":
@@ -82,8 +77,9 @@ const Command = React.forwardRef<HTMLDivElement, CommandProps>(
             if (keys.length > 0) {
               const prevIndex = currentIndex - 1 < 0 ? keys.length - 1 : currentIndex - 1
               const prevKey = keys[prevIndex]
-              setSelectedValue(prevKey!)
-              itemsRef.current.get(prevKey!)?.scrollIntoView({ block: "nearest" })
+              if (prevKey === undefined) break
+              setSelectedValue(prevKey)
+              itemsRef.current.get(prevKey)?.scrollIntoView({ block: "nearest" })
             }
             break
           case "Enter":
@@ -95,16 +91,19 @@ const Command = React.forwardRef<HTMLDivElement, CommandProps>(
           case "Home":
             e.preventDefault()
             if (keys.length > 0) {
-              setSelectedValue(keys[0]!)
-              itemsRef.current.get(keys[0]!)?.scrollIntoView({ block: "nearest" })
+              const firstKey = keys[0]
+              if (firstKey === undefined) break
+              setSelectedValue(firstKey)
+              itemsRef.current.get(firstKey)?.scrollIntoView({ block: "nearest" })
             }
             break
           case "End":
             e.preventDefault()
             if (keys.length > 0) {
               const lastKey = keys[keys.length - 1]
-              setSelectedValue(lastKey!)
-              itemsRef.current.get(lastKey!)?.scrollIntoView({ block: "nearest" })
+              if (lastKey === undefined) break
+              setSelectedValue(lastKey)
+              itemsRef.current.get(lastKey)?.scrollIntoView({ block: "nearest" })
             }
             break
         }
@@ -126,6 +125,7 @@ const Command = React.forwardRef<HTMLDivElement, CommandProps>(
     return (
       <CommandContext.Provider value={contextValue}>
         <div
+          role="menu"
           ref={ref}
           className={cn(
             "flex h-full w-full flex-col overflow-hidden text-popover-foreground",
@@ -142,8 +142,7 @@ const Command = React.forwardRef<HTMLDivElement, CommandProps>(
 )
 Command.displayName = "Command"
 
-interface CommandInputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+interface CommandInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   onValueChange?: (value: string) => void
   wrapperClassName?: string
 }
@@ -160,7 +159,7 @@ const CommandInput = React.forwardRef<HTMLInputElement, CommandInputProps>(
         inputRef.current?.focus()
       }, 0)
       return () => clearTimeout(timer)
-    }, [])
+    }, [inputRef.current?.focus])
 
     return (
       <div
@@ -189,28 +188,27 @@ const CommandInput = React.forwardRef<HTMLInputElement, CommandInputProps>(
 )
 CommandInput.displayName = "CommandInput"
 
-const CommandList = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden py-1", className)}
-    {...props}
-  />
-))
+const CommandList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      role="listbox"
+      className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden py-1", className)}
+      {...props}
+    />
+  ),
+)
 CommandList.displayName = "CommandList"
 
-const CommandEmpty = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("py-6 text-center text-sm text-muted-foreground", className)}
-    {...props}
-  />
-))
+const CommandEmpty = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn("py-6 text-center text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  ),
+)
 CommandEmpty.displayName = "CommandEmpty"
 
 interface CommandGroupProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -219,11 +217,7 @@ interface CommandGroupProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const CommandGroup = React.forwardRef<HTMLDivElement, CommandGroupProps>(
   ({ className, heading, children, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn("overflow-hidden text-foreground", className)}
-      {...props}
-    >
+    <div ref={ref} className={cn("overflow-hidden text-foreground", className)} {...props}>
       {heading && (
         <div className="py-1.5 px-1.5 mx-1 text-xs font-medium text-muted-foreground">
           {heading}
@@ -242,12 +236,13 @@ interface CommandItemProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const CommandItem = React.forwardRef<HTMLDivElement, CommandItemProps>(
-  ({ className, onSelect, value, onMouseEnter, disabled, ...props }, ref) => {
+  ({ className, onSelect, value, onMouseEnter, disabled, ...props }, _ref) => {
     const context = React.useContext(CommandContext)
     const itemRef = React.useRef<HTMLDivElement>(null)
 
     // Generate a stable value if not provided
-    const itemValue = value || React.useId()
+    const generatedId = React.useId()
+    const itemValue = value || generatedId
 
     // Register this item with the Command (skip if disabled)
     React.useEffect(() => {
@@ -284,6 +279,17 @@ const CommandItem = React.forwardRef<HTMLDivElement, CommandItemProps>(
           className,
         )}
         onClick={disabled ? undefined : onSelect}
+        role="option"
+        aria-selected={isSelected}
+        aria-disabled={disabled}
+        tabIndex={isSelected && !disabled ? 0 : -1}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.stopPropagation()
+            e.currentTarget.click()
+          }
+        }}
         onMouseEnter={handleMouseEnter}
         {...props}
       />
@@ -292,20 +298,19 @@ const CommandItem = React.forwardRef<HTMLDivElement, CommandItemProps>(
 )
 CommandItem.displayName = "CommandItem"
 
-const CommandSeparator = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn(overlaySeparator, className)} {...props} />
-))
+const CommandSeparator = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn(overlaySeparator, className)} {...props} />
+  ),
+)
 CommandSeparator.displayName = "CommandSeparator"
 
 export {
   Command,
-  CommandInput,
-  CommandList,
   CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
+  CommandList,
   CommandSeparator,
 }

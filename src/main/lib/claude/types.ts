@@ -20,6 +20,7 @@ export type UIMessageChunk =
       toolCallId: string
       toolName: string
       input: unknown
+      providerMetadata?: unknown
     }
   | { type: "tool-output-available"; toolCallId: string; output: unknown }
   | { type: "tool-output-error"; toolCallId: string; errorText: string }
@@ -46,6 +47,14 @@ export type UIMessageChunk =
       mcpServers: MCPServer[]
       plugins: { name: string; path: string }[]
       skills: string[]
+      /**
+       * Native engine only: the v1 harness exposes no tool list, so `tools`
+       * carries only cached `mcp__server__tool` names and the full list is
+       * unknown. Absent/false on legacy (complete list).
+       */
+      toolsUnknown?: boolean
+      /** Native engine only: unparseable MCP config files (daemon ignores them). */
+      mcpConfigErrors?: { file: string; error: string }[]
     }
 
 export type MCPServerStatus = "connected" | "failed" | "pending" | "needs-auth"

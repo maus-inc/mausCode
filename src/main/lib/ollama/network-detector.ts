@@ -3,7 +3,7 @@
  * Checks if internet is available for Claude API
  */
 
-import { isOfflineSimulated } from '../trpc/routers/debug'
+import { isOfflineSimulated } from "../trpc/routers/debug"
 
 export interface NetworkStatus {
   online: boolean
@@ -24,7 +24,7 @@ const CACHE_TTL = 10000 // 10 seconds cache
 export async function checkInternetConnection(): Promise<boolean> {
   // Check if offline mode is being simulated (for testing)
   if (isOfflineSimulated()) {
-    console.log('[Network] Offline mode is being simulated (debug feature)')
+    console.log("[Network] Offline mode is being simulated (debug feature)")
     cachedStatus = { online: false, lastCheck: Date.now() }
     return false
   }
@@ -38,9 +38,9 @@ export async function checkInternetConnection(): Promise<boolean> {
 
   // Try multiple endpoints for more reliable detection
   const endpoints = [
-    'https://api.anthropic.com',
-    'https://www.google.com',
-    'https://1.1.1.1', // Cloudflare DNS
+    "https://api.anthropic.com",
+    "https://www.google.com",
+    "https://1.1.1.1", // Cloudflare DNS
   ]
 
   for (const endpoint of endpoints) {
@@ -49,7 +49,7 @@ export async function checkInternetConnection(): Promise<boolean> {
       const timeoutId = setTimeout(() => controller.abort(), 2000)
 
       const response = await fetch(endpoint, {
-        method: 'HEAD',
+        method: "HEAD",
         signal: controller.signal,
       })
 
@@ -61,15 +61,14 @@ export async function checkInternetConnection(): Promise<boolean> {
         console.log(`[Network] Internet check: ONLINE (via ${endpoint})`)
         return true
       }
-    } catch (error) {
+    } catch {
       // Try next endpoint
-      continue
     }
   }
 
   // All endpoints failed - likely offline
   cachedStatus = { online: false, lastCheck: now }
-  console.log('[Network] Internet check: OFFLINE (all endpoints failed)')
+  console.log("[Network] Internet check: OFFLINE (all endpoints failed)")
   return false
 }
 

@@ -1,27 +1,37 @@
-import { createACPProvider, type ACPProvider } from "@mcpc-tech/acp-ai-provider"
-import { observable } from "@trpc/server/observable"
-import { streamText } from "ai"
-import { eq } from "drizzle-orm"
-import { app } from "electron"
-import { spawn, type ChildProcess } from "node:child_process"
+/**
+ * NOTE (transplant): reasoning-effort model parsing (`model/effort` selection,
+ * `buildCodexProviderArgs`, session fingerprinting), and text-delta chunk
+ * coalescing in the stream loop were
+ * transplanted from erenbertr/1code (Apache-2.0, © the 1Code contributors).
+ *
+ * Chat sessions spawn `codex app-server` (native JSON-RPC) via the ported T3
+ * Effect client in `../../codex-app-server/session`. The legacy codex-acp
+ * (Zed ACP adapter) path was removed in the app-server migration.
+ */
+
+import { type ChildProcess, spawn } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { basename, dirname, join, sep } from "node:path"
+import { basename, join } from "node:path"
+import { observable } from "@trpc/server/observable"
+import { eq } from "drizzle-orm"
+import { app } from "electron"
 import { z } from "zod"
-import {
-  normalizeCodexAssistantMessage,
-  normalizeCodexStreamChunk,
-} from "../../../../shared/codex-tool-normalizer"
+import { normalizeCodexAssistantMessage } from "../../../../shared/codex-tool-normalizer"
+import { createChunkCoalescer } from "../../claude"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
-import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { resolveCliBinaryPath } from "../../cli-binaries"
 import {
-  fetchMcpTools,
-  fetchMcpToolsStdio,
-  type McpToolInfo,
-} from "../../mcp-auth"
+  type CodexAppServerSession,
+  type CodexSessionChunk,
+  type CodexTurnInput,
+  createCodexAppServerSession,
+} from "../../codex-app-server/session"
+import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { writeImageTempFiles } from "../../image-staging"
+import { fetchMcpTools, fetchMcpToolsStdio, type McpToolInfo } from "../../mcp-auth"
 import { publicProcedure, router } from "../index"
 
 const imageAttachmentSchema = z.object({
@@ -31,17 +41,14 @@ const imageAttachmentSchema = z.object({
 })
 
 type CodexProviderSession = {
-  provider: ACPProvider
+  session: CodexAppServerSession
   cwd: string
   authFingerprint: string | null
   mcpFingerprint: string
+  reasoningEffort: string | null
 }
 
-type CodexLoginSessionState =
-  | "running"
-  | "success"
-  | "error"
-  | "cancelled"
+type CodexLoginSessionState = "running" | "success" | "error" | "cancelled"
 
 type CodexLoginSession = {
   id: string
@@ -53,11 +60,7 @@ type CodexLoginSession = {
   exitCode: number | null
 }
 
-type CodexIntegrationState =
-  | "connected_chatgpt"
-  | "connected_api_key"
-  | "not_logged_in"
-  | "unknown"
+type CodexIntegrationState = "connected_chatgpt" | "connected_api_key" | "not_logged_in" | "unknown"
 
 type CodexMcpServerForSession =
   | {
@@ -80,6 +83,8 @@ type CodexMcpServerForSettings = {
   tools: McpToolInfo[]
   needsAuth: boolean
   config: Record<string, unknown>
+  serverInfo?: { name: string; version: string; icons?: Array<{ src: string }> }
+  error?: string
 }
 
 type CodexMcpSnapshot = {
@@ -120,7 +125,9 @@ const loginSessions = new Map<string, CodexLoginSession>()
 const codexMcpCache = new Map<string, CodexMcpSnapshot>()
 
 const URL_CANDIDATE_REGEX = /https?:\/\/[^\s]+/g
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape parsing.
 const ANSI_ESCAPE_REGEX = /\u001B\[[0-?]*[ -/]*[@-~]/g
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape parsing.
 const ANSI_OSC_REGEX = /\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g
 
 const AUTH_HINTS = [
@@ -136,7 +143,8 @@ const AUTH_HINTS = [
   "401",
   "403",
 ]
-const DEFAULT_CODEX_MODEL = "gpt-5.3-codex/high"
+const DEFAULT_CODEX_MODEL = "gpt-5.5"
+const CODEX_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh"])
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 const CODEX_USAGE_POLL_ATTEMPTS = 3
 const CODEX_USAGE_POLL_INTERVAL_MS = 200
@@ -185,78 +193,30 @@ const codexMcpListEntrySchema = z
 
 type CodexMcpListEntry = z.infer<typeof codexMcpListEntrySchema>
 
-function getCodexPackageName(): string {
-  const platform = process.platform
-  const arch = process.arch
-
-  if (platform === "darwin") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-darwin-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-darwin-x64"
-  }
-
-  if (platform === "linux") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-linux-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-linux-x64"
-  }
-
-  if (platform === "win32") {
-    if (arch === "arm64") return "@zed-industries/codex-acp-win32-arm64"
-    if (arch === "x64") return "@zed-industries/codex-acp-win32-x64"
-  }
-
-  throw new Error(`Unsupported platform/arch for codex-acp: ${platform}/${arch}`)
-}
-
-function toUnpackedAsarPath(filePath: string): string {
-  const unpackedPath = filePath.replace(
-    `${sep}app.asar${sep}`,
-    `${sep}app.asar.unpacked${sep}`,
-  )
-
-  if (unpackedPath !== filePath && existsSync(unpackedPath)) {
-    return unpackedPath
-  }
-
-  return filePath
-}
-
-function resolveCodexAcpBinaryPath(): string {
-  const packageName = getCodexPackageName()
-  const binaryName = process.platform === "win32" ? "codex-acp.exe" : "codex-acp"
-  const codexPackageRoot = dirname(
-    require.resolve("@zed-industries/codex-acp/package.json"),
-  )
-  const resolvedPath = require.resolve(`${packageName}/bin/${binaryName}`, {
-    // Resolve relative to the wrapper package so nested optional deps work in packaged apps.
-    paths: [codexPackageRoot],
-  })
-
-  return toUnpackedAsarPath(resolvedPath)
-}
-
 function resolveBundledCodexCliPath(): string {
   const binaryName = process.platform === "win32" ? "codex.exe" : "codex"
   const resourcesDir = app.isPackaged
     ? join(process.resourcesPath, "bin")
-    : join(
-        app.getAppPath(),
-        "resources",
-        "bin",
-        `${process.platform}-${process.arch}`,
-      )
+    : join(app.getAppPath(), "resources", "bin", `${process.platform}-${process.arch}`)
 
   const binaryPath = join(resourcesDir, binaryName)
-  if (existsSync(binaryPath)) {
-    return binaryPath
-  }
 
-  const hint = app.isPackaged
+  // NOTE (transplant): PATH fallback via resolveCliBinaryPath from
+  // SamSammane/1code-ui (Apache-2.0) — dev boxes and global installs work
+  // without a bundled binary.
+  const downloadHint = app.isPackaged
     ? "Binary is missing from bundled resources."
-    : "Run `bun run codex:download` to download it for local dev."
+    : "Run `bun run codex:download` or install Codex CLI globally."
 
-  throw new Error(
-    `[codex] Bundled Codex CLI not found at ${binaryPath}. ${hint}`,
-  )
+  const resolved = resolveCliBinaryPath({
+    bundledPath: binaryPath,
+    commandName: "codex",
+    downloadHint,
+  })
+  if (resolved !== binaryPath) {
+    console.log(`[codex] Using Codex CLI from PATH: ${resolved}`)
+  }
+  return resolved
 }
 
 function stripAnsi(input: string): string {
@@ -324,8 +284,16 @@ function getActiveLoginSession(): CodexLoginSession | null {
   return null
 }
 
+interface CodexErrorShape {
+  data?: { message?: unknown; code?: unknown }
+  errorText?: unknown
+  message?: unknown
+  error?: unknown
+  code?: unknown
+}
+
 function extractCodexError(error: unknown): { message: string; code?: string } {
-  const anyError = error as any
+  const anyError = error as CodexErrorShape
   const message =
     anyError?.data?.message ||
     anyError?.errorText ||
@@ -340,10 +308,7 @@ function extractCodexError(error: unknown): { message: string; code?: string } {
   }
 }
 
-function isCodexAuthError(params: {
-  message?: string | null
-  code?: string | null
-}): boolean {
+function isCodexAuthError(params: { message?: string | null; code?: string | null }): boolean {
   const searchableText = `${params.code || ""} ${params.message || ""}`.toLowerCase()
   return AUTH_HINTS.some((hint) => searchableText.includes(hint))
 }
@@ -383,9 +348,7 @@ async function runCodexCli(
 
     child.once("error", (error) => {
       rejectPromise(
-        new Error(
-          `[codex] Failed to execute \`codex ${args.join(" ")}\`: ${error.message}`,
-        ),
+        new Error(`[codex] Failed to execute \`codex ${args.join(" ")}\`: ${error.message}`),
       )
     })
 
@@ -462,9 +425,7 @@ async function findSessionFileById(sessionId: string): Promise<string | null> {
   const sessionsRoot = resolveSessionsRoot()
   const fileSuffix = `-${sessionId}.jsonl`
   const sortDesc = (values: string[]) =>
-    values.sort((left, right) =>
-      right.localeCompare(left, undefined, { numeric: true }),
-    )
+    values.sort((left, right) => right.localeCompare(left, undefined, { numeric: true }))
   const listNames = async (dirPath: string): Promise<string[]> => {
     try {
       return await readdir(dirPath, { encoding: "utf8" })
@@ -472,25 +433,17 @@ async function findSessionFileById(sessionId: string): Promise<string | null> {
       return []
     }
   }
-  const years = sortDesc(
-    (await listNames(sessionsRoot)).filter((name) => /^\d{4}$/.test(name)),
-  )
+  const years = sortDesc((await listNames(sessionsRoot)).filter((name) => /^\d{4}$/.test(name)))
 
   for (const year of years) {
     const yearPath = join(sessionsRoot, year)
-    const months = sortDesc(
-      (await listNames(yearPath)).filter((name) => /^\d{2}$/.test(name)),
-    )
+    const months = sortDesc((await listNames(yearPath)).filter((name) => /^\d{2}$/.test(name)))
     for (const month of months) {
       const monthPath = join(yearPath, month)
-      const days = sortDesc(
-        (await listNames(monthPath)).filter((name) => /^\d{2}$/.test(name)),
-      )
+      const days = sortDesc((await listNames(monthPath)).filter((name) => /^\d{2}$/.test(name)))
       for (const day of days) {
         const dayPath = join(monthPath, day)
-        const fileName = (await listNames(dayPath)).find((name) =>
-          name.endsWith(fileSuffix),
-        )
+        const fileName = (await listNames(dayPath)).find((name) => name.endsWith(fileSuffix))
         if (fileName) {
           return join(dayPath, fileName)
         }
@@ -517,21 +470,21 @@ async function readLatestTokenCountInfo(
     const rawLine = lines[index]?.trim()
     if (!rawLine) continue
 
-    let parsedLine: any
+    let parsedLine: unknown
     try {
       parsedLine = JSON.parse(rawLine)
     } catch {
       continue
     }
 
-    if (
-      parsedLine?.type !== "event_msg" ||
-      parsedLine?.payload?.type !== "token_count"
-    ) {
-      continue
-    }
+    if (typeof parsedLine !== "object" || parsedLine === null) continue
+    const line = parsedLine as { type?: unknown; timestamp?: unknown; payload?: unknown }
+    if (line.type !== "event_msg") continue
+    if (typeof line.payload !== "object" || line.payload === null) continue
+    const payload = line.payload as { type?: unknown; info?: unknown }
+    if (payload.type !== "token_count") continue
 
-    const eventTimestampMs = toTimestampMs(parsedLine?.timestamp)
+    const eventTimestampMs = toTimestampMs(line.timestamp)
     const notBeforeTimestampMs = options?.notBeforeTimestampMs
     if (
       notBeforeTimestampMs !== undefined &&
@@ -540,13 +493,14 @@ async function readLatestTokenCountInfo(
       continue
     }
 
-    const rawInfo = parsedLine.payload?.info
+    const rawInfo = payload.info
     if (!rawInfo || typeof rawInfo !== "object") continue
+    const infoRecord = rawInfo as { last_token_usage?: unknown; model_context_window?: unknown }
 
-    const rawTokenUsage = (rawInfo as any).last_token_usage
+    const rawTokenUsage = infoRecord.last_token_usage
     let lastTokenUsage: CodexTokenUsage | undefined
     if (rawTokenUsage && typeof rawTokenUsage === "object") {
-      const tokenUsage = rawTokenUsage as any
+      const tokenUsage = rawTokenUsage as Record<string, unknown>
       const parsedTokenUsage: CodexTokenUsage = {
         input_tokens: toNonNegativeInt(tokenUsage.input_tokens),
         cached_input_tokens: toNonNegativeInt(tokenUsage.cached_input_tokens),
@@ -558,9 +512,7 @@ async function readLatestTokenCountInfo(
       }
     }
 
-    const modelContextWindow = toNonNegativeInt(
-      (rawInfo as any).model_context_window,
-    )
+    const modelContextWindow = toNonNegativeInt(infoRecord.model_context_window)
 
     const info: CodexTokenCountInfo = {
       last_token_usage: lastTokenUsage,
@@ -583,18 +535,14 @@ function mapToUsageMetadata(info: CodexTokenCountInfo): CodexUsageMetadata | nul
 
   const inputTokens =
     perMessageUsage?.input_tokens !== undefined
-      ? Math.max(
-          0,
-          perMessageUsage.input_tokens - (perMessageUsage.cached_input_tokens ?? 0),
-        )
+      ? Math.max(0, perMessageUsage.input_tokens - (perMessageUsage.cached_input_tokens ?? 0))
       : undefined
   const outputTokens = perMessageUsage?.output_tokens
   const totalTokens =
     perMessageUsage?.total_tokens ??
     (perMessageUsage?.input_tokens !== undefined || perMessageUsage?.output_tokens !== undefined
       ? (perMessageUsage?.input_tokens ?? 0) + (perMessageUsage?.output_tokens ?? 0)
-      : undefined
-    )
+      : undefined)
 
   const usageMetadata: CodexUsageMetadata = {}
   if (inputTokens !== undefined) usageMetadata.inputTokens = inputTokens
@@ -784,7 +732,7 @@ async function fetchCodexMcpTools(entry: CodexMcpListEntry): Promise<McpToolInfo
 }
 
 function resolveCodexLookupPath(pathCandidate: string | null | undefined): string {
-  return pathCandidate && pathCandidate.trim() ? pathCandidate.trim() : "__global__"
+  return pathCandidate?.trim() ? pathCandidate.trim() : "__global__"
 }
 
 function getCodexMcpFingerprint(servers: CodexMcpServerForSession[]): string {
@@ -799,11 +747,7 @@ async function resolveCodexMcpSnapshot(params: {
   const lookupPath = resolveCodexLookupPath(params.lookupPath)
   const cached = codexMcpCache.get(lookupPath)
   const shouldIncludeTools = Boolean(params.includeTools)
-  if (
-    cached &&
-    !params.forceRefresh &&
-    (!shouldIncludeTools || cached.toolsResolved)
-  ) {
+  if (cached && !params.forceRefresh && (!shouldIncludeTools || cached.toolsResolved)) {
     return cached
   }
 
@@ -880,21 +824,18 @@ async function resolveCodexMcpSnapshot(params: {
         settingsConfig.url = url
         settingsConfig.headers = entry.transport.http_headers || undefined
         settingsConfig.envHttpHeaders = entry.transport.env_http_headers || undefined
-        settingsConfig.bearerTokenEnvVar =
-          entry.transport.bearer_token_env_var || undefined
+        settingsConfig.bearerTokenEnvVar = entry.transport.bearer_token_env_var || undefined
       }
 
       const shouldProbeTools =
         shouldIncludeTools &&
         includeInSession &&
         !authState.needsAuth &&
-        (
-          // Probe unauthenticated/public servers and stdio servers.
-          !authState.supportsAuth ||
+        // Probe unauthenticated/public servers and stdio servers.
+        (!authState.supportsAuth ||
           transportType === "stdio" ||
           // For auth-capable HTTP, only probe if explicit auth header is available.
-          Boolean(resolvedHttpHeaders?.Authorization)
-        )
+          Boolean(resolvedHttpHeaders?.Authorization))
       const tools = shouldProbeTools ? await fetchCodexMcpTools(entry) : []
       if (shouldProbeTools && tools.length === 0) {
         status = "failed"
@@ -942,9 +883,7 @@ function clearCodexMcpCache(): void {
   codexMcpCache.clear()
 }
 
-function getCodexServerIdentity(
-  server: CodexMcpServerForSettings,
-): string {
+function getCodexServerIdentity(server: CodexMcpServerForSettings): string {
   const config = server.config as Record<string, unknown>
   return JSON.stringify({
     enabled: config.enabled ?? null,
@@ -1019,7 +958,10 @@ export async function getAllCodexMcpConfigHandler() {
       continue
     }
     if (result.status === "rejected") {
-      console.error("[codex.getAllMcpConfig] Failed to resolve project MCP snapshot:", result.reason)
+      console.error(
+        "[codex.getAllMcpConfig] Failed to resolve project MCP snapshot:",
+        result.reason,
+      )
     }
   }
 
@@ -1047,7 +989,31 @@ function normalizeCodexIntegrationState(rawOutput: string): CodexIntegrationStat
   return "unknown"
 }
 
-function parseStoredMessages(raw: string | null | undefined): any[] {
+/** Loose shape of a persisted chat message part (stored as JSON in subChats.messages). */
+export interface StoredMessagePart {
+  type?: string
+  text?: unknown
+  state?: string
+  toolCallId?: string
+  toolName?: string
+  input?: unknown
+  output?: unknown
+  data?: unknown
+  filePath?: string
+  content?: unknown
+  result?: unknown
+  startedAt?: number
+}
+
+/** Loose shape of a persisted chat message (stored as JSON in subChats.messages). */
+export interface StoredChatMessage {
+  id?: string
+  role?: string
+  parts?: StoredMessagePart[]
+  metadata?: unknown
+}
+
+export function parseStoredMessages(raw: string | null | undefined): StoredChatMessage[] {
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
@@ -1057,7 +1023,7 @@ function parseStoredMessages(raw: string | null | undefined): any[] {
   }
 }
 
-function extractPromptFromStoredMessage(message: any): string {
+export function extractPromptFromStoredMessage(message: StoredChatMessage): string {
   if (!message || !Array.isArray(message.parts)) return ""
 
   const textParts: string[] = []
@@ -1067,8 +1033,7 @@ function extractPromptFromStoredMessage(message: any): string {
     if (part?.type === "text" && typeof part.text === "string") {
       textParts.push(part.text)
     } else if (part?.type === "file-content") {
-      const filePath =
-        typeof part.filePath === "string" ? part.filePath : undefined
+      const filePath = typeof part.filePath === "string" ? part.filePath : undefined
       const fileName = filePath?.split("/").pop() || filePath || "file"
       const content = typeof part.content === "string" ? part.content : ""
       fileContents.push(`\n--- ${fileName} ---\n${content}`)
@@ -1078,10 +1043,24 @@ function extractPromptFromStoredMessage(message: any): string {
   return textParts.join("\n") + fileContents.join("")
 }
 
-function getLastSessionId(messages: any[]): string | undefined {
+export function getLastSessionId(messages: StoredChatMessage[]): string | undefined {
   const lastAssistant = [...messages].reverse().find((message) => message?.role === "assistant")
-  const sessionId = lastAssistant?.metadata?.sessionId
-  return typeof sessionId === "string" ? sessionId : undefined
+  const metadata: unknown = lastAssistant?.metadata
+  if (metadata && typeof metadata === "object" && "sessionId" in metadata) {
+    const sessionId: unknown = metadata.sessionId
+    return typeof sessionId === "string" ? sessionId : undefined
+  }
+  return undefined
+}
+
+function getLastThreadId(messages: StoredChatMessage[]): string | undefined {
+  const lastAssistant = [...messages].reverse().find((message) => message?.role === "assistant")
+  const metadata: unknown = lastAssistant?.metadata
+  if (metadata && typeof metadata === "object" && "threadId" in metadata) {
+    const threadId: unknown = metadata.threadId
+    return typeof threadId === "string" ? threadId : undefined
+  }
+  return undefined
 }
 
 function extractCodexModelId(rawModel: unknown): string | undefined {
@@ -1096,6 +1075,28 @@ function extractCodexModelId(rawModel: unknown): string | undefined {
   }
 
   return normalizedModel
+}
+
+function parseCodexModelSelection(rawModel: unknown): {
+  modelId?: string
+  reasoningEffort?: string
+} {
+  const rawModelId = extractCodexModelId(rawModel)
+  if (!rawModelId) {
+    return {}
+  }
+
+  const [modelId, reasoningEffort, ...extraParts] = rawModelId.split("/")
+  if (
+    modelId &&
+    reasoningEffort &&
+    extraParts.length === 0 &&
+    CODEX_REASONING_EFFORTS.has(reasoningEffort)
+  ) {
+    return { modelId, reasoningEffort }
+  }
+
+  return { modelId: rawModelId }
 }
 
 function preprocessCodexModelName(params: {
@@ -1146,23 +1147,18 @@ function buildCodexProviderEnv(authConfig?: { apiKey: string }): Record<string, 
   }
 }
 
-function getCodexAuthMethodId(authConfig?: {
-  apiKey: string
-}): "codex-api-key" | undefined {
-  const apiKey = authConfig?.apiKey?.trim()
-  if (!apiKey) {
-    return undefined
+// `-c key=value` config overrides, placed before the `app-server` subcommand.
+function buildCodexProviderArgs(reasoningEffort?: string): string[] {
+  const args: string[] = []
+
+  if (reasoningEffort && CODEX_REASONING_EFFORTS.has(reasoningEffort)) {
+    args.push("-c", `model_reasoning_effort="${reasoningEffort}"`)
   }
 
-  // codex-acp advertises auth methods:
-  // - chatgpt
-  // - codex-api-key
-  // - openai-api-key
-  // For app-managed API key path we want deterministic key auth.
-  return "codex-api-key"
+  return args
 }
 
-function buildUserParts(
+export function buildUserParts(
   prompt: string,
   images:
     | Array<{
@@ -1171,8 +1167,8 @@ function buildUserParts(
         filename?: string
       }>
     | undefined,
-): any[] {
-  const parts: any[] = [{ type: "text", text: prompt }]
+): StoredMessagePart[] {
+  const parts: StoredMessagePart[] = [{ type: "text", text: prompt }]
 
   if (images && images.length > 0) {
     for (const image of images) {
@@ -1191,43 +1187,19 @@ function buildUserParts(
   return parts
 }
 
-function buildModelMessageContent(
-  prompt: string,
-  images:
-    | Array<{
-        base64Data?: string
-        mediaType?: string
-        filename?: string
-      }>
-    | undefined,
-): any[] {
-  const content: any[] = [{ type: "text", text: prompt }]
-
-  if (images && images.length > 0) {
-    for (const image of images) {
-      if (!image.base64Data || !image.mediaType) continue
-      content.push({
-        type: "file",
-        mediaType: image.mediaType,
-        data: image.base64Data,
-        ...(image.filename ? { filename: image.filename } : {}),
-      })
-    }
-  }
-
-  return content
-}
-
-function getOrCreateProvider(params: {
+async function getOrCreateSession(params: {
   subChatId: string
   cwd: string
-  mcpServers: CodexMcpServerForSession[]
   mcpFingerprint: string
-  existingSessionId?: string
+  existingThreadId?: string
+  legacySessionId?: string
+  reasoningEffort?: string
+  model?: string
   authConfig?: {
     apiKey: string
   }
-}): ACPProvider {
+  onChunk: (chunk: CodexSessionChunk) => void
+}): Promise<CodexAppServerSession> {
   const authFingerprint = getAuthFingerprint(params.authConfig)
   const existing = providerSessions.get(params.subChatId)
 
@@ -1235,53 +1207,58 @@ function getOrCreateProvider(params: {
     existing &&
     existing.cwd === params.cwd &&
     existing.authFingerprint === authFingerprint &&
-    existing.mcpFingerprint === params.mcpFingerprint
+    existing.mcpFingerprint === params.mcpFingerprint &&
+    existing.reasoningEffort === (params.reasoningEffort || null)
   ) {
-    return existing.provider
+    existing.session.setOnChunk(params.onChunk)
+    return existing.session
   }
 
   if (existing) {
-    existing.provider.cleanup()
-    providerSessions.delete(params.subChatId)
+    await cleanupProvider(params.subChatId)
   }
 
   const hasAppManagedApiKey = Boolean(params.authConfig?.apiKey?.trim())
-  // When app-managed key auth is used, avoid resuming older persisted session IDs.
+  // When app-managed key auth is used, avoid resuming older persisted threads.
   // Those can be tied to unauthenticated/CLI-auth state and trigger auth loops.
-  const existingSessionIdForProvider = hasAppManagedApiKey
-    ? undefined
-    : params.existingSessionId
+  const resumeIds = hasAppManagedApiKey
+    ? {}
+    : {
+        ...(params.existingThreadId ? { existingThreadId: params.existingThreadId } : {}),
+        ...(params.legacySessionId ? { legacySessionId: params.legacySessionId } : {}),
+      }
 
-  const provider = createACPProvider({
-    command: resolveCodexAcpBinaryPath(),
+  const session = await createCodexAppServerSession({
+    binaryPath: resolveBundledCodexCliPath(),
+    argv: [...buildCodexProviderArgs(params.reasoningEffort), "app-server"],
+    cwd: params.cwd,
     env: buildCodexProviderEnv(params.authConfig),
-    authMethodId: getCodexAuthMethodId(params.authConfig),
-    session: {
-      cwd: params.cwd,
-      mcpServers: params.mcpServers,
-    },
-    ...(existingSessionIdForProvider
-      ? { existingSessionId: existingSessionIdForProvider }
-      : {}),
-    persistSession: true,
+    model: params.model,
+    onChunk: params.onChunk,
+    ...resumeIds,
   })
 
   providerSessions.set(params.subChatId, {
-    provider,
+    session,
     cwd: params.cwd,
     authFingerprint,
     mcpFingerprint: params.mcpFingerprint,
+    reasoningEffort: params.reasoningEffort || null,
   })
 
-  return provider
+  return session
 }
 
-function cleanupProvider(subChatId: string): void {
+async function cleanupProvider(subChatId: string): Promise<void> {
   const existing = providerSessions.get(subChatId)
   if (!existing) return
 
-  existing.provider.cleanup()
   providerSessions.delete(subChatId)
+  try {
+    await existing.session.dispose()
+  } catch (error) {
+    console.error("[codex] Failed to dispose app-server session:", error)
+  }
 }
 
 export const codexRouter = router({
@@ -1296,8 +1273,7 @@ export const codexRouter = router({
 
     return {
       state,
-      isConnected:
-        state === "connected_chatgpt" || state === "connected_api_key",
+      isConnected: state === "connected_chatgpt" || state === "connected_api_key",
       rawOutput: combinedOutput,
       exitCode: result.exitCode,
     }
@@ -1313,8 +1289,7 @@ export const codexRouter = router({
       .trim()
 
     const state = normalizeCodexIntegrationState(statusOutput)
-    const isConnected =
-      state === "connected_chatgpt" || state === "connected_api_key"
+    const isConnected = state === "connected_chatgpt" || state === "connected_api_key"
 
     if (isConnected) {
       throw new Error("Failed to log out from Codex. Please try again.")
@@ -1565,7 +1540,7 @@ export const codexRouter = router({
         model: z.string().optional(),
         cwd: z.string(),
         projectPath: z.string().optional(),
-        mode: z.enum(["plan", "agent"]).default("agent"),
+        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
         sessionId: z.string().optional(),
         forceNewSession: z.boolean().optional(),
         images: z.array(imageAttachmentSchema).optional(),
@@ -1577,13 +1552,13 @@ export const codexRouter = router({
       }),
     )
     .subscription(({ input }) => {
-      return observable<any>((emit) => {
+      return observable<CodexSessionChunk>((emit) => {
         const existingStream = activeStreams.get(input.subChatId)
         if (existingStream) {
           existingStream.cancelRequested = true
           existingStream.controller.abort()
           // Ensure old run cannot continue emitting after supersede.
-          cleanupProvider(input.subChatId)
+          void cleanupProvider(input.subChatId)
         }
 
         const abortController = new AbortController()
@@ -1595,7 +1570,7 @@ export const codexRouter = router({
 
         let isActive = true
 
-        const safeEmit = (chunk: any) => {
+        const safeEmit = (chunk: CodexSessionChunk) => {
           if (!isActive) return
           try {
             emit.next(chunk)
@@ -1614,6 +1589,17 @@ export const codexRouter = router({
           }
         }
 
+        // Coalesce high-frequency text-delta chunks into fewer IPC emits.
+        // Non-text chunks flush the buffer first (ordering preserved); the buffer
+        // is drained explicitly on stream end / error / abort below.
+        const coalescer = createChunkCoalescer<CodexSessionChunk>(
+          (chunk) => {
+            safeEmit(chunk)
+            return isActive
+          },
+          { flushIntervalMs: 40 },
+        )
+
         ;(async () => {
           try {
             const db = getDatabase()
@@ -1629,26 +1615,31 @@ export const codexRouter = router({
             }
 
             const existingMessages = parseStoredMessages(existingSubChat.messages)
-            const requestedModelId =
-              extractCodexModelId(input.model) || DEFAULT_CODEX_MODEL
+            const parsedModelSelection = parseCodexModelSelection(input.model)
+            const requestedModelId = parsedModelSelection.modelId || DEFAULT_CODEX_MODEL
             const selectedModelId = preprocessCodexModelName({
               modelId: requestedModelId,
               authConfig: input.authConfig,
             })
-            const metadataModel = selectedModelId
+            const selectedReasoningEffort = parsedModelSelection.reasoningEffort
+            const metadataModel = selectedReasoningEffort
+              ? `${selectedModelId}/${selectedReasoningEffort}`
+              : selectedModelId
+            // app-server takes model and reasoning effort as separate fields
+            // (thread/start + turn/start) — no `model/effort` concat needed.
 
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
               lastMessage?.role === "user" &&
               extractPromptFromStoredMessage(lastMessage) === input.prompt
 
-            let messagesForStream = existingMessages
+            let messagesForStream: StoredChatMessage[] = existingMessages
             const isAuthoritativeRun = () => {
               const currentStream = activeStreams.get(input.subChatId)
               return !currentStream || currentStream.runId === input.runId
             }
 
-            const persistSubChatMessages = (messages: any[]) => {
+            const persistSubChatMessages = (messages: StoredChatMessage[]) => {
               if (!isAuthoritativeRun()) {
                 return false
               }
@@ -1663,12 +1654,14 @@ export const codexRouter = router({
               return true
             }
 
-            const cleanAssistantMessageForPersistence = (message: any) => {
-              if (!message || message.role !== "assistant") return message
+            const cleanAssistantMessageForPersistence = (
+              message: StoredChatMessage,
+            ): StoredChatMessage | null => {
+              if (message?.role !== "assistant") return message
               if (!Array.isArray(message.parts)) return message
 
               const cleanedParts = message.parts.filter(
-                (part: any) => part?.state !== "input-streaming",
+                (part: StoredMessagePart) => part?.state !== "input-streaming",
               )
 
               if (cleanedParts.length === 0) {
@@ -1682,7 +1675,7 @@ export const codexRouter = router({
 
               return normalizeCodexAssistantMessage(cleanedMessage, {
                 normalizeState: true,
-              })
+              }) as StoredChatMessage
             }
 
             if (!isDuplicatePrompt) {
@@ -1705,7 +1698,7 @@ export const codexRouter = router({
             }
 
             if (input.forceNewSession) {
-              cleanupProvider(input.subChatId)
+              await cleanupProvider(input.subChatId)
             }
 
             let mcpSnapshot: CodexMcpSnapshot = {
@@ -1716,11 +1709,8 @@ export const codexRouter = router({
               toolsResolved: false,
             }
             try {
-              const resolvedProjectPathFromCwd = resolveProjectPathFromWorktree(
-                input.cwd,
-              )
-              const mcpLookupPath =
-                input.projectPath || resolvedProjectPathFromCwd || input.cwd
+              const resolvedProjectPathFromCwd = resolveProjectPathFromWorktree(input.cwd)
+              const mcpLookupPath = input.projectPath || resolvedProjectPathFromCwd || input.cwd
               mcpSnapshot = await resolveCodexMcpSnapshot({
                 lookupPath: mcpLookupPath,
               })
@@ -1728,29 +1718,23 @@ export const codexRouter = router({
               console.error("[codex] Failed to resolve MCP servers:", mcpError)
             }
 
-            const provider = getOrCreateProvider({
-              subChatId: input.subChatId,
-              cwd: input.cwd,
-              mcpServers: mcpSnapshot.mcpServersForSession,
-              mcpFingerprint: mcpSnapshot.fingerprint,
-              existingSessionId:
-                input.forceNewSession
-                  ? undefined
-                  : input.sessionId ?? getLastSessionId(existingMessages),
-              authConfig: input.authConfig,
-            })
-
+            // Accumulate the assistant message from app-server chunks while also
+            // forwarding chunks to the renderer. Shape mirrors the AI-SDK
+            // UIMessage parts the ACP path produced, so persistence and the
+            // renderer stay untouched.
+            const accumulatedParts: StoredMessagePart[] = []
+            const accumulatedText: Record<string, string> = {}
+            const toolPartIndexByCallId: Record<string, number> = {}
             const startedAt = Date.now()
-            let latestSessionId =
-              provider.getSessionId() ||
-              input.sessionId ||
-              getLastSessionId(existingMessages)
+            let latestSessionId: string | undefined =
+              input.sessionId || getLastSessionId(existingMessages)
+            let latestThreadId: string | undefined = getLastThreadId(existingMessages)
             let usagePromise: Promise<CodexUsageMetadata | null> | null = null
 
             const resolveUsageOnce = (): Promise<CodexUsageMetadata | null> => {
               if (usagePromise) return usagePromise
 
-              const sessionId = latestSessionId || provider.getSessionId()
+              const sessionId = latestSessionId
               if (!sessionId) {
                 return Promise.resolve(null)
               }
@@ -1761,120 +1745,173 @@ export const codexRouter = router({
               return usagePromise
             }
 
-            const result = streamText({
-              model: provider.languageModel(selectedModelId),
-              messages: [
-                {
-                  role: "user",
-                  content: buildModelMessageContent(input.prompt, input.images),
-                },
-              ],
-              tools: provider.tools,
-              abortSignal: abortController.signal,
-            })
-
-            const uiStream = result.toUIMessageStream({
-              originalMessages: messagesForStream,
-              generateMessageId: () => crypto.randomUUID(),
-              messageMetadata: ({ part }) => {
-                const sessionId = provider.getSessionId() || undefined
-                if (sessionId) {
-                  latestSessionId = sessionId
-                }
-
-                if (part.type === "finish") {
-                  return {
-                    model: metadataModel,
-                    sessionId,
-                    durationMs: Date.now() - startedAt,
-                    resultSubtype: part.finishReason === "error" ? "error" : "success",
-                  }
-                }
-
-                if (sessionId) {
-                  return {
-                    model: metadataModel,
-                    sessionId,
-                  }
-                }
-
-                return { model: metadataModel }
-              },
-              onFinish: async ({ responseMessage, isContinuation }) => {
-                try {
-                  const usageMetadata = await resolveUsageOnce()
-                  const responseWithUsage = usageMetadata
-                    ? {
-                        ...responseMessage,
-                        metadata: {
-                          ...((responseMessage as any)?.metadata || {}),
-                          ...usageMetadata,
-                        },
-                      }
-                    : responseMessage
-                  const cleanedResponseMessage =
-                    cleanAssistantMessageForPersistence(responseWithUsage)
-
-                  if (!cleanedResponseMessage) {
-                    persistSubChatMessages(messagesForStream)
-                    return
-                  }
-
-                  const messagesToPersist = [
-                    ...(isContinuation
-                      ? messagesForStream.slice(0, -1)
-                      : messagesForStream),
-                    cleanedResponseMessage,
-                  ]
-
-                  persistSubChatMessages(messagesToPersist)
-                } catch (error) {
-                  console.error("[codex] Failed to persist messages:", error)
-                }
-              },
-              onError: (error) => extractCodexError(error).message,
-            })
-
-            const reader = uiStream.getReader()
-            let pendingFinishChunk: any | null = null
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
-
-              if (value?.type === "error") {
-                const normalized = extractCodexError(value)
-
+            const handleSessionChunk = (chunk: CodexSessionChunk) => {
+              if (chunk?.type === "error") {
+                // Drain buffered text before the error chunk (ordering).
+                coalescer.flush()
+                const normalized = extractCodexError(chunk)
                 if (isCodexAuthError(normalized)) {
-                  safeEmit({ ...value, type: "auth-error", errorText: normalized.message })
+                  safeEmit({
+                    ...chunk,
+                    type: "auth-error",
+                    errorText: normalized.message,
+                  })
                 } else {
-                  safeEmit({ ...value, errorText: normalized.message })
+                  safeEmit({ ...chunk, errorText: normalized.message })
                 }
-                continue
+                return
               }
 
-              if (value?.type === "finish") {
-                pendingFinishChunk = value
-                continue
+              if (chunk?.type === "text-start" && typeof chunk.id === "string") {
+                accumulatedText[chunk.id] = ""
+              } else if (
+                chunk?.type === "text-delta" &&
+                typeof chunk.id === "string" &&
+                typeof chunk.delta === "string"
+              ) {
+                accumulatedText[chunk.id] = (accumulatedText[chunk.id] ?? "") + chunk.delta
+              } else if (chunk?.type === "text-end" && typeof chunk.id === "string") {
+                accumulatedParts.push({
+                  type: "text",
+                  text: accumulatedText[chunk.id] ?? "",
+                })
+                delete accumulatedText[chunk.id]
+              } else if (
+                chunk?.type === "tool-input-available" &&
+                typeof chunk.toolCallId === "string"
+              ) {
+                const part = {
+                  type: `tool-${chunk.toolName}`,
+                  toolCallId: chunk.toolCallId,
+                  toolName: chunk.toolName,
+                  input: chunk.input,
+                  state: "call",
+                  startedAt: Date.now(),
+                }
+                toolPartIndexByCallId[chunk.toolCallId] = accumulatedParts.length
+                accumulatedParts.push(part)
+              } else if (
+                chunk?.type === "tool-output-available" &&
+                typeof chunk.toolCallId === "string"
+              ) {
+                const index = toolPartIndexByCallId[chunk.toolCallId]
+                if (index !== undefined && accumulatedParts[index]) {
+                  accumulatedParts[index] = {
+                    ...accumulatedParts[index],
+                    result: chunk.output,
+                    output: chunk.output,
+                    state: "result",
+                  }
+                }
               }
 
-              safeEmit(value)
+              coalescer.push(chunk)
             }
 
-            if (pendingFinishChunk) {
-              const usageMetadata = await resolveUsageOnce()
-              if (usageMetadata) {
-                safeEmit({
-                  type: "message-metadata",
-                  messageMetadata: usageMetadata,
-                })
-              }
-              safeEmit(pendingFinishChunk)
+            const session = await getOrCreateSession({
+              subChatId: input.subChatId,
+              cwd: input.cwd,
+              mcpFingerprint: mcpSnapshot.fingerprint,
+              existingThreadId: input.forceNewSession
+                ? undefined
+                : getLastThreadId(existingMessages),
+              legacySessionId: input.forceNewSession
+                ? undefined
+                : (input.sessionId ?? getLastSessionId(existingMessages)),
+              reasoningEffort: selectedReasoningEffort,
+              model: selectedModelId,
+              authConfig: input.authConfig,
+              onChunk: handleSessionChunk,
+            })
+            latestSessionId = session.sessionId
+            latestThreadId = session.threadId
+
+            if (abortController.signal.aborted) {
+              // Cancelled while spawning: the finally below disposes the
+              // session (aborted runs always clean up).
+              safeComplete()
+              return
+            }
+            abortController.signal.addEventListener(
+              "abort",
+              () => {
+                void session.interrupt()
+              },
+              { once: true },
+            )
+
+            const turnInput: CodexTurnInput[] = [{ type: "text", text: input.prompt }]
+            const { paths: imagePaths, cleanup: cleanupImageFiles } = await writeImageTempFiles(
+              input.images,
+              `codex-${input.runId}`,
+            )
+            for (const imagePath of imagePaths) {
+              turnInput.push({ type: "localImage", path: imagePath })
+            }
+
+            let turnResult: Awaited<ReturnType<CodexAppServerSession["startTurn"]>>
+            if (abortController.signal.aborted) {
+              await cleanupImageFiles()
+              turnResult = { status: "interrupted" }
             } else {
-              safeEmit({ type: "finish" })
+              try {
+                turnResult = await session.startTurn(turnInput, {
+                  model: selectedModelId,
+                  effort: selectedReasoningEffort,
+                })
+              } finally {
+                await cleanupImageFiles()
+              }
+            }
+
+            // Drain any buffered text-delta before the post-stream emits.
+            coalescer.flush()
+
+            const usageMetadata = await resolveUsageOnce()
+            if (usageMetadata) {
+              safeEmit({
+                type: "message-metadata",
+                messageMetadata: usageMetadata,
+              })
+            }
+
+            const finishMetadata = {
+              model: metadataModel,
+              sessionId: latestSessionId,
+              threadId: latestThreadId,
+              durationMs: Date.now() - startedAt,
+              // Mirror the ACP/AI-SDK routers: only true errors fail; user
+              // interrupts render without the "Failed" badge.
+              resultSubtype: turnResult.status === "error" ? "error" : "success",
+            }
+            safeEmit({ type: "message-metadata", messageMetadata: finishMetadata })
+
+            safeEmit({ type: "finish" })
+
+            try {
+              const responseMessage = {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                parts: accumulatedParts,
+                metadata: {
+                  ...finishMetadata,
+                  ...(usageMetadata ?? {}),
+                },
+              }
+              const cleanedResponseMessage = cleanAssistantMessageForPersistence(responseMessage)
+
+              if (!cleanedResponseMessage) {
+                persistSubChatMessages(messagesForStream)
+              } else {
+                persistSubChatMessages([...messagesForStream, cleanedResponseMessage])
+              }
+            } catch (error) {
+              console.error("[codex] Failed to persist messages:", error)
             }
 
             safeComplete()
           } catch (error) {
+            coalescer.flush()
             const normalized = extractCodexError(error)
 
             console.error("[codex] chat stream error:", error)
@@ -1891,7 +1928,7 @@ export const codexRouter = router({
               const shouldCleanupProvider =
                 abortController.signal.aborted || activeStream.cancelRequested
               if (shouldCleanupProvider) {
-                cleanupProvider(input.subChatId)
+                await cleanupProvider(input.subChatId)
               }
               activeStreams.delete(input.subChatId)
             }
@@ -1900,6 +1937,7 @@ export const codexRouter = router({
 
         return () => {
           isActive = false
+          coalescer.dispose() // Clear flush timer (flush is a no-op once inactive)
           abortController.abort()
 
           const activeStream = activeStreams.get(input.subChatId)
@@ -1935,8 +1973,8 @@ export const codexRouter = router({
 
   cleanup: publicProcedure
     .input(z.object({ subChatId: z.string() }))
-    .mutation(({ input }) => {
-      cleanupProvider(input.subChatId)
+    .mutation(async ({ input }) => {
+      await cleanupProvider(input.subChatId)
 
       const activeStream = activeStreams.get(input.subChatId)
       if (activeStream) {

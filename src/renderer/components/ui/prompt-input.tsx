@@ -1,21 +1,18 @@
 "use client"
 
-import { Textarea } from "./textarea"
+import type React from "react"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "./tooltip"
-import { cn } from "../../lib/utils"
-import React, {
   createContext,
+  forwardRef,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
-  useLayoutEffect,
-  forwardRef,
 } from "react"
+import { cn } from "../../lib/utils"
+import { Textarea } from "./textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip"
 
 type PromptInputContextType = {
   isLoading: boolean
@@ -105,12 +102,7 @@ export type PromptInputTextareaProps = {
 } & React.ComponentProps<typeof Textarea>
 
 const PromptInputTextareaInner = (
-  {
-    className,
-    onKeyDown,
-    disableAutosize = false,
-    ...props
-  }: PromptInputTextareaProps,
+  { className, onKeyDown, disableAutosize = false, ...props }: PromptInputTextareaProps,
   forwardedRef: React.Ref<HTMLTextAreaElement>,
 ) => {
   const { value, setValue, maxHeight, onSubmit, disabled } = usePromptInput()
@@ -122,9 +114,8 @@ const PromptInputTextareaInner = (
     if (typeof forwardedRef === "function") {
       forwardedRef(textareaRef.current)
     } else if (forwardedRef) {
-      ;(
-        forwardedRef as React.MutableRefObject<HTMLTextAreaElement | null>
-      ).current = textareaRef.current
+      ;(forwardedRef as React.MutableRefObject<HTMLTextAreaElement | null>).current =
+        textareaRef.current
     }
   }, [forwardedRef])
 
@@ -137,26 +128,29 @@ const PromptInputTextareaInner = (
 
     const scrollHeight = textarea.scrollHeight
     const maxHeightPx =
-      typeof maxHeight === "number"
-        ? maxHeight
-        : parseInt(maxHeight as string, 10) || 240
+      typeof maxHeight === "number" ? maxHeight : parseInt(maxHeight as string, 10) || 240
 
     const newHeight = Math.min(scrollHeight, maxHeightPx)
     textarea.style.height = `${newHeight}px`
     textarea.style.overflowY = scrollHeight > maxHeightPx ? "auto" : "hidden"
-  }, [value, disableAutosize, maxHeight])
+  }, [disableAutosize, maxHeight])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Prevent submission during IME composition (e.g., Chinese/Japanese/Korean input)
-    if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.nativeEvent.isComposing
+    ) {
       e.preventDefault()
       onSubmit?.()
     }
     onKeyDown?.(e)
   }
 
-  const maxHeightStyle =
-    typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight
+  const maxHeightStyle = typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight
 
   return (
     <Textarea
@@ -179,20 +173,15 @@ const PromptInputTextareaInner = (
   )
 }
 
-const PromptInputTextarea = forwardRef<
-  HTMLTextAreaElement,
-  PromptInputTextareaProps
->(PromptInputTextareaInner)
+const PromptInputTextarea = forwardRef<HTMLTextAreaElement, PromptInputTextareaProps>(
+  PromptInputTextareaInner,
+)
 
 PromptInputTextarea.displayName = "PromptInputTextarea"
 
 type PromptInputActionsProps = React.HTMLAttributes<HTMLDivElement>
 
-function PromptInputActions({
-  children,
-  className,
-  ...props
-}: PromptInputActionsProps) {
+function PromptInputActions({ children, className, ...props }: PromptInputActionsProps) {
   return (
     <div className={cn("flex items-center gap-2", className)} {...props}>
       {children}
@@ -247,6 +236,7 @@ function PromptInputVariantContext() {
     <div className="mx-2 mt-1">
       <div className="inline-flex items-center gap-1 px-1.5 py-1 bg-muted text-foreground rounded-md">
         <svg
+          aria-hidden="true"
           width="10"
           height="10"
           viewBox="0 0 10 10"
@@ -283,9 +273,9 @@ function PromptInputVariantContext() {
 
 export {
   PromptInput,
-  PromptInputTextarea,
-  PromptInputActions,
   PromptInputAction,
+  PromptInputActions,
   PromptInputContextItems,
+  PromptInputTextarea,
   PromptInputVariantContext,
 }

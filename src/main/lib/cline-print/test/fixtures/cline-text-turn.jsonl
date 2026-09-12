@@ -1,0 +1,15 @@
+{"ts":"2026-09-11T15:21:14.464Z","type":"hook_event","hookEventName":"agent_start","agentId":"agent_1789140074433_ck15vt","taskId":"conv_1789140074455_uu4xmvw","parentAgentId":null}
+{"ts":"2026-09-11T15:21:14.472Z","type":"agent_event","event":{"type":"iteration_start","iteration":1}}
+{"ts":"2026-09-11T15:21:14.495Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"Hello "}}
+{"ts":"2026-09-11T15:21:14.502Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"from "}}
+{"ts":"2026-09-11T15:21:14.510Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"the "}}
+{"ts":"2026-09-11T15:21:14.514Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"stub "}}
+{"ts":"2026-09-11T15:21:14.518Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"model! "}}
+{"ts":"2026-09-11T15:21:14.526Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"Canned "}}
+{"ts":"2026-09-11T15:21:14.530Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"response. "}}
+{"ts":"2026-09-11T15:21:14.537Z","type":"agent_event","event":{"type":"usage","inputTokens":100,"outputTokens":20,"cacheReadTokens":0,"cacheWriteTokens":0,"cost":0,"totalInputTokens":100,"totalOutputTokens":20,"totalCacheReadTokens":0,"totalCacheWriteTokens":0,"totalCost":0}}
+{"ts":"2026-09-11T15:21:14.542Z","type":"agent_event","event":{"type":"content_end","contentType":"text","text":"Hello from the stub model! Canned response. "}}
+{"ts":"2026-09-11T15:21:14.546Z","type":"agent_event","event":{"type":"iteration_end","iteration":1,"hadToolCalls":false,"toolCallCount":0}}
+{"ts":"2026-09-11T15:21:14.552Z","type":"hook_event","hookEventName":"agent_end","agentId":"agent_1789140074433_ck15vt","taskId":"conv_1789140074455_uu4xmvw","parentAgentId":null}
+{"ts":"2026-09-11T15:21:14.556Z","type":"agent_event","event":{"type":"done","reason":"completed","text":"Hello from the stub model! Canned response. ","iterations":1,"usage":{"inputTokens":100,"outputTokens":20,"cacheReadTokens":0,"cacheWriteTokens":0,"totalCost":0}}}
+{"ts":"2026-09-11T15:21:14.581Z","type":"run_result","finishReason":"completed","iterations":1,"usage":{"inputTokens":100,"outputTokens":20,"cacheReadTokens":0,"cacheWriteTokens":0,"totalCost":0},"aggregateUsage":{"inputTokens":100,"outputTokens":20,"cacheReadTokens":0,"cacheWriteTokens":0,"totalCost":0},"durationMs":101,"text":"Hello from the stub model! Canned response. ","model":{"id":"stub-model","provider":"openai-native"}}

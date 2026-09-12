@@ -1,18 +1,19 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect } from "react"
+import { Check, ChevronRight, Copy } from "lucide-react"
+import { memo, useCallback, useEffect, useState } from "react"
+import { RawHtml } from "../../../components/raw-html"
 import {
   Collapsible,
-  CollapsibleTrigger,
   CollapsibleContent,
+  CollapsibleTrigger,
 } from "../../../components/ui/collapsible"
-import { ChevronRight, Copy, Check } from "lucide-react"
-import { cn } from "../../../lib/utils"
-import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
+import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
+import { cn } from "../../../lib/utils"
 
 interface MessageJsonDisplayProps {
-  message: any
+  message: unknown
   label?: string
 }
 
@@ -53,17 +54,16 @@ export const MessageJsonDisplay = memo(function MessageJsonDisplay({
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <div className="flex items-center gap-1">
         <CollapsibleTrigger asChild>
-          <button className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors">
-            <ChevronRight
-              className={cn(
-                "h-3 w-3 transition-transform",
-                isOpen && "rotate-90",
-              )}
-            />
+          <button
+            type="button"
+            className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
+          >
+            <ChevronRight className={cn("h-3 w-3 transition-transform", isOpen && "rotate-90")} />
             <span>{label} JSON</span>
           </button>
         </CollapsibleTrigger>
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation()
             handleCopy()
@@ -83,10 +83,7 @@ export const MessageJsonDisplay = memo(function MessageJsonDisplay({
           {/* JSON content */}
           <div className="p-3 max-h-[300px] overflow-auto">
             {highlightedHtml ? (
-              <pre
-                className="text-xs font-mono"
-                dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-              />
+              <RawHtml as="pre" html={highlightedHtml} className="text-xs font-mono" />
             ) : (
               <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">
                 {jsonString}

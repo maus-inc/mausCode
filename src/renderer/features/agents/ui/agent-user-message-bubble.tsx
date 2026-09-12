@@ -1,27 +1,25 @@
 "use client"
 
-import { useState, useRef, useEffect, memo, useMemo } from "react"
-import { cn } from "../../../lib/utils"
+import { useAtomValue } from "jotai"
+import { Check, Copy } from "lucide-react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../../components/ui/dialog"
 import { useOverflowDetection } from "../../../hooks/use-overflow-detection"
+import { cn } from "../../../lib/utils"
+import { chatFontSizeAtom } from "../atoms"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog"
-import { AgentImageItem } from "./agent-image-item"
-import { RenderFileMentions, extractTextMentions, TextMentionBlocks } from "../mentions/render-file-mentions"
+  extractTextMentions,
+  RenderFileMentions,
+  TextMentionBlocks,
+} from "../mentions/render-file-mentions"
 import { useSearchHighlight, useSearchQuery } from "../search"
+import type { ImagePartLike } from "../stores/message-store"
+import { AgentImageItem } from "./agent-image-item"
 
 interface AgentUserMessageBubbleProps {
   messageId: string
   textContent: string
-  imageParts?: Array<{
-    data?: {
-      filename?: string
-      url?: string
-    }
-  }>
+  imageParts?: ImagePartLike[]
   /** If true, renders only images and text - no TextMentionBlocks (they're rendered by parent) */
   skipTextMentionBlocks?: boolean
 }
@@ -31,7 +29,7 @@ function highlightTextInDom(
   container: HTMLElement,
   searchText: string,
   currentOffset: number | null,
-  currentLength: number | null
+  currentLength: number | null,
 ) {
   // Remove existing highlights first
   const existingHighlights = container.querySelectorAll(".search-highlight")
@@ -46,18 +44,15 @@ function highlightTextInDom(
   if (!searchText) return
 
   const lowerSearch = searchText.toLowerCase()
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null
-  )
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null)
 
   const textNodes: Text[] = []
-  let node: Text | null
-  while ((node = walker.nextNode() as Text | null)) {
-    if (node.nodeValue && node.nodeValue.toLowerCase().includes(lowerSearch)) {
+  let node: Text | null = walker.nextNode() as Text | null
+  while (node !== null) {
+    if (node.nodeValue?.toLowerCase().includes(lowerSearch)) {
       textNodes.push(node)
     }
+    node = walker.nextNode() as Text | null
   }
 
   let globalOffset = 0
@@ -68,7 +63,8 @@ function highlightTextInDom(
     const fragments: (string | HTMLElement)[] = []
     let searchIndex = 0
 
-    while ((searchIndex = lowerText.indexOf(lowerSearch, lastIndex)) !== -1) {
+    searchIndex = lowerText.indexOf(lowerSearch, lastIndex)
+    while (searchIndex !== -1) {
       if (searchIndex > lastIndex) {
         fragments.push(text.slice(lastIndex, searchIndex))
       }
@@ -86,6 +82,7 @@ function highlightTextInDom(
 
       fragments.push(mark)
       lastIndex = searchIndex + searchText.length
+      searchIndex = lowerText.indexOf(lowerSearch, lastIndex)
     }
 
     if (lastIndex < text.length) {
@@ -117,21 +114,31 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
   skipTextMentionBlocks = false,
 }: AgentUserMessageBubbleProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(textContent)
+    setIsCopied(true)
+    setTimeout(() => setIsCopied(false), 2000)
+  }, [textContent])
 
   // Extract quote/diff mentions to display above the bubble
   const { textMentions, cleanedText } = useMemo(
     () => extractTextMentions(textContent),
-    [textContent]
+    [textContent],
   )
 
   // VS Code style overflow detection using ResizeObserver (no layout thrashing)
   const showGradient = useOverflowDetection(contentRef, [textContent])
 
+  // Chat font size preference — applied to text bubble and expanded dialog
+  const chatFontSize = useAtomValue(chatFontSizeAtom)
+
   // Search highlight support
   const highlights = useSearchHighlight(messageId, 0, "text")
   const searchQuery = useSearchQuery()
-  const currentHighlight = highlights.find(h => h.isCurrent)
+  const currentHighlight = highlights.find((h) => h.isCurrent)
 
   // Determine if we should scroll for search (has current highlight in this message)
   const hasCurrentSearchHighlight = currentHighlight !== undefined
@@ -157,7 +164,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
     }
 
     prevHadHighlight.current = hasCurrentSearchHighlight
-  }, [hasCurrentSearchHighlight, currentHighlight?.offset])
+  }, [hasCurrentSearchHighlight])
 
   // Apply DOM-based highlighting after render
   useEffect(() => {
@@ -167,7 +174,7 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
       contentRef.current,
       searchQuery,
       currentHighlight?.offset ?? null,
-      currentHighlight?.length ?? null
+      currentHighlight?.length ?? null,
     )
 
     return () => {
@@ -182,18 +189,21 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
         })
       }
     }
-  }, [searchQuery, currentHighlight?.offset, currentHighlight?.length, textContent])
+  }, [searchQuery, currentHighlight?.offset, currentHighlight?.length])
 
   return (
     <>
-      <div className="flex justify-start drop-shadow-[0_10px_20px_hsl(var(--background))]" data-user-bubble>
-        <div className="space-y-2 w-full">
+      <div
+        className="group/usermsg flex justify-start drop-shadow-[0_10px_20px_hsl(var(--background))]"
+        data-user-bubble
+      >
+        <div className="space-y-2 w-full relative">
           {/* Show attached images from stored message */}
           {imageParts.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               {(() => {
                 // Build allImages array for gallery navigation
-                const resolveImgUrl = (img: any) =>
+                const resolveImgUrl = (img: ImagePartLike) =>
                   img.data?.base64Data && img.data?.mediaType
                     ? `data:${img.data.mediaType};base64,${img.data.base64Data}`
                     : img.data?.url || ""
@@ -224,25 +234,56 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
           )}
           {/* Text bubble with overflow detection */}
           {cleanedText ? (
-            <div
-              ref={contentRef}
-              onClick={() => showGradient && !hasCurrentSearchHighlight && setIsExpanded(true)}
-              className={cn(
-                "relative bg-input-background border px-3 py-2 rounded-xl whitespace-pre-wrap text-sm transition-all duration-200 max-h-[100px]",
-                // When searching in this message, allow scroll; otherwise hide overflow
-                hasCurrentSearchHighlight ? "overflow-y-auto" : "overflow-hidden",
-                // Cursor and hover only when can expand (not during search)
-                showGradient && !hasCurrentSearchHighlight && "cursor-pointer hover:brightness-110",
-              )}
-              data-message-id={messageId}
-              data-part-index={0}
-              data-part-type="text"
-            >
-              <RenderFileMentions text={cleanedText} />
-              {/* Show gradient only when collapsed and not searching in this message */}
-              {showGradient && !hasCurrentSearchHighlight && (
-                <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none bg-gradient-to-t from-[hsl(var(--input-background))] to-transparent rounded-b-xl" />
-              )}
+            <div className="relative">
+              {/* biome-ignore lint/a11y/useSemanticElements: contains block-level layout; a native button would be invalid HTML. */}
+              <div
+                ref={contentRef}
+                onClick={() => showGradient && !hasCurrentSearchHighlight && setIsExpanded(true)}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isExpanded}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    e.currentTarget.click()
+                  }
+                }}
+                className={cn(
+                  "relative bg-input-background border px-3 py-2 rounded-xl whitespace-pre-wrap transition-all duration-200 max-h-[100px]",
+                  // When searching in this message, allow scroll; otherwise hide overflow
+                  hasCurrentSearchHighlight ? "overflow-y-auto" : "overflow-hidden",
+                  // Cursor and hover only when can expand (not during search)
+                  showGradient &&
+                    !hasCurrentSearchHighlight &&
+                    "cursor-pointer hover:brightness-110",
+                )}
+                style={{ fontSize: `${chatFontSize}px` }}
+                data-message-id={messageId}
+                data-part-index={0}
+                data-part-type="text"
+              >
+                <RenderFileMentions text={cleanedText} />
+                {/* Show gradient only when collapsed and not searching in this message */}
+                {showGradient && !hasCurrentSearchHighlight && (
+                  <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none bg-gradient-to-t from-[hsl(var(--input-background))] to-transparent rounded-b-xl" />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className={cn(
+                  "absolute -bottom-6 right-0 p-1 rounded transition-all duration-150",
+                  "text-muted-foreground hover:text-foreground",
+                  "opacity-0 group-hover/usermsg:opacity-100",
+                )}
+                title="Copy message"
+              >
+                {isCopied ? (
+                  <Check className="w-3.5 h-3.5 text-green-500" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
             </div>
           ) : (imageParts.length > 0 || textMentions.length > 0) && !skipTextMentionBlocks ? (
             // Show "Using X" summary when no text but have attachments rendered inline
@@ -256,9 +297,9 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
                 }
 
                 // Count text mentions by type
-                const quoteCount = textMentions.filter(m => m.type === "quote").length
-                const pastedCount = textMentions.filter(m => m.type === "pasted").length
-                const codeCount = textMentions.filter(m => m.type === "diff").length
+                const quoteCount = textMentions.filter((m) => m.type === "quote").length
+                const pastedCount = textMentions.filter((m) => m.type === "pasted").length
+                const codeCount = textMentions.filter((m) => m.type === "diff").length
 
                 if (quoteCount > 0) {
                   parts.push(quoteCount === 1 ? "selected text" : `${quoteCount} text selections`)
@@ -286,10 +327,8 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            {textMentions.length > 0 && (
-              <TextMentionBlocks mentions={textMentions} />
-            )}
-            <div className="whitespace-pre-wrap text-sm">
+            {textMentions.length > 0 && <TextMentionBlocks mentions={textMentions} />}
+            <div className="whitespace-pre-wrap" style={{ fontSize: `${chatFontSize}px` }}>
               <RenderFileMentions text={cleanedText} />
             </div>
           </div>

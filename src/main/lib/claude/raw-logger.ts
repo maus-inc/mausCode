@@ -1,6 +1,6 @@
+import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises"
+import { join } from "node:path"
 import { app } from "electron"
-import { join } from "path"
-import { appendFile, mkdir, stat, readdir, unlink } from "fs/promises"
 
 // Check if logging is enabled (lazy check after app is ready)
 function isEnabled(): boolean {
@@ -80,10 +80,7 @@ export async function cleanupOldLogs(): Promise<void> {
  * Log a raw Claude message to JSONL file for debugging
  * Includes automatic log rotation and cleanup
  */
-export async function logRawClaudeMessage(
-  sessionId: string,
-  msg: unknown,
-): Promise<void> {
+export async function logRawClaudeMessage(sessionId: string, msg: unknown): Promise<void> {
   if (!isEnabled()) return
 
   try {
@@ -91,8 +88,7 @@ export async function logRawClaudeMessage(
 
     // Create new file for new session OR rotate if current file is too large
     const needsNewFile =
-      sessionId !== currentSessionId ||
-      (currentLogFile && (await shouldRotateLog(currentLogFile)))
+      sessionId !== currentSessionId || (currentLogFile && (await shouldRotateLog(currentLogFile)))
 
     if (needsNewFile) {
       currentSessionId = sessionId
@@ -114,7 +110,11 @@ export async function logRawClaudeMessage(
       data: msg,
     }
 
-    await appendFile(currentLogFile!, JSON.stringify(entry) + "\n")
+    if (!currentLogFile) {
+      console.error("[raw-logger] No log file initialized, skipping entry")
+      return
+    }
+    await appendFile(currentLogFile, `${JSON.stringify(entry)}\n`)
   } catch (err) {
     // Don't let logging errors break the main flow
     console.error("[raw-logger] Failed to log:", err)

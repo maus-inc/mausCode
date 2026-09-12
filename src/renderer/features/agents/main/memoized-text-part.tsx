@@ -1,9 +1,11 @@
 "use client"
 
+import { useAtomValue } from "jotai"
 import { memo, useEffect, useRef } from "react"
-import { cn } from "../../../lib/utils"
 import { MemoizedMarkdown } from "../../../components/chat-markdown-renderer"
-import { useSearchQuery, useSearchHighlight } from "../search"
+import { cn } from "../../../lib/utils"
+import { chatFontSizeAtom } from "../atoms"
+import { useSearchHighlight, useSearchQuery } from "../search"
 
 interface MemoizedTextPartProps {
   text: string
@@ -18,7 +20,7 @@ interface MemoizedTextPartProps {
 function highlightTextInDom(
   container: HTMLElement,
   searchText: string,
-  currentMatchIndex: number | null = null
+  currentMatchIndex: number | null = null,
 ) {
   // Remove existing highlights first
   const existingHighlights = container.querySelectorAll(".search-highlight")
@@ -33,18 +35,15 @@ function highlightTextInDom(
   if (!searchText) return
 
   const lowerSearch = searchText.toLowerCase()
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null
-  )
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null)
 
   const textNodes: Text[] = []
-  let node: Text | null
-  while ((node = walker.nextNode() as Text | null)) {
-    if (node.nodeValue && node.nodeValue.toLowerCase().includes(lowerSearch)) {
+  let node: Text | null = walker.nextNode() as Text | null
+  while (node !== null) {
+    if (node.nodeValue?.toLowerCase().includes(lowerSearch)) {
       textNodes.push(node)
     }
+    node = walker.nextNode() as Text | null
   }
 
   let matchCounter = 0
@@ -55,7 +54,8 @@ function highlightTextInDom(
     const fragments: (string | HTMLElement)[] = []
     let searchIndex = 0
 
-    while ((searchIndex = lowerText.indexOf(lowerSearch, lastIndex)) !== -1) {
+    searchIndex = lowerText.indexOf(lowerSearch, lastIndex)
+    while (searchIndex !== -1) {
       if (searchIndex > lastIndex) {
         fragments.push(text.slice(lastIndex, searchIndex))
       }
@@ -71,6 +71,7 @@ function highlightTextInDom(
 
       fragments.push(mark)
       lastIndex = searchIndex + searchText.length
+      searchIndex = lowerText.indexOf(lowerSearch, lastIndex)
     }
 
     if (lastIndex < text.length) {
@@ -95,106 +96,124 @@ function highlightTextInDom(
 
 // Inner component - pure render, no hooks that cause re-renders
 // Only re-renders when props change (text, styling props)
-const MemoizedTextPartInner = memo(function MemoizedTextPartInner({
-  text,
-  messageId,
-  partIndex,
-  isFinalText,
-  visibleStepsCount,
-}: Omit<MemoizedTextPartProps, "isStreaming">) {
-  if (!text?.trim()) return null
+const MemoizedTextPartInner = memo(
+  function MemoizedTextPartInner({
+    text,
+    messageId,
+    partIndex,
+    isFinalText,
+    visibleStepsCount,
+    baseFontSize,
+  }: Omit<MemoizedTextPartProps, "isStreaming"> & { baseFontSize?: number }) {
+    if (!text?.trim()) return null
 
-  return (
-    <div
-      className={cn(
-        "text-foreground px-2",
-        isFinalText && visibleStepsCount > 0 && "pt-3 border-t border-border/50",
-      )}
-      data-message-id={messageId}
-      data-part-index={partIndex}
-      data-part-type="text"
-    >
-      {isFinalText && visibleStepsCount > 0 && (
-        <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium mb-1">
-          Response
-        </div>
-      )}
-      <MemoizedMarkdown content={text} id={`${messageId}-${partIndex}`} size="sm" />
-    </div>
-  )
-}, (prev, next) => {
-  return (
-    prev.text === next.text &&
-    prev.messageId === next.messageId &&
-    prev.partIndex === next.partIndex &&
-    prev.isFinalText === next.isFinalText &&
-    prev.visibleStepsCount === next.visibleStepsCount
-  )
-})
+    return (
+      <div
+        className={cn(
+          "text-foreground px-2",
+          isFinalText && visibleStepsCount > 0 && "pt-3 border-t border-border/50",
+        )}
+        data-message-id={messageId}
+        data-part-index={partIndex}
+        data-part-type="text"
+      >
+        {isFinalText && visibleStepsCount > 0 && (
+          <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium mb-1">
+            Response
+          </div>
+        )}
+        <MemoizedMarkdown
+          content={text}
+          id={`${messageId}-${partIndex}`}
+          size="sm"
+          baseFontSize={baseFontSize}
+        />
+      </div>
+    )
+  },
+  (prev, next) => {
+    return (
+      prev.text === next.text &&
+      prev.messageId === next.messageId &&
+      prev.partIndex === next.partIndex &&
+      prev.isFinalText === next.isFinalText &&
+      prev.visibleStepsCount === next.visibleStepsCount &&
+      prev.baseFontSize === next.baseFontSize
+    )
+  },
+)
 
 // Outer component - handles search highlighting via DOM manipulation
 // This may re-render when search changes, but the inner MemoizedTextPartInner won't
 // because its props (text, etc.) haven't changed
-export const MemoizedTextPart = memo(function MemoizedTextPart({
-  text,
-  messageId,
-  partIndex,
-  isFinalText,
-  visibleStepsCount,
-  isStreaming = false,
-}: MemoizedTextPartProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
+export const MemoizedTextPart = memo(
+  function MemoizedTextPart({
+    text,
+    messageId,
+    partIndex,
+    isFinalText,
+    visibleStepsCount,
+    isStreaming = false,
+  }: MemoizedTextPartProps) {
+    const containerRef = useRef<HTMLDivElement>(null)
 
-  // Search hooks - when search is closed, these return empty/null values
-  // and don't cause re-renders (SearchHighlightProvider returns static context)
-  const searchQuery = useSearchQuery()
-  const highlights = useSearchHighlight(messageId, partIndex, "text")
-  const currentHighlight = highlights.find(h => h.isCurrent)
-  const currentMatchIndexInPart = currentHighlight?.indexInPart ?? null
+    // Chat font size preference — passed to MemoizedMarkdown to scale text via em-based styles
+    const chatFontSize = useAtomValue(chatFontSizeAtom)
 
-  // Apply DOM-based highlighting after render
-  // Skip during streaming to avoid performance issues
-  useEffect(() => {
-    if (!containerRef.current || isStreaming || !searchQuery) return
+    // Search hooks - when search is closed, these return empty/null values
+    // and don't cause re-renders (SearchHighlightProvider returns static context)
+    const searchQuery = useSearchQuery()
+    const highlights = useSearchHighlight(messageId, partIndex, "text")
+    const currentHighlight = highlights.find((h) => h.isCurrent)
+    const currentMatchIndexInPart = currentHighlight?.indexInPart ?? null
 
-    highlightTextInDom(containerRef.current, searchQuery, currentMatchIndexInPart)
+    // Apply DOM-based highlighting after render
+    // Skip during streaming to avoid performance issues
+    // biome-ignore lint/correctness/useExhaustiveDependencies: text intentionally re-triggers highlighting when content changes; the callback reads the live DOM.
+    useEffect(() => {
+      if (!containerRef.current || isStreaming || !searchQuery) return
 
-    return () => {
-      if (containerRef.current) {
-        const existingHighlights = containerRef.current.querySelectorAll(".search-highlight")
-        existingHighlights.forEach((el) => {
-          const parent = el.parentNode
-          if (parent) {
-            parent.replaceChild(document.createTextNode(el.textContent || ""), el)
-            parent.normalize()
-          }
-        })
+      highlightTextInDom(containerRef.current, searchQuery, currentMatchIndexInPart)
+
+      return () => {
+        if (containerRef.current) {
+          const existingHighlights = containerRef.current.querySelectorAll(".search-highlight")
+          existingHighlights.forEach((el) => {
+            const parent = el.parentNode
+            if (parent) {
+              parent.replaceChild(document.createTextNode(el.textContent || ""), el)
+              parent.normalize()
+            }
+          })
+        }
       }
-    }
-  }, [searchQuery, currentMatchIndexInPart, isStreaming, text])
+    }, [searchQuery, currentMatchIndexInPart, isStreaming, text])
 
-  if (!text?.trim()) return null
+    if (!text?.trim()) return null
 
-  return (
-    <div ref={containerRef}>
-      <MemoizedTextPartInner
-        text={text}
-        messageId={messageId}
-        partIndex={partIndex}
-        isFinalText={isFinalText}
-        visibleStepsCount={visibleStepsCount}
-      />
-    </div>
-  )
-}, (prev, next) => {
-  // Only re-render outer component when these props change
-  // Search-related re-renders happen but inner component stays memoized
-  return (
-    prev.text === next.text &&
-    prev.messageId === next.messageId &&
-    prev.partIndex === next.partIndex &&
-    prev.isFinalText === next.isFinalText &&
-    prev.visibleStepsCount === next.visibleStepsCount &&
-    prev.isStreaming === next.isStreaming
-  )
-})
+    return (
+      <div ref={containerRef}>
+        <MemoizedTextPartInner
+          text={text}
+          messageId={messageId}
+          partIndex={partIndex}
+          isFinalText={isFinalText}
+          visibleStepsCount={visibleStepsCount}
+          baseFontSize={chatFontSize}
+        />
+      </div>
+    )
+  },
+  (prev, next) => {
+    // Only re-render outer component when these props change
+    // Search-related re-renders happen but inner component stays memoized
+    return (
+      prev.text === next.text &&
+      prev.messageId === next.messageId &&
+      prev.partIndex === next.partIndex &&
+      prev.isFinalText === next.isFinalText &&
+      prev.visibleStepsCount === next.visibleStepsCount &&
+      prev.isStreaming === next.isStreaming
+    )
+  },
+)

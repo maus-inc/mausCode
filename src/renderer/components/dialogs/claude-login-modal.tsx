@@ -13,11 +13,7 @@ import {
 } from "../../lib/atoms"
 import { appStore } from "../../lib/jotai-store"
 import { trpc } from "../../lib/trpc"
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-} from "../ui/alert-dialog"
+import { AlertDialog, AlertDialogCancel, AlertDialogContent } from "../ui/alert-dialog"
 import { Button } from "../ui/button"
 import { ClaudeCodeIcon, IconSpinner } from "../ui/icons"
 import { Input } from "../ui/input"
@@ -52,9 +48,7 @@ export function ClaudeLoginModal({
   autoStartAuth = false,
 }: ClaudeLoginModalProps) {
   const [open, setOpen] = useAtom(agentsLoginModalOpenAtom)
-  const setAnthropicOnboardingCompleted = useSetAtom(
-    anthropicOnboardingCompletedAtom,
-  )
+  const setAnthropicOnboardingCompleted = useSetAtom(anthropicOnboardingCompletedAtom)
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
@@ -80,15 +74,12 @@ export function ClaudeLoginModal({
     {
       enabled: flowState.step === "waiting_url",
       refetchInterval: 1500,
-    }
+    },
   )
 
   // Update flow state when we get the OAuth URL
   useEffect(() => {
-    if (
-      flowState.step === "waiting_url" &&
-      pollStatusQuery.data?.oauthUrl
-    ) {
+    if (flowState.step === "waiting_url" && pollStatusQuery.data?.oauthUrl) {
       setSavedOauthUrl(pollStatusQuery.data.oauthUrl)
       setFlowState({
         step: "has_url",
@@ -97,10 +88,7 @@ export function ClaudeLoginModal({
         sandboxUrl: flowState.sandboxUrl,
         sessionId: flowState.sessionId,
       })
-    } else if (
-      flowState.step === "waiting_url" &&
-      pollStatusQuery.data?.state === "error"
-    ) {
+    } else if (flowState.step === "waiting_url" && pollStatusQuery.data?.state === "error") {
       setFlowState({
         step: "error",
         message: pollStatusQuery.data.error || "Failed to get OAuth URL",
@@ -110,11 +98,7 @@ export function ClaudeLoginModal({
 
   // Open URL in browser when ready (after user clicked Connect)
   useEffect(() => {
-    if (
-      flowState.step === "has_url" &&
-      userClickedConnect &&
-      !urlOpenedRef.current
-    ) {
+    if (flowState.step === "has_url" && userClickedConnect && !urlOpenedRef.current) {
       urlOpenedRef.current = true
       setUrlOpened(true)
       openOAuthUrlMutation.mutate(flowState.oauthUrl)
@@ -140,7 +124,10 @@ export function ClaudeLoginModal({
   const triggerAuthRetry = () => {
     const pending = appStore.get(pendingAuthRetryMessageAtom)
     if (pending && pending.provider === "claude-code") {
-      console.log("[ClaudeLoginModal] OAuth success - triggering retry for subChatId:", pending.subChatId)
+      console.log(
+        "[ClaudeLoginModal] OAuth success - triggering retry for subChatId:",
+        pending.subChatId,
+      )
       appStore.set(pendingAuthRetryMessageAtom, { ...pending, readyToRetry: true })
     }
   }
@@ -148,11 +135,7 @@ export function ClaudeLoginModal({
   // Helper to clear pending retry (on cancel/close without success)
   const clearPendingRetry = () => {
     const pending = appStore.get(pendingAuthRetryMessageAtom)
-    if (
-      pending &&
-      pending.provider === "claude-code" &&
-      !pending.readyToRetry
-    ) {
+    if (pending && pending.provider === "claude-code" && !pending.readyToRetry) {
       console.log("[ClaudeLoginModal] Modal closed without success - clearing pending retry")
       appStore.set(pendingAuthRetryMessageAtom, null)
     }
@@ -223,12 +206,7 @@ export function ClaudeLoginModal({
   }, [flowState, openOAuthUrlMutation, startAuthMutation])
 
   useEffect(() => {
-    if (
-      !open ||
-      !autoStartAuth ||
-      flowState.step !== "idle" ||
-      didAutoStartForOpenRef.current
-    ) {
+    if (!open || !autoStartAuth || flowState.step !== "idle" || didAutoStartForOpenRef.current) {
       return
     }
 
@@ -302,8 +280,7 @@ export function ClaudeLoginModal({
     setOpen(false)
   }
 
-  const isLoadingAuth =
-    flowState.step === "starting" || flowState.step === "waiting_url"
+  const isLoadingAuth = flowState.step === "starting" || flowState.step === "waiting_url"
   const isSubmitting = flowState.step === "submitting"
 
   // Handle modal open/close - clear pending retry if closing without success
@@ -328,19 +305,15 @@ export function ClaudeLoginModal({
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
               <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                <Logo className="w-5 h-5" fill="white" />
+                <Logo className="w-5 h-5 invert" />
               </div>
               <div className="w-10 h-10 rounded-full bg-[#D97757] flex items-center justify-center">
                 <ClaudeCodeIcon className="w-6 h-6 text-white" />
               </div>
             </div>
             <div className="space-y-1">
-              <h1 className="text-base font-semibold tracking-tight">
-                Claude Code
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Connect your Claude Code subscription
-              </p>
+              <h1 className="text-base font-semibold tracking-tight">Claude Code</h1>
+              <p className="text-sm text-muted-foreground">Connect your Claude Code subscription</p>
             </div>
           </div>
 
@@ -362,9 +335,7 @@ export function ClaudeLoginModal({
             )}
 
             {/* Code Input - Show after URL is opened or if has_url */}
-            {(urlOpened ||
-              flowState.step === "has_url" ||
-              flowState.step === "submitting") && (
+            {(urlOpened || flowState.step === "has_url" || flowState.step === "submitting") && (
               <div className="space-y-4">
                 <Input
                   value={authCode}
@@ -388,6 +359,7 @@ export function ClaudeLoginModal({
                     <>
                       {" "}
                       <button
+                        type="button"
                         onClick={handleOpenFallbackUrl}
                         className="text-primary hover:underline"
                       >
@@ -405,11 +377,7 @@ export function ClaudeLoginModal({
                 <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                   <p className="text-sm text-destructive">{flowState.message}</p>
                 </div>
-                <Button
-                  variant="secondary"
-                  onClick={handleConnectClick}
-                  className="w-full"
-                >
+                <Button variant="secondary" onClick={handleConnectClick} className="w-full">
                   Try Again
                 </Button>
               </div>

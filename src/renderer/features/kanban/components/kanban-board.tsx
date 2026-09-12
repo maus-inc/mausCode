@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react"
-import { KanbanColumn } from "./kanban-column"
-import type { KanbanCardData } from "./kanban-card"
 import type { SubChatStatus } from "../lib/derive-status"
+import type { KanbanCardData } from "./kanban-card"
+import { KanbanColumn } from "./kanban-column"
 
 interface KanbanBoardProps {
   cards: KanbanCardData[]

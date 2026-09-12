@@ -1,5 +1,6 @@
-import { useEffect, useCallback } from "react"
 import { useAtom } from "jotai"
+import { useCallback, useEffect } from "react"
+import { RELEASES_URL } from "../../../shared/app-identity"
 import { justUpdatedAtom, justUpdatedVersionAtom } from "../atoms"
 
 const LAST_VERSION_KEY = "app:last-version"
@@ -10,9 +11,7 @@ const LAST_VERSION_KEY = "app:last-version"
  */
 export function useJustUpdated() {
   const [justUpdated, setJustUpdated] = useAtom(justUpdatedAtom)
-  const [justUpdatedVersion, setJustUpdatedVersion] = useAtom(
-    justUpdatedVersionAtom,
-  )
+  const [justUpdatedVersion, setJustUpdatedVersion] = useAtom(justUpdatedVersionAtom)
 
   // Check for update on mount
   useEffect(() => {
@@ -52,7 +51,7 @@ export function useJustUpdated() {
     if (api) {
       // Link to changelog with anchor to current version
       const version = justUpdatedVersion ? `#v${justUpdatedVersion}` : ""
-      api.openExternal(`https://1code.dev/changelog${version}`)
+      api.openExternal(`${RELEASES_URL}${version ? `#${version}` : ""}`)
     }
     dismissJustUpdated()
   }, [justUpdatedVersion, dismissJustUpdated])

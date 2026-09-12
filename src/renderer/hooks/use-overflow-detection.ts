@@ -28,7 +28,7 @@ import { useEffect, useRef, useState } from "react"
  */
 export function useOverflowDetection(
   contentRef: React.RefObject<HTMLElement | null>,
-  deps: unknown[] = []
+  deps: unknown[] = [],
 ): boolean {
   const [hasOverflow, setHasOverflow] = useState(false)
   const rafIdRef = useRef<number>(0)
@@ -72,7 +72,7 @@ export function useOverflowDetection(
         cancelAnimationFrame(rafIdRef.current)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: deps are forwarded from the caller by design (documented hook API).
   }, deps)
 
   return hasOverflow

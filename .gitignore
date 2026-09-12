@@ -20,6 +20,8 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+# bun is the canonical package manager (bun.lock); never commit npm's lockfile
+package-lock.json
 
 # Environment
 .env
@@ -30,3 +32,14 @@ electron.vite.config.*.mjs
 
 # Claude binary (downloaded at build time)
 resources/bin/
+
+# Rust build outputs (vendored runtime)
+runtime/jcode/target/
+
+# Test / benchmark outputs
+coverage/
+test-results/
+
+# Cloudflare Wrangler local state (legacy deploy tooling)
+.wrangler/
+.merge-backup/

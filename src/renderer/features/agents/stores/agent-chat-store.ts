@@ -1,11 +1,12 @@
 import type { Chat } from "@ai-sdk/react"
+import type { UIMessage } from "ai"
 
 /**
  * Simple module-level storage for Chat objects.
  * Lives outside React lifecycle so chats persist across component mount/unmount.
  */
 
-const chats = new Map<string, Chat<any>>()
+const chats = new Map<string, Chat<UIMessage>>()
 const streamIds = new Map<string, string | null>()
 const parentChatIds = new Map<string, string>() // subChatId → parentChatId (stored at creation time)
 const manuallyAborted = new Map<string, boolean>() // Track if chat was manually stopped
@@ -15,7 +16,7 @@ export const agentChatStore = {
 
   keys: () => Array.from(chats.keys()),
 
-  set: (id: string, chat: Chat<any>, parentChatId: string) => {
+  set: (id: string, chat: Chat<UIMessage>, parentChatId: string) => {
     chats.set(id, chat)
     parentChatIds.set(id, parentChatId)
   },
@@ -23,8 +24,8 @@ export const agentChatStore = {
   has: (id: string) => chats.has(id),
 
   delete: (id: string) => {
-    const chat = chats.get(id) as any
-    chat?.transport?.cleanup?.()
+    const chat = chats.get(id)
+    ;(chat as unknown as { transport?: { cleanup?: () => void } })?.transport?.cleanup?.()
     chats.delete(id)
     streamIds.delete(id)
     parentChatIds.delete(id)
@@ -50,7 +51,7 @@ export const agentChatStore = {
 
   clear: () => {
     for (const chat of chats.values()) {
-      ;(chat as any)?.transport?.cleanup?.()
+      ;(chat as unknown as { transport?: { cleanup?: () => void } })?.transport?.cleanup?.()
     }
     chats.clear()
     streamIds.clear()

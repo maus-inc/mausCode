@@ -2,10 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "../../../components/ui/button"
-import {
-  LinkIcon,
-  CheckIcon,
-} from "../../../components/ui/icons"
+import { CheckIcon, LinkIcon } from "../../../components/ui/icons"
 import { cn } from "../../../lib/utils"
 import { useHaptic } from "../hooks/use-haptic"
 

@@ -1,43 +1,34 @@
-import { useEffect, useCallback, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { useTheme } from "next-themes"
-import { fullThemeDataAtom } from "@/lib/atoms"
+import { AlignJustify, Check, ChevronsDown } from "lucide-react"
 import { motion } from "motion/react"
-import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
+import { useTheme } from "next-themes"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  IconDoubleChevronRight,
-  CustomTerminalIcon,
-  IconSidePeek,
-  IconBottomPanel,
-} from "@/components/ui/icons"
-import { AlignJustify, Check, ChevronsDown } from "lucide-react"
+import { IconBottomPanel, IconDoubleChevronRight, IconSidePeek } from "@/components/ui/icons"
 import { Kbd } from "@/components/ui/kbd"
+import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { fullThemeDataAtom } from "@/lib/atoms"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { Terminal } from "./terminal"
-import { TerminalTabs } from "./terminal-tabs"
-import { getDefaultTerminalBg } from "./helpers"
+import { trpc } from "@/lib/trpc"
 import {
+  activeTerminalIdAtom,
+  type TerminalDisplayMode,
+  terminalCwdAtom,
+  terminalDisplayModeAtom,
   terminalSidebarOpenAtomFamily,
   terminalSidebarWidthAtom,
-  terminalDisplayModeAtom,
   terminalsAtom,
-  activeTerminalIdAtom,
-  terminalCwdAtom,
-  type TerminalDisplayMode,
 } from "./atoms"
-import { trpc } from "@/lib/trpc"
+import { getDefaultTerminalBg } from "./helpers"
+import { Terminal } from "./terminal"
+import { TerminalTabs } from "./terminal-tabs"
 import type { TerminalInstance } from "./types"
 import { isSharedTerminalScope } from "./utils"
 
@@ -86,8 +77,7 @@ function getNextTerminalName(terminals: TerminalInstance[]): string {
     })
     .filter((n) => n > 0)
 
-  const maxNumber =
-    existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
+  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
   return `Terminal ${maxNumber + 1}`
 }
 
@@ -126,9 +116,7 @@ function TerminalModeSwitcher({
           >
             <Icon className="size-4 text-muted-foreground" />
             <span className="flex-1">{label}</span>
-            {mode === value && (
-              <Check className="size-4 text-muted-foreground ml-auto" />
-            )}
+            {mode === value && <Check className="size-4 text-muted-foreground ml-auto" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -147,10 +135,7 @@ export function TerminalSidebar({
   onClose,
 }: TerminalSidebarProps) {
   // Per-chat terminal sidebar state (sidebar open/close is per-workspace, not per-scope)
-  const terminalSidebarAtom = useMemo(
-    () => terminalSidebarOpenAtomFamily(chatId),
-    [chatId],
-  )
+  const terminalSidebarAtom = useMemo(() => terminalSidebarOpenAtomFamily(chatId), [chatId])
   const [isOpen, setIsOpen] = useAtom(terminalSidebarAtom)
   const [displayMode, setDisplayMode] = useAtom(terminalDisplayModeAtom)
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
@@ -177,16 +162,10 @@ export function TerminalSidebar({
   }, [isDark, fullThemeData])
 
   // Get terminals for this scope (shared by path for local mode, isolated for worktree)
-  const terminals = useMemo(
-    () => allTerminals[scopeKey] || [],
-    [allTerminals, scopeKey],
-  )
+  const terminals = useMemo(() => allTerminals[scopeKey] || [], [allTerminals, scopeKey])
 
   // Get active terminal ID for this scope
-  const activeTerminalId = useMemo(
-    () => allActiveIds[scopeKey] || null,
-    [allActiveIds, scopeKey],
-  )
+  const activeTerminalId = useMemo(() => allActiveIds[scopeKey] || null, [allActiveIds, scopeKey])
 
   // Get the active terminal instance
   const activeTerminal = useMemo(
@@ -345,14 +324,10 @@ export function TerminalSidebar({
 
       // If active terminal was closed, switch to the last remaining one
       const currentActiveId = activeTerminalIdRef.current
-      if (
-        currentActiveId &&
-        !remainingTerminals.find((t) => t.id === currentActiveId)
-      ) {
+      if (currentActiveId && !remainingTerminals.find((t) => t.id === currentActiveId)) {
         setAllActiveIds((prev) => ({
           ...prev,
-          [currentScopeKey]:
-            remainingTerminals[remainingTerminals.length - 1]?.id || null,
+          [currentScopeKey]: remainingTerminals[remainingTerminals.length - 1]?.id || null,
         }))
       }
     },
@@ -416,7 +391,15 @@ export function TerminalSidebar({
     } else {
       createTerminal()
     }
-  }, [isOpen, terminals.length, scopeKey, createTerminal, trpcUtils, setAllTerminals, setAllActiveIds])
+  }, [
+    isOpen,
+    terminals.length,
+    scopeKey,
+    createTerminal,
+    trpcUtils,
+    setAllTerminals,
+    setAllActiveIds,
+  ])
 
   // Note: Cmd+J keyboard shortcut is handled in active-chat.tsx
   // to ensure it works regardless of terminal display mode or focus state.
@@ -625,7 +608,6 @@ interface TerminalBottomPanelContentProps {
 }
 
 export function TerminalBottomPanelContent({
-  chatId,
   scopeKey,
   cwd,
   workspaceId,
@@ -654,14 +636,8 @@ export function TerminalBottomPanelContent({
     return getDefaultTerminalBg(isDark)
   }, [isDark, fullThemeData])
 
-  const terminals = useMemo(
-    () => allTerminals[scopeKey] || [],
-    [allTerminals, scopeKey],
-  )
-  const activeTerminalId = useMemo(
-    () => allActiveIds[scopeKey] || null,
-    [allActiveIds, scopeKey],
-  )
+  const terminals = useMemo(() => allTerminals[scopeKey] || [], [allTerminals, scopeKey])
+  const activeTerminalId = useMemo(() => allActiveIds[scopeKey] || null, [allActiveIds, scopeKey])
   const activeTerminal = useMemo(
     () => terminals.find((t) => t.id === activeTerminalId) || null,
     [terminals, activeTerminalId],

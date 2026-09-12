@@ -1,7 +1,7 @@
-import * as fs from "fs/promises"
-import type { Dirent } from "fs"
-import * as path from "path"
-import * as os from "os"
+import type { Dirent } from "node:fs"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import type { McpServerConfig } from "../claude-config"
 import { isDirentDirectory } from "../fs/dirent"
 
@@ -82,10 +82,7 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
   for (const marketplace of marketplaces) {
     if (marketplace.name.startsWith(".")) continue
 
-    const isMarketplaceDir = await isDirentDirectory(
-      marketplacesDir,
-      marketplace,
-    )
+    const isMarketplaceDir = await isDirentDirectory(marketplacesDir, marketplace)
     if (!isMarketplaceDir) continue
 
     const marketplacePath = path.join(marketplacesDir, marketplace.name)

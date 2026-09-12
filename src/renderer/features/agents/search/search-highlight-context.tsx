@@ -1,14 +1,14 @@
 import { useAtomValue } from "jotai"
-import * as React from "react"
-import { createContext, useContext, useMemo, useCallback } from "react"
+import type * as React from "react"
+import { createContext, useCallback, useContext, useMemo } from "react"
 
 import {
+  chatSearchCurrentMatchAtom,
+  chatSearchMatchesAtom,
   chatSearchOpenAtom,
   chatSearchQueryAtom,
-  chatSearchMatchesAtom,
-  chatSearchCurrentMatchAtom,
-  type SearchMatch,
   type HighlightRange,
+  type SearchMatch,
 } from "./chat-search-atoms"
 
 // ============================================================================
@@ -18,16 +18,10 @@ import {
 interface SearchHighlightContextValue {
   query: string
   isSearchActive: boolean
-  getHighlightRanges: (
-    messageId: string,
-    partIndex: number,
-    partType: string
-  ) => HighlightRange[]
+  getHighlightRanges: (messageId: string, partIndex: number, partType: string) => HighlightRange[]
 }
 
-const SearchHighlightContext = createContext<SearchHighlightContextValue | null>(
-  null
-)
+const SearchHighlightContext = createContext<SearchHighlightContextValue | null>(null)
 
 // ============================================================================
 // PROVIDER
@@ -46,9 +40,7 @@ const CLOSED_SEARCH_VALUE: SearchHighlightContextValue = {
   getHighlightRanges: emptyGetHighlightRanges,
 }
 
-export function SearchHighlightProvider({
-  children,
-}: SearchHighlightProviderProps) {
+export function SearchHighlightProvider({ children }: SearchHighlightProviderProps) {
   // Only subscribe to isOpen first - this is the gate
   const isOpen = useAtomValue(chatSearchOpenAtom)
 
@@ -63,18 +55,12 @@ export function SearchHighlightProvider({
   }
 
   // Search is open - render the active provider
-  return (
-    <SearchHighlightProviderActive>
-      {children}
-    </SearchHighlightProviderActive>
-  )
+  return <SearchHighlightProviderActive>{children}</SearchHighlightProviderActive>
 }
 
 // Separate component for when search is active
 // This isolates the subscriptions to query/matches/currentMatch
-function SearchHighlightProviderActive({
-  children,
-}: SearchHighlightProviderProps) {
+function SearchHighlightProviderActive({ children }: SearchHighlightProviderProps) {
   const query = useAtomValue(chatSearchQueryAtom)
   const matches = useAtomValue(chatSearchMatchesAtom)
   const currentMatch = useAtomValue(chatSearchCurrentMatchAtom)
@@ -107,7 +93,7 @@ function SearchHighlightProviderActive({
         indexInPart: idx,
       }))
     },
-    [matchesByKey, currentMatch]
+    [matchesByKey, currentMatch],
   )
 
   const value = useMemo(
@@ -116,14 +102,10 @@ function SearchHighlightProviderActive({
       isSearchActive: query.trim().length > 0,
       getHighlightRanges,
     }),
-    [query, getHighlightRanges]
+    [query, getHighlightRanges],
   )
 
-  return (
-    <SearchHighlightContext.Provider value={value}>
-      {children}
-    </SearchHighlightContext.Provider>
-  )
+  return <SearchHighlightContext.Provider value={value}>{children}</SearchHighlightContext.Provider>
 }
 
 // ============================================================================
@@ -144,11 +126,11 @@ export function useSearchHighlightContext() {
 export function useSearchHighlight(
   messageId: string,
   partIndex: number,
-  partType: string
+  partType: string,
 ): HighlightRange[] {
   const context = useContext(SearchHighlightContext)
 
-  if (!context || !context.isSearchActive) {
+  if (!context?.isSearchActive) {
     return []
   }
 

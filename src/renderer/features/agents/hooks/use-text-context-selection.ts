@@ -1,15 +1,20 @@
-import { useState, useCallback, useRef } from "react"
+import { useCallback, useRef, useState } from "react"
 import {
-  type SelectedTextContext,
-  type DiffTextContext,
   createTextPreview,
+  type DiffTextContext,
+  type SelectedTextContext,
 } from "../lib/queue-utils"
 
 export interface UseTextContextSelectionReturn {
   textContexts: SelectedTextContext[]
   diffTextContexts: DiffTextContext[]
   addTextContext: (text: string, sourceMessageId: string) => void
-  addDiffTextContext: (text: string, filePath: string, lineNumber?: number, lineType?: "old" | "new") => void
+  addDiffTextContext: (
+    text: string,
+    filePath: string,
+    lineNumber?: number,
+    lineType?: "old" | "new",
+  ) => void
   removeTextContext: (id: string) => void
   removeDiffTextContext: (id: string) => void
   clearTextContexts: () => void
@@ -32,30 +37,26 @@ export function useTextContextSelection(): UseTextContextSelectionReturn {
   textContextsRef.current = textContexts
   diffTextContextsRef.current = diffTextContexts
 
-  const addTextContext = useCallback(
-    (text: string, sourceMessageId: string) => {
-      const trimmedText = text.trim()
-      if (!trimmedText) return
+  const addTextContext = useCallback((text: string, sourceMessageId: string) => {
+    const trimmedText = text.trim()
+    if (!trimmedText) return
 
-      // Prevent duplicates - check if same text from same message already exists
-      const isDuplicate = textContextsRef.current.some(
-        (ctx) =>
-          ctx.text === trimmedText && ctx.sourceMessageId === sourceMessageId
-      )
-      if (isDuplicate) return
+    // Prevent duplicates - check if same text from same message already exists
+    const isDuplicate = textContextsRef.current.some(
+      (ctx) => ctx.text === trimmedText && ctx.sourceMessageId === sourceMessageId,
+    )
+    if (isDuplicate) return
 
-      const newContext: SelectedTextContext = {
-        id: `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        text: trimmedText,
-        sourceMessageId,
-        preview: createTextPreview(trimmedText),
-        createdAt: new Date(),
-      }
+    const newContext: SelectedTextContext = {
+      id: `tc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      text: trimmedText,
+      sourceMessageId,
+      preview: createTextPreview(trimmedText),
+      createdAt: new Date(),
+    }
 
-      setTextContexts((prev) => [...prev, newContext])
-    },
-    []
-  )
+    setTextContexts((prev) => [...prev, newContext])
+  }, [])
 
   const addDiffTextContext = useCallback(
     (text: string, filePath: string, lineNumber?: number, lineType?: "old" | "new") => {
@@ -64,8 +65,7 @@ export function useTextContextSelection(): UseTextContextSelectionReturn {
 
       // Prevent duplicates
       const isDuplicate = diffTextContextsRef.current.some(
-        (ctx) =>
-          ctx.text === trimmedText && ctx.filePath === filePath
+        (ctx) => ctx.text === trimmedText && ctx.filePath === filePath,
       )
       if (isDuplicate) return
 
@@ -81,7 +81,7 @@ export function useTextContextSelection(): UseTextContextSelectionReturn {
 
       setDiffTextContexts((prev) => [...prev, newContext])
     },
-    []
+    [],
   )
 
   const removeTextContext = useCallback((id: string) => {
@@ -101,21 +101,15 @@ export function useTextContextSelection(): UseTextContextSelectionReturn {
   }, [])
 
   // Direct state setter for restoring from draft
-  const setTextContextsFromDraft = useCallback(
-    (contexts: SelectedTextContext[]) => {
-      setTextContexts(contexts)
-      textContextsRef.current = contexts
-    },
-    []
-  )
+  const setTextContextsFromDraft = useCallback((contexts: SelectedTextContext[]) => {
+    setTextContexts(contexts)
+    textContextsRef.current = contexts
+  }, [])
 
-  const setDiffTextContextsFromDraft = useCallback(
-    (contexts: DiffTextContext[]) => {
-      setDiffTextContexts(contexts)
-      diffTextContextsRef.current = contexts
-    },
-    []
-  )
+  const setDiffTextContextsFromDraft = useCallback((contexts: DiffTextContext[]) => {
+    setDiffTextContexts(contexts)
+    diffTextContextsRef.current = contexts
+  }, [])
 
   return {
     textContexts,

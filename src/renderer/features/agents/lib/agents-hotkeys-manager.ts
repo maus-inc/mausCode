@@ -5,14 +5,14 @@
 
 import * as React from "react"
 import { useCallback, useMemo } from "react"
+import type { CustomHotkeysConfig, SettingsTab } from "../../../lib/atoms"
+import { getResolvedHotkey, type ShortcutActionId } from "../../../lib/hotkeys"
 import {
-  AgentActionContext,
   AGENT_ACTIONS,
+  type AgentActionContext,
   executeAgentAction,
   getAvailableAgentActions,
 } from "./agents-actions"
-import type { SettingsTab, CustomHotkeysConfig } from "../../../lib/atoms"
-import { getResolvedHotkey, type ShortcutActionId } from "../../../lib/hotkeys"
 
 // ============================================================================
 // ACTION ID MAPPING
@@ -55,8 +55,8 @@ const SHORTCUT_TO_ACTION_MAP: Record<ShortcutActionId, string> = {
 }
 
 // Reverse mapping: action ID -> shortcut ID
-const ACTION_TO_SHORTCUT_MAP: Record<string, ShortcutActionId> = Object.fromEntries(
-  Object.entries(SHORTCUT_TO_ACTION_MAP).map(([k, v]) => [v, k as ShortcutActionId])
+const _ACTION_TO_SHORTCUT_MAP: Record<string, ShortcutActionId> = Object.fromEntries(
+  Object.entries(SHORTCUT_TO_ACTION_MAP).map(([k, v]) => [v, k as ShortcutActionId]),
 ) as Record<string, ShortcutActionId>
 
 // ============================================================================
@@ -108,6 +108,7 @@ export interface AgentsHotkeysManagerConfig {
   setSelectedChatId?: (id: string | null) => void
   setSelectedDraftId?: (id: string | null) => void
   setShowNewChatForm?: (show: boolean) => void
+  requestNewChatFormReset?: () => void
   setDesktopView?: (view: import("../atoms").DesktopView) => void
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
   setSettingsActiveTab?: (tab: SettingsTab) => void
@@ -142,6 +143,7 @@ export function useAgentsHotkeys(
       setSelectedChatId: config.setSelectedChatId,
       setSelectedDraftId: config.setSelectedDraftId,
       setShowNewChatForm: config.setShowNewChatForm,
+      requestNewChatFormReset: config.requestNewChatFormReset,
       setDesktopView: config.setDesktopView,
       setSidebarOpen: config.setSidebarOpen,
       setSettingsActiveTab: config.setSettingsActiveTab,
@@ -153,6 +155,7 @@ export function useAgentsHotkeys(
       config.setSelectedChatId,
       config.setSelectedDraftId,
       config.setShowNewChatForm,
+      config.requestNewChatFormReset,
       config.setDesktopView,
       config.setSidebarOpen,
       config.setSettingsActiveTab,
@@ -181,7 +184,6 @@ export function useAgentsHotkeys(
     if (!window.desktopApi?.onShortcutNewAgent) return
 
     const cleanup = window.desktopApi.onShortcutNewAgent(() => {
-      console.log("[Hotkey] Cmd+N received via IPC, executing create-new-agent")
       handleHotkeyAction("create-new-agent")
     })
 
@@ -194,7 +196,6 @@ export function useAgentsHotkeys(
     if (!window.desktopApi?.onShortcutOpenSettings) return
 
     const cleanup = window.desktopApi.onShortcutOpenSettings(() => {
-      console.log("[Hotkey] Cmd+, received via IPC, executing open-settings")
       handleHotkeyAction("open-settings")
     })
 
@@ -207,7 +208,7 @@ export function useAgentsHotkeys(
       const customConfig = config.customHotkeysConfig || { version: 1, bindings: {} }
       return getResolvedHotkey(shortcutId, customConfig)
     },
-    [config.customHotkeysConfig]
+    [config.customHotkeysConfig],
   )
 
   // Unified hotkey listener that respects custom configurations
@@ -322,9 +323,7 @@ export function useAgentsHotkeys(
 
     for (const action of actionsWithHotkeys) {
       if (!action.hotkey) continue
-      const hotkeys = Array.isArray(action.hotkey)
-        ? action.hotkey
-        : [action.hotkey]
+      const hotkeys = Array.isArray(action.hotkey) ? action.hotkey : [action.hotkey]
       const isGlobal = GLOBAL_HOTKEYS.has(action.id)
       mappings.push({
         actionId: action.id,
@@ -342,9 +341,7 @@ export function useAgentsHotkeys(
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       const isInInput =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
 
       for (const mapping of hotkeyMappings) {
         if (isInInput && !mapping.isGlobal) continue

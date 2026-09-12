@@ -1,21 +1,21 @@
 "use client"
 
-import * as React from "react"
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu"
-import { cn } from "../../lib/utils"
 import { CheckIcon, DotFilledIcon } from "@radix-ui/react-icons"
-import { CaretRightIcon } from "./icons"
+import * as React from "react"
 import {
-  overlayContent,
-  overlayItemWithIcon,
-  overlaySubTrigger,
   overlayCheckableItem,
-  overlayItemIndicator,
-  overlaySeparator,
-  overlayLabel,
-  overlayShortcut,
   overlayChevron,
+  overlayContent,
+  overlayItemIndicator,
+  overlayItemWithIcon,
+  overlayLabel,
+  overlaySeparator,
+  overlayShortcut,
+  overlaySubTrigger,
 } from "../../lib/overlay-styles"
+import { cn } from "../../lib/utils"
+import { CaretRightIcon } from "./icons"
 
 const ContextMenu = ContextMenuPrimitive.Root
 
@@ -65,11 +65,7 @@ const ContextMenuContent = React.forwardRef<
   <ContextMenuPrimitive.Portal>
     <ContextMenuPrimitive.Content
       ref={ref}
-      className={cn(
-        overlayContent,
-        "min-w-[200px] py-1 dark",
-        className,
-      )}
+      className={cn(overlayContent, "min-w-[200px] py-1 dark", className)}
       {...props}
     />
   </ContextMenuPrimitive.Portal>
@@ -108,8 +104,7 @@ const ContextMenuCheckboxItem = React.forwardRef<
     {children}
   </ContextMenuPrimitive.CheckboxItem>
 ))
-ContextMenuCheckboxItem.displayName =
-  ContextMenuPrimitive.CheckboxItem.displayName
+ContextMenuCheckboxItem.displayName = ContextMenuPrimitive.CheckboxItem.displayName
 
 const ContextMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.RadioItem>,
@@ -156,28 +151,25 @@ const ContextMenuSeparator = React.forwardRef<
 ))
 ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName
 
-const ContextMenuShortcut = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLSpanElement>) => {
+const ContextMenuShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
   return <span className={cn(overlayShortcut, className)} {...props} />
 }
 ContextMenuShortcut.displayName = "ContextMenuShortcut"
 
 export {
   ContextMenu,
-  ContextMenuTrigger,
-  ContextMenuContent,
-  ContextMenuItem,
   ContextMenuCheckboxItem,
-  ContextMenuRadioItem,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
   ContextMenuLabel,
+  ContextMenuPortal,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
   ContextMenuShortcut,
-  ContextMenuGroup,
-  ContextMenuPortal,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-  ContextMenuRadioGroup,
+  ContextMenuTrigger,
 }
