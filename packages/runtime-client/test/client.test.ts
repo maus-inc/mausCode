@@ -3,7 +3,15 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
-import { HarnessError, JcodeClient, NdjsonDecoder, unixSocketTransport } from "../dist/index.js"
+import {
+  type ClientFrame,
+  HarnessError,
+  JcodeClient,
+  NdjsonDecoder,
+  type ServerFrame,
+  type UnknownApiEvent,
+  unixSocketTransport,
+} from "../dist/index.js"
 import { startMockHarness } from "./mock-harness.ts"
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
@@ -198,7 +206,7 @@ test("sendMessage retains the legacy images argument", async () => {
 })
 
 test("sendMessage noReply waits for request ok and does not wait for turn events", async () => {
-  let observed: any
+  let observed: ClientFrame | undefined
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req === "send_message") {
@@ -219,6 +227,7 @@ test("sendMessage noReply waits for request ok and does not wait for turn events
 
   await client.sendMessage("s1", "context only", { noReply: true })
 
+  assert.ok(observed, "expected the mock to observe a send_message request")
   assert.equal(observed.req, "send_message")
   assert.equal(observed.session_id, "s1")
   assert.equal(observed.content, "context only")
@@ -267,7 +276,7 @@ test("events() return settles a pending next call", async () => {
 test("unknown event kinds still surface on the generic channel", async () => {
   const server = await startMockHarness()
   const client = await JcodeClient.connect({ socketPath: server.socketPath })
-  const seen = new Promise<any>((resolve) => client.once("event", resolve))
+  const seen = new Promise<ServerFrame>((resolve) => client.once("event", resolve))
   server.broadcast({ v: 1, ev: "some_future_event", payload: 1 })
   const frame = await seen
   assert.equal(frame.ev, "some_future_event")
@@ -318,11 +327,11 @@ test("a stale socket file reports a dead bridge, not a missing one", async () =>
 })
 
 test("GA methods send stable request shapes and map typed replies", async () => {
-  const requests: any[] = []
+  const requests: ClientFrame[] = []
   const server = await startMockHarness({
     onRequest(request, send) {
       requests.push(request)
-      const reply = (frame: any) => send({ v: 1, reply_to: request.id, ...frame })
+      const reply = (frame: UnknownApiEvent) => send({ v: 1, reply_to: request.id, ...frame })
       switch (request.req) {
         case "list_sessions":
           reply({
@@ -436,7 +445,11 @@ test("GA methods send stable request shapes and map typed replies", async () => 
       modifiedMs: 123,
     })
 
-    const byKind = (kind: string) => requests.find((request) => request.req === kind)
+    const byKind = (kind: string): ClientFrame => {
+      const found = requests.find((request) => request.req === kind)
+      assert.ok(found, `expected a ${kind} request`)
+      return found
+    }
     assert.equal(byKind("list_sessions").include_archived, true)
     assert.equal(byKind("archive_session").session_id, "s1")
     assert.equal(byKind("set_retention_policy").archive_after_days, 30)
@@ -460,7 +473,7 @@ test("GA methods send stable request shapes and map typed replies", async () => 
 
 test("globalEvents discovers persisted and newly-created sessions and cleans up children", async () => {
   const sessions = ["persisted-1", "persisted-2"]
-  const listRequests: any[] = []
+  const listRequests: ClientFrame[] = []
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req === "list_sessions") {

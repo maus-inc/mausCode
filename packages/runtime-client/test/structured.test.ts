@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { JcodeClient, StructuredOutputError } from "../dist/index.js"
+import { JcodeClient, type ServerFrame, StructuredOutputError } from "../dist/index.js"
 import { startMockHarness } from "./mock-harness.ts"
 
 const schema = {
@@ -15,7 +15,7 @@ const schema = {
 
 type Summary = { summary: string; count: number }
 
-function sendTurn(send: (frame: any) => void, sessionId: string, text: string): void {
+function sendTurn(send: (frame: ServerFrame) => void, sessionId: string, text: string): void {
   send({ v: 1, ev: "message_accepted", session_id: sessionId })
   send({ v: 1, ev: "text_delta", session_id: sessionId, text })
   send({ v: 1, ev: "turn_done", session_id: sessionId })
@@ -26,7 +26,7 @@ test("runStructured validates JSON Schema and returns parsed data", async () => 
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req !== "send_message") return
-      prompts.push(request.content)
+      prompts.push(request.content as string)
       sendTurn(send, "s1", '```json\n{"summary":"done","count":2}\n```')
     },
   })
@@ -51,7 +51,7 @@ test("runStructured sends a corrective retry after schema validation fails", asy
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req !== "send_message") return
-      prompts.push(request.content)
+      prompts.push(request.content as string)
       sendTurn(send, "s1", responses[prompts.length - 1])
     },
   })
@@ -81,7 +81,7 @@ test("runStructured rejects with validation details after bounded retries are ex
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req !== "send_message") return
-      prompts.push(request.content)
+      prompts.push(request.content as string)
       sendTurn(send, "s1", "not json")
     },
   })

@@ -9,11 +9,11 @@ import fs from "node:fs"
 import net from "node:net"
 import os from "node:os"
 import path from "node:path"
-import { NdjsonDecoder } from "../dist/index.js"
+import { type ClientFrame, NdjsonDecoder, type ServerFrame } from "../dist/index.js"
 
 export interface MockOptions {
   /** Called for each client request; return frames to send back. */
-  onRequest?: (request: any, send: (frame: any) => void) => void
+  onRequest?: (request: ClientFrame, send: (frame: ServerFrame) => void) => void
 }
 
 export interface MockServer {
@@ -22,7 +22,7 @@ export interface MockServer {
   /** Number of currently open client connections. */
   clientCount(): number
   /** Push an unsolicited event to every connected client. */
-  broadcast(event: any): void
+  broadcast(event: ServerFrame): void
 }
 
 export async function startMockHarness(options: MockOptions = {}): Promise<MockServer> {
@@ -37,8 +37,8 @@ export async function startMockHarness(options: MockOptions = {}): Promise<MockS
     const decoder = new NdjsonDecoder()
     socket.on("data", (chunk) => {
       for (const raw of decoder.push(chunk)) {
-        const request = raw as any
-        const send = (frame: any) => socket.write(`${JSON.stringify(frame)}\n`)
+        const request = raw as ClientFrame
+        const send = (frame: ServerFrame) => socket.write(`${JSON.stringify(frame)}\n`)
         if (request.req === "hello") {
           send({
             v: 1,
@@ -62,7 +62,7 @@ export async function startMockHarness(options: MockOptions = {}): Promise<MockS
     clientCount() {
       return clients.size
     },
-    broadcast(event: any) {
+    broadcast(event: ServerFrame) {
       for (const socket of clients) socket.write(`${JSON.stringify(event)}\n`)
     },
     close() {
