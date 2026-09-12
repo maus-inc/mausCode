@@ -19,11 +19,11 @@ const MOCK_PATH = join(
 )
 
 function runTurn(mode?: string): {
-  chunks: any[]
+  chunks: unknown[]
   done: ReturnType<typeof runRooPrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: unknown[] = []
   const turn = runRooPrintTurn({
     command: process.execPath,
     args: [MOCK_PATH],
@@ -37,7 +37,7 @@ function runTurn(mode?: string): {
   return { chunks, done: turn.done, interrupt: turn.interrupt }
 }
 
-const textOf = (chunks: any[]) =>
+const textOf = (chunks: unknown[]) =>
   chunks
     .filter((c) => c.type === "text-delta")
     .map((c) => c.delta)

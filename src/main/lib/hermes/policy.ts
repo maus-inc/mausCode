@@ -68,14 +68,20 @@ export function extractHermesError(error: unknown): {
   message: string
   code?: string
 } {
-  const anyError = error as any
+  const err =
+    typeof error === "object" && error !== null
+      ? (error as {
+          data?: { message?: unknown; code?: unknown }
+          errorText?: unknown
+          message?: unknown
+          error?: unknown
+          code?: unknown
+        })
+      : null
+
   const message =
-    anyError?.data?.message ||
-    anyError?.errorText ||
-    anyError?.message ||
-    anyError?.error ||
-    String(error)
-  const code = anyError?.data?.code || anyError?.code
+    err?.data?.message || err?.errorText || err?.message || err?.error || String(error)
+  const code = err?.data?.code || err?.code
 
   return {
     message: typeof message === "string" ? message : String(message),

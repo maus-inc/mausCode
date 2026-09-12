@@ -22,11 +22,11 @@ function runTurn(
   mode?: string,
   prompt = "probe prompt",
 ): {
-  chunks: any[]
+  chunks: unknown[]
   done: ReturnType<typeof runOpenclawPrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: unknown[] = []
   const turn = runOpenclawPrintTurn({
     command: process.execPath,
     args: [MOCK_PATH],

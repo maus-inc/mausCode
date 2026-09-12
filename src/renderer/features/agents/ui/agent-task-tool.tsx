@@ -9,7 +9,7 @@ import { selectedProjectAtom } from "../atoms"
 import { useFileOpen } from "../mentions"
 import { AgentToolCall } from "./agent-tool-call"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
-import { AgentToolRegistry, type ToolDisplayPart, getToolStatus } from "./agent-tool-registry"
+import { AgentToolRegistry, getToolStatus, type ToolDisplayPart } from "./agent-tool-registry"
 import type { ToolPartLike } from "./agent-tool-state"
 import { areTaskToolPropsEqual } from "./agent-tool-utils"
 

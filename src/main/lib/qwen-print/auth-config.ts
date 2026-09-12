@@ -72,12 +72,12 @@ export function parseQwenDotenv(text: string): Record<string, string> {
   return out
 }
 
-function readJsonFile(path: string): Record<string, any> {
+function readJsonFile(path: string): Record<string, unknown> {
   try {
     if (!existsSync(path)) return {}
     const parsed: unknown = JSON.parse(readFileSync(path, "utf8"))
     if (typeof parsed === "object" && parsed !== null) {
-      return parsed as Record<string, any>
+      return parsed as Record<string, unknown>
     }
     return {}
   } catch {

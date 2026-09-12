@@ -39,11 +39,11 @@ const MOCK_PATH = join(
   "hermes-acp-mock.mjs",
 )
 
-async function collectStreamParts(model: any): Promise<any[]> {
+async function collectStreamParts(model: unknown): Promise<any[]> {
   const { stream } = await model.doStream({
     prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
   })
-  const parts: any[] = []
+  const parts: unknown[] = []
   const reader = stream.getReader()
   for (;;) {
     const { done, value } = await reader.read()
@@ -131,7 +131,7 @@ it("terminates a pending prompt when the consumer aborts", async () => {
     const { stream } = await provider.languageModel().doStream({
       prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
       abortSignal: controller.signal,
-    } as any)
+    } as unknown)
     const reader = stream.getReader()
     const read = reader.read()
     controller.abort()
@@ -165,7 +165,7 @@ it("maps prompt failures through the hermes error classifier", async () => {
       prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
     })
     const reader = stream.getReader()
-    let errorPart: any = null
+    let errorPart: unknown = null
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break

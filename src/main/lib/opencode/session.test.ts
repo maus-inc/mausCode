@@ -10,7 +10,7 @@ import { startMockOpencodeServer } from "./test/fixtures/opencode-mock-server.ts
 it("runs a full turn and maps events to chunks with usage", async () => {
   const mock = await startMockOpencodeServer()
   try {
-    const chunks: any[] = []
+    const chunks: unknown[] = []
     const session = await createOpencodeSession({
       serverUrl: mock.url,
       cwd: process.cwd(),
@@ -89,7 +89,7 @@ it("resumes an existing session id", async () => {
 it("interrupts a turn via abort", async () => {
   const mock = await startMockOpencodeServer({ scriptDelayMs: "never" })
   try {
-    const chunks: any[] = []
+    const chunks: unknown[] = []
     const session = await createOpencodeSession({
       serverUrl: mock.url,
       cwd: process.cwd(),
@@ -121,7 +121,7 @@ it("maps session errors to error chunks and results", async () => {
     ],
   })
   try {
-    const chunks: any[] = []
+    const chunks: unknown[] = []
     const session = await createOpencodeSession({
       serverUrl: mock.url,
       cwd: process.cwd(),
@@ -215,7 +215,7 @@ it("handles snapshot-only text and duplicate deliveries", async () => {
     scriptDelayMs: 0,
   })
   try {
-    const chunks: any[] = []
+    const chunks: unknown[] = []
     const session = await createOpencodeSession({
       serverUrl: mock.url,
       cwd: process.cwd(),
@@ -242,7 +242,7 @@ it("handles snapshot-only text and duplicate deliveries", async () => {
 it("recreates the session once when a turn hits a deleted session", async () => {
   const mock = await startMockOpencodeServer({ scriptDelayMs: 0 })
   try {
-    const chunks: any[] = []
+    const chunks: unknown[] = []
     const session = await createOpencodeSession({
       serverUrl: mock.url,
       cwd: process.cwd(),

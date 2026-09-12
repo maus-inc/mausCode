@@ -17,13 +17,13 @@ import {
   selectedProjectAtom,
 } from "../atoms"
 import { useFileOpen } from "../mentions"
-import type { ToolPartLike } from "./agent-tool-state"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import {
   type ChangedFileInfo,
   extractChangedFiles,
   extractGitActivity,
 } from "../utils/git-activity"
+import type { ToolPartLike } from "./agent-tool-state"
 
 interface GitActivityBadgesProps {
   parts: ToolPartLike[]

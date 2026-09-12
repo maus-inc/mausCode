@@ -198,7 +198,7 @@ test("sendMessage retains the legacy images argument", async () => {
 })
 
 test("sendMessage noReply waits for request ok and does not wait for turn events", async () => {
-  let observed: any
+  let observed: unknown
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req === "send_message") {
@@ -267,7 +267,7 @@ test("events() return settles a pending next call", async () => {
 test("unknown event kinds still surface on the generic channel", async () => {
   const server = await startMockHarness()
   const client = await JcodeClient.connect({ socketPath: server.socketPath })
-  const seen = new Promise<any>((resolve) => client.once("event", resolve))
+  const seen = new Promise<unknown>((resolve) => client.once("event", resolve))
   server.broadcast({ v: 1, ev: "some_future_event", payload: 1 })
   const frame = await seen
   assert.equal(frame.ev, "some_future_event")
@@ -318,11 +318,11 @@ test("a stale socket file reports a dead bridge, not a missing one", async () =>
 })
 
 test("GA methods send stable request shapes and map typed replies", async () => {
-  const requests: any[] = []
+  const requests: unknown[] = []
   const server = await startMockHarness({
     onRequest(request, send) {
       requests.push(request)
-      const reply = (frame: any) => send({ v: 1, reply_to: request.id, ...frame })
+      const reply = (frame: unknown) => send({ v: 1, reply_to: request.id, ...frame })
       switch (request.req) {
         case "list_sessions":
           reply({
@@ -460,7 +460,7 @@ test("GA methods send stable request shapes and map typed replies", async () => 
 
 test("globalEvents discovers persisted and newly-created sessions and cleans up children", async () => {
   const sessions = ["persisted-1", "persisted-2"]
-  const listRequests: any[] = []
+  const listRequests: unknown[] = []
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req === "list_sessions") {

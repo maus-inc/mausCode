@@ -22,12 +22,12 @@ function runTurn(
   mode?: string,
   stdinText?: string,
 ): {
-  chunks: any[]
+  chunks: unknown[]
   sessionIds: string[]
   done: ReturnType<typeof runCursorPrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: unknown[] = []
   const sessionIds: string[] = []
   const turn = runCursorPrintTurn({
     command: process.execPath,
