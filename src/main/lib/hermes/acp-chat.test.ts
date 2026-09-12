@@ -104,7 +104,10 @@ it("fails resume against a fresh process (ACP sessions are process-scoped)", asy
   try {
     await second.initSession()
   } catch (error) {
-    failure = String(error)
+    // The provider rejects with the raw JSON-RPC error object
+    // ({code, message}), not an Error, so String(error) would be
+    // "[object Object]". Extract the message the same way prod does.
+    failure = extractHermesError(error).message
   } finally {
     second.cleanup()
   }
