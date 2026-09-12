@@ -60,12 +60,12 @@ export function clineProvidersPath(opts?: {
   return join(dataDir, "settings", "providers.json")
 }
 
-function readJsonFile(path: string): Record<string, any> {
+function readJsonFile(path: string): Record<string, unknown> {
   try {
     if (!existsSync(path)) return {}
     const parsed: unknown = JSON.parse(readFileSync(path, "utf8"))
     if (typeof parsed === "object" && parsed !== null) {
-      return parsed as Record<string, any>
+      return parsed as Record<string, unknown>
     }
     return {}
   } catch {
@@ -171,12 +171,15 @@ export function listClineStoredModels(opts?: {
   const data = readJsonFile(clineProvidersPath(opts))
   const providers =
     typeof data.providers === "object" && data.providers !== null
-      ? (data.providers as Record<string, any>)
+      ? (data.providers as Record<string, unknown>)
       : {}
   const out: ClineStoredModel[] = []
   const seen = new Set<string>()
   for (const [provider, entry] of Object.entries(providers)) {
-    const model = (entry as any)?.settings?.model
+    const model =
+      typeof entry === "object" && entry !== null
+        ? (entry as { settings?: { model?: unknown } }).settings?.model
+        : undefined
     if (!nonEmpty(model) || seen.has(model)) continue
     seen.add(model)
     out.push({ id: model, provider })
