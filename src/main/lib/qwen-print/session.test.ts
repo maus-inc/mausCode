@@ -20,12 +20,12 @@ const MOCK_PATH = join(
 )
 
 function runTurn(mode?: string): {
-  chunks: unknown[]
+  chunks: any[]
   done: ReturnType<typeof runQwenPrintTurn>["done"]
   interrupt: () => void
   seenSessionId: () => string | undefined
 } {
-  const chunks: unknown[] = []
+  const chunks: any[] = []
   let seenId: string | undefined
   const turn = runQwenPrintTurn({
     command: process.execPath,
@@ -119,7 +119,7 @@ it("maps disconnected MCP servers to failed in session-init", async () => {
   await done
   const init = chunks.find((c) => c.type === "session-init")
   assert.ok(init)
-  const byName = Object.fromEntries((init.mcpServers as unknown[]).map((s) => [s.name, s.status]))
+  const byName = Object.fromEntries((init.mcpServers as any[]).map((s) => [s.name, s.status]))
   assert.strictEqual(byName.ok, "connected")
   assert.strictEqual(byName.down, "failed")
 })
@@ -173,7 +173,7 @@ it("premapQwenLine renames streamed tool_use blocks", () => {
       content_block: { type: "tool_use", id: "c1", name: "grep_search" },
     },
   }
-  premapQwenLine(line as unknown)
+  premapQwenLine(line as any)
   assert.strictEqual((line.event.content_block as { name: string }).name, "Grep")
 })
 
@@ -184,9 +184,6 @@ it("premapQwenLine passes MCP tool names through untouched", () => {
       content: [{ type: "tool_use", id: "c1", name: "mcp__stub__echo" }],
     },
   }
-  premapQwenLine(line as unknown)
-  assert.strictEqual(
-    ((line.message as unknown).content[0] as { name: string }).name,
-    "mcp__stub__echo",
-  )
+  premapQwenLine(line as any)
+  assert.strictEqual(((line.message as any).content[0] as { name: string }).name, "mcp__stub__echo")
 })

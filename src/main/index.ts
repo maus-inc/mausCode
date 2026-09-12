@@ -881,9 +881,9 @@ if (gotTheLock) {
     }
 
     // Expose setUpdateAvailable globally for auto-updater
-    global.__setUpdateAvailable = setUpdateAvailable
+    ;(global as any).__setUpdateAvailable = setUpdateAvailable
     // Expose unlockDevTools globally for IPC handler
-    global.__unlockDevTools = unlockDevTools
+    ;(global as any).__unlockDevTools = unlockDevTools
 
     // Build initial menu
     buildMenu()

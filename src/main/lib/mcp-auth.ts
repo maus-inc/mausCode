@@ -382,9 +382,9 @@ export async function refreshMcpToken(
  * Returns the servers config with updated Authorization headers
  */
 export async function ensureMcpTokensFresh(
-  mcpServers: Record<string, McpServerConfigView>,
+  mcpServers: Record<string, any>,
   projectPath: string,
-): Promise<Record<string, McpServerConfigView>> {
+): Promise<Record<string, any>> {
   const updatedServers = { ...mcpServers }
 
   for (const [serverName, serverConfig] of Object.entries(mcpServers)) {

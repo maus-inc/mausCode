@@ -12,10 +12,6 @@ declare global {
     readonly VITE_POSTHOG_KEY?: string
     readonly VITE_POSTHOG_HOST?: string
   }
-
-  var __setUpdateAvailable: ((available: boolean, version?: string) => void) | undefined
-  var __unlockDevTools: (() => void) | undefined
-  var __devToolsUnlocked: boolean | undefined
 }
 
 export {}

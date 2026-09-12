@@ -19,11 +19,11 @@ const MOCK_PATH = join(
 )
 
 function runTurn(mode?: string): {
-  chunks: unknown[]
+  chunks: any[]
   done: ReturnType<typeof runClinePrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: unknown[] = []
+  const chunks: any[] = []
   const turn = runClinePrintTurn({
     command: process.execPath,
     args: [MOCK_PATH],

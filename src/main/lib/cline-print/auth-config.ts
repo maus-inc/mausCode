@@ -60,12 +60,12 @@ export function clineProvidersPath(opts?: {
   return join(dataDir, "settings", "providers.json")
 }
 
-function readJsonFile(path: string): Record<string, unknown> {
+function readJsonFile(path: string): Record<string, any> {
   try {
     if (!existsSync(path)) return {}
     const parsed: unknown = JSON.parse(readFileSync(path, "utf8"))
     if (typeof parsed === "object" && parsed !== null) {
-      return parsed as Record<string, unknown>
+      return parsed as Record<string, any>
     }
     return {}
   } catch {
@@ -171,15 +171,12 @@ export function listClineStoredModels(opts?: {
   const data = readJsonFile(clineProvidersPath(opts))
   const providers =
     typeof data.providers === "object" && data.providers !== null
-      ? (data.providers as Record<string, unknown>)
+      ? (data.providers as Record<string, any>)
       : {}
   const out: ClineStoredModel[] = []
   const seen = new Set<string>()
   for (const [provider, entry] of Object.entries(providers)) {
-    const model =
-      typeof entry === "object" && entry !== null
-        ? (entry as { settings?: { model?: unknown } }).settings?.model
-        : undefined
+    const model = (entry as any)?.settings?.model
     if (!nonEmpty(model) || seen.has(model)) continue
     seen.add(model)
     out.push({ id: model, provider })
@@ -198,7 +195,7 @@ export function probeClineStoredAuth(opts?: {
   const data = readJsonFile(providersPath)
   const providers =
     typeof data.providers === "object" && data.providers !== null
-      ? (data.providers as Record<string, unknown>)
+      ? (data.providers as Record<string, any>)
       : {}
 
   const lastUsed = nonEmpty(data.lastUsedProvider) ? (data.lastUsedProvider as string) : undefined

@@ -104,10 +104,7 @@ it("fails resume against a fresh process (ACP sessions are process-scoped)", asy
   try {
     await second.initSession()
   } catch (error) {
-    failure =
-      typeof error === "object" && error !== null && "message" in error
-        ? String(error.message)
-        : String(error)
+    failure = String(error)
   } finally {
     second.cleanup()
   }

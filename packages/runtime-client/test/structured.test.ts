@@ -15,7 +15,7 @@ const schema = {
 
 type Summary = { summary: string; count: number }
 
-function sendTurn(send: (frame: unknown) => void, sessionId: string, text: string): void {
+function sendTurn(send: (frame: any) => void, sessionId: string, text: string): void {
   send({ v: 1, ev: "message_accepted", session_id: sessionId })
   send({ v: 1, ev: "text_delta", session_id: sessionId, text })
   send({ v: 1, ev: "turn_done", session_id: sessionId })

@@ -10,7 +10,7 @@ const peerPath = new URL("./test/fixtures/codex-app-server-turn-mock-peer.ts", i
   .pathname
 
 const spawnSession = (
-  onChunk: (chunk: unknown) => void,
+  onChunk: (chunk: any) => void,
   opts?: { existingThreadId?: string; legacySessionId?: string; env?: Record<string, string> },
 ) =>
   createCodexAppServerSession({
@@ -24,7 +24,7 @@ const spawnSession = (
   })
 
 it("runs a full turn and maps notifications to chunks", async () => {
-  const chunks: unknown[] = []
+  const chunks: any[] = []
   const session = await spawnSession((chunk) => chunks.push(chunk))
   assert.equal(session.threadId, "thread-mock-1")
   assert.equal(session.sessionId, "session-mock-1")

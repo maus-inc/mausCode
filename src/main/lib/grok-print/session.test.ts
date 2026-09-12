@@ -24,14 +24,14 @@ function runTurn(
   promptFileText?: string,
   extraArgs?: string[],
 ): {
-  chunks: unknown[]
-  usages: unknown[]
+  chunks: any[]
+  usages: any[]
   done: ReturnType<typeof runGrokPrintTurn>["done"]
   interrupt: () => void
   seenSessionId: () => string | undefined
 } {
-  const chunks: unknown[] = []
-  const usages: unknown[] = []
+  const chunks: any[] = []
+  const usages: any[] = []
   let seenId: string | undefined
   const turn = runGrokPrintTurn({
     command: process.execPath,
