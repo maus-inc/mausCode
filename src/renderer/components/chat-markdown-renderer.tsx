@@ -1,13 +1,18 @@
 import { Check, Copy } from "lucide-react"
-import { memo, useCallback, useEffect, useMemo, useState } from "react"
+import { type ComponentProps, memo, useCallback, useEffect, useMemo, useState } from "react"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
-import { type Components, parseMarkdownIntoBlocks, Streamdown } from "streamdown"
+import { parseMarkdownIntoBlocks, Streamdown } from "streamdown"
 import { useCodeTheme } from "../lib/hooks/use-code-theme"
 import { highlightCode } from "../lib/themes/shiki-theme-loader"
 import { cn } from "../lib/utils"
 import { MermaidBlock } from "./mermaid-block"
 import { RawHtml } from "./raw-html"
+
+// streamdown no longer exports its `Components` type (it is declared but
+// private in streamdown's own .d.ts), so derive it from the `components`
+// prop. This stays in sync with the installed streamdown version.
+type Components = NonNullable<ComponentProps<typeof Streamdown>["components"]>
 
 // Function to strip emojis from text (only common emojis, preserving markdown symbols)
 export function stripEmojis(text: string): string {
