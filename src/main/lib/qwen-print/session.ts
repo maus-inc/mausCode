@@ -35,7 +35,7 @@
  */
 import { type ChildProcess, spawn } from "node:child_process"
 import { StringDecoder } from "node:string_decoder"
-import { createTransformer } from "../claude/transform"
+import { type ClaudeStreamMessage, createTransformer } from "../claude/transform"
 
 export type QwenUsage = {
   inputTokens?: number
@@ -324,7 +324,8 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
       }
       return
     }
-    for (const chunk of transform(parsed)) {
+    // A stream-json wire line, asserted to the shared message shape.
+    for (const chunk of transform(parsed as ClaudeStreamMessage)) {
       emit(chunk)
     }
   }

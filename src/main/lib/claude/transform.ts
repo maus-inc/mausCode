@@ -7,6 +7,67 @@ import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from
  */
 
 /**
+ * A single `stream-json` message off the Claude CLI wire (qwen-print reuses
+ * this transformer, so its daemon emits the same dialect after premap).
+ *
+ * Only the fields `transform` reads are modeled; the wire carries more.
+ * Content blocks form a closed discriminated union so `block.type` checks
+ * narrow to members with required fields. Missing fields on malformed input
+ * flow through as `undefined`, exactly as when `msg` was `any` (no guards
+ * added, no behavior change).
+ */
+export type ClaudeStreamMessage = {
+  parent_tool_use_id?: string | null
+  type?: string
+  subtype?: string
+  status?: string
+  session_id?: string
+  total_cost_usd?: number
+  event?: {
+    type?: string
+    content_block?: { type?: string; id?: string; name?: string }
+    delta?: { type?: string; text?: string; partial_json?: string; thinking?: unknown }
+  }
+  message?: {
+    usage?: {
+      input_tokens?: number
+      cache_read_input_tokens?: number
+      cache_creation_input_tokens?: number
+      output_tokens?: number
+    }
+    content?: ClaudeContentBlock[] | string
+  }
+  tool_use_result?: unknown
+  mcp_servers?: ClaudeMcpServer[]
+  tools?: string[]
+  plugins?: { name: string; path: string }[]
+  skills?: string[]
+  usage?: {
+    input_tokens?: number
+    cache_read_input_tokens?: number
+    cache_creation_input_tokens?: number
+    output_tokens?: number
+  }
+}
+
+export type ClaudeContentBlock =
+  | { type: "text"; text: string }
+  | { type: "thinking"; thinking?: string }
+  | { type: "tool_use"; id: string; name: string; input?: unknown }
+  | { type: "tool_result"; tool_use_id: string; content?: unknown; is_error?: boolean }
+
+export interface ClaudeMcpServer {
+  name: string
+  status: string
+  serverInfo?: {
+    name: string
+    version: string
+    icons?: { src: string; mimeType?: string; sizes?: string[]; theme?: "light" | "dark" }[]
+  }
+  error?: string
+}
+
+/**
  * Coalesces high-frequency consecutive `text-delta` chunks into fewer, larger
  * emits so the renderer receives far fewer IPC messages per second, without
  * changing the final rendered content.
@@ -218,7 +279,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
     }
   }
 
-  return function* transform(msg: any): Generator<UIMessageChunk> {
+  return function* transform(msg: ClaudeStreamMessage): Generator<UIMessageChunk> {
     // Track parent_tool_use_id for nested tools
     // Only update when explicitly present (don't reset on messages without it)
     if (msg.parent_tool_use_id !== undefined) {
@@ -379,7 +440,10 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
     // ===== ASSISTANT MESSAGE (complete, often with tool_use) =====
     // When streaming is enabled, text arrives via stream_event, not here
     if (msg.type === "assistant" && msg.message?.content) {
-      for (const block of msg.message.content) {
+      // `content` can be a bare string on the wire; iterating it would walk
+      // chars that match no branch, so skip non-arrays (same net effect).
+      const blocks = Array.isArray(msg.message.content) ? msg.message.content : []
+      for (const block of blocks) {
         // Handle thinking blocks from Extended Thinking
         // Skip if already emitted via streaming (thinking_delta)
         if (block.type === "thinking" && block.thinking) {
@@ -494,30 +558,14 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       // Session init - extract MCP servers, plugins, tools
       if (msg.subtype === "init") {
         // Map MCP servers with validated status type and additional info
-        const mcpServers: MCPServer[] = (msg.mcp_servers || []).map(
-          (s: {
-            name: string
-            status: string
-            serverInfo?: {
-              name: string
-              version: string
-              icons?: {
-                src: string
-                mimeType?: string
-                sizes?: string[]
-                theme?: "light" | "dark"
-              }[]
-            }
-            error?: string
-          }) => ({
-            name: s.name,
-            status: (["connected", "failed", "pending", "needs-auth"].includes(s.status)
-              ? s.status
-              : "pending") as MCPServerStatus,
-            ...(s.serverInfo && { serverInfo: s.serverInfo }),
-            ...(s.error && { error: s.error }),
-          }),
-        )
+        const mcpServers: MCPServer[] = (msg.mcp_servers || []).map((s) => ({
+          name: s.name,
+          status: (["connected", "failed", "pending", "needs-auth"].includes(s.status)
+            ? s.status
+            : "pending") as MCPServerStatus,
+          ...(s.serverInfo && { serverInfo: s.serverInfo }),
+          ...(s.error && { error: s.error }),
+        }))
         yield {
           type: "session-init",
           tools: msg.tools || [],
