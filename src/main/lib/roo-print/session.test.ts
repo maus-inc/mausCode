@@ -9,7 +9,7 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
-import { runRooPrintTurn } from "./session"
+import { type RooPrintChunk, runRooPrintTurn } from "./session"
 
 const MOCK_PATH = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -19,11 +19,11 @@ const MOCK_PATH = join(
 )
 
 function runTurn(mode?: string): {
-  chunks: any[]
+  chunks: RooPrintChunk[]
   done: ReturnType<typeof runRooPrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: RooPrintChunk[] = []
   const turn = runRooPrintTurn({
     command: process.execPath,
     args: [MOCK_PATH],
@@ -37,7 +37,7 @@ function runTurn(mode?: string): {
   return { chunks, done: turn.done, interrupt: turn.interrupt }
 }
 
-const textOf = (chunks: any[]) =>
+const textOf = (chunks: RooPrintChunk[]) =>
   chunks
     .filter((c) => c.type === "text-delta")
     .map((c) => c.delta)
@@ -69,11 +69,13 @@ it("projects a full turn: deduped text, thinking, tools, usage", async () => {
 
   // Thinking tool protocol mirrors the claude path.
   const thinkingStart = chunks.find((c) => c.type === "tool-input-start")
+  assert.ok(thinkingStart, "expected a tool-input-start chunk")
   assert.equal(thinkingStart.toolName, "Thinking")
   const thinkingAvailable = chunks.find(
     (c) => c.type === "tool-input-available" && c.toolCallId === thinkingStart.toolCallId,
   )
-  assert.equal(thinkingAvailable.input.text, "planning approach")
+  assert.ok(thinkingAvailable, "expected a tool-input-available chunk")
+  assert.equal((thinkingAvailable.input as { text: unknown }).text, "planning approach")
 
   // Generic tool: exactly one input, closed without synthesis.
   const genericInputs = chunks.filter(

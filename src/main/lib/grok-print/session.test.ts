@@ -10,7 +10,7 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
-import { runGrokPrintTurn } from "./session"
+import { type GrokPrintChunk, type GrokUsage, runGrokPrintTurn } from "./session"
 
 const MOCK_PATH = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -19,19 +19,35 @@ const MOCK_PATH = join(
   "grok-print-mock.mjs",
 )
 
+type GrokChunkOf<T extends GrokPrintChunk["type"]> = Extract<GrokPrintChunk, { type: T }>
+
+// Narrowing filter/find over the chunk union (Array.filter/find alone do not narrow).
+function chunksOf<T extends GrokPrintChunk["type"]>(
+  chunks: GrokPrintChunk[],
+  type: T,
+): GrokChunkOf<T>[] {
+  return chunks.filter((chunk): chunk is GrokChunkOf<T> => chunk.type === type)
+}
+function chunkOf<T extends GrokPrintChunk["type"]>(
+  chunks: GrokPrintChunk[],
+  type: T,
+): GrokChunkOf<T> | undefined {
+  return chunks.find((chunk): chunk is GrokChunkOf<T> => chunk.type === type)
+}
+
 function runTurn(
   mode?: string,
   promptFileText?: string,
   extraArgs?: string[],
 ): {
-  chunks: any[]
-  usages: any[]
+  chunks: GrokPrintChunk[]
+  usages: GrokUsage[]
   done: ReturnType<typeof runGrokPrintTurn>["done"]
   interrupt: () => void
   seenSessionId: () => string | undefined
 } {
-  const chunks: any[] = []
-  const usages: any[] = []
+  const chunks: GrokPrintChunk[] = []
+  const usages: GrokUsage[] = []
   let seenId: string | undefined
   const turn = runGrokPrintTurn({
     command: process.execPath,
@@ -65,14 +81,16 @@ it("maps a full turn: text, canonical tools, usage, end metadata", async () => {
   assert.equal(seenSessionId(), "ses-grok-1")
   assert.equal(result.stopReason, "end_turn")
   assert.equal(result.numTurns, 2)
-  const deltas = chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta)
+  const deltas = chunksOf(chunks, "text-delta").map((chunk) => chunk.delta)
   assert.deepEqual(deltas, ["Hello ", "done."])
   // thought + available_commands are suppressed, not text.
   assert.ok(!deltas.join("").includes("internal reasoning"))
-  const input = chunks.find((chunk) => chunk.type === "tool-input-available")
+  const input = chunkOf(chunks, "tool-input-available")
+  assert.ok(input, "expected a tool-input-available chunk")
   assert.equal(input.toolName, "Read")
   assert.deepEqual(input.input, { path: "README.md" })
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const output = chunkOf(chunks, "tool-output-available")
+  assert.ok(output, "expected a tool-output-available chunk")
   assert.deepEqual(output.output, { lines: 42 })
   assert.equal(usages.length, 1)
   // End usage wins over summed line usage.
@@ -90,10 +108,10 @@ it("ignores progress updates and emits tool output at most once", async () => {
   const { chunks, done } = runTurn("progress-update")
   const result = await done
   assert.equal(result.status, "completed")
-  const inputs = chunks.filter((chunk) => chunk.type === "tool-input-available")
+  const inputs = chunksOf(chunks, "tool-input-available")
   assert.equal(inputs.length, 1)
   assert.equal(inputs[0].toolName, "Bash")
-  const outputs = chunks.filter((chunk) => chunk.type === "tool-output-available")
+  const outputs = chunksOf(chunks, "tool-output-available")
   assert.equal(outputs.length, 1)
   assert.deepEqual(outputs[0].output, { exitCode: 0 })
 })
@@ -102,7 +120,8 @@ it("surfaces failed tools as error outputs", async () => {
   const { chunks, done } = runTurn("failed-tool")
   const result = await done
   assert.equal(result.status, "completed")
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const output = chunkOf(chunks, "tool-output-available")
+  assert.ok(output, "expected a tool-output-available chunk")
   assert.deepEqual(output.output, { error: "invalid regex" })
 })
 
@@ -110,8 +129,10 @@ it("correlates tools without call_id oldest-open-first", async () => {
   const { chunks, done } = runTurn("no-call-id")
   const result = await done
   assert.equal(result.status, "completed")
-  const input = chunks.find((chunk) => chunk.type === "tool-input-available")
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const input = chunkOf(chunks, "tool-input-available")
+  const output = chunkOf(chunks, "tool-output-available")
+  assert.ok(input, "expected a tool-input-available chunk")
+  assert.ok(output, "expected a tool-output-available chunk")
   assert.equal(input.toolName, "LS")
   assert.equal(output.toolCallId, input.toolCallId)
   assert.deepEqual(output.output, { entries: 3 })
@@ -121,7 +142,7 @@ it("renders plan entries as text lines", async () => {
   const { chunks, done } = runTurn("plan")
   const result = await done
   assert.equal(result.status, "completed")
-  const deltas = chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta)
+  const deltas = chunksOf(chunks, "text-delta").map((chunk) => chunk.delta)
   assert.deepEqual(deltas, ["Planning. ", "Plan:\n- Add jwtVerify helper\n- Replace session check"])
 })
 
@@ -163,7 +184,7 @@ it("splices --prompt-file content through a temp file", async () => {
   const { chunks, done } = runTurn("prompt-file", "hello-prompt", ["--prompt-file"])
   const result = await done
   assert.equal(result.status, "completed")
-  const deltas = chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta)
+  const deltas = chunksOf(chunks, "text-delta").map((chunk) => chunk.delta)
   assert.deepEqual(deltas, ["file:12:", "hello-prompt"])
 })
 
@@ -171,7 +192,7 @@ it("flushes a final line without a trailing newline", async () => {
   const { chunks, done } = runTurn("no-trailing-newline")
   const result = await done
   assert.equal(result.status, "completed")
-  const deltas = chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta)
+  const deltas = chunksOf(chunks, "text-delta").map((chunk) => chunk.delta)
   assert.deepEqual(deltas, ["tail"])
 })
 
@@ -187,10 +208,10 @@ it("correlates multiple id-less tools oldest-open-first without loss", async () 
   const { chunks, done } = runTurn("no-call-id-multi")
   const result = await done
   assert.equal(result.status, "completed")
-  const outputs = chunks.filter((chunk) => chunk.type === "tool-output-available")
+  const outputs = chunksOf(chunks, "tool-output-available")
   assert.equal(outputs.length, 2)
   // Progress update did not consume an id: outputs attach A then B.
-  const inputs = chunks.filter((chunk) => chunk.type === "tool-input-available")
+  const inputs = chunksOf(chunks, "tool-input-available")
   assert.deepEqual(
     outputs.map((chunk) => chunk.toolCallId),
     inputs.map((chunk) => chunk.toolCallId),
@@ -213,6 +234,7 @@ it("resolves nested use_tool names on the first __ split", async () => {
   const { chunks, done } = runTurn("nested-mcp")
   const result = await done
   assert.equal(result.status, "completed")
-  const input = chunks.find((chunk) => chunk.type === "tool-input-available")
+  const input = chunkOf(chunks, "tool-input-available")
+  assert.ok(input, "expected a tool-input-available chunk")
   assert.equal(input.toolName, "mcp__gh__repos__create")
 })

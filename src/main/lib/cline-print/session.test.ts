@@ -9,7 +9,7 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
-import { runClinePrintTurn } from "./session"
+import { type ClinePrintChunk, runClinePrintTurn } from "./session"
 
 const MOCK_PATH = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -19,11 +19,11 @@ const MOCK_PATH = join(
 )
 
 function runTurn(mode?: string): {
-  chunks: any[]
+  chunks: ClinePrintChunk[]
   done: ReturnType<typeof runClinePrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: ClinePrintChunk[] = []
   const turn = runClinePrintTurn({
     command: process.execPath,
     args: [MOCK_PATH],
@@ -76,8 +76,9 @@ it("projects tool calls as input-available + output-available pairs", async () =
   assert.equal(inputs[0].toolCallId, "call_1")
   assert.equal(inputs[0].toolName, "read_files")
   assert.equal(outputs[0].toolCallId, "call_1")
-  assert.ok(Array.isArray(outputs[0].output))
-  assert.equal(outputs[0].output[0].success, true)
+  const output = outputs[0].output
+  assert.ok(Array.isArray(output))
+  assert.equal((output[0] as { success: unknown }).success, true)
 })
 
 it("surfaces auth failures as a held error chunk (no finish)", async () => {
