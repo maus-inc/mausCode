@@ -6,6 +6,7 @@ import { getClaudeShellEnvironment } from "./claude/env"
 import {
   GLOBAL_MCP_PATH,
   getMcpServerConfig,
+  type McpServerConfig,
   readClaudeConfig,
   updateClaudeConfigAtomic,
   updateMcpServerConfig,
@@ -382,20 +383,13 @@ export async function refreshMcpToken(
  * Returns the servers config with updated Authorization headers
  */
 export async function ensureMcpTokensFresh(
-  mcpServers: Record<string, any>,
+  mcpServers: Record<string, McpServerConfig>,
   projectPath: string,
-): Promise<Record<string, any>> {
+): Promise<Record<string, McpServerConfig>> {
   const updatedServers = { ...mcpServers }
 
   for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
-    const oauth = serverConfig._oauth as
-      | {
-          accessToken?: string
-          refreshToken?: string
-          clientId?: string
-          expiresAt?: number
-        }
-      | undefined
+    const oauth = serverConfig._oauth
 
     // Skip servers without OAuth
     if (!oauth?.accessToken) continue

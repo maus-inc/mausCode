@@ -72,12 +72,21 @@ export function parseQwenDotenv(text: string): Record<string, string> {
   return out
 }
 
-function readJsonFile(path: string): Record<string, any> {
+/** ~/.qwen/settings.json — only the fields auth probing reads. Values stay
+ * `unknown`: the file is unvalidated JSON, and each reader narrows. */
+interface QwenSettingsJson {
+  modelProviders?: Record<string, unknown>
+  security?: { auth?: { selectedType?: unknown } }
+  model?: { name?: unknown }
+  env?: unknown
+}
+
+function readQwenSettings(path: string): QwenSettingsJson {
   try {
     if (!existsSync(path)) return {}
     const parsed: unknown = JSON.parse(readFileSync(path, "utf8"))
     if (typeof parsed === "object" && parsed !== null) {
-      return parsed as Record<string, any>
+      return parsed as QwenSettingsJson
     }
     return {}
   } catch {
@@ -122,7 +131,7 @@ function findDotenvValue(
 
 export function listQwenStoredModels(homeDir?: string): QwenStoredModel[] {
   const home = homeDir ?? homedir()
-  const settings = readJsonFile(join(home, ".qwen", "settings.json"))
+  const settings = readQwenSettings(join(home, ".qwen", "settings.json"))
   const providers = settings.modelProviders
   if (typeof providers !== "object" || providers === null) return []
   const out: QwenStoredModel[] = []
@@ -153,7 +162,7 @@ export function probeQwenStoredAuth(opts?: {
   const home = opts?.homeDir ?? homedir()
   const env = opts?.env ?? process.env
   const settingsPath = join(home, ".qwen", "settings.json")
-  const settings = readJsonFile(settingsPath)
+  const settings = readQwenSettings(settingsPath)
   const sources: string[] = []
   if (existsSync(settingsPath)) sources.push(settingsPath)
 

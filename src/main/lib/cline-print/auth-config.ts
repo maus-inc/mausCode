@@ -198,7 +198,7 @@ export function probeClineStoredAuth(opts?: {
   const data = readJsonFile(providersPath)
   const providers =
     typeof data.providers === "object" && data.providers !== null
-      ? (data.providers as Record<string, any>)
+      ? (data.providers as Record<string, { settings?: { model?: unknown; apiKey?: unknown } }>)
       : {}
 
   const lastUsed = nonEmpty(data.lastUsedProvider) ? (data.lastUsedProvider as string) : undefined
