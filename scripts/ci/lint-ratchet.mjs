@@ -114,7 +114,12 @@ try {
   // biome exits nonzero when it reports anything; the JSON is still on stdout.
   raw = error.stdout ?? ""
 }
-const clean = String(raw).replace(/\x1b\[[0-9;]*m/g, "")
+// Strip ANSI SGR colour codes before parsing. The pattern is assembled from a
+// string escape instead of a regex literal containing a raw control character, so
+// the matcher stays exactly `\x1b\[[0-9;]*m` while the file keeps no control
+// characters inside a regex.
+const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
+const clean = String(raw).replace(ANSI_SGR, "")
 let report
 try {
   report = JSON.parse(clean.slice(clean.indexOf("{")))

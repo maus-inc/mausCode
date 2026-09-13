@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo } from "react"
 import { CustomAgentIcon, OriginalMCPIcon, SkillIcon } from "../../../components/ui/icons"
 import { UnknownFileIcon } from "../../../icons/framework-icons"
+import { keyItems } from "../../../lib/react-keys"
 import { getFileIconByExtension } from "./agents-file-mention"
 import { MENTION_PREFIXES } from "./agents-mentions-editor"
 
@@ -445,10 +446,10 @@ function renderTextWithUltrathink(text: string): React.ReactNode {
   const parts = text.split(/(ultrathink)/gi)
   if (parts.length === 1) return text
 
-  return parts.map((part, index) => {
+  return keyItems(parts, (part) => part).map(({ key, item: part }) => {
     if (part.toLowerCase() === "ultrathink") {
       return (
-        <span key={index} className="chroma-text chroma-text-animate">
+        <span key={key} className="chroma-text chroma-text-animate">
           {part}
         </span>
       )
@@ -665,8 +666,8 @@ export function TextMentionBlocks({ mentions }: { mentions: ParsedMention[] }) {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {textMentions.map((mention, idx) => (
-        <TextMentionBlock key={idx} mention={mention} />
+      {keyItems(textMentions).map(({ key, item: mention }) => (
+        <TextMentionBlock key={key} mention={mention} />
       ))}
     </div>
   )

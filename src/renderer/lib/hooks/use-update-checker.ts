@@ -116,7 +116,9 @@ export function useUpdateChecker() {
 
     // Cleanup
     return () => {
-      unsubs.forEach((unsub) => unsub?.())
+      unsubs.forEach((unsub) => {
+        unsub?.()
+      })
     }
   }, [setState, isDismissed])
 

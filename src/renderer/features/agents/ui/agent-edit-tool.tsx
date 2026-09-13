@@ -7,6 +7,7 @@ import { CollapseIcon, ExpandIcon, IconSpinner } from "../../../components/ui/ic
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
+import { keyItems } from "../../../lib/react-keys"
 import { highlightCode } from "../../../lib/themes/shiki-theme-loader"
 import { cn } from "../../../lib/utils"
 import { agentsDiffSidebarOpenAtom, agentsFocusedDiffFileAtom, selectedProjectAtom } from "../atoms"
@@ -605,14 +606,11 @@ export const AgentEditTool = memo(function AgentEditTool({
           {/* Display lines - either streaming content or completed diff */}
           {displayLines.length > 0 ? (
             <div className={cn(isInputStreaming && shouldAlignBottom && "flex-shrink-0")}>
-              {displayLines.map((line: DiffLine, idx: number) => (
-                <DiffLineRow
-                  // Stable key: type + index is sufficient during streaming
-                  key={`${line.type}-${idx}`}
-                  line={line}
-                  highlightedHtml={highlightedMap.get(idx)}
-                />
-              ))}
+              {keyItems(displayLines, (line: DiffLine) => `${line.type}:${line.content}`).map(
+                ({ key, item: line, index: idx }) => (
+                  <DiffLineRow key={key} line={line} highlightedHtml={highlightedMap.get(idx)} />
+                ),
+              )}
             </div>
           ) : // Fallback: show raw streaming content when no lines parsed yet
           throttledStreamingContent || newString ? (

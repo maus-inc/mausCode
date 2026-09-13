@@ -21,6 +21,7 @@ import {
   type ShortcutCategory,
 } from "../../../lib/hotkeys"
 import { useHotkeyRecorder } from "../../../lib/hotkeys/use-hotkey-recorder"
+import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { CmdIcon, ControlIcon, OptionIcon, ShiftIcon } from "../../ui/icons"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
@@ -156,8 +157,8 @@ function ShortcutListItem({
     >
       <span className="text-sm truncate">{action.label}</span>
       <div className="flex items-center gap-0.5 ml-2 flex-shrink-0">
-        {keys.map((key, index) => (
-          <ShortcutKey key={index} keyName={key} size="sm" />
+        {keyItems(keys, (k) => k).map(({ key, item: keyName }) => (
+          <ShortcutKey key={key} keyName={keyName} size="sm" />
         ))}
       </div>
     </button>
@@ -255,8 +256,8 @@ function ShortcutDetailPanel({
             if (currentKeys.length > 0) {
               return (
                 <div className="flex items-center gap-1">
-                  {currentKeys.map((key, index) => (
-                    <ShortcutKey key={index} keyName={key} size="lg" />
+                  {keyItems(currentKeys, (k) => k).map(({ key, item: keyName }) => (
+                    <ShortcutKey key={key} keyName={keyName} size="lg" />
                   ))}
                 </div>
               )
@@ -269,8 +270,8 @@ function ShortcutDetailPanel({
           if (keys.length > 0) {
             return (
               <div className="flex items-center gap-1">
-                {keys.map((key, index) => (
-                  <ShortcutKey key={index} keyName={key} size="lg" />
+                {keyItems(keys, (k) => k).map(({ key, item: keyName }) => (
+                  <ShortcutKey key={key} keyName={keyName} size="lg" />
                 ))}
               </div>
             )
@@ -295,8 +296,8 @@ function ShortcutDetailPanel({
             <RotateCcw className="h-3 w-3" />
             <span>Reset to</span>
             <div className="flex items-center gap-0.5">
-              {defaultKeys.map((key, index) => (
-                <ShortcutKey key={index} keyName={key} size="sm" />
+              {keyItems(defaultKeys, (k) => k).map(({ key, item: keyName }) => (
+                <ShortcutKey key={key} keyName={keyName} size="sm" />
               ))}
             </div>
           </button>

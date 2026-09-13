@@ -393,7 +393,9 @@ export const TerminalTabs = memo(function TerminalTabs({
     checkTruncation()
 
     const resizeObserver = new ResizeObserver(() => checkTruncation())
-    textRefs.current.forEach((el) => el && resizeObserver.observe(el))
+    textRefs.current.forEach((el) => {
+      if (el) resizeObserver.observe(el)
+    })
 
     return () => resizeObserver.disconnect()
   }, [])

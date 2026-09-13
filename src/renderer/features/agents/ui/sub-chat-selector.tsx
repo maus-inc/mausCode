@@ -363,7 +363,9 @@ export function SubChatSelector({
   const onCloseOtherTabs = useCallback((subChatId: string) => {
     const state = useAgentSubChatStore.getState()
     const idsToClose = state.openSubChatIds.filter((id) => id !== subChatId)
-    idsToClose.forEach((id) => state.removeFromOpenSubChats(id))
+    idsToClose.forEach((id) => {
+      state.removeFromOpenSubChats(id)
+    })
     state.setActiveSubChat(subChatId)
   }, [])
 
@@ -373,7 +375,9 @@ export function SubChatSelector({
 
       // Use visual order from sorted openSubChats, not storage order
       const idsToClose = openSubChats.slice(visualIndex + 1).map((sc) => sc.id)
-      idsToClose.forEach((id) => state.removeFromOpenSubChats(id))
+      idsToClose.forEach((id) => {
+        state.removeFromOpenSubChats(id)
+      })
     },
     [openSubChats],
   )
@@ -536,7 +540,9 @@ export function SubChatSelector({
     checkTruncation()
 
     const resizeObserver = new ResizeObserver(() => checkTruncation())
-    textRefs.current.forEach((el) => el && resizeObserver.observe(el))
+    textRefs.current.forEach((el) => {
+      if (el) resizeObserver.observe(el)
+    })
 
     return () => resizeObserver.disconnect()
   }, [])

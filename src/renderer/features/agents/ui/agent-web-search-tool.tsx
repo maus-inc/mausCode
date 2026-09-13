@@ -3,6 +3,7 @@
 import { memo, useMemo, useState } from "react"
 import { CollapseIcon, ExpandIcon, IconSpinner, SearchIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { getToolStatus } from "./agent-tool-registry"
@@ -138,9 +139,9 @@ export const AgentWebSearchTool = memo(function AgentWebSearchTool({
       {/* Results list - expandable */}
       {hasResults && isExpanded && (
         <div className="border-t border-border max-h-[200px] overflow-y-auto">
-          {results.map((result, idx) => (
+          {keyItems(results, (result) => result.url).map(({ key, item: result }) => (
             <a
-              key={idx}
+              key={key}
               href={result.url}
               target="_blank"
               rel="noopener noreferrer"

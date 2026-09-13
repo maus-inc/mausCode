@@ -84,6 +84,7 @@ import {
   VueIcon,
   YAMLIcon,
 } from "../../../icons/framework-icons"
+import { keyItems } from "../../../lib/react-keys"
 
 interface ChangedFile {
   filePath: string
@@ -524,14 +525,12 @@ export function getOptionIcon(option: {
  */
 function renderFolderTree(path: string) {
   const parts = path.split("/").filter(Boolean)
-  const lastIndex = parts.length - 1
   return (
     <div className="flex flex-col gap-1 min-w-[220px]">
-      {parts.map((part, index) => {
-        const isLast = index === lastIndex
+      {keyItems(parts).map(({ key, item: part, index, isLast }) => {
         return (
           <div
-            key={index}
+            key={key}
             className={cn(
               "flex items-center gap-1.5 text-xs",
               isLast ? "text-foreground" : "text-muted-foreground",

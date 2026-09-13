@@ -16,7 +16,6 @@ import {
   automationTemplateParamsAtom,
   desktopViewAtom,
 } from "../agents/atoms"
-
 import {
   AUTOMATION_TEMPLATES,
   AutomationCard,
@@ -26,6 +25,8 @@ import {
   TemplateCard,
   type ViewTab,
 } from "./_components"
+
+const SKELETON_ROW_KEYS = Array.from({ length: 6 }, (_, i) => `automation-skeleton-${i}`)
 
 export function AutomationsView() {
   const teamId = useAtomValue(selectedTeamIdAtom)
@@ -174,9 +175,9 @@ export function AutomationsView() {
           {/* Content */}
           {isLoading ? (
             <div className="grid grid-cols-1 min-420:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
-              {[...Array(6)].map((_, i) => (
+              {SKELETON_ROW_KEYS.map((rowKey) => (
                 <div
-                  key={i}
+                  key={rowKey}
                   className="bg-background border border-border rounded-[10px] p-4 animate-pulse"
                 >
                   {/* Icons row skeleton */}

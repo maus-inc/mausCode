@@ -57,7 +57,9 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
     }
 
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop()
+      })
       streamRef.current = null
     }
     if (mediaRecorderRef.current) {

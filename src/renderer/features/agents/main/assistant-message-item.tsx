@@ -14,6 +14,7 @@ import { CollapseIcon, ExpandIcon, QuestionIcon } from "../../../components/ui/i
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { soundNotificationsEnabledAtom } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
+import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom, showMessageJsonAtom } from "../atoms"
 import { isAssistantMessageQuestion } from "../lib/is-question"
@@ -107,6 +108,20 @@ interface NormalizedPart {
   result?: unknown
   errorText?: string
   error?: unknown
+}
+
+/**
+ * React key for a top-level message part: the tool call id when the part carries
+ * one, otherwise the part type plus a grouping fingerprint. Group parts
+ * (`exploring-group`, `task-group`) have no id of their own, and they appear at the
+ * position their first child was appended, so "type + child count" stays stable
+ * across the streaming renders that make index keys fragile.
+ */
+function partKeyOf(part: unknown): string {
+  const p = part as { toolCallId?: unknown; type?: unknown; parts?: unknown }
+  if (typeof p.toolCallId === "string" && p.toolCallId) return p.toolCallId
+  const children = Array.isArray(p.parts) ? p.parts.length : ""
+  return `${typeof p.type === "string" ? p.type : "part"}${children}`
 }
 
 /** A normalized part or a marker group built by the grouping passes. */
@@ -1089,13 +1104,12 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
               // Apply both grouping functions: first task tools, then exploring tools
               const taskGrouped = groupTaskTools(stepParts, nestedToolIds)
               const grouped = groupExploringTools(taskGrouped, nestedToolIds)
-              return grouped.map((part, idx: number) => {
+              return keyItems(grouped, partKeyOf).map(({ key, item: part, index, isLast }) => {
                 if (part.type === "exploring-group" && "parts" in part) {
-                  const isLast = idx === grouped.length - 1
                   const isGroupStreaming = isStreaming && isLastMessage && isLast
                   return (
                     <AgentExploringGroup
-                      key={idx}
+                      key={key}
                       parts={part.parts}
                       chatStatus={status}
                       isStreaming={isGroupStreaming}
@@ -1103,11 +1117,10 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
                   )
                 }
                 if (part.type === "task-group" && "parts" in part) {
-                  const isLast = idx === grouped.length - 1
                   const isGroupStreaming = isStreaming && isLastMessage && isLast
                   return (
                     <AgentTaskToolsGroup
-                      key={idx}
+                      key={key}
                       parts={part.parts as unknown as TaskToolPart[]}
                       chatStatus={status}
                       isStreaming={isGroupStreaming}
@@ -1115,7 +1128,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
                     />
                   )
                 }
-                return renderPart(part, idx, false)
+                return renderPart(part, index, false)
               })
             })()}
           </CollapsibleSteps>
@@ -1125,13 +1138,12 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
           // Apply both grouping functions: first task tools, then exploring tools
           const taskGrouped = groupTaskTools(finalParts, nestedToolIds)
           const grouped = groupExploringTools(taskGrouped, nestedToolIds)
-          return grouped.map((part, idx: number) => {
+          return keyItems(grouped, partKeyOf).map(({ key, item: part, index, isLast }) => {
             if (part.type === "exploring-group" && "parts" in part) {
-              const isLast = idx === grouped.length - 1
               const isGroupStreaming = isStreaming && isLastMessage && isLast
               return (
                 <AgentExploringGroup
-                  key={idx}
+                  key={key}
                   parts={part.parts}
                   chatStatus={status}
                   isStreaming={isGroupStreaming}
@@ -1139,11 +1151,10 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
               )
             }
             if (part.type === "task-group" && "parts" in part) {
-              const isLast = idx === grouped.length - 1
               const isGroupStreaming = isStreaming && isLastMessage && isLast
               return (
                 <AgentTaskToolsGroup
-                  key={idx}
+                  key={key}
                   parts={part.parts as unknown as TaskToolPart[]}
                   chatStatus={status}
                   isStreaming={isGroupStreaming}
@@ -1153,7 +1164,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
             }
             return renderPart(
               part,
-              shouldCollapse ? collapseBeforeIndex + idx : idx,
+              shouldCollapse ? collapseBeforeIndex + index : index,
               shouldCollapse,
             )
           })

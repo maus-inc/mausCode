@@ -5,6 +5,7 @@ import { Check, Copy } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../../components/ui/dialog"
 import { useOverflowDetection } from "../../../hooks/use-overflow-detection"
+import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { chatFontSizeAtom } from "../atoms"
 import {
@@ -215,16 +216,18 @@ export const AgentUserMessageBubble = memo(function AgentUserMessageBubble({
                     url: resolveImgUrl(img),
                   }))
 
-                return imageParts.map((img, idx) => (
-                  <AgentImageItem
-                    key={`${messageId}-img-${idx}`}
-                    id={`${messageId}-img-${idx}`}
-                    filename={img.data?.filename || "image"}
-                    url={resolveImgUrl(img)}
-                    allImages={allImages}
-                    imageIndex={idx}
-                  />
-                ))
+                return keyItems(imageParts, (img) => resolveImgUrl(img) || "image").map(
+                  ({ key, item: img, index: idx }) => (
+                    <AgentImageItem
+                      key={`${messageId}-img-${key}`}
+                      id={`${messageId}-img-${idx}`}
+                      filename={img.data?.filename || "image"}
+                      url={resolveImgUrl(img)}
+                      allImages={allImages}
+                      imageIndex={idx}
+                    />
+                  ),
+                )
               })()}
             </div>
           )}

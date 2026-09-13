@@ -68,7 +68,10 @@ class MentionProviderRegistry {
    */
   registerAll(providers: MentionProvider[]): () => void {
     const unregisterFns = providers.map((p) => this.register(p))
-    return () => unregisterFns.forEach((fn) => fn())
+    return () =>
+      unregisterFns.forEach((fn) => {
+        fn()
+      })
   }
 
   /**

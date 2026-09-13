@@ -603,6 +603,10 @@ export function AgentModelSelector({
           return item.modelName.toLowerCase().includes(q)
         case "custom":
           return "custom model".includes(q)
+        // A kind this switch does not know about must not decide the filter by
+        // returning undefined; an unknown entry is simply not a match.
+        default:
+          return false
       }
     })
   }, [allModels, search])

@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react"
 import { ClaudeCodeIcon } from "../../../components/ui/icons"
+import { keyItems } from "../../../lib/react-keys"
 import { PlatformIcon } from "./platform-icon"
 import type { Platform } from "./types"
 import { getAutomationDescription } from "./utils"
@@ -34,9 +35,9 @@ export function AutomationCard({ automation, onClick }: AutomationCardProps) {
         className="bg-background border border-border rounded-[10px] p-4 cursor-pointer hover:border-border/80 hover:bg-muted/30"
       >
         <div className="flex items-center gap-1.5 mb-3">
-          {platforms.map((platform, idx) => (
+          {keyItems(platforms).map(({ key, item: platform }) => (
             <div
-              key={idx}
+              key={key}
               className="w-7 h-7 rounded-md bg-accent/50 flex items-center justify-center"
             >
               <PlatformIcon platform={platform} className="h-4 w-4 text-muted-foreground" />

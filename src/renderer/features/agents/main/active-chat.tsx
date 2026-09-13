@@ -3,7 +3,7 @@
 import { Chat, useChat } from "@ai-sdk/react"
 import type { ChatTransport, UIMessage } from "ai"
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ArrowDown, ChevronDown, GitFork, ListTree, TerminalSquare } from "lucide-react"
+import { ArrowDown, ChevronDown, GitFork, TerminalSquare } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import {
   createContext,
@@ -31,15 +31,11 @@ import {
   AgentIcon,
   AttachIcon,
   ClaudeCodeIcon,
-  CollapseIcon,
   CursorIcon,
-  ExpandIcon,
   IconCloseSidebarRight,
   IconOpenSidebarRight,
   IconSpinner,
-  PauseIcon,
   UnarchiveIcon,
-  VolumeIcon,
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import { PromptInput, PromptInputActions } from "../../../components/ui/prompt-input"
@@ -47,7 +43,6 @@ import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { trackMessageSent } from "../../../lib/analytics"
-import { apiFetch } from "../../../lib/api-fetch"
 import {
   chatSourceModeAtom,
   customClaudeConfigAtom,

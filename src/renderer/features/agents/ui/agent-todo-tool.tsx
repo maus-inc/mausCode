@@ -14,6 +14,7 @@ import {
 } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { alwaysExpandTodoListAtom } from "../../../lib/atoms"
+import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { currentTodosAtomFamily } from "../atoms"
 import { AgentToolCall } from "./agent-tool-call"
@@ -591,12 +592,8 @@ export const AgentTodoTool = memo(function AgentTodoTool({
               )}
             </span>
             <div className="flex items-center gap-1 text-muted-foreground/60 font-normal truncate min-w-0">
-              {visibleItems.map((c, idx) => (
-                <TodoChangeItem
-                  key={idx}
-                  change={c}
-                  showSeparator={idx < visibleItems.length - 1}
-                />
+              {keyItems(visibleItems).map(({ key, item: c, isLast }) => (
+                <TodoChangeItem key={key} change={c} showSeparator={!isLast} />
               ))}
               {remainingCount > 0 && (
                 <span className="text-muted-foreground/60 whitespace-nowrap flex-shrink-0">
@@ -758,13 +755,8 @@ export const AgentTodoTool = memo(function AgentTodoTool({
               }
             }}
           >
-            {displayTodos.map((todo, idx) => (
-              <TodoListItem
-                key={idx}
-                todo={todo}
-                isPending={isPending}
-                isLast={idx === displayTodos.length - 1}
-              />
+            {keyItems(displayTodos).map(({ key, item: todo, isLast }) => (
+              <TodoListItem key={key} todo={todo} isPending={isPending} isLast={isLast} />
             ))}
           </div>
         )}

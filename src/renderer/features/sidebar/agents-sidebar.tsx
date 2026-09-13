@@ -1570,7 +1570,9 @@ export function AgentsSidebar({
     if (chatIdsToPin.length > 0) {
       setPinnedChatIds((prev) => {
         const next = new Set(prev)
-        chatIdsToPin.forEach((id) => next.add(id))
+        chatIdsToPin.forEach((id) => {
+          next.add(id)
+        })
         return next
       })
       clearChatSelection()
@@ -1583,7 +1585,9 @@ export function AgentsSidebar({
     if (chatIdsToUnpin.length > 0) {
       setPinnedChatIds((prev) => {
         const next = new Set(prev)
-        chatIdsToUnpin.forEach((id) => next.delete(id))
+        chatIdsToUnpin.forEach((id) => {
+          next.delete(id)
+        })
         return next
       })
       clearChatSelection()

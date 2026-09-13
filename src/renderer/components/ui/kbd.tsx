@@ -1,4 +1,5 @@
 import * as React from "react"
+import { keyItems } from "../../lib/react-keys"
 import { cn } from "../../lib/utils"
 import { CmdIcon, EnterIcon, OptionIcon, ShiftIcon } from "./icons"
 
@@ -23,13 +24,13 @@ function renderShortcut(children: React.ReactNode): React.ReactNode {
   const regex = /([⌘⌥⇧⌃↵])/g
   const tokens = children.split(regex)
 
-  tokens.forEach((token, index) => {
+  for (const { key, item: token } of keyItems(tokens, (t) => t)) {
     if (symbolMap[token]) {
       parts.push(symbolMap[token])
     } else if (token) {
-      parts.push(<span key={index}>{token}</span>)
+      parts.push(<span key={key}>{token}</span>)
     }
-  })
+  }
 
   return parts
 }

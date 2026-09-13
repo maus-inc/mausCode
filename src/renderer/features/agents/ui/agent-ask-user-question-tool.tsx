@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai"
 import { memo } from "react"
 import { QuestionIcon } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { keyItems } from "../../../lib/react-keys"
 import {
   askUserQuestionResultsAtom,
   pendingUserQuestionsAtom,
@@ -132,8 +133,8 @@ export const AgentAskUserQuestionTool = memo(function AgentAskUserQuestionTool({
         </div>
         {/* Content */}
         <div className="flex flex-col gap-2 p-2.5 text-xs">
-          {entries.map(([question, answer], idx) => (
-            <div key={idx} className="flex flex-col gap-0.5">
+          {keyItems(entries, ([question]) => question).map(({ key, item: [question, answer] }) => (
+            <div key={key} className="flex flex-col gap-0.5">
               <span className="font-medium text-foreground">{question}</span>
               <span className="text-muted-foreground">{answer}</span>
             </div>

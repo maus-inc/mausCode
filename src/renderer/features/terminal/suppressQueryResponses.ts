@@ -1,5 +1,8 @@
 import type { Terminal as XTerm } from "xterm"
 
+// ESC introducer shared by the query-response matchers below.
+const ESC = "\u001b"
+
 /**
  * Suppress terminal query responses that can echo garbage characters.
  *
@@ -17,15 +20,17 @@ import type { Terminal as XTerm } from "xterm"
 export function suppressQueryResponses(xterm: XTerm): () => void {
   // Query response patterns to suppress
   // These are responses xterm.js sends when queried
+  // Assembled from the ESC constant so no regex literal carries a raw control
+  // character; each source string is byte-equivalent to the literal it replaces.
   const queryResponsePatterns = [
     // DA1 (Primary Device Attributes) response: CSI ? 1 ; 2 c
-    /^\x1b\[\?[\d;]*c$/,
+    new RegExp(`^${ESC}\\[\\?[\\d;]*c$`),
     // DA2 (Secondary Device Attributes) response: CSI > 0 ; version ; 0 c
-    /^\x1b\[>[\d;]*c$/,
+    new RegExp(`^${ESC}\\[>[\\d;]*c$`),
     // DSR (Device Status Report) response: CSI row ; col R
-    /^\x1b\[\d+;\d+R$/,
+    new RegExp(`^${ESC}\\[\\d+;\\d+R$`),
     // DECRQSS (Request Selection or Setting) responses
-    /^\x1bP[\d$r].*\x1b\\$/,
+    new RegExp(`^${ESC}P[\\d$r].*${ESC}\\\\$`),
   ]
 
   /**

@@ -10,10 +10,21 @@
  * @param data - Terminal output data
  * @returns The parsed cwd path or null if not found
  */
+// The two control characters the OSC 7 grammar is built from. Naming them keeps
+// the pattern readable and keeps raw control characters out of regex literals;
+// the assembled source is the same expression the literal spelled.
+const ESC = "\u001b"
+const BEL = "\u0007"
+
 export function parseCwd(data: string): string | null {
   // OSC 7 with BEL terminator: \x1b]7;file://hostname/path\x07
   // OSC 7 with ST terminator: \x1b]7;file://hostname/path\x1b\\
-  const osc7Pattern = /\x1b\]7;file:\/\/[^/]*([^\x07\x1b]+)(?:\x07|\x1b\\)/g
+  // Constructed per call because the loop below drives it with exec(), which
+  // advances `lastIndex` on a global regex.
+  const osc7Pattern = new RegExp(
+    `${ESC}\\]7;file://[^/]*([^${BEL}${ESC}]+)(?:${BEL}|${ESC}\\\\)`,
+    "g",
+  )
 
   let match: RegExpExecArray | null
   let lastCwd: string | null = null

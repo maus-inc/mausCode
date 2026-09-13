@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai"
 import { ChevronRight } from "lucide-react"
 import { memo, useEffect, useRef, useState } from "react"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom } from "../atoms"
 import { useFileOpen } from "../mentions"
@@ -211,12 +212,15 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                 : undefined
             }
           >
-            {nestedTools.map((nestedPart, idx) => {
+            {keyItems(nestedTools, (nestedPart) =>
+              String(
+                (nestedPart as { toolCallId?: unknown }).toolCallId ?? nestedPart.type ?? "part",
+              ),
+            ).map(({ key, item: nestedPart }) => {
               const nestedMeta = nestedPart.type ? AgentToolRegistry[nestedPart.type] : undefined
               if (!nestedMeta) {
                 return (
-                  /* biome-ignore lint/suspicious/noArrayIndexKey: nested tool parts are positional and append-only. */
-                  <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
+                  <div key={key} className="text-xs text-muted-foreground py-0.5 px-2">
                     {nestedPart.type?.replace("tool-", "")}
                   </div>
                 )
@@ -232,7 +236,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                 nestedReadPath && onOpenFile ? () => onOpenFile(nestedReadPath) : undefined
               return (
                 <AgentToolCall
-                  key={idx}
+                  key={key}
                   icon={nestedMeta.icon}
                   title={nestedMeta.title(nestedPart as ToolDisplayPart)}
                   subtitle={nestedMeta.subtitle?.(nestedPart as ToolDisplayPart)}

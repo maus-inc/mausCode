@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { UnknownFileIcon } from "@/icons/framework-icons"
 import { trpc } from "@/lib/trpc"
 import { cn } from "@/lib/utils"
+import { keyItems } from "../../../lib/react-keys"
 import { recentlyOpenedFilesAtom } from "../../agents/atoms"
 import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
 
@@ -335,14 +336,16 @@ const FileSearchItem = memo(function FileSearchItem({
       <span className="flex items-center gap-1.5 w-full min-w-0">
         <span className="shrink-0 whitespace-nowrap">
           {query
-            ? highlightMatches(label, query).map((seg, i) =>
+            ? keyItems(
+                highlightMatches(label, query),
+                (seg) => `${seg.highlight ? "m" : "s"}:${seg.text}`,
+              ).map(({ key, item: seg }) =>
                 seg.highlight ? (
-                  /* biome-ignore lint/suspicious/noArrayIndexKey: highlight segments are positional splits, static per render. */
-                  <mark key={i} className="bg-transparent text-foreground font-semibold">
+                  <mark key={key} className="bg-transparent text-foreground font-semibold">
                     {seg.text}
                   </mark>
                 ) : (
-                  <span key={i}>{seg.text}</span>
+                  <span key={key}>{seg.text}</span>
                 ),
               )
             : label}
@@ -358,14 +361,16 @@ const FileSearchItem = memo(function FileSearchItem({
           >
             <span style={{ direction: "ltr" }}>
               {query
-                ? highlightMatches(dirPath, query).map((seg, i) =>
+                ? keyItems(
+                    highlightMatches(dirPath, query),
+                    (seg) => `${seg.highlight ? "m" : "s"}:${seg.text}`,
+                  ).map(({ key, item: seg }) =>
                     seg.highlight ? (
-                      /* biome-ignore lint/suspicious/noArrayIndexKey: highlight segments are positional splits, static per render. */
-                      <mark key={i} className="bg-transparent text-foreground font-semibold">
+                      <mark key={key} className="bg-transparent text-foreground font-semibold">
                         {seg.text}
                       </mark>
                     ) : (
-                      <span key={i}>{seg.text}</span>
+                      <span key={key}>{seg.text}</span>
                     ),
                   )
                 : dirPath}

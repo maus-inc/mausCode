@@ -193,10 +193,14 @@ export function clearSubChatDraft(chatId: string, subChatId: string): void {
 
   // Revoke blob URLs for images and files before deleting
   if (draft?.images) {
-    draft.images.forEach((img) => revokeDraftBlobUrls(img.id))
+    draft.images.forEach((img) => {
+      revokeDraftBlobUrls(img.id)
+    })
   }
   if (draft?.files) {
-    draft.files.forEach((file) => revokeDraftBlobUrls(file.id))
+    draft.files.forEach((file) => {
+      revokeDraftBlobUrls(file.id)
+    })
   }
 
   delete globalDrafts[key]
@@ -443,7 +447,9 @@ export function toDraftTextContext(ctx: SelectedTextContext): DraftTextContext {
 export function revokeDraftBlobUrls(draftId: string): void {
   const urls = draftBlobUrls.get(draftId)
   if (urls) {
-    urls.forEach((url) => URL.revokeObjectURL(url))
+    urls.forEach((url) => {
+      URL.revokeObjectURL(url)
+    })
     draftBlobUrls.delete(draftId)
   }
 }
@@ -453,7 +459,9 @@ export function revokeDraftBlobUrls(draftId: string): void {
  */
 export function revokeAllDraftBlobUrls(): void {
   draftBlobUrls.forEach((urls) => {
-    urls.forEach((url) => URL.revokeObjectURL(url))
+    urls.forEach((url) => {
+      URL.revokeObjectURL(url)
+    })
   })
   draftBlobUrls.clear()
 }

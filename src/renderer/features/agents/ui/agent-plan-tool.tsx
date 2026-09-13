@@ -4,6 +4,7 @@ import { FileCode2, SkipForward } from "lucide-react"
 import { memo, useState } from "react"
 import { CheckIcon, CollapseIcon, ExpandIcon, IconSpinner } from "../../../components/ui/icons"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
+import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
@@ -275,9 +276,9 @@ export const AgentPlanTool = memo(function AgentPlanTool({ part, chatStatus }: A
                     {/* Files */}
                     {step.files && step.files.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
-                        {step.files.map((file, fileIdx) => (
+                        {keyItems(step.files).map(({ key, item: file }) => (
                           <span
-                            key={fileIdx}
+                            key={key}
                             className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
                           >
                             <FileCode2 className="w-2.5 h-2.5" />

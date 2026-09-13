@@ -3,6 +3,7 @@
 import { useAtomValue } from "jotai"
 import { ChevronRight } from "lucide-react"
 import { memo, useEffect, useRef, useState } from "react"
+import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom } from "../atoms"
 import { useFileOpen } from "../mentions"
@@ -128,12 +129,13 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
                 : undefined
             }
           >
-            {parts.map((part, idx) => {
+            {keyItems(parts, (part) =>
+              String((part as { toolCallId?: unknown }).toolCallId ?? part.type ?? "part"),
+            ).map(({ key, item: part }) => {
               const meta = part.type ? AgentToolRegistry[part.type] : undefined
               if (!meta) {
                 return (
-                  /* biome-ignore lint/suspicious/noArrayIndexKey: tool parts are positional and append-only. */
-                  <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
+                  <div key={key} className="text-xs text-muted-foreground py-0.5 px-2">
                     {part.type?.replace("tool-", "")}
                   </div>
                 )
@@ -145,7 +147,7 @@ export const AgentExploringGroup = memo(function AgentExploringGroup({
                 readFilePath && onOpenFile ? () => onOpenFile(readFilePath) : undefined
               return (
                 <AgentToolCall
-                  key={idx}
+                  key={key}
                   icon={meta.icon}
                   title={meta.title(part as ToolDisplayPart)}
                   subtitle={meta.subtitle?.(part as ToolDisplayPart)}
