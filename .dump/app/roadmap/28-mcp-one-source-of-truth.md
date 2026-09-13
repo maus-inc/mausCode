@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 28 of 42, wave W13 |
+| Step | 28 of 45, wave W13 |
 | Area | main, renderer, db |
 | Risk | critical, it touches another product's config and MCP credentials |
 | Depends on | {{S10}}, {{S11}} |

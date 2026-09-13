@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 37 of 42, the fork harvest, the lineage decision the catalog demands |
+| Step | 37 of 45, the fork harvest, the lineage decision the catalog demands |
 | Area | renderer, db |
 | Risk | high, it decides which sidebar history we keep |
 | Depends on | {{S17}}, {{S18}}, {{S36}} |

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 32 of 42, CI phase 3, plus parity P8 release mechanics |
+| Step | 32 of 45, CI phase 3, plus parity P8 release mechanics |
 | Area | ci, packaging |
 | Risk | high, it produces what other people run |
 | Depends on | {{S03}}, {{S29}}, {{S30}}, {{S31}} |

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 23 of 42, wave W10 first half, triage row 32 |
+| Step | 23 of 45, wave W10 first half, triage row 32 |
 | Area | main, shared |
 | Risk | high |
 | Depends on | {{S01}}, {{S09}}, {{S12}} |

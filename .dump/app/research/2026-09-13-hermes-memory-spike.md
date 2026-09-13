@@ -2,6 +2,8 @@
 
 **Date:** 2026-09-13 · **Status:** research, no code changed · **Feeds:** plan wave W10 (memory + `AGENTS.md`), and the "deep port, automatic, performance-positive" instruction that governs it
 
+**Refined for implementation in** `2026-09-13-self-improvement-loop.md`, which adds the skill lifecycle, the disclosure loading, the review pass and the decay columns, with the sources read and the wording steps 24, 43 and 44 cite. This file stays the read log, that one is the brief.
+
 Source read: `/tmp/hermes-agent`, HEAD `de2d6a1` ("fix(config): a fresh process recovers the last good config.yaml instead of running on defaults"). Read paths are inside that clone. This repo is not a JS project — it is a Python agent — so nothing here is a file-level port. What transfers is the **control flow**: who is called, when, with what budget, and what is refused.
 
 ## The one-sentence summary

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 39 of 42, the fork harvest, `ningzhaoxing` security rows plus Locus security tests |
+| Step | 39 of 45, the fork harvest, `ningzhaoxing` security rows plus Locus security tests |
 | Area | main, tests, docs |
 | Risk | high, it is the security test suite |
 | Depends on | {{S10}}, {{S22}} |

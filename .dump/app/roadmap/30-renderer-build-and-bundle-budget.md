@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 30 of 42, CI phase 2, plus the plan's performance gate |
+| Step | 30 of 45, CI phase 2, plus the plan's performance gate |
 | Area | build, renderer, ci |
 | Risk | medium |
 | Depends on | {{S03}}, {{S29}} |

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 42 of 42, the fork harvest close-out |
+| Step | 42 of 45, the fork harvest close-out |
 | Area | docs |
 | Risk | low as code, high as institutional memory |
 | Depends on | {{S36}}, {{S37}}, {{S38}}, {{S39}}, {{S40}}, {{S41}} |

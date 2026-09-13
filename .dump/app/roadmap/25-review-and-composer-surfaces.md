@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 25 of 42, wave W11, plus parity P7 |
+| Step | 25 of 45, wave W11, plus parity P7 |
 | Area | renderer |
 | Risk | medium |
 | Depends on | {{S13}}, {{S17}}, {{S18}}, {{S22}}, {{S24}} |

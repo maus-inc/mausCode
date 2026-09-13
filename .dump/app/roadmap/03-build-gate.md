@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 03 of 42, the build gate in §11.2 row 2 |
+| Step | 03 of 45, the build gate in §11.2 row 2 |
 | Area | ci, build |
 | Risk | high |
 | Depends on | {{S01}}, {{S02}} |

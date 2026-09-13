@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 07 of 42, wave W1 |
+| Step | 07 of 45, wave W1 |
 | Area | db, main |
 | Risk | high |
 | Depends on | {{S01}}, {{S03}} |

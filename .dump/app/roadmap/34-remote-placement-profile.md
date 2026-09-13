@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 34 of 42, wave W14, parked behind the human's channel decision |
+| Step | 34 of 45, wave W14, parked behind the human's channel decision |
 | Area | main, runtime, settings |
 | Risk | critical, it moves execution and its credentials off the laptop |
 | Depends on | {{S10}}, {{S25}}, {{S27}}, {{S32}}, {{S33}} |

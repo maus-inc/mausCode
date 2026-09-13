@@ -59,6 +59,19 @@ move to `decisions.md` with the date.
     hatch for lockfile regeneration.
 15. **1Code data auto-migration.** Read-only detection is ratified. If a migration prompt is ever
     wanted, it needs its own design and tests, per the rejected list in `decisions.md`.
+17. **Does mausCode model its user?** hermes-agent integrates Honcho for a dialectic user model,
+    an evolving picture of preferences and working style. Porting that means holding a persistent
+    profile of the human on disk. Options: no user model, local-only profile fields the user can
+    read and edit in settings, or a full dialectic model. Recommendation, the middle one, and it
+    gates any future personalisation step. Blocks nothing yet, and step 44's decay rules assume
+    the answer stays local.
+18. **How far does the sign-in removal go?** Chosen behaviour is "remove the built-in app
+    sign-in"; three scopes remain. A, drop the gate only. B, drop the gate and the login modal and
+    keep provider OAuth plus the account switcher in settings as credential management, the
+    recommendation, because a Pro or Max user has no API key to paste. C, remove all Anthropic
+    OAuth and keep API keys only, which strands those users. Step 45 asks this before deleting,
+    and the answer changes whether `src/main/lib/oauth.ts` and `AUTH_SERVER_PORT` keep a second
+    job or only the MCP one.
 16. **`.dump/ci/research/HANDOFF-fork-harvest-context.md` instruction hygiene.** That handoff
     tells an agent to push with a token embedded in the remote URL and to co-author with a bot
     identity. Both are wrong here. `AGENTS.md` now forbids them; confirm the handoff file should

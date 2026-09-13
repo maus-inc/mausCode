@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 31 of 42, rebrand follow-through and repo hygiene |
+| Step | 31 of 45, rebrand follow-through and repo hygiene |
 | Area | branding, docs, assets |
 | Risk | medium, high for the identity fields |
 | Depends on | {{S01}}, {{S04}} |

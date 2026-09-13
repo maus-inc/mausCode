@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 09 of 42, wave W1 tail plus parity P2 remainder |
+| Step | 09 of 45, wave W1 tail plus parity P2 remainder |
 | Area | main, runtime |
 | Risk | high |
 | Depends on | {{S07}} |

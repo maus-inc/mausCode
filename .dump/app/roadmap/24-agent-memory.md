@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 24 of 42, wave W10 second half, triage row 31 |
+| Step | 24 of 45, wave W10 second half, triage row 31 |
 | Area | main, shared, renderer, db |
 | Risk | high |
 | Depends on | {{S04}} decision 4, {{S07}}, {{S09}}, {{S11}}, {{S23}} |

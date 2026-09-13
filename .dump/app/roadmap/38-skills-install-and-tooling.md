@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 38 of 42, the fork harvest, `ningzhaoxing` Category C |
+| Step | 38 of 45, the fork harvest, `ningzhaoxing` Category C |
 | Area | main, renderer |
 | Risk | medium |
 | Depends on | {{S23}}, {{S31}} |

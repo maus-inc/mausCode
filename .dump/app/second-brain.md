@@ -176,9 +176,12 @@ Detail lives in `research/` and `plans/`; this file states what is true.
 
 ## Roadmap and issues (2026-09-13)
 
-`plans/2026-09-13-mauscode-roadmap.md` is the single ordered sequence, 42 steps, issued to
+`plans/2026-09-13-mauscode-roadmap.md` is the single ordered sequence, 45 steps, issued to
 GitHub with the `roadmap` label and generated from `.dump/app/roadmap/NN-<slug>.md`.
-Steps 36 to 42 are the fork-harvest program, the ledger in `.dump/ci/research/fork-network-harvest-catalog.md`
+Steps 36 to 42 and 45 are the fork-harvest program, and steps 43 and 44 are the self-improvement
+loop, the skill lifecycle and session recall ported from hermes-agent's learning loop, wording in
+`research/2026-09-13-self-improvement-loop.md`.
+Steps 36 to 42 were the first pass at the fork-harvest program, the ledger in `.dump/ci/research/fork-network-harvest-catalog.md`
 and its handoff turned into work items, so an adopted or refused piece stays refused. Issue bodies
 follow `.github/ISSUE_TEMPLATE/roadmap-step.md`, which requires measured evidence with an
 evidence level, a plan in commit order, Always and Ask-first and Never boundaries, verifiable

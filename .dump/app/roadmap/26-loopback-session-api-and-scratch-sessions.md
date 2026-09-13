@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 26 of 42, wave W8 |
+| Step | 26 of 45, wave W8 |
 | Area | main, renderer, db |
 | Risk | critical, it opens a listening socket |
 | Depends on | {{S07}}, {{S10}}, {{S11}}, {{S24}} |

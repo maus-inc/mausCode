@@ -24,6 +24,9 @@ under delegated authority with the reasoning written down.
 | Memory and instruction loading are a deep port of hermes-agent logic, automatic and performance-positive | 2026-09-12 | `app/decisions/2026-09-12-jules-feature-triage.md` rows 31-32 | Wave W10, steps 23 and 24 |
 | MCP management follows our own UX standard, not the upstream paste-a-key panel | 2026-09-12 | `app/decisions/2026-09-12-jules-feature-triage.md` row 47 | Wave W13, step 28 |
 | Every feature item from the inherited changelog got its own question and recorded verdict | 2026-09-12 | `app/decisions/2026-09-12-jules-feature-triage.md` | 54 verdicts, waves W1-W14 |
+| `ken-jo`'s built-in sign-in removal is adopted, its diff is not | 2026-09-13 | the human, reversing the Category D rejection in `ci/research/fork-network-harvest-catalog.md` | Roadmap step 45, which must still ask the scope question before deleting anything |
+| `find-skills` runs before every roadmap step, and installed skills are project memory | 2026-09-13 | the human, `AGENTS.md` skill routing, `.agents/skills/find-skills/SKILL.md` fetched from `vercel-labs/skills` | Every issue body carries the rule, and a skill may never widen an approval |
+| The self-improvement loop follows the agentskills.io skill format and hermes' disclosure model | 2026-09-13 | `app/research/2026-09-13-self-improvement-loop.md`, sources listed there | Steps 24, 43 and 44; `name` and `description` are validated at write time, and a skill body loads on trigger only |
 
 ## Chosen by an agent under delegated authority
 
@@ -47,3 +50,5 @@ under delegated authority with the reasoning written down.
 | Four-host pull request provider registry | We are GitHub-only through `gh`; four providers is four maintenance surfaces |
 | Wholesale merges from any fork, and every fork's deletions | Their removals are exactly what the human asked to keep away |
 | A pirate persona day feature | Asked and declined |
+| Wholesale replacement of the credential and OAuth plumbing on the strength of the auth-removal decision | Provider credentials and MCP OAuth are not the app account; step 45 keeps `auth-store.ts`, `auth-manager.ts` and the loopback callback server that MCP auth depends on |
+| A persistent psychological model of the user, which upstream implements with Honcho | Needs its own consent conversation, held at `questions.md` item 17 |

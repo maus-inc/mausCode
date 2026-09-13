@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 12 of 42, parity P1-1, P1-2, P1-3 and P2 |
+| Step | 12 of 45, parity P1-1, P1-2, P1-3 and P2 |
 | Area | deps, main, renderer |
 | Risk | high |
 | Depends on | {{S04}} decision 1, {{S11}} |

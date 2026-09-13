@@ -56,7 +56,7 @@ EXCLUDED by user: kanban (5 files)mind-map AI builder (React-Flow build surface,
 - [ ] `PsyberKadi`: freeze-recovery automation snapshot doc (optional)
 
 ### Category D - Reject (documented why)
-- [ ] `ken-jo`: auth removal (we want auth,maus sign-in) 
+- [ ] `ken-jo`: auth removal (we want auth,maus sign-in) — **revisited 2026-09-13**: the human adopted the behaviour (roadmap step 45); the fork's diff, its window rework and its deletions remain refused. `decisions.md` in `.dump/global` carries the reversal. 
 - [ ] `jhckevin` auth-manager + sandbox-import deletions
 - [ ] `aletc1`: not actually ahead
 - [ ] stale forks (tip==old upstream tags: rakshanNagesh19205, schulzfel, arafat877, varun-coditas, linrf et al.)

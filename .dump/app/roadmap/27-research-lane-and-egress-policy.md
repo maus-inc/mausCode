@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 27 of 42, wave W12 |
+| Step | 27 of 45, wave W12 |
 | Area | main, shared, renderer |
 | Risk | critical, it is the app deciding to talk to the internet |
 | Depends on | {{S10}}, {{S11}}, {{S26}}, {{S28}} |

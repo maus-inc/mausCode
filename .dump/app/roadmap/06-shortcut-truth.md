@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 06 of 42, parity P4 shortcut layer |
+| Step | 06 of 45, parity P4 shortcut layer |
 | Area | renderer |
 | Risk | medium |
 | Depends on | {{S01}} |

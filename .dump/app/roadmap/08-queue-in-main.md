@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 08 of 42, wave W1 second half |
+| Step | 08 of 45, wave W1 second half |
 | Area | renderer, main |
 | Risk | high |
 | Depends on | {{S07}} |

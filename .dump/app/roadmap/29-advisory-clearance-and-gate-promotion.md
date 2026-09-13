@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 29 of 42, CI phase 4 ratchet promotion, plus the audit baseline |
+| Step | 29 of 45, CI phase 4 ratchet promotion, plus the audit baseline |
 | Area | deps, ci |
 | Risk | high |
 | Depends on | {{S02}}, {{S03}}, {{S12}} |

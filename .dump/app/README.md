@@ -40,7 +40,7 @@ Every file here must satisfy all of these, or it does not belong:
   unattended write gate) mapped onto mausCode's waves, including the store-ownership decision.
 - `plans/2026-09-13-mauscode-roadmap.md` — the ordered 35-step program with the dependency
   graph, milestones, standing constraints, and the corpus claims corrected by re-measurement.
-- `roadmap/` — the 42 step bodies as filed on GitHub, one file per issue. The issue is the
+- `roadmap/` — the 45 step bodies as filed on GitHub, one file per issue. The issue is the
   working copy; these are the durable originals, so a closed issue can be re-derived.
 - `decisions/` — dated decision records and provisional assumptions.
 - `benchmarks/` — benchmark methods and results (CI-owned numbers).

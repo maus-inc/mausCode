@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 20 of 42, wave W4 |
+| Step | 20 of 45, wave W4 |
 | Area | main |
 | Risk | high |
 | Depends on | {{S07}}, {{S09}}, {{S10}}, {{S19}} |

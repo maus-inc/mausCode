@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 10 of 42, wave W2, the permission floor |
+| Step | 10 of 45, wave W2, the permission floor |
 | Area | main, shared, db |
 | Risk | critical |
 | Depends on | {{S01}}, {{S07}} |
