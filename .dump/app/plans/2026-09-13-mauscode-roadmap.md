@@ -117,16 +117,68 @@ A CLI product, rejected in triage rows 19 and 20. Kanban and the mind-map build 
 
 Bodies live in `.dump/app/roadmap/NN-<slug>.md` with `{{SNN}}` where a step number is referenced. The GitHub issue carries the same body with those tokens replaced by real issue numbers.
 
-Each GitHub body is the step file with `AGENTS.md` prepended verbatim under a `## Starter: repository ground rules` heading, and with `{{SNN}}` replaced by the real issue number. To reproduce a body from the repository:
+Each GitHub body is the step file with `AGENTS.md` prepended verbatim under a `## Starter: the
+repository ground rules, verbatim` heading, so the rules travel with the work. Filed 2026-09-13,
+45 issues plus the index, #48, which resolves a `{{SNN}}` reference to its issue number. Editing and
+commenting on issues is blocked for this integration, so the tokens stay in the bodies and the index
+issue is the resolution; the arithmetic on this board is issue number equals step number plus two.
 
 ```sh
-{ printf '## Starter: repository ground rules\n\n'; cat AGENTS.md;
+{ printf '## Starter: the repository ground rules, verbatim\n\n'; cat AGENTS.md;
   printf '\n---\n\n'; cat .dump/app/roadmap/NN-<slug>.md; } > /tmp/body.md
 ```
 
-| Step | File | Issue |
+| Step | Issue | File |
 | --- | --- | --- |
 
 ## 8. How this roadmap ends
 
 Each step closes only with its record written back to `.dump`. When 01 to 09 are merged, re-measure 10 onward against the tree rather than against this table, because the dependency graph is the durable part and the estimates are not. When 34 and 35 land, this file is superseded by a new plan for the engine port, which is where `mauscode-architecture-plan.md` picks up.
+
+| 01 | #3 | `01-instruction-truth.md` |
+| 02 | #4 | `02-gate-policy.md` |
+| 03 | #5 | `03-build-gate.md` |
+| 04 | #6 | `04-open-decisions.md` |
+| 05 | #7 | `05-codex-default-constant.md` |
+| 06 | #8 | `06-shortcut-truth.md` |
+| 07 | #9 | `07-run-state.md` |
+| 08 | #10 | `08-queue-in-main.md` |
+| 09 | #11 | `09-event-mapping.md` |
+| 10 | #12 | `10-permission-floor.md` |
+| 11 | #13 | `11-secret-owners.md` |
+| 12 | #14 | `12-sdk-and-pins.md` |
+| 13 | #15 | `13-pr-snapshot-schema.md` |
+| 14 | #16 | `14-changeset-and-real-pr.md` |
+| 15 | #17 | `15-pr-state-detection.md` |
+| 16 | #18 | `16-ci-autopilot.md` |
+| 17 | #19 | `17-subchat-optimistic-ordering.md` |
+| 18 | #20 | `18-multi-pane-correctness.md` |
+| 19 | #21 | `19-subchat-orchestration.md` |
+| 20 | #22 | `20-plan-and-code-critics.md` |
+| 21 | #23 | `21-scheduler-and-authorship.md` |
+| 22 | #24 | `22-suggestion-inbox-and-issue-trigger.md` |
+| 23 | #25 | `23-instruction-loading.md` |
+| 24 | #26 | `24-agent-memory.md` |
+| 25 | #27 | `25-review-and-composer-surfaces.md` |
+| 26 | #28 | `26-loopback-session-api-and-scratch-sessions.md` |
+| 27 | #29 | `27-research-lane-and-egress-policy.md` |
+| 28 | #30 | `28-mcp-one-source-of-truth.md` |
+| 29 | #31 | `29-advisory-clearance-and-gate-promotion.md` |
+| 30 | #32 | `30-renderer-build-and-bundle-budget.md` |
+| 31 | #33 | `31-identity-and-repo-hygiene.md` |
+| 32 | #34 | `32-release-workflow-and-artifacts.md` |
+| 33 | #35 | `33-environment-import-flow.md` |
+| 34 | #36 | `34-remote-placement-profile.md` |
+| 35 | #37 | `35-codex-app-server-parity.md` |
+| 36 | #38 | `36-harvest-sidebar-and-usage-closeout.md` |
+| 37 | #39 | `37-sidebar-lineage-decision.md` |
+| 38 | #40 | `38-skills-install-and-tooling.md` |
+| 39 | #41 | `39-security-test-suite.md` |
+| 40 | #42 | `40-release-config-and-banner-model.md` |
+| 41 | #43 | `41-audit-trail-and-i18n-foundation.md` |
+| 42 | #44 | `42-close-the-harvest-ledger.md` |
+| 43 | #45 | `43-skill-lifecycle-and-disclosure.md` |
+| 44 | #46 | `44-session-recall-and-memory-decay.md` |
+| 45 | #47 | `45-remove-built-in-sign-in.md` |
+
+Index issue: #48.
