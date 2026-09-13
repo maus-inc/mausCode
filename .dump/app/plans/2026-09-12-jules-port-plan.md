@@ -838,6 +838,49 @@ schedules, authorship); **M4** = W10–W13 (knowledge, surfaces, API, MCP); **M5
 - **Labels:** the trigger label defaults to `mauscode`, configurable per project; there is no existing label
   automation in this repo to collide with, so this is a naming choice, not a constraint.
 
+### 6.1 Lint campaign — closed 2026-09-13 (measured, not asserted)
+
+The standing order was "fix ALL findings, tests included, no exemptions". Final state, all of it
+re-measured with `npx -y @biomejs/biome@2.5.13 check . --max-diagnostics=none`:
+
+| step | findings | what went |
+| --- | --- | --- |
+| baseline at `6f4d818` | **135** | the inherited debt of this branch (the handoff's ~1,400 figure described `arena/01a08de4-mauscode`, never pushed, so it is not this tree's history) |
+| `6d616ea` | **103 → 79** | 14 `noControlCharactersInRegex`, 14 `useIterableCallbackReturn`, 3 `noUnusedImports`, 2 stale suppressions, then all 25 remaining `noArrayIndexKey` (new `src/renderer/lib/react-keys.ts`) |
+| `34c7bb3` | **55** | 4 editable-command-row keys (`src/renderer/lib/command-rows.ts`), 10 `noLabelWithoutControl`, 8 `noSvgWithoutTitle`, 1 `noDescendingSpecificity` |
+| `9734578` | **0** | 55 `noExplicitAny`, replaced by real types — no suppression added anywhere |
+| `c71c270` | gate | every rule in `biome.json` that was pinned to `"warn"` is now `"error"`, and the stale per-file `useSemanticElements` downgrade on `agents-sidebar.tsx` is deleted |
+
+Rules that governed the work, worth keeping for the rest of the program:
+
+- Fix the root cause; never add `biome-ignore`. Deleting a suppression or an unnecessary cast counts
+  as progress; narrowing a *file scope* for non-DOM packaging artifacts (`out/`, `resources/bin`,
+  `build/`, `runtime/jcode`) is allowed, narrowing a *rule* is not.
+- Stable identities beat content hashes for editable rows: a keystroke-derived key remounts the
+  `<Input>` and drops the caret. Persistence keeps its old shape (`string[]`) and dirty-checking
+  compares texts, so ids never read as unsaved edits.
+- One a11y rule's fix can create another (`role="group"` → `useSemanticElements`, `<span onClick>`
+  → `useKeyWithClickEvents`). Re-measure the whole repo, not the file you touched.
+- `noLabelWithoutControl` genuinely cannot see a Radix `Checkbox` (`role="checkbox"` on a
+  `<button>`), and `label[for]` cannot activate a non-labelable element: `aria-label` on the control
+  is the fix, not `htmlFor`.
+
+By-product worth keeping in mind for later waves: seven casts were **proven redundant** by `tsc`
+and deleted instead of retyped — six `super({ … } as any)` in the vendored
+`src/shared/contracts/{project,filesystem}.ts` (t3code carries the same five at `:137,168,190,263,300`;
+a good upstream patch, and casts are erased so our emitted JS is unchanged) and one on a hermes
+`doStream` call. `src/main/lib/claude/transform.ts` now translates `ClaudeStreamMessage` (the SDK
+union widened with `parent_tool_use_id`) instead of `any` — the typed-stream design this plan
+recorded in §2/P2 is now actually applied, which is what makes wave W1's `RunState`/`BackgroundProgress`
+carry-over safe to build on.
+
+Gates at every step: root `tsc --noEmit` = 0, `npx vitest run` = 54 files / 618 tests,
+`node scripts/ci/lint-changed.mjs` = 0 over 954 files, and `packages/runtime-client`'s new
+`tsc -p tsconfig.test.json` = 0 with its 43 `node --test` cases passing. Two things this sandbox
+could not check, stated plainly: the renderer bundle (`electron-vite build` OOMs at ~1.9 GB — a
+sandbox limit, not a repo defect) and the two bun-based ratchet scripts (no `bun` binary here; they
+run in CI, where `oven-sh/setup-bun@v2` installs it).
+
 ## 7. Deferred / rejected (why, and what reopens them)
 
 | Item | Verdict | Re-entry trigger |
@@ -948,8 +991,8 @@ stale inventory.
 
 | Task as inherited | Measured today | Remaining work |
 | --- | --- | --- |
-| "2 tsc errors + ~148 Biome warnings" | `npx @biomejs/biome@2.5.13 check . --max-diagnostics=none` → **0 errors, 135 warnings** | 55 `noExplicitAny`, 31 `noArrayIndexKey`, 14 `useIterableCallbackReturn`, 14 `noControlCharactersInRegex`, 3 `noUnusedImports`, 1 `noDescendingSpecificity` (+ ~18 in rules the grep above does not name, e.g. a11y). `tsc` itself cannot run here: no `node_modules`. |
-| "fix ALL findings, tests included, no exemptions" (binding) | `biome.json:43,46` mark the any/control-char rules `"warn"`, which is why a clean exit coexists with 135 findings | Drive all six groups to 0, **then flip those rules to `"error"` in the same commit** so the count cannot regrow. Ordering that worked last time and still applies: mechanical first (`noUnusedImports`, `noArrayIndexKey`), then `useIterableCallbackReturn`/`noControlCharactersInRegex`, then `any` removal file by file with `tsc` after each. |
+| "2 tsc errors + ~148 Biome warnings" | `npx @biomejs/biome@2.5.13 check . --max-diagnostics=none` → **0 errors, 135 warnings** — closed 2026-09-13 at 0 findings, all rules at `"error"`; see §6.1 | 55 `noExplicitAny`, 31 `noArrayIndexKey`, 14 `useIterableCallbackReturn`, 14 `noControlCharactersInRegex`, 3 `noUnusedImports`, 1 `noDescendingSpecificity` (+ ~18 in rules the grep above does not name, e.g. a11y). `tsc` itself cannot run here: no `node_modules`. |
+| "fix ALL findings, tests included, no exemptions" (binding) | `biome.json:43,46` mark the any/control-char rules `"warn"`, which is why a clean exit coexists with 135 findings | DONE: all groups driven to 0 and every `"warn"` severity in `biome.json` flipped to `"error"` (`6f4d818`→`c71c270`); see §6.1. Ordering that worked last time and still applies: mechanical first (`noUnusedImports`, `noArrayIndexKey`), then `useIterableCallbackReturn`/`noControlCharactersInRegex`, then `any` removal file by file with `tsc` after each. |
 | "`any`-removal batches A–D done" | **Only partly in this tree.** 25 files still carry `: any`/`as any`: `qwen-print/session.test.ts` (6), `shared/contracts/project.ts` (5), `opencode/session.test.ts` (5), `runtime-client/test/mock-harness.ts` (5), `hermes/acp-chat.test.ts` (4), `grok-print/session.test.ts` (4), `runtime-client/test/client.test.ts` (4), `roo-print/session.test.ts` (3), `projects-rail.tsx` (2), and 1–2 each in 16 more. Parts of the sweep *are* committed: `cline-print/{session,auth-config,mcp-config}.ts`, `mcp-auth.ts`, `hermes/policy.ts`, `ollama/detector.ts` measure **0** findings | Finish the sweep on the 25 files above; the already-clean ones show the shape of the fix, so imitate them instead of re-deriving it. |
 | "streamdown `Components` breaks typecheck (P0-1)" | **Already fixed here** — `src/renderer/components/chat-markdown-renderer.tsx:12-15` | nothing; do not re-apply |
 | "hermes resume-failure test (P0-2)" | **Already fixed** — it is the tip commit | nothing |
