@@ -140,8 +140,15 @@ export function ConfirmArchiveDialog({
                   {/* Worktree checkbox */}
                   {hasWorktree && (
                     <div className="space-y-2">
-                      <label className="flex items-start gap-3 cursor-pointer">
+                      {/* Row shape matches the existing checkbox rows in the app
+                          (changes-view, file-item): a plain flex row holding a Radix
+                          Checkbox and its text. A <label> cannot name or activate a
+                          role="checkbox" button, so the accessible name lives on the
+                          control itself. */}
+                      <div className="flex items-start gap-3">
                         <Checkbox
+                          id="confirm-archive-delete-worktree"
+                          aria-label="Delete worktree to free disk space"
                           checked={deleteWorktree}
                           onCheckedChange={(checked) => setDeleteWorktree(checked === true)}
                           className="mt-0.5"
@@ -149,7 +156,7 @@ export function ConfirmArchiveDialog({
                         <span className="text-sm select-none">
                           Delete worktree to free disk space
                         </span>
-                      </label>
+                      </div>
 
                       {/* Uncommitted changes warning */}
                       {showWarning && (

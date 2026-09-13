@@ -80,6 +80,7 @@
       "!release-*",
       "!drizzle/meta",
       "!resources/bin",
+      "!build",
       "!coverage",
       "!**/new mauscode branding",
       "!.merge-backup",

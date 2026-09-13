@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { COMMAND_PROMPTS } from "../../../features/agents/commands"
 import { agentsSettingsDialogOpenAtom, selectedAgentChatIdAtom } from "../../../lib/atoms"
+import { type CommandRow, nextRowId, toRows, toTexts } from "../../../lib/command-rows"
 import { trpc } from "../../../lib/trpc"
 import { Button } from "../../ui/button"
 import { AIPenIcon } from "../../ui/icons"
@@ -63,9 +64,9 @@ export function AgentsWorktreesTab() {
 
   // Local state
   const [saveTarget, setSaveTarget] = useState<"cursor" | "mauscode">("mauscode")
-  const [commands, setCommands] = useState<string[]>([""])
-  const [unixCommands, setUnixCommands] = useState<string[]>([])
-  const [windowsCommands, setWindowsCommands] = useState<string[]>([])
+  const [commands, setCommands] = useState<CommandRow[]>(() => toRows([""]))
+  const [unixCommands, setUnixCommands] = useState<CommandRow[]>(() => toRows([]))
+  const [windowsCommands, setWindowsCommands] = useState<CommandRow[]>(() => toRows([]))
   const [showPlatformSpecific, setShowPlatformSpecific] = useState(false)
 
   // Auto-select first project
@@ -88,23 +89,25 @@ export function AgentsWorktreesTab() {
       if (configData.config) {
         // Generic commands
         const generic = configData.config["setup-worktree"]
-        setCommands(Array.isArray(generic) ? [...generic, ""] : generic ? [generic, ""] : [""])
+        setCommands(
+          toRows(Array.isArray(generic) ? [...generic, ""] : generic ? [generic, ""] : [""]),
+        )
 
         // Platform-specific
         const unix = configData.config["setup-worktree-unix"]
         const win = configData.config["setup-worktree-windows"]
 
-        setUnixCommands(Array.isArray(unix) ? unix : unix ? [unix] : [])
-        setWindowsCommands(Array.isArray(win) ? win : win ? [win] : [])
+        setUnixCommands(toRows(Array.isArray(unix) ? unix : unix ? [unix] : []))
+        setWindowsCommands(toRows(Array.isArray(win) ? win : win ? [win] : []))
 
         // Show platform section if any platform-specific commands exist
         if (unix || win) {
           setShowPlatformSpecific(true)
         }
       } else {
-        setCommands([""])
-        setUnixCommands([])
-        setWindowsCommands([])
+        setCommands(toRows([""]))
+        setUnixCommands(toRows([]))
+        setWindowsCommands(toRows([]))
       }
     }
   }, [configData])
@@ -113,9 +116,9 @@ export function AgentsWorktreesTab() {
     if (!selectedProjectId) return
 
     const config: Record<string, string[]> = {}
-    const filteredCommands = commands.filter((c) => c.trim())
-    const filteredUnix = unixCommands.filter((c) => c.trim())
-    const filteredWin = windowsCommands.filter((c) => c.trim())
+    const filteredCommands = toTexts(commands).filter((c) => c.trim())
+    const filteredUnix = toTexts(unixCommands).filter((c) => c.trim())
+    const filteredWin = toTexts(windowsCommands).filter((c) => c.trim())
 
     if (filteredCommands.length > 0) {
       config["setup-worktree"] = filteredCommands
@@ -137,21 +140,21 @@ export function AgentsWorktreesTab() {
   const updateCommand = (
     index: number,
     value: string,
-    list: string[],
-    setter: (v: string[]) => void,
+    list: CommandRow[],
+    setter: (v: CommandRow[]) => void,
   ) => {
     const newList = [...list]
-    newList[index] = value
+    newList[index] = { ...newList[index], text: value }
     setter(newList)
   }
 
-  const removeCommand = (index: number, list: string[], setter: (v: string[]) => void) => {
+  const removeCommand = (index: number, list: CommandRow[], setter: (v: CommandRow[]) => void) => {
     if (list.length <= 1) return
     setter(list.filter((_, i) => i !== index))
   }
 
-  const addCommand = (list: string[], setter: (v: string[]) => void) => {
-    setter([...list, ""])
+  const addCommand = (list: CommandRow[], setter: (v: CommandRow[]) => void) => {
+    setter([...list, { id: nextRowId(), text: "" }])
   }
 
   const selectedProject = projects?.find((p) => p.id === selectedProjectId)
@@ -287,10 +290,10 @@ export function AgentsWorktreesTab() {
                   </span>
                 </div>
                 <div className="space-y-2">
-                  {commands.map((cmd, i) => (
-                    <div key={i} className="flex items-center gap-2">
+                  {commands.map((row, i) => (
+                    <div key={row.id} className="flex items-center gap-2">
                       <Input
-                        value={cmd}
+                        value={row.text}
                         onChange={(e) => updateCommand(i, e.target.value, commands, setCommands)}
                         placeholder="bun install && cp $ROOT_WORKTREE_PATH/.env .env"
                         className="flex-1 font-mono text-sm"
@@ -347,10 +350,10 @@ export function AgentsWorktreesTab() {
                         </p>
                       ) : (
                         <div className="space-y-2">
-                          {unixCommands.map((cmd, i) => (
-                            <div key={i} className="flex items-center gap-2">
+                          {unixCommands.map((row, i) => (
+                            <div key={row.id} className="flex items-center gap-2">
                               <Input
-                                value={cmd}
+                                value={row.text}
                                 onChange={(e) =>
                                   updateCommand(i, e.target.value, unixCommands, setUnixCommands)
                                 }
@@ -389,10 +392,10 @@ export function AgentsWorktreesTab() {
                         </p>
                       ) : (
                         <div className="space-y-2">
-                          {windowsCommands.map((cmd, i) => (
-                            <div key={i} className="flex items-center gap-2">
+                          {windowsCommands.map((row, i) => (
+                            <div key={row.id} className="flex items-center gap-2">
                               <Input
-                                value={cmd}
+                                value={row.text}
                                 onChange={(e) =>
                                   updateCommand(
                                     i,

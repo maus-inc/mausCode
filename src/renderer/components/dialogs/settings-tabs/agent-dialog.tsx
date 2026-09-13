@@ -190,10 +190,14 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
                 {/* Name */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
+                  <label
+                    htmlFor="agent-dialog-name"
+                    className="text-sm font-medium text-foreground"
+                  >
                     Name <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="agent-dialog-name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -207,10 +211,14 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
 
                 {/* Description */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
+                  <label
+                    htmlFor="agent-dialog-description"
+                    className="text-sm font-medium text-foreground"
+                  >
                     Description <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="agent-dialog-description"
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -224,10 +232,14 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
 
                 {/* Prompt */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
+                  <label
+                    htmlFor="agent-dialog-prompt"
+                    className="text-sm font-medium text-foreground"
+                  >
                     System Prompt <span className="text-red-500">*</span>
                   </label>
                   <textarea
+                    id="agent-dialog-prompt"
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder="You are an expert code reviewer. When invoked:
@@ -245,12 +257,13 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
 
                 {/* Model */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Model</label>
+                  <span className="block text-sm font-medium text-foreground">Model</span>
                   <div className="flex flex-wrap gap-2">
                     {(["inherit", "sonnet", "opus", "haiku"] as const).map((m) => (
                       <button
                         key={m}
                         type="button"
+                        aria-pressed={model === m}
                         onClick={() => setModel(m)}
                         className={cn(
                           "px-3 py-1.5 text-sm rounded-md border transition-colors",
@@ -269,12 +282,13 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
 
                 {/* Tools */}
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-foreground">Tools</label>
+                  <span className="block text-sm font-medium text-foreground">Tools</span>
                   <div className="flex flex-wrap gap-2">
                     {(["all", "allowlist", "denylist"] as const).map((mode) => (
                       <button
                         key={mode}
                         type="button"
+                        aria-pressed={toolMode === mode}
                         onClick={() => {
                           setToolMode(mode)
                           if (mode === "all") setSelectedTools([])
@@ -305,10 +319,11 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                 {/* Source (only for new agents) */}
                 {!isEditing && (
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-foreground">Location</label>
+                    <span className="block text-sm font-medium text-foreground">Location</span>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
+                        aria-pressed={source === "user"}
                         onClick={() => setSource("user")}
                         className={cn(
                           "px-3 py-1.5 text-sm rounded-md border transition-colors",
@@ -321,6 +336,7 @@ export function AgentDialog({ open, onOpenChange, agent, onSuccess }: AgentDialo
                       </button>
                       <button
                         type="button"
+                        aria-pressed={source === "project"}
                         onClick={() => setSource("project")}
                         className={cn(
                           "px-3 py-1.5 text-sm rounded-md border transition-colors",

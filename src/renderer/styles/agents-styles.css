@@ -202,6 +202,21 @@ body:has([data-agents-page]) [data-sonner-toast] {
    8. DIALOG STYLES
    ======================================== */
 
+/* Dark theme for agents portals - apply popover color */
+.dark .canvas-dialog,
+.dark [data-radix-portal] [role="dialog"],
+.dark body:has([data-agents-page]) [data-radix-portal],
+.dark body:has([data-agents-page]) [data-radix-popper-content-wrapper],
+.dark body:has([data-agents-page]) [role="dialog"] {
+  /* Apply popover color to dialogs and portals */
+  --popover: 0 0% 9%;
+  /* #171717 */
+
+  /* Override muted to be brighter for better code block visibility */
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 55%;
+}
+
 /* Ring-4 for all dialogs on agents pages */
 [data-agents-page] [data-canvas-dialog],
 [data-agents-page] .canvas-dialog,
@@ -224,21 +239,6 @@ body:has([data-agents-page]) .canvas-dialog {
 .dark body:has([data-agents-page]) .canvas-dialog {
   --tw-ring-color: rgb(38 38 38 / 0.8);
   /* neutral-800/80 */
-}
-
-/* Dark theme for agents portals - apply popover color */
-.dark .canvas-dialog,
-.dark [data-radix-portal] [role="dialog"],
-.dark body:has([data-agents-page]) [data-radix-portal],
-.dark body:has([data-agents-page]) [data-radix-popper-content-wrapper],
-.dark body:has([data-agents-page]) [role="dialog"] {
-  /* Apply popover color to dialogs and portals */
-  --popover: 0 0% 9%;
-  /* #171717 */
-
-  /* Override muted to be brighter for better code block visibility */
-  --muted: 0 0% 14%;
-  --muted-foreground: 0 0% 55%;
 }
 
 /* ========================================

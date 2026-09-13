@@ -690,10 +690,14 @@ export function AutomationsDetailView() {
 
                   {/* Target repository */}
                   <div className="mt-6">
-                    <label className="text-sm text-muted-foreground mb-1.5 block">
+                    <label
+                      htmlFor="automation-target-repository"
+                      className="text-sm text-muted-foreground mb-1.5 block"
+                    >
                       Target repository
                     </label>
                     <input
+                      id="automation-target-repository"
                       value={targetRepository}
                       onChange={(e) => setTargetRepository(e.target.value)}
                       placeholder="owner/repo (optional)"
@@ -706,10 +710,14 @@ export function AutomationsDetailView() {
 
                   {/* Instructions */}
                   <div className="mt-4">
-                    <label className="text-sm text-muted-foreground mb-1.5 block">
+                    <label
+                      htmlFor="automation-instructions"
+                      className="text-sm text-muted-foreground mb-1.5 block"
+                    >
                       Instructions
                     </label>
                     <textarea
+                      id="automation-instructions"
                       value={instructions}
                       onChange={(e) => {
                         setInstructions(e.target.value)

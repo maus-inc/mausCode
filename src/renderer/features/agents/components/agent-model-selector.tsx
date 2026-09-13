@@ -443,13 +443,17 @@ function CrossProviderConfirmDialog({
                   </p>
                 </div>
                 <div className="bg-muted p-4 flex items-center justify-between border-t border-border rounded-b-xl">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <div className="flex items-center gap-2">
                     <Checkbox
+                      id="model-selector-dont-ask-again"
+                      aria-label="Don't ask again when switching agents"
                       checked={dontShowAgain}
                       onCheckedChange={(v) => setDontShowAgain(v === true)}
                     />
-                    <span className="text-xs text-muted-foreground">Don't ask again</span>
-                  </label>
+                    <span className="text-xs text-muted-foreground select-none">
+                      Don't ask again
+                    </span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <Button onClick={onClose} variant="ghost" className="rounded-md">
                       Cancel

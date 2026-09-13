@@ -10,6 +10,7 @@ import {
   selectedAgentChatIdAtom,
   selectedProjectAtom,
 } from "../../../lib/atoms"
+import { type CommandRow, nextRowId, toRows, toTexts } from "../../../lib/command-rows"
 import { invalidateProjectIcon, useProjectIcon } from "../../../lib/hooks/use-project-icon"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
@@ -192,9 +193,9 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
 
   // Local state
   const [saveTarget, setSaveTarget] = useState<"cursor" | "mauscode">("mauscode")
-  const [commands, setCommands] = useState<string[]>([""])
-  const [unixCommands, setUnixCommands] = useState<string[]>([])
-  const [windowsCommands, setWindowsCommands] = useState<string[]>([])
+  const [commands, setCommands] = useState<CommandRow[]>(() => toRows([""]))
+  const [unixCommands, setUnixCommands] = useState<CommandRow[]>(() => toRows([]))
+  const [windowsCommands, setWindowsCommands] = useState<CommandRow[]>(() => toRows([]))
   const [showPlatformSpecific, setShowPlatformSpecific] = useState(false)
 
   // Ref to track last saved state for dirty checking
@@ -207,9 +208,9 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
       const newSaveTarget = configData.source === "cursor" ? "cursor" : "mauscode"
       setSaveTarget(newSaveTarget)
 
-      let newCommands: string[] = [""]
-      let newUnix: string[] = []
-      let newWin: string[] = []
+      let newCommands: CommandRow[] = toRows([""])
+      let newUnix: CommandRow[] = []
+      let newWin: CommandRow[] = []
 
       if (configData.config) {
         const isComment = (s: string) => s.trimStart().startsWith("#")
@@ -221,17 +222,17 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
           : generic && !isComment(generic)
             ? [generic]
             : []
-        newCommands = genericArr.length > 0 ? [...genericArr, ""] : [""]
+        newCommands = toRows(genericArr.length > 0 ? [...genericArr, ""] : [""])
 
         const unix = configData.config["setup-worktree-unix"]
         const win = configData.config["setup-worktree-windows"]
 
-        newUnix = Array.isArray(unix)
-          ? filterComments(unix)
-          : unix && !isComment(unix)
-            ? [unix]
-            : []
-        newWin = Array.isArray(win) ? filterComments(win) : win && !isComment(win) ? [win] : []
+        newUnix = toRows(
+          Array.isArray(unix) ? filterComments(unix) : unix && !isComment(unix) ? [unix] : [],
+        )
+        newWin = toRows(
+          Array.isArray(win) ? filterComments(win) : win && !isComment(win) ? [win] : [],
+        )
 
         if (unix || win) {
           setShowPlatformSpecific(true)
@@ -244,9 +245,9 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
 
       // Snapshot the initial state so doSave won't fire on first render
       savedConfigRef.current = JSON.stringify({
-        commands: newCommands,
-        unixCommands: newUnix,
-        windowsCommands: newWin,
+        commands: toTexts(newCommands),
+        unixCommands: toTexts(newUnix),
+        windowsCommands: toTexts(newWin),
         saveTarget: newSaveTarget,
       })
       configReadyRef.current = true
@@ -256,13 +257,20 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
   const doSave = useCallback(() => {
     if (!projectId || !configReadyRef.current) return
 
-    const currentState = JSON.stringify({ commands, unixCommands, windowsCommands, saveTarget })
+    // Dirty checking compares the persisted shape only - row ids are per-mount
+    // and must never be part of the snapshot, or a reload would look "dirty".
+    const currentState = JSON.stringify({
+      commands: toTexts(commands),
+      unixCommands: toTexts(unixCommands),
+      windowsCommands: toTexts(windowsCommands),
+      saveTarget,
+    })
     if (currentState === savedConfigRef.current) return
 
     const config: Record<string, string[]> = {}
-    const filteredCommands = commands.filter((c) => c.trim())
-    const filteredUnix = unixCommands.filter((c) => c.trim())
-    const filteredWin = windowsCommands.filter((c) => c.trim())
+    const filteredCommands = toTexts(commands).filter((c) => c.trim())
+    const filteredUnix = toTexts(unixCommands).filter((c) => c.trim())
+    const filteredWin = toTexts(windowsCommands).filter((c) => c.trim())
 
     if (filteredCommands.length > 0) config["setup-worktree"] = filteredCommands
     if (filteredUnix.length > 0) config["setup-worktree-unix"] = filteredUnix
@@ -275,11 +283,11 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
   const updateCommand = (
     index: number,
     value: string,
-    list: string[],
-    setter: (v: string[]) => void,
+    list: CommandRow[],
+    setter: (v: CommandRow[]) => void,
   ) => {
     const newList = [...list]
-    newList[index] = value
+    newList[index] = { ...newList[index], text: value }
     setter(newList)
   }
 
@@ -287,8 +295,8 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
 
   const removeCommand = (
     index: number,
-    list: string[],
-    setter: (v: string[]) => void,
+    list: CommandRow[],
+    setter: (v: CommandRow[]) => void,
     allowEmpty = false,
   ) => {
     if (!allowEmpty && list.length <= 1) return
@@ -304,8 +312,8 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
     }
   }, [doSave])
 
-  const addCommand = (list: string[], setter: (v: string[]) => void) => {
-    setter([...list, ""])
+  const addCommand = (list: CommandRow[], setter: (v: CommandRow[]) => void) => {
+    setter([...list, { id: nextRowId(), text: "" }])
   }
 
   const cursorExists = configData?.available?.cursor?.exists ?? false
@@ -320,16 +328,16 @@ function ProjectDetail({ projectId, onDeleted }: { projectId: string; onDeleted:
 
   // Helper to render a command list with add/remove
   const renderCommandList = (
-    list: string[],
-    setter: (v: string[]) => void,
+    list: CommandRow[],
+    setter: (v: CommandRow[]) => void,
     placeholder: string,
     allowEmpty = false,
   ) => (
     <div className="space-y-2">
-      {list.map((cmd, i) => (
-        <div key={i} className="flex items-center gap-2">
+      {list.map((row, i) => (
+        <div key={row.id} className="flex items-center gap-2">
           <Input
-            value={cmd}
+            value={row.text}
             onChange={(e) => updateCommand(i, e.target.value, list, setter)}
             onBlur={doSave}
             placeholder={placeholder}
