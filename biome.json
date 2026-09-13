@@ -28,35 +28,35 @@
     "rules": {
       "preset": "recommended",
       "correctness": {
-        "noUnusedVariables": "warn",
-        "noUnusedImports": "warn",
-        "noUnusedFunctionParameters": "warn",
-        "useExhaustiveDependencies": "warn",
-        "useHookAtTopLevel": "warn"
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error",
+        "noUnusedFunctionParameters": "error",
+        "useExhaustiveDependencies": "error",
+        "useHookAtTopLevel": "error"
       },
       "style": {
-        "noNonNullAssertion": "warn",
-        "useTemplate": "warn",
-        "useNodejsImportProtocol": "warn"
+        "noNonNullAssertion": "error",
+        "useTemplate": "error",
+        "useNodejsImportProtocol": "error"
       },
       "suspicious": {
-        "noExplicitAny": "warn",
-        "noArrayIndexKey": "warn",
-        "useIterableCallbackReturn": "warn",
-        "noControlCharactersInRegex": "warn",
-        "noImplicitAnyLet": "warn"
+        "noExplicitAny": "error",
+        "noArrayIndexKey": "error",
+        "useIterableCallbackReturn": "error",
+        "noControlCharactersInRegex": "error",
+        "noImplicitAnyLet": "error"
       },
       "a11y": {
-        "useButtonType": "warn",
-        "noSvgWithoutTitle": "warn",
-        "noStaticElementInteractions": "warn",
-        "noLabelWithoutControl": "warn",
-        "useKeyWithClickEvents": "warn",
-        "noNoninteractiveTabindex": "warn"
+        "useButtonType": "error",
+        "noSvgWithoutTitle": "error",
+        "noStaticElementInteractions": "error",
+        "noLabelWithoutControl": "error",
+        "useKeyWithClickEvents": "error",
+        "noNoninteractiveTabindex": "error"
       },
       "complexity": {
-        "useOptionalChain": "warn",
-        "noUselessFragments": "warn"
+        "useOptionalChain": "error",
+        "noUselessFragments": "error"
       }
     }
   },
@@ -66,10 +66,6 @@
       "formatter": { "enabled": false },
       "linter": { "enabled": false },
       "assist": { "enabled": false }
-    },
-    {
-      "includes": ["src/renderer/features/sidebar/agents-sidebar.tsx"],
-      "linter": { "rules": { "a11y": { "useSemanticElements": "warn" } } }
     }
   ],
   "files": {
