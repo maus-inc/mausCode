@@ -54,7 +54,7 @@ Measured this session, and the measurements matter because they are smaller than
 
 ## 10. Acceptance criteria
 
-- [ ] The human's chosen option is recorded in `.dump/global/decisions.md` with its date, and the implementation matches it exactly.
+- [ ] PA-20 in `.dump/app/decisions/provisional-assumptions.md` still matches what shipped, and if the human overrode the assumption, `decisions.md` carries the new dated entry before the code lands.
 - [ ] `grep -rn "claude-login-modal" src` returns nothing, and no route or keyboard path opens a removed dialog.
 - [ ] A provider credential added in settings resumes a turn that previously required sign-in, shown by a test on the retry path.
 - [ ] An MCP server using OAuth connects after the change, proven against the retained callback server.
