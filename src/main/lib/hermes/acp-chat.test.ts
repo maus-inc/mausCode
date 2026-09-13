@@ -14,6 +14,22 @@ import { assert, it } from "@effect/vitest"
 import { createACPProvider } from "@mcpc-tech/acp-ai-provider"
 import { vi } from "vitest"
 import { providerCapabilitySchema } from "../../../shared/provider-capabilities"
+import { requireValue } from "../print-test-helpers"
+
+/**
+ * The ACP provider's own model and stream-part types, read off `createACPProvider`. Naming them
+ * here (rather than `any`) means a provider upgrade that renames a stream part or tightens the
+ * call options is a compile error in these tests instead of a silent `undefined`.
+ */
+type AcpProvider = ReturnType<typeof createACPProvider>
+type AcpLanguageModel = ReturnType<AcpProvider["languageModel"]>
+type AcpStreamPart =
+  Awaited<ReturnType<AcpLanguageModel["doStream"]>> extends {
+    stream: ReadableStream<infer Part>
+  }
+    ? Part
+    : never
+
 import { resolveHermesAcpLaunch, resolveHermesCli } from "../hermes-binary"
 import { extractHermesError, isHermesAuthError, isHermesReadonlyCommand } from "./policy"
 
@@ -39,11 +55,11 @@ const MOCK_PATH = join(
   "hermes-acp-mock.mjs",
 )
 
-async function collectStreamParts(model: any): Promise<any[]> {
+async function collectStreamParts(model: AcpLanguageModel): Promise<AcpStreamPart[]> {
   const { stream } = await model.doStream({
     prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
   })
-  const parts: any[] = []
+  const parts: AcpStreamPart[] = []
   const reader = stream.getReader()
   for (;;) {
     const { done, value } = await reader.read()
@@ -72,7 +88,10 @@ it("streams a full turn (text + tool + finish) through the ACP provider", async 
     assert.ok(types.includes("text-delta"))
     assert.ok(types.includes("tool-input-start"))
     assert.ok(types.includes("finish"))
-    const delta = parts.find((part) => part.type === "text-delta")
+    const delta = requireValue(
+      parts.find((part) => part.type === "text-delta"),
+      "a text-delta part",
+    )
     assert.equal(delta.delta, "Hello from mock.")
   } finally {
     provider.cleanup()
@@ -134,7 +153,7 @@ it("terminates a pending prompt when the consumer aborts", async () => {
     const { stream } = await provider.languageModel().doStream({
       prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
       abortSignal: controller.signal,
-    } as any)
+    })
     const reader = stream.getReader()
     const read = reader.read()
     controller.abort()
@@ -168,7 +187,7 @@ it("maps prompt failures through the hermes error classifier", async () => {
       prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
     })
     const reader = stream.getReader()
-    let errorPart: any = null
+    let errorPart: AcpStreamPart | null = null
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break

@@ -187,6 +187,12 @@ export function listClineStoredModels(opts?: {
   return out
 }
 
+/** One entry of `providers` in cline's `providers.jsonl`/settings document. */
+interface ClineProviderEntry {
+  settings?: { model?: string; apiKey?: string; [key: string]: unknown }
+  [key: string]: unknown
+}
+
 export function probeClineStoredAuth(opts?: {
   homeDir?: string
   dataDir?: string
@@ -198,12 +204,12 @@ export function probeClineStoredAuth(opts?: {
   const data = readJsonFile(providersPath)
   const providers =
     typeof data.providers === "object" && data.providers !== null
-      ? (data.providers as Record<string, any>)
+      ? (data.providers as Record<string, ClineProviderEntry>)
       : {}
 
   const lastUsed = nonEmpty(data.lastUsedProvider) ? (data.lastUsedProvider as string) : undefined
   const lastSettings = lastUsed ? providers[lastUsed]?.settings : undefined
-  const lastModel = nonEmpty(lastSettings?.model) ? (lastSettings.model as string) : undefined
+  const lastModel = nonEmpty(lastSettings?.model) ? lastSettings.model : undefined
 
   // Prefer the last-used provider, else any configured provider.
   const candidates = [

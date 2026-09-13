@@ -27,6 +27,8 @@ export interface McpServerConfig {
   args?: string[]
   url?: string
   authType?: "oauth" | "bearer" | "none"
+  /** Authorization and other headers written into the server entry (set on token refresh). */
+  headers?: Record<string, string>
   _oauth?: {
     accessToken: string
     refreshToken?: string

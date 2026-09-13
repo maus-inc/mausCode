@@ -10,6 +10,8 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
+import { requireChunk } from "../print-test-helpers"
+import type { GrokPrintChunk, GrokUsage } from "./session"
 import { runGrokPrintTurn } from "./session"
 
 const MOCK_PATH = join(
@@ -24,14 +26,14 @@ function runTurn(
   promptFileText?: string,
   extraArgs?: string[],
 ): {
-  chunks: any[]
-  usages: any[]
+  chunks: GrokPrintChunk[]
+  usages: GrokUsage[]
   done: ReturnType<typeof runGrokPrintTurn>["done"]
   interrupt: () => void
   seenSessionId: () => string | undefined
 } {
-  const chunks: any[] = []
-  const usages: any[] = []
+  const chunks: GrokPrintChunk[] = []
+  const usages: GrokUsage[] = []
   let seenId: string | undefined
   const turn = runGrokPrintTurn({
     command: process.execPath,
@@ -69,10 +71,16 @@ it("maps a full turn: text, canonical tools, usage, end metadata", async () => {
   assert.deepEqual(deltas, ["Hello ", "done."])
   // thought + available_commands are suppressed, not text.
   assert.ok(!deltas.join("").includes("internal reasoning"))
-  const input = chunks.find((chunk) => chunk.type === "tool-input-available")
+  const input = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-input-available"),
+    "tool-input-available",
+  )
   assert.equal(input.toolName, "Read")
   assert.deepEqual(input.input, { path: "README.md" })
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const output = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-output-available"),
+    "tool-output-available",
+  )
   assert.deepEqual(output.output, { lines: 42 })
   assert.equal(usages.length, 1)
   // End usage wins over summed line usage.
@@ -102,7 +110,10 @@ it("surfaces failed tools as error outputs", async () => {
   const { chunks, done } = runTurn("failed-tool")
   const result = await done
   assert.equal(result.status, "completed")
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const output = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-output-available"),
+    "tool-output-available",
+  )
   assert.deepEqual(output.output, { error: "invalid regex" })
 })
 
@@ -110,8 +121,14 @@ it("correlates tools without call_id oldest-open-first", async () => {
   const { chunks, done } = runTurn("no-call-id")
   const result = await done
   assert.equal(result.status, "completed")
-  const input = chunks.find((chunk) => chunk.type === "tool-input-available")
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const input = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-input-available"),
+    "tool-input-available",
+  )
+  const output = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-output-available"),
+    "tool-output-available",
+  )
   assert.equal(input.toolName, "LS")
   assert.equal(output.toolCallId, input.toolCallId)
   assert.deepEqual(output.output, { entries: 3 })
@@ -213,6 +230,9 @@ it("resolves nested use_tool names on the first __ split", async () => {
   const { chunks, done } = runTurn("nested-mcp")
   const result = await done
   assert.equal(result.status, "completed")
-  const input = chunks.find((chunk) => chunk.type === "tool-input-available")
+  const input = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-input-available"),
+    "tool-input-available",
+  )
   assert.equal(input.toolName, "mcp__gh__repos__create")
 })

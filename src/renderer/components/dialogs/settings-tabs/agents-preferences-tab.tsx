@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { APP_META, type ExternalApp } from "../../../../shared/external-apps"
 import clionIcon from "../../../assets/app-icons/clion.svg"
 // Editor icon imports
-import cursorIcon from "../../../assets/app-icons/cursor.svg"
+import cursorIcon from "../../../assets/app-icons/cursor.png"
 import fleetIcon from "../../../assets/app-icons/fleet.svg"
 import ghosttyIcon from "../../../assets/app-icons/ghostty.svg"
 import golandIcon from "../../../assets/app-icons/goland.svg"

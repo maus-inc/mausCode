@@ -5,7 +5,7 @@ import type { ExternalApp } from "../../shared/external-apps"
 import appcodeIcon from "../assets/app-icons/appcode.svg"
 import clionIcon from "../assets/app-icons/clion.svg"
 // ─── Icon imports ───────────────────────────────────────────────────────────
-import cursorIcon from "../assets/app-icons/cursor.svg"
+import cursorIcon from "../assets/app-icons/cursor.png"
 import datagripIcon from "../assets/app-icons/datagrip.svg"
 import finderIcon from "../assets/app-icons/finder.png"
 import fleetIcon from "../assets/app-icons/fleet.svg"

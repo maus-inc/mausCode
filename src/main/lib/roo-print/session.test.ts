@@ -9,7 +9,8 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
-import { runRooPrintTurn } from "./session"
+import { requireChunk } from "../print-test-helpers"
+import { type RooPrintChunk, runRooPrintTurn } from "./session"
 
 const MOCK_PATH = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -19,11 +20,11 @@ const MOCK_PATH = join(
 )
 
 function runTurn(mode?: string): {
-  chunks: any[]
+  chunks: RooPrintChunk[]
   done: ReturnType<typeof runRooPrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: RooPrintChunk[] = []
   const turn = runRooPrintTurn({
     command: process.execPath,
     args: [MOCK_PATH],
@@ -37,7 +38,7 @@ function runTurn(mode?: string): {
   return { chunks, done: turn.done, interrupt: turn.interrupt }
 }
 
-const textOf = (chunks: any[]) =>
+const textOf = (chunks: RooPrintChunk[]) =>
   chunks
     .filter((c) => c.type === "text-delta")
     .map((c) => c.delta)
@@ -68,12 +69,19 @@ it("projects a full turn: deduped text, thinking, tools, usage", async () => {
   assert.equal(starts[0].id, ends[0].id)
 
   // Thinking tool protocol mirrors the claude path.
-  const thinkingStart = chunks.find((c) => c.type === "tool-input-start")
-  assert.equal(thinkingStart.toolName, "Thinking")
-  const thinkingAvailable = chunks.find(
-    (c) => c.type === "tool-input-available" && c.toolCallId === thinkingStart.toolCallId,
+  const thinkingStart = requireChunk(
+    chunks.find((c) => c.type === "tool-input-start"),
+    "tool-input-start",
   )
-  assert.equal(thinkingAvailable.input.text, "planning approach")
+  assert.equal(thinkingStart.toolName, "Thinking")
+  const thinkingAvailable = requireChunk(
+    chunks.find(
+      (c) => c.type === "tool-input-available" && c.toolCallId === thinkingStart.toolCallId,
+    ),
+    "tool-input-available",
+  )
+  // `input` is opaque on the chunk interface, so assert the whole payload rather than a field.
+  assert.deepEqual(thinkingAvailable.input, { text: "planning approach" })
 
   // Generic tool: exactly one input, closed without synthesis.
   const genericInputs = chunks.filter(

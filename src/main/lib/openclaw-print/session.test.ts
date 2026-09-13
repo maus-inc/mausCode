@@ -9,7 +9,7 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
-import { runOpenclawPrintTurn } from "./session"
+import { type OpenclawPrintChunk, runOpenclawPrintTurn } from "./session"
 
 const MOCK_PATH = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -22,11 +22,11 @@ function runTurn(
   mode?: string,
   prompt = "probe prompt",
 ): {
-  chunks: any[]
+  chunks: OpenclawPrintChunk[]
   done: ReturnType<typeof runOpenclawPrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: OpenclawPrintChunk[] = []
   const turn = runOpenclawPrintTurn({
     command: process.execPath,
     args: [MOCK_PATH],

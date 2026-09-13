@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
+import type { ServerFrame } from "../dist/index.js"
 import { JcodeClient, StructuredOutputError } from "../dist/index.js"
 import { startMockHarness } from "./mock-harness.ts"
 
@@ -15,7 +16,7 @@ const schema = {
 
 type Summary = { summary: string; count: number }
 
-function sendTurn(send: (frame: any) => void, sessionId: string, text: string): void {
+function sendTurn(send: (frame: ServerFrame) => void, sessionId: string, text: string): void {
   send({ v: 1, ev: "message_accepted", session_id: sessionId })
   send({ v: 1, ev: "text_delta", session_id: sessionId, text })
   send({ v: 1, ev: "turn_done", session_id: sessionId })

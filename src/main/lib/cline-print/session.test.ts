@@ -9,7 +9,7 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
-import { runClinePrintTurn } from "./session"
+import { type ClinePrintChunk, runClinePrintTurn } from "./session"
 
 const MOCK_PATH = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -19,11 +19,11 @@ const MOCK_PATH = join(
 )
 
 function runTurn(mode?: string): {
-  chunks: any[]
+  chunks: ClinePrintChunk[]
   done: ReturnType<typeof runClinePrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: ClinePrintChunk[] = []
   const turn = runClinePrintTurn({
     command: process.execPath,
     args: [MOCK_PATH],

@@ -1,3 +1,5 @@
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
+
 // AI SDK UIMessageChunk format
 export type UIMessageChunk =
   // Message lifecycle
@@ -89,4 +91,15 @@ export type MessageMetadata = {
   durationMs?: number
   resultSubtype?: string
   finalTextId?: string
+}
+
+/**
+ * The stream messages the translator consumes: the SDK's own discriminated union,
+ * widened with the nested-tool marker the CLI attaches to child-agent messages
+ * (`parent_tool_use_id`), which the published union does not carry. Typing the
+ * translator against this instead of `any` makes a CLI/SDK message-shape change a
+ * compile error at the read site rather than a `undefined` in the transcript.
+ */
+export type ClaudeStreamMessage = SDKMessage & {
+  readonly parent_tool_use_id?: string | null
 }

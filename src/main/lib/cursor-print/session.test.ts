@@ -9,7 +9,8 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
-import { runCursorPrintTurn } from "./session"
+import { requireChunk } from "../print-test-helpers"
+import { type CursorPrintChunk, runCursorPrintTurn } from "./session"
 
 const MOCK_PATH = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -22,12 +23,12 @@ function runTurn(
   mode?: string,
   stdinText?: string,
 ): {
-  chunks: any[]
+  chunks: CursorPrintChunk[]
   sessionIds: string[]
   done: ReturnType<typeof runCursorPrintTurn>["done"]
   interrupt: () => void
 } {
-  const chunks: any[] = []
+  const chunks: CursorPrintChunk[] = []
   const sessionIds: string[] = []
   const turn = runCursorPrintTurn({
     command: process.execPath,
@@ -114,7 +115,10 @@ it("maps rejected tool results to error outputs", async () => {
   const { chunks, done } = runTurn("rejected")
   const result = await done
   assert.equal(result.status, "completed")
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const output = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-output-available"),
+    "tool-output-available",
+  )
   assert.deepEqual(output.output, { error: "rejected: needs approval" })
 })
 
@@ -122,8 +126,14 @@ it("correlates tools without call_id oldest-open-first", async () => {
   const { chunks, done } = runTurn("no-call-id")
   const result = await done
   assert.equal(result.status, "completed")
-  const input = chunks.find((chunk) => chunk.type === "tool-input-available")
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const input = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-input-available"),
+    "tool-input-available",
+  )
+  const output = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-output-available"),
+    "tool-output-available",
+  )
   assert.equal(input.toolName, "Grep")
   assert.equal(output.toolCallId, input.toolCallId)
   assert.deepEqual(output.output, { matches: 1 })
@@ -158,7 +168,10 @@ it("treats non-started tool subtypes as completion, not input", async () => {
   const result = await done
   assert.equal(result.status, "completed")
   assert.equal(chunks.filter((chunk) => chunk.type === "tool-input-available").length, 0)
-  const output = chunks.find((chunk) => chunk.type === "tool-output-available")
+  const output = requireChunk(
+    chunks.find((chunk) => chunk.type === "tool-output-available"),
+    "tool-output-available",
+  )
   assert.equal(output.toolCallId, "call-f")
   assert.deepEqual(output.output, { error: "command failed" })
 })

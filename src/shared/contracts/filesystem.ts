@@ -66,6 +66,6 @@ export class FilesystemBrowseError extends Schema.TaggedError<FilesystemBrowseEr
       message:
         decodedFilesystemBrowseErrorMessage(props) ??
         `Failed to browse filesystem path '${props.partialPath}'${cwd}.`,
-    } as any)
+    })
   }
 }

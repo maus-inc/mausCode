@@ -133,7 +133,7 @@ export class ProjectSearchEntriesError extends Schema.TaggedError<ProjectSearchE
       message:
         decodedProjectErrorMessage(props) ??
         `Failed to search workspace entries in '${props.cwd}'.`,
-    } as any)
+    })
   }
 }
 
@@ -164,7 +164,7 @@ export class ProjectSearchContentsError extends Schema.TaggedError<ProjectSearch
       message:
         decodedProjectErrorMessage(props) ??
         `Failed to search workspace contents in '${props.cwd}'.`,
-    } as any)
+    })
   }
 }
 
@@ -186,7 +186,7 @@ export class ProjectListEntriesError extends Schema.TaggedError<ProjectListEntri
       ...props,
       message:
         decodedProjectErrorMessage(props) ?? `Failed to list workspace entries in '${props.cwd}'.`,
-    } as any)
+    })
   }
 }
 
@@ -259,7 +259,7 @@ export class ProjectReadFileError extends Schema.TaggedError<ProjectReadFileErro
       message:
         decodedProjectErrorMessage(props) ??
         `Failed to read workspace file '${props.relativePath}' in '${props.cwd}'.`,
-    } as any)
+    })
   }
 }
 
@@ -296,6 +296,6 @@ export class ProjectWriteFileError extends Schema.TaggedError<ProjectWriteFileEr
       message:
         decodedProjectErrorMessage(props) ??
         `Failed to write workspace file '${props.relativePath}' in '${props.cwd}'.`,
-    } as any)
+    })
   }
 }

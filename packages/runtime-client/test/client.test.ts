@@ -3,8 +3,10 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
+import type { AnyApiEvent } from "../dist/index.js"
 import { HarnessError, JcodeClient, NdjsonDecoder, unixSocketTransport } from "../dist/index.js"
-import { startMockHarness } from "./mock-harness.ts"
+import type { MockReply, MockRequest } from "./mock-harness.ts"
+import { requestOf, startMockHarness } from "./mock-harness.ts"
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
@@ -198,7 +200,7 @@ test("sendMessage retains the legacy images argument", async () => {
 })
 
 test("sendMessage noReply waits for request ok and does not wait for turn events", async () => {
-  let observed: any
+  let observed: MockRequest | undefined
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req === "send_message") {
@@ -219,6 +221,7 @@ test("sendMessage noReply waits for request ok and does not wait for turn events
 
   await client.sendMessage("s1", "context only", { noReply: true })
 
+  assert.ok(observed, "the harness should have seen a request")
   assert.equal(observed.req, "send_message")
   assert.equal(observed.session_id, "s1")
   assert.equal(observed.content, "context only")
@@ -258,7 +261,7 @@ test("events() return settles a pending next call", async () => {
   const client = await JcodeClient.connect({ socketPath: server.socketPath })
   const stream = client.events("s1")
   const pending = stream.next()
-  await stream.return()
+  await stream.return?.()
   assert.deepEqual(await pending, { value: undefined, done: true })
   await client.close()
   await server.close()
@@ -267,7 +270,7 @@ test("events() return settles a pending next call", async () => {
 test("unknown event kinds still surface on the generic channel", async () => {
   const server = await startMockHarness()
   const client = await JcodeClient.connect({ socketPath: server.socketPath })
-  const seen = new Promise<any>((resolve) => client.once("event", resolve))
+  const seen = new Promise<AnyApiEvent>((resolve) => client.once("event", resolve))
   server.broadcast({ v: 1, ev: "some_future_event", payload: 1 })
   const frame = await seen
   assert.equal(frame.ev, "some_future_event")
@@ -318,11 +321,11 @@ test("a stale socket file reports a dead bridge, not a missing one", async () =>
 })
 
 test("GA methods send stable request shapes and map typed replies", async () => {
-  const requests: any[] = []
+  const requests: MockRequest[] = []
   const server = await startMockHarness({
     onRequest(request, send) {
       requests.push(request)
-      const reply = (frame: any) => send({ v: 1, reply_to: request.id, ...frame })
+      const reply = (frame: MockReply) => send({ v: 1, reply_to: request.id, ...frame })
       switch (request.req) {
         case "list_sessions":
           reply({
@@ -436,20 +439,22 @@ test("GA methods send stable request shapes and map typed replies", async () => 
       modifiedMs: 123,
     })
 
-    const byKind = (kind: string) => requests.find((request) => request.req === kind)
-    assert.equal(byKind("list_sessions").include_archived, true)
-    assert.equal(byKind("archive_session").session_id, "s1")
-    assert.equal(byKind("set_retention_policy").archive_after_days, 30)
+    assert.equal(requestOf(requests, "list_sessions").include_archived, true)
+    assert.equal(requestOf(requests, "archive_session").session_id, "s1")
+    assert.equal(requestOf(requests, "set_retention_policy").archive_after_days, 30)
     assert.deepEqual(
       {
-        provider: byKind("set_api_key").provider,
-        api_key: byKind("set_api_key").api_key,
+        provider: requestOf(requests, "set_api_key").provider,
+        api_key: requestOf(requests, "set_api_key").api_key,
       },
       { provider: "gemini-api", api_key: "secret" },
     )
-    assert.equal(byKind("read_file").max_bytes, 5)
+    assert.equal(requestOf(requests, "read_file").max_bytes, 5)
     assert.deepEqual(
-      { path: byKind("search_text").path, limit: byKind("search_text").limit },
+      {
+        path: requestOf(requests, "search_text").path,
+        limit: requestOf(requests, "search_text").limit,
+      },
       { path: "src", limit: 2 },
     )
   } finally {
@@ -460,7 +465,7 @@ test("GA methods send stable request shapes and map typed replies", async () => 
 
 test("globalEvents discovers persisted and newly-created sessions and cleans up children", async () => {
   const sessions = ["persisted-1", "persisted-2"]
-  const listRequests: any[] = []
+  const listRequests: MockRequest[] = []
   const server = await startMockHarness({
     onRequest(request, send) {
       if (request.req === "list_sessions") {
@@ -498,17 +503,17 @@ test("globalEvents discovers persisted and newly-created sessions and cleans up 
       new Set([first.value.session_id, second.value.session_id]),
       new Set(["persisted-1", "persisted-2"]),
     )
-    assert.equal(listRequests[0].include_archived, true)
+    assert.equal(requestOf(listRequests, "list_sessions").include_archived, true)
 
     sessions.push("new-3")
     const third = await stream.next()
     assert.equal(third.value.session_id, "new-3")
     await waitFor(() => server.clientCount() === 4)
 
-    await stream.return()
+    await stream.return?.()
     await waitFor(() => server.clientCount() === 1)
   } finally {
-    await stream.return()
+    await stream.return?.()
     await client.close()
     await server.close()
   }
@@ -544,7 +549,7 @@ test("globalEvents aborts a pending consumer and closes every child", async () =
     assert.deepEqual(await pending, { value: undefined, done: true })
     await waitFor(() => server.clientCount() === 1)
   } finally {
-    await stream.return()
+    await stream.return?.()
     await client.close()
     await server.close()
   }
@@ -584,7 +589,7 @@ test("globalEvents fails loudly when its bounded event queue overflows", async (
       (error: HarnessError) => error.code === "event_buffer_overflow",
     )
   } finally {
-    await stream.return()
+    await stream.return?.()
     await client.close()
     await server.close()
   }

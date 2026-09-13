@@ -1,4 +1,10 @@
-import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from "./types"
+import type {
+  ClaudeStreamMessage,
+  MCPServer,
+  MCPServerStatus,
+  MessageMetadata,
+  UIMessageChunk,
+} from "./types"
 
 /**
  * NOTE (transplant): `ChunkCoalescer`/`createChunkCoalescer` below, the
@@ -218,7 +224,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
     }
   }
 
-  return function* transform(msg: any): Generator<UIMessageChunk> {
+  return function* transform(msg: ClaudeStreamMessage): Generator<UIMessageChunk> {
     // Track parent_tool_use_id for nested tools
     // Only update when explicitly present (don't reset on messages without it)
     if (msg.parent_tool_use_id !== undefined) {

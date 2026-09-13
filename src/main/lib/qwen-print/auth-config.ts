@@ -72,12 +72,20 @@ export function parseQwenDotenv(text: string): Record<string, string> {
   return out
 }
 
-function readJsonFile(path: string): Record<string, any> {
+/** The subset of `~/.qwen/settings.json` this module reads. */
+interface QwenSettingsFile {
+  model?: { name?: unknown; [key: string]: unknown }
+  security?: { auth?: { selectedType?: unknown; [key: string]: unknown }; [key: string]: unknown }
+  modelProviders?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+function readJsonFile(path: string): QwenSettingsFile {
   try {
     if (!existsSync(path)) return {}
     const parsed: unknown = JSON.parse(readFileSync(path, "utf8"))
     if (typeof parsed === "object" && parsed !== null) {
-      return parsed as Record<string, any>
+      return parsed as QwenSettingsFile
     }
     return {}
   } catch {

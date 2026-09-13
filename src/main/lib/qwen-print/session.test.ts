@@ -10,7 +10,8 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assert, it } from "@effect/vitest"
-import { premapQwenLine, runQwenPrintTurn } from "./session"
+import { requireChunk } from "../print-test-helpers"
+import { premapQwenLine, type QwenPrintChunk, runQwenPrintTurn } from "./session"
 
 const MOCK_PATH = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -20,12 +21,12 @@ const MOCK_PATH = join(
 )
 
 function runTurn(mode?: string): {
-  chunks: any[]
+  chunks: QwenPrintChunk[]
   done: ReturnType<typeof runQwenPrintTurn>["done"]
   interrupt: () => void
   seenSessionId: () => string | undefined
 } {
-  const chunks: any[] = []
+  const chunks: QwenPrintChunk[] = []
   let seenId: string | undefined
   const turn = runQwenPrintTurn({
     command: process.execPath,
@@ -66,10 +67,16 @@ it("maps a full turn: text, canonical tools, no projector finish", async () => {
   assert.ok(types.includes("session-init"))
   assert.ok(types.includes("text-delta"))
 
-  const toolCall = chunks.find((c) => c.type === "tool-input-available")
+  const toolCall = requireChunk(
+    chunks.find((c) => c.type === "tool-input-available"),
+    "tool-input-available",
+  )
   // run_shell_command -> canonical Bash (display-only rename).
   assert.strictEqual(toolCall.toolName, "Bash")
-  const toolOut = chunks.find((c) => c.type === "tool-output-available")
+  const toolOut = requireChunk(
+    chunks.find((c) => c.type === "tool-output-available"),
+    "tool-output-available",
+  )
   assert.strictEqual(toolOut.toolCallId, toolCall.toolCallId)
 
   const text = chunks
@@ -102,24 +109,32 @@ it("surfaces permission denials as visible text", async () => {
   const { chunks, done } = runTurn("denials")
   const result = await done
   assert.strictEqual(result.status, "completed")
-  const denial = chunks.find(
-    (c) =>
-      c.type === "text-delta" &&
-      typeof c.delta === "string" &&
-      c.delta.includes("Permission denied"),
+  const denial = requireChunk(
+    chunks.find(
+      (c) =>
+        c.type === "text-delta" &&
+        typeof c.delta === "string" &&
+        c.delta.includes("Permission denied"),
+    ),
+    "text-delta",
   )
-  assert.ok(denial)
-  assert.ok(denial.delta.includes("write_file"))
-  const renamed = chunks.find((c) => c.type === "tool-input-available")
+  assert.ok(denial.delta?.includes("write_file"))
+  const renamed = requireChunk(
+    chunks.find((c) => c.type === "tool-input-available"),
+    "tool-input-available",
+  )
   assert.strictEqual(renamed.toolName, "Write")
 })
 
 it("maps disconnected MCP servers to failed in session-init", async () => {
   const { chunks, done } = runTurn("mcp-status")
   await done
-  const init = chunks.find((c) => c.type === "session-init")
-  assert.ok(init)
-  const byName = Object.fromEntries((init.mcpServers as any[]).map((s) => [s.name, s.status]))
+  const init = requireChunk(
+    chunks.find((c) => c.type === "session-init"),
+    "session-init",
+  )
+  const servers = (init.mcpServers as { name: string; status: string }[] | undefined) ?? []
+  const byName = Object.fromEntries(servers.map((s) => [s.name, s.status]))
   assert.strictEqual(byName.ok, "connected")
   assert.strictEqual(byName.down, "failed")
 })
@@ -129,8 +144,12 @@ it("turns error envelopes into held error chunks (no finish)", async () => {
   const result = await done
   assert.strictEqual(result.status, "error")
   assert.ok(result.errorMessage?.includes("Missing API key"))
-  const errorChunk = chunks.find((c) => c.type === "error")
-  assert.ok(errorChunk)
+  // Existence alone was the old assertion; the chunk is now typed, so the payload is checked too.
+  const errorChunk = requireChunk(
+    chunks.find((c) => c.type === "error"),
+    "error",
+  )
+  assert.ok(errorChunk.errorText?.includes("Missing API key"))
   assert.ok(!chunks.map((c) => c.type).includes("finish"))
 })
 
@@ -173,8 +192,8 @@ it("premapQwenLine renames streamed tool_use blocks", () => {
       content_block: { type: "tool_use", id: "c1", name: "grep_search" },
     },
   }
-  premapQwenLine(line as any)
-  assert.strictEqual((line.event.content_block as { name: string }).name, "Grep")
+  premapQwenLine(line)
+  assert.strictEqual(line.event.content_block.name, "Grep")
 })
 
 it("premapQwenLine passes MCP tool names through untouched", () => {
@@ -184,6 +203,6 @@ it("premapQwenLine passes MCP tool names through untouched", () => {
       content: [{ type: "tool_use", id: "c1", name: "mcp__stub__echo" }],
     },
   }
-  premapQwenLine(line as any)
-  assert.strictEqual(((line.message as any).content[0] as { name: string }).name, "mcp__stub__echo")
+  premapQwenLine(line)
+  assert.strictEqual(line.message.content[0].name, "mcp__stub__echo")
 })

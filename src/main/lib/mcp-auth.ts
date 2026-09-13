@@ -3,6 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { BrowserWindow, shell } from "electron"
 import { getClaudeShellEnvironment } from "./claude/env"
+import type { McpServerConfig } from "./claude-config"
 import {
   GLOBAL_MCP_PATH,
   getMcpServerConfig,
@@ -381,21 +382,20 @@ export async function refreshMcpToken(
  * Call this before passing servers to the SDK
  * Returns the servers config with updated Authorization headers
  */
+/**
+ * Refreshes the OAuth bearer token of every server entry that needs one.
+ *
+ * Entries are typed as `McpServerConfig` (`claude-config`) rather than an unchecked map, so the
+ * `headers` / `_oauth` writes below are checked against the fields the CLI config actually has.
+ */
 export async function ensureMcpTokensFresh(
-  mcpServers: Record<string, any>,
+  mcpServers: Record<string, McpServerConfig>,
   projectPath: string,
-): Promise<Record<string, any>> {
+): Promise<Record<string, McpServerConfig>> {
   const updatedServers = { ...mcpServers }
 
   for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
-    const oauth = serverConfig._oauth as
-      | {
-          accessToken?: string
-          refreshToken?: string
-          clientId?: string
-          expiresAt?: number
-        }
-      | undefined
+    const oauth = serverConfig._oauth
 
     // Skip servers without OAuth
     if (!oauth?.accessToken) continue

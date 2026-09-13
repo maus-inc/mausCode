@@ -4,13 +4,13 @@
  * turn chunks, interrupt, and resume paths.
  */
 import { assert, it } from "@effect/vitest"
-import { createCodexAppServerSession } from "./session.ts"
+import { type CodexSessionChunk, createCodexAppServerSession } from "./session.ts"
 
 const peerPath = new URL("./test/fixtures/codex-app-server-turn-mock-peer.ts", import.meta.url)
   .pathname
 
 const spawnSession = (
-  onChunk: (chunk: any) => void,
+  onChunk: (chunk: CodexSessionChunk) => void,
   opts?: { existingThreadId?: string; legacySessionId?: string; env?: Record<string, string> },
 ) =>
   createCodexAppServerSession({
@@ -24,7 +24,7 @@ const spawnSession = (
   })
 
 it("runs a full turn and maps notifications to chunks", async () => {
-  const chunks: any[] = []
+  const chunks: CodexSessionChunk[] = []
   const session = await spawnSession((chunk) => chunks.push(chunk))
   assert.equal(session.threadId, "thread-mock-1")
   assert.equal(session.sessionId, "session-mock-1")
