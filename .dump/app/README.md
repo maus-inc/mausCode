@@ -40,6 +40,7 @@ Every file here must satisfy all of these, or it does not belong:
   unattended write gate) mapped onto mausCode's waves, including the store-ownership decision.
 - `plans/2026-09-13-mauscode-roadmap.md` — the ordered 35-step program with the dependency
   graph, milestones, standing constraints, and the corpus claims corrected by re-measurement.
+- `research/2026-09-13-find-skills-run.md` — the discovery record for the skills ecosystem: what was run, what works, what was installed and what was refused with the reason. Re-run `find-skills` if it is more than a month old.
 - `roadmap/` — the 45 step bodies as filed on GitHub, one file per issue. The issue is the
   working copy; these are the durable originals, so a closed issue can be re-derived.
 - `decisions/` — dated decision records and provisional assumptions.

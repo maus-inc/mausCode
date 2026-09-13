@@ -140,11 +140,3 @@ If this is something you do often, you could create your own skill:
 npx skills init my-xyz-skill
 ```
 
-
-## Provenance
-
-Verbatim from `https://github.com/vercel-labs/skills`, skill `find-skills`, fetched 2026-09-13 with
-`npx skills use "https://github.com/vercel-labs/skills" --skill "find-skills"`. Unmodified above this
-section, per the recipe's rule that a port keeps its source and its attribution. mausCode adds one
-project rule on top of it, stated in `AGENTS.md`: this skill runs before a step is implemented, not
-only when a user asks.

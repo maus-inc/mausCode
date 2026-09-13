@@ -63,9 +63,15 @@
   "overrides": [
     {
       "includes": ["**/_generated/**"],
-      "formatter": { "enabled": false },
-      "linter": { "enabled": false },
-      "assist": { "enabled": false }
+      "formatter": {
+        "enabled": false
+      },
+      "linter": {
+        "enabled": false
+      },
+      "assist": {
+        "enabled": false
+      }
     }
   ],
   "files": {
@@ -81,6 +87,7 @@
       "!**/new mauscode branding",
       "!.merge-backup",
       "!**/.merge-backup",
+      "!.agents/skills",
       "!runtime/jcode"
     ]
   }

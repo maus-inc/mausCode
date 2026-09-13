@@ -30,7 +30,7 @@ Three defects users hit hourly. Tab groups are shared across panes, so closing a
 
 ## 4. Read first, and what already exists
 
-`docs/design-system-baseline.md` for pane and tab affordances. `sub-chat-store.ts` owns split membership and normalisation, so tab groups belong beside it, not in a new store. The store's persist shape needs a version field before you add one, and the migration must leave an unversioned payload working.
+`docs/design-system-baseline.md` for pane and tab affordances, and the installed skill `vercel-composition-patterns`, whose first rule, "Avoid Boolean Prop Proliferation", rated critical, names this exact bug class: a boolean prop that doubles state per addition is why `isActive` gates a pane that is merely visible. `sub-chat-store.ts` owns split membership and normalisation, so tab groups belong beside it, not in a new store. The store's persist shape needs a version field before you add one, and the migration must leave an unversioned payload working.
 
 ## 6. Implementation plan
 

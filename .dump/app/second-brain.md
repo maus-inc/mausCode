@@ -174,6 +174,18 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   on native; whether native stays opt-in per-chat pending the benchmark gate.
   See `decisions/provisional-assumptions.md` (PA-7+).
 
+## Skills (2026-09-13)
+
+`AGENTS.md` makes `find-skills` mandatory before a step is designed. Six skills are in `.agents/skills/`,
+`unslop`, `find-skills`, and four installed today with hashes in `skills-lock.json`, `skill-creator` and
+`frontend-design` from `anthropics/skills`, `vercel-react-best-practices` and `vercel-composition-patterns`
+from `vercel-labs/agent-skills`, about 547 KB of documentation that the app never imports. Two candidates
+were refused with reasons on record, `web-design-guidelines` because it fetches its rules from a URL at
+review time and `webapp-testing` because it tells the agent to run Playwright scripts as black boxes. The
+registry's keyword search endpoint returns nothing for every query from this environment, so discovery
+goes through the leaderboard and the repository listing, and a "no skills found" result is a tool failure
+rather than an empty ecosystem.
+
 ## Roadmap and issues (2026-09-13)
 
 `plans/2026-09-13-mauscode-roadmap.md` is the single ordered sequence, 45 steps, issued to

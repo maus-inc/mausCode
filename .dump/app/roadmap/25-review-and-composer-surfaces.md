@@ -30,7 +30,7 @@ Triage rows 33, 35, 37, 38, 43, 45 and 49 all landed here, and three of them car
 
 ## 4. Read first, and what already exists
 
-`docs/design-system-baseline.md` before any of this, that pass is a non-negotiable in the plan, and its motion and copy sections govern the polish item. `react-keys.ts` and `command-rows.ts` are the required patterns for list identity. The existing mode switcher is where stacked lands; do not add a second control.
+the installed skills `frontend-design` for visual direction and `vercel-react-best-practices` for the render cost of each change, then `docs/design-system-baseline.md` before any of this, that pass is a non-negotiable in the plan, and its motion and copy sections govern the polish item. `react-keys.ts` and `command-rows.ts` are the required patterns for list identity. The existing mode switcher is where stacked lands; do not add a second control.
 
 ## 6. Implementation plan
 

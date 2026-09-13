@@ -31,7 +31,7 @@ The renderer build OOMs at the default Node heap and needs the 4 GB override CI 
 
 ## 4. Read first, and what already exists
 
-`.dump/ci/plans/initial-ci-plan.md` phase 2, which already specifies build-time and RSS wrappers, a renderer chunk budget and main-process micro benchmarks; and `docs/design-system-baseline.md` before changing any loading affordance, since a lazily loaded viewer that flashes is a UI regression, not a win.
+the installed skill `vercel-react-best-practices`, applying its bundle and re-render rules and ignoring its Next.js server-action ones, then `.dump/ci/plans/initial-ci-plan.md` phase 2, which already specifies build-time and RSS wrappers, a renderer chunk budget and main-process micro benchmarks; and `docs/design-system-baseline.md` before changing any loading affordance, since a lazily loaded viewer that flashes is a UI regression, not a win.
 
 ## 6. Implementation plan
 

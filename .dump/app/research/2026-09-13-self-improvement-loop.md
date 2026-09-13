@@ -45,6 +45,10 @@ Format constraints we inherit from the agentskills.io standard: `name` 1 to 64 c
 
 The single most common defect, and the reason our validator checks it: **a vague description means the skill is never loaded**. The model sees only the name and the one-liner, so if that line does not match how a person phrases a request, the body is never opened, and the author concludes the feature is broken.
 
+Two borrowed practices close that gap, both from `anthropics/skills@skill-creator`, installed in this repository on 2026-09-13 and reviewed before use. First, authoring is an interview before it is writing: what the skill does, when it should trigger, what the output looks like, and whether the output is objectively verifiable and therefore worth test prompts, since a subjective skill does not need an eval harness and pretending otherwise is waste. Second, a skill ships with a measuring step, a small set of prompts run with and without the skill, a review of the difference, then a description pass to improve triggering, which is the part that decides whether the library is used at all. Our step 43 validator enforces the format and the length, and its acceptance bar is the description test: a generated skill that no prompt in its own eval set triggers is refused, not shipped.
+
+Second shape worth stealing, from the two Vercel skills, is the library structure. Both are one thin `SKILL.md` plus a `rules/` directory of one-file-per-rule documents whose front matter carries `title`, `impact`, `impactDescription` and `tags`, 72 such files in one and 13 in the other. That is level-2 disclosure made practical, a single rule can be pulled without the file, and it is the format our generated skills should use when they grow past one screen.
+
 ## 4. Auto reading, which is the half usually left out
 
 Two mechanisms, both needed.
