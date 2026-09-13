@@ -122,6 +122,11 @@ repository ground rules, verbatim` heading, so the rules travel with the work. F
 45 issues plus the index, #48, which resolves a `{{SNN}}` reference to its issue number. Editing and
 commenting on issues is blocked for this integration, so the tokens stay in the bodies and the index
 issue is the resolution; the arithmetic on this board is issue number equals step number plus two.
+Two consequences of that block, both recorded so nobody is misled: the `roadmap` label exists but
+could not be attached to any issue, and any step body revised in this directory after filing, which
+includes #45's step 43 body, is newer on disk than on GitHub, because an issue cannot be edited here.
+The file is the authority, as `AGENTS.md` requires, and closing an issue against the GitHub copy
+alone is a review finding.
 
 ```sh
 { printf '## Starter: the repository ground rules, verbatim\n\n'; cat AGENTS.md;
