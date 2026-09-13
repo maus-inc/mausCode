@@ -139,6 +139,26 @@ Detail lives in `research/` and `plans/`; this file states what is true.
 - Big-bang rewrite of chats/terminal/git UI before vertical slice; depending on
   21st.dev for anything.
 
+## Proposed, not approved (2026-09-12)
+
+- A Jules-feature port program is drafted in `plans/2026-09-12-jules-port-plan.md` (waves W0–W14) with the
+  per-feature verdicts recorded in `decisions/2026-09-12-jules-feature-triage.md`. **No code, no OpenSpec
+  change, and no task in an existing scaffold has been changed by it.** Two facts it relies on are worth
+  carrying here: `src/shared/contracts/` (24,860 lines of ported T3 schemas + 23 test files) has **zero
+  importers** outside its own directory, and `main/lib/runtime/translate.ts:147-168` discards 22 harness events
+  including `session_status`, `background_progress` and `wake_requested`. The vendored PR/CI vocabulary in
+  `contracts/orchestration.ts:630-699` (`ThreadPullRequestLink`/`Snapshot`) is the one part worth wiring up first.
+
+- Recreation of the 1Code v0.0.75→v0.0.84 parity program lives in `plans/release-parity-v0.0.75-0.0.84-plan.md`
+  (phases P0-P8, 47 items). It was lost with the session that wrote it, so it is rebuilt here with every item
+  re-measured against `1a37e0b`: P0-1/P0-2 are already fixed on this branch, the Biome gate is 0 errors / 135
+  warnings, and two of its original claims (dead `updatePrInfo`, "three pollers") are corrected in place.
+- Two research spikes (2026-09-13, read-only) sit in `research/`:
+  `2026-09-13-t3code-pr-state-spike.md` (how PR state is discovered, cached and de-duplicated upstream; 60 s
+  success / 20 s→15 min failure TTL split; a 55-line Effect-free `dedupeChecks` worth vendoring) and
+  `2026-09-13-hermes-memory-spike.md` (memory as a provider *lifecycle*: static prompt block vs per-turn recall,
+  `queue_prefetch` consumed next turn, fail-closed pre-compress checkpoint, unattended writes limited to `add`).
+
 ## Unresolved user-facing decisions
 
 - Wordmark selection (5 PNGs in `new mauscode branding/`); CLI/app-id naming

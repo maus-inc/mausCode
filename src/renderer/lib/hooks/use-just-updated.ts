@@ -49,9 +49,11 @@ export function useJustUpdated() {
   const openChangelog = useCallback(() => {
     const api = window.desktopApi
     if (api) {
-      // Link to changelog with anchor to current version
-      const version = justUpdatedVersion ? `#v${justUpdatedVersion}` : ""
-      api.openExternal(`${RELEASES_URL}${version ? `#${version}` : ""}`)
+      // Link to changelog with anchor to current version. RELEASES_URL carries no
+      // fragment, so the leading "#" is added once, here — appending a second one
+      // produced `.../releases##v0.0.84`, which GitHub resolves to no anchor at all.
+      const anchor = justUpdatedVersion ? `#v${justUpdatedVersion}` : ""
+      api.openExternal(`${RELEASES_URL}${anchor}`)
     }
     dismissJustUpdated()
   }, [justUpdatedVersion, dismissJustUpdated])

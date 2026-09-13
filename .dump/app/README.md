@@ -27,6 +27,17 @@ Every file here must satisfy all of these, or it does not belong:
   placement verdicts.
 - `research/migration-system.md` — import flow design and documented assumptions.
 - `plans/mauscode-architecture-plan.md` — target shape, invariants, models, phases.
+- `plans/2026-09-12-jules-port-plan.md` — PROPOSED (unapproved) program to port the Jules changelog
+  features the user selected: waves W0–W14, each an OpenSpec change, with the codebase findings that shape
+  them. Companion record: `decisions/2026-09-12-jules-feature-triage.md` (54 features: 34 accepted,
+  6 scoped to remote work, 8 deferred, 6 rejected). No code has been written for either.
+- `plans/release-parity-v0.0.75-0.0.84-plan.md` — RECREATED (2026-09-13) 1Code release-parity program, phases
+  P0-P8 across 47 release-note items, each re-verified against this branch; already-fixed items are marked so
+  nobody redoes them, and §11 of the port plan sequences the two programs together.
+- `research/2026-09-13-t3code-pr-state-spike.md` — how t3code models, discovers, caches and de-duplicates
+  pull-request state, and which 55 lines are worth vendoring verbatim.
+- `research/2026-09-13-hermes-memory-spike.md` — hermes-agent's memory lifecycle (provider hooks, budgets,
+  unattended write gate) mapped onto mausCode's waves, including the store-ownership decision.
 - `decisions/` — dated decision records and provisional assumptions.
 - `benchmarks/` — benchmark methods and results (CI-owned numbers).
 - `audits/` — security and architecture audit findings.
