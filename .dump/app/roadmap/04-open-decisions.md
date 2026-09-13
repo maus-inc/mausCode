@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 04 of 35, the four open decisions in §11.3 |
+| Step | 04 of 42, the four open decisions in §11.3 |
 | Area | decision |
 | Risk | high, because four steps are waiting on it |
 | Depends on | {{S01}} |

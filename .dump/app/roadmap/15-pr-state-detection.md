@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 15 of 35, wave W6 first half, parity P6 second half |
+| Step | 15 of 42, wave W6 first half, parity P6 second half |
 | Area | main, renderer |
 | Risk | high |
 | Depends on | {{S06}}, {{S13}} |

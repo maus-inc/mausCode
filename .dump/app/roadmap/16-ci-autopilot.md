@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 16 of 35, wave W6 second half |
+| Step | 16 of 42, wave W6 second half |
 | Area | main, renderer |
 | Risk | critical, because it is unattended and it pushes |
 | Depends on | {{S07}}, {{S09}}, {{S10}}, {{S14}}, {{S15}} |

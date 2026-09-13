@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 01 of 35, wave W0, parity P0-4 |
+| Step | 01 of 42, wave W0, parity P0-4 |
 | Area | docs |
 | Risk | medium |
 | Depends on | nothing |

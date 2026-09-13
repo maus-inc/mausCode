@@ -1,6 +1,6 @@
 # mausCode roadmap, 2026-09-13
 
-**Status:** active sequence, issued to GitHub. **Supersedes nothing:** it consumes `2026-09-12-jules-port-plan.md` (waves W0-W14), `release-parity-v0.0.75-0.0.84-plan.md` (P0-P8), and `mauscode-architecture-plan.md` (invariants I-1 to I-6, phases P0-P9). This file is the order and the issue index; those three stay the reasoning.
+**Status:** active sequence, 42 steps, issued to GitHub. **Supersedes nothing:** it consumes `2026-09-12-jules-port-plan.md` (waves W0-W14), `release-parity-v0.0.75-0.0.84-plan.md` (P0-P8), and `mauscode-architecture-plan.md` (invariants I-1 to I-6, phases P0-P9). This file is the order and the issue index; those three stay the reasoning.
 
 **Method.** Every `.dump` file was read end to end on 2026-09-13, 59 files, 5,522 lines, 451,615 bytes, and every path or line cited below was opened in the same session at HEAD `d5bdf69`. Where a corpus claim did not survive that check, it is corrected in §5 rather than repeated.
 
@@ -9,7 +9,8 @@
 1. `AGENTS.md` at the repository root. Binding rules, verification gates, parallel-agent lanes.
 2. `docs/design-system-baseline.md` before interface work, `docs/backend-porting-recipe.md` before provider work, `docs/ci-gotchas.md` before gate work, `FULL-REVIEW.md` before claiming anything is done.
 3. `.dump/app/second-brain.md`, then the specific `research/` file named by your step.
-4. Your issue, which is self-contained by design. `.github/ISSUE_TEMPLATE/roadmap-step.md` is the format, and each body carries evidence, plan, boundaries, acceptance criteria, verification and out-of-scope.
+4. Your issue, which is self-contained by design. Its body opens with `AGENTS.md` verbatim, then the step. `.github/ISSUE_TEMPLATE/roadmap-step.md` is the format, and each body carries evidence, plan, boundaries, acceptance criteria, verification and out-of-scope.
+5. Run `find-skills` before you write anything, as `AGENTS.md` requires, and name in your report which skills you loaded. For any user-facing layout, copy or motion, research how the best tools in the category solve it, prototype the screen in HTML under `.dump/<domain>/research/`, and put two or four options to the human before implementing. The human owns design taste, and a weaker option chosen for convenience is a finding, not a shortcut.
 
 ## 2. The sequence
 
@@ -52,6 +53,13 @@
 | 33 | Build the environment import flow | migration thesis | high | 10, 11, 14, 24, 26, 27, 28 | M5 |
 | 34 | Decide the remote placement profile, and park it until then | W14 | critical | 10, 25, 27, 32, 33 | M5 |
 | 35 | Close the Codex app-server schema and parity gaps | phase 5 follow-up | high | 12 | M5 |
+| 36 | Finish the harvested provider and sidebar payload | fork harvest, Category A remainder | medium | 17, 25 | M6 |
+| 37 | Decide the sidebar lineage and ship reorder, archive and emoji picker | fork harvest, lineage decision | high | 17, 18, 36 | M6 |
+| 38 | Install skills and manage third-party tooling | fork harvest, `ningzhaoxing` skills | medium | 23, 31 | M6 |
+| 39 | Give the security boundaries a test suite and a finding record | fork harvest, security rows | high | 10, 22 | M6 |
+| 40 | Add release configuration, the banner model and changelog URLs | fork harvest, `jhckevin` standalone files | medium | 31, 32 | M6 |
+| 41 | Ship the run audit trail, the acceptance-record convention and i18n groundwork | fork harvest, `Locus` ops discipline | medium | 07, 25, 39 | M6 |
+| 42 | Close the harvest ledger | fork harvest, close-out | low | 36 to 41 | M6 |
 
 ## 3. Milestones
 
@@ -61,6 +69,7 @@
 | M2, safe to act | 10 to 15 | Permission floor merged with a test per allow rule, one secret owner, pins moved together, PR state persisted and a real pull request openable |
 | M3, safe to leave alone | 16 to 21 | CI repair and PR response run bounded, panes and ordering are correct, fan-out and critics work, and a schedule can fire |
 | M4, useful when unattended | 22 to 24, 29 to 31 | Inbox with a label trigger, instructions that survive the budget, memory with provenance, gates promoted, hygiene closed |
+| M6, harvested work settled | 36 to 42 | Every row of `.dump/ci/research/fork-network-harvest-catalog.md` reads adopted, refused or parked, the security suite fails when a guard is removed, and the audit trail is readable and exportable |
 | M5, shippable and extensible | 25 to 28, 32 to 35 | Review surfaces polished, loopback API, MCP one truth, release artifacts, import flow, placement decided, parity verification |
 
 ## 4. Standing constraints on every step
@@ -90,14 +99,26 @@ Recorded here so no later session re-derives them. The plan files carry the same
 | Capability reporting is "planned, not implemented" | Ten profiles exist at `src/main/lib/providers/` with `security`, `performance` and `features` blocks, served by `src/main/lib/trpc/routers/providers.ts`; no renderer file imports the registry | Step 27 extends profiles, and the UI gap is the real work |
 | `mock-api.ts` should be deleted per the architecture plan while the system map says keep | Unresolved contradiction between two `.dump` files | Step 01 resolves it in favour of the tree, as `AGENTS.md` requires |
 | Vendored contracts are "available vocabulary, not a live path" | Confirmed: 24,860 lines, zero importers outside the directory | Step 13 makes two files the first importers, and records the policy |
+| The harvest's erenbertr payload is largely transplanted | Confirmed at file level: twelve `*-chat-transport.ts` files, plus `auto-rename.ts`, `use-changed-files-tracking.ts`, `sub-chat-selector.tsx`, `sub-chat-status-card.tsx`, `mcp-servers-indicator.tsx`, `agent-preview.tsx` and `agent-thinking-tool.tsx`. Only two Category A rows remain open | Step 36 owns the remainder, and the `usage-widget.tsx` name in the ledger does not exist in the tree |
+| `jhckevin` release configuration, banner model and changelog URL were taken | **Not taken.** `git ls-files` finds no `release-config`, `banner-model` or `changelog-url`, and three call sites build the releases anchor differently, `update-banner.tsx:129` and `agents-help-popover.tsx:108`, `:112` | Step 40 |
+| The `SamSammanne` Cursor integration needs porting | **Already adopted**, `src/main/lib/trpc/routers/cursor.ts` with 11 procedures, `src/shared/cursor-model-id.ts`, `src/main/lib/cursor-agent-binary.ts`, recorded in `.dump/app/decisions/phase6-cursor-provider-adoption.md`. Its `src/web-server` parity half is absent | Step 42 records the parity decision rather than re-harvesting |
+| Skills install exists because `skills.ts` exists | Half true. `src/main/lib/trpc/routers/skills.ts` has `list`, `listEnabled`, `create`, `update` and `delete`, and there is no install path, `grep -rn "installSkill" src` is empty | Step 38 |
+| A bilingual surface is "orthogonal low-risk" | There is no i18n or locale infrastructure at all, verified by a `git ls-files` scan returning zero files | Step 41 does measured groundwork and refuses a half-translated UI |
 
 ## 6. Non-goals of this roadmap
 
-A CLI product, rejected in triage rows 19 and 20. Kanban and the mind-map build surface, excluded from the fork harvest. Metered plans, concurrency limits and account tiers, row 18. Render-deployment webhooks, row 12. Slack, Linear and Jira, row 17. Four-host pull request providers. A public `JCode` name in any user-facing surface, per D2. Anything that widens approvals, sandbox or egress outside the capability manifest.
+A CLI product, rejected in triage rows 19 and 20. Kanban and the mind-map build surface, excluded from the fork harvest. Locus's runtime-boundary model as a transplant, refused in favour of our own permission floor, step 10, recorded in triage row 5. Any web or second-client parity build, parked by step 42 with a trigger. A hosted translation service or a half-translated UI. Metered plans, concurrency limits and account tiers, row 18. Render-deployment webhooks, row 12. Slack, Linear and Jira, row 17. Four-host pull request providers. A public `JCode` name in any user-facing surface, per D2. Anything that widens approvals, sandbox or egress outside the capability manifest.
 
 ## 7. Issue index
 
 Bodies live in `.dump/app/roadmap/NN-<slug>.md` with `{{SNN}}` where a step number is referenced. The GitHub issue carries the same body with those tokens replaced by real issue numbers.
+
+Each GitHub body is the step file with `AGENTS.md` prepended verbatim under a `## Starter: repository ground rules` heading, and with `{{SNN}}` replaced by the real issue number. To reproduce a body from the repository:
+
+```sh
+{ printf '## Starter: repository ground rules\n\n'; cat AGENTS.md;
+  printf '\n---\n\n'; cat .dump/app/roadmap/NN-<slug>.md; } > /tmp/body.md
+```
 
 | Step | File | Issue |
 | --- | --- | --- |

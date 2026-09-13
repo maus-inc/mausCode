@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 11 of 35, wave W2 second track |
+| Step | 11 of 42, wave W2 second track |
 | Area | main, db |
 | Risk | critical |
 | Depends on | {{S01}} |

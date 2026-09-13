@@ -47,9 +47,42 @@ Prevention beats review. These are the failure classes recorded in `FULL-REVIEW.
 - Delete the dead state, the unused export and the lying comment in the same change that found them.
 - Report the evidence level of every claim. An E1 read is not an E4 run, and a gate you did not run is reported as not run.
 
+## How to work a roadmap step
+
+Every step is a GitHub issue labelled `roadmap`, generated from `.dump/app/roadmap/NN-<slug>.md`. The issue body opens with this file verbatim, so the rules travel with the work. Decompose before you build, and write the answer in the issue's sections rather than in your head.
+
+1. Run `find-skills` first, always. Fan the task out over the skills you have before you write anything, and load the ones that match. If the skill is unavailable in your environment, say so in the report and use the closest project skill in `.agents/skills/`. Do not invent a skill name.
+2. Read the step, then restate it in one line: outcome, owner, demo. If the restatement is vague, the step is not ready and you ask before coding.
+3. Interrogate it in plain language. List every ambiguity, sort by blast radius, and ask one question per turn with your recommendation and the evidence attached, per `Querying the human`. Never ask in jargon, and define a term the first time you use it.
+4. Research before you design, and cite what you read. For a UI or UX decision that means deep online research into how the best tools in the category solve it, plus an HTML prototype of the screen or interaction committed under `.dump/<domain>/research/` so the human can open it. Prototype first for anything with layout, motion or copy; the prototype is throwaway, the decisions are not, so write them into the step.
+5. Take the human's preference seriously on user-facing design. Layout, information hierarchy, density, copy and motion are their calls, not defaults you pick because a component library suggested one. Offer two to four concrete options, show the prototype or a screenshot per option, name the trade-off, recommend one, and wait. Do not ship a design you were told to ask about.
+6. Hide unfinished work. This app has no server-side flag service, so the equivalent is a settings key plus a capability field: read from the store in `src/main`, expose through the provider capability profile, default off, and name the setting in the PR so the reviewer can toggle it. A shipped feature you cannot turn off is a bug you can only fix with a release. Delete the setting, the capability branch and the dead code once the path is settled, in a follow-up step, not never.
+7. Branch discipline. Base your branch on the branch the roadmap step names, one step per branch, keep it short-lived, and rebase the moment the base moves. `main` stays releasable, so never merge an untested step. Commit messages say what and why in plain language, and one commit per contract, not one per file.
+8. Structure. One responsibility per module, dependencies injected so a test can pass a fake, and UI, logic and data access in the layers this repo already has: `src/renderer` renders, `src/main/lib` owns behaviour, `src/shared` holds what two processes must agree on. Follow the conventions that exist; if a rule is missing, add it to the relevant document in the same PR. When a function passes roughly 200 lines or you copy a block twice, stop and extract before adding more on top.
+9. Test to the risk, in the layers this repo runs. Unit for pure logic and boundary cases, under a second each, colocated next to the file and against mocks. Integration for a tRPC procedure, a migration or a spawn, against the mock harness or a temp home directory, under 30 seconds per suite. There is no automated end-to-end harness here, so a step that changes a user flow carries a manual verification checklist with the commands and what you saw. Aim for full coverage of what you added rather than a global percentage, and let a failing test block the PR rather than a warning.
+10. CI is the pipeline. `quality` runs lint and typecheck, `test` runs both test suites, `build` compiles three targets, `package` builds the app without publishing. There is no staging deploy for a desktop app, so progressive delivery means what step 32 ships: an unsigned draft release with checksums that a human promotes. No deployment automation exists, so do not invent a canary, a rollback hook or a dashboard for a slice of users, and never claim one ran.
+11. Security is designed in, not gated at the end. Validate and bound input at every boundary that is not your own process, provider stdout, a repository string, a downloaded file, a foreign config. Dependency risk is `bun audit --json` filtered to critical, ratcheted, and a fix beats a new baseline row. During design, name what data flows through the feature and what the blast radius is if it is abused, then check the obvious classes: path traversal, command injection, secret leakage, and an agent that can widen its own authority.
+12. Make it observable inside the app. The durable record is what matters when a user reports a bug with a log folder: emit a structured line at each state change with the run or session id, never a token, never file contents. Anything long-running gets progress, a phase, a byte or record count and a failure cause. Metrics and alerting are out of scope for a local-first app, so the benchmark record in `.dump` is the before and after, and a step without one has not proven it is safe for the performance promise.
+13. Document in the same change. Correct the doc that described the old behaviour, write the decision or research record into `.dump`, and put in the PR what a reviewer needs to check. A new pattern gets a rule line where the rules live, or the next agent reverse-engineers it.
+
+Per step, in order: outcome restated, questions asked and answered, research and prototype done, flag or setting named, code, tests, gates run, `.dump` record written, PR opened, follow-up for flag cleanup filed.
+
+## Effort and honesty floor
+
+- Never offer a smaller or lower-quality version of the work because it is complex. Complexity is the reason the step exists. State the cost, then do it, or escalate to the human with the trade-off named. "Given the complexity I suggest skipping" is not an outcome this repository accepts.
+- Never ship a contextually incomplete implementation and call it done. Every consumer, every provider that claims the capability, every migration and export path, and every dead branch the change creates is part of the change.
+- Never stub your way past a hard case. A placeholder that returns `{}` or `true` to satisfy a type is a defect with extra steps, and if it is genuinely out of scope, the step says so in writing and names who owns the rest.
+- Never bloat. No dependency the step does not need, no abstraction with one caller, no second store mirroring the first, no comment paraphrasing the line above it. If a fix grows past the step's boundary, the boundary was wrong, so say so instead of quietly widening it.
+- Never leave work half-named. Anything you noticed but did not do goes in the report, or it becomes a comment on the roadmap issue, or it becomes a new issue. An agent who silently drops a finding has created a future bug report.
+- Never let a green gate substitute for the feature working. Run it, look at it, and report what you saw.
+
+
+
 ## Querying the human
 
 Align with the user before you build. Ask one question at a time when the answer changes the design, offer two or three concrete options with your recommendation, and allow a custom answer. Sort your questions by blast radius. Carry the evidence in the question, so the user can answer without reopening the code. Ask everything you still need in one batch when a batch is honest, rather than dribbling questions across turns.
+
+Questions about user-facing design are the priority, not the leftovers: content, layout, hierarchy, density, motion and copy go to the human with a prototype or a screenshot per option, because they own the taste and the roadmap says so. Ask in plain words, with no jargon, and never soften a question into a suggestion they have to decode.
 
 ## Writing style, repo-wide
 

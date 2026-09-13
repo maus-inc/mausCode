@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 02 of 35, parity P0-3 |
+| Step | 02 of 42, parity P0-3 |
 | Area | ci, docs |
 | Risk | medium |
 | Depends on | {{S01}} |

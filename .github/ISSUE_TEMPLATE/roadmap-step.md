@@ -22,6 +22,20 @@ Two rules decide whether this issue is worth filing at all.
 2. Section 5 exists because most of this repo's near-misses were features that already
    exist under another name. If you skip it, the issue gets re-litigated in review.
 
+Three more are mandatory, and they are the ones `AGENTS.md` calls the effort floor.
+
+3. Run `find-skills` before anything else, and name in section 4 which skills you loaded
+   and which you rejected. Then search online for how the best tools in this category solve
+   the problem and cite the sources in section 5. A step that starts by writing code has
+   already skipped its cheapest research.
+4. Anything with layout, motion, copy or information hierarchy ships an HTML prototype under
+   `.dump/<domain>/research/`, plus two to four concrete options put to the human with the
+   trade-off named and a recommendation. The human owns design taste. Do not implement a
+   design you were told to ask about, and do not settle for a weaker version of the interface
+   because the good one looks expensive. Say the cost, then pay it or escalate it.
+5. No stubs, no silent deferral, no "works correctly". If part of the step cannot be done
+   here, section 14 names the step that owns the rest, and the PR says so in plain words.
+
 Levels used throughout: E0 intent only, E1 static read of the code, E2 consumer or test
 trace, E3 a command run against this tree, E4 the app run locally, E5 reproduced on the
 target platform with real user state.
@@ -63,12 +77,18 @@ Measured anchors, each with a level. A row with no path is a guess, so mark it a
 Ordered list of documents to open before any edit, with the one line each is for. Always
 include `AGENTS.md`. Then the relevant parts of `FULL-REVIEW.md`,
 `docs/backend-porting-recipe.md` for provider work, `docs/design-system-baseline.md` for
-interface work, and the `.dump` research or decision file that produced this step.
+interface work, and the `.dump` research or decision file that produced this step. Start the
+section with what `find-skills` returned for this task: the skills you loaded, what each one
+changed about your approach, and what you checked and rejected.
 
 ## 5. What already exists
 
 Prior art inside this repo and upstream, and why it is not already the answer. Include the
 nearest dead or unused code, because adopting it is usually cheaper than writing new code.
+Then external prior art, from real research rather than memory: the products and write-ups
+you read, what each one does, and which of their decisions you are copying or refusing. If the
+step has a UI, link the prototype file under `.dump/<domain>/research/` here, or say the step
+needs none and why.
 
 ## 6. Implementation plan
 

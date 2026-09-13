@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 13 of 35, parity P6 first half, wave W6 prerequisite |
+| Step | 13 of 42, parity P6 first half, wave W6 prerequisite |
 | Area | db, main, shared |
 | Risk | high |
 | Depends on | {{S03}}, {{S12}} |

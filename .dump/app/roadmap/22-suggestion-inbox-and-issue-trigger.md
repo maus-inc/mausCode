@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 22 of 35, wave W7 |
+| Step | 22 of 42, wave W7 |
 | Area | main, renderer, db |
 | Risk | high, because one entry point is a remote trigger |
 | Depends on | {{S10}}, {{S14}}, {{S16}}, {{S21}} |

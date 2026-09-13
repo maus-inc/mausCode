@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 35 of 35, the follow-up the phase 5 spike recommended |
+| Step | 35 of 42, the follow-up the phase 5 spike recommended |
 | Area | main, deps |
 | Risk | high |
 | Depends on | {{S12}} |

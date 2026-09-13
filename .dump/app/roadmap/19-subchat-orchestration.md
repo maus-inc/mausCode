@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 19 of 35, wave W3, the escalation of triage row 23 |
+| Step | 19 of 42, wave W3, the escalation of triage row 23 |
 | Area | main, renderer |
 | Risk | high |
 | Depends on | {{S07}}, {{S08}}, {{S10}}, {{S17}}, {{S18}} |

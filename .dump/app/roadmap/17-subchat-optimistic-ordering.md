@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 17 of 35, parity P3 and P4 ordering |
+| Step | 17 of 42, parity P3 and P4 ordering |
 | Area | renderer, main |
 | Risk | medium |
 | Depends on | {{S04}} decision 2, {{S07}}, {{S08}} |
