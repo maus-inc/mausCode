@@ -38,6 +38,10 @@ Every file here must satisfy all of these, or it does not belong:
   pull-request state, and which 55 lines are worth vendoring verbatim.
 - `research/2026-09-13-hermes-memory-spike.md` — hermes-agent's memory lifecycle (provider hooks, budgets,
   unattended write gate) mapped onto mausCode's waves, including the store-ownership decision.
+- `plans/2026-09-13-mauscode-roadmap.md` — the ordered 35-step program with the dependency
+  graph, milestones, standing constraints, and the corpus claims corrected by re-measurement.
+- `roadmap/` — the 35 step bodies as filed on GitHub, one file per issue. The issue is the
+  working copy; these are the durable originals, so a closed issue can be re-derived.
 - `decisions/` — dated decision records and provisional assumptions.
 - `benchmarks/` — benchmark methods and results (CI-owned numbers).
 - `audits/` — security and architecture audit findings.

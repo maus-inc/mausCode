@@ -1,8 +1,26 @@
 # Contributing to mausCode
 
 mausCode is a local-first agent workspace by maus-inc. It inherits its product/UI foundation
-from the archived [1Code](https://github.com/21st-dev/1code) project (Apache-2.0) — see
+from the archived [1Code](https://github.com/21st-dev/1code) project, Apache-2.0. See
 `UPSTREAM.md` and `NOTICE` for the provenance record.
+
+## Documents that bind your change
+
+`AGENTS.md` is the entry point and is binding. It carries the rules, the facts you would
+otherwise relearn, the verification gate list, and the parallel-agent ownership rules.
+`FULL-REVIEW.md` is the review protocol, and `REVIEW.md` points to it. Provider work follows
+`docs/backend-porting-recipe.md`. Interface work follows `docs/design-system-baseline.md`.
+
+`.dump` is the durable engineering memory of this project. It is not a trash folder, not a
+transcript folder and not a scratchpad. Decisions, research, audits, rejected approaches and
+baselines live there, written for the reader who never saw the session that produced them.
+Read `.dump/<domain>/second-brain.md` before working in that area, and write the record back
+in the same change. A claim with a path and a measurement is welcome here; a claim without one
+gets checked and then removed.
+
+Issues that propose work follow `.github/ISSUE_TEMPLATE/roadmap-step.md`, which requires
+evidence with a measured level, an implementation plan in commit order, boundaries in three
+tiers, verifiable acceptance criteria, the exact commands, and what stays out of scope.
 
 ## Building from Source
 
@@ -35,9 +53,9 @@ behavior without a benchmark and a justification recorded in `.dump/<domain>/`.
 ## Local-only mode
 
 The app runs without any hosted service. When `MAIN_VITE_API_URL` is unset, sign-in, hosted
-changelog, and auto-updates are simply unavailable — all local features work. Do not
-reintroduce hardcoded third-party service endpoints; control-plane and update-feed URLs are
-build-time configuration (see `.env.example`).
+changelog and auto-updates are unavailable, and every local feature still works. Do not
+reintroduce hardcoded third-party service endpoints. Control-plane and update-feed URLs are
+build-time configuration, recorded in `.env.example`.
 
 ## Analytics & Telemetry
 
@@ -51,16 +69,25 @@ When touching inherited code:
 
 - Preserve upstream attribution in `UPSTREAM.md` / `NOTICE` and this file
 - Do not claim upstream authorship as mausCode's
-- Legacy 1Code data locations (`~/.21st/worktrees`, `.1code/worktree.json`) are
-  **detected read-only** — keep them resolving, never write to them
+- Legacy 1Code data locations, `~/.21st/worktrees` and `.1code/worktree.json`, are
+  **detected read-only**. Keep them resolving and never write to them
 - New mausCode terminology follows `.dump/global/naming.md`
 
 ## Contributing
 
-1. Fork the repo
-2. Create a feature branch
-3. Make your changes (keep commits reviewable)
-4. Submit a PR
+1. Read `AGENTS.md`, then `REVIEW.md`. Both are binding, not advisory.
+2. Find your step in `.dump/app/plans/2026-09-13-mauscode-roadmap.md`. If the work is not
+   there, open an issue with the roadmap template before you write code.
+3. Create a branch off the current default branch, one step per branch. Touch only the files
+   your step owns.
+4. Install with `bun install`, the same command CI runs, and keep `bun.lock` in step with
+   `package.json`. Do not commit an `npm` lockfile.
+5. Run the gates in the `AGENTS.md` verification section and report each as passed, failed or
+   not run. Never describe a gate you did not run as green.
+6. Record the outcome in `.dump/<domain>/`: the decision, the measurement, and what was
+   rejected with the reason.
+7. Open a PR using `PULL_REQUEST_TEMPLATE.md`. Keep the summary short and put the detail in
+   collapsible blocks.
 
 ## License
 

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ground rules before you file
+    url: https://github.com/maus-inc/mausCode/blob/main/AGENTS.md
+    about: The rules every change follows, including the gates an issue must name.
+  - name: How to contribute
+    url: https://github.com/maus-inc/mausCode/blob/main/CONTRIBUTING.md
+    about: Setup, verification gates, and the benchmark rule for performance claims.
+  - name: Review protocol
+    url: https://github.com/maus-inc/mausCode/blob/main/FULL-REVIEW.md
+    about: The evidence levels and severity scale that the roadmap template uses.

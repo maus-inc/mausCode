@@ -161,11 +161,29 @@ Detail lives in `research/` and `plans/`; this file states what is true.
 
 ## Unresolved user-facing decisions
 
-- Wordmark selection (5 PNGs in `new mauscode branding/`); CLI/app-id naming
-  (provisional: `mauscode`, `dev.maus-inc.mauscode`); JCode vendor form + attribution
-  placement (provisional: copied tree under `runtime/jcode` + UPSTREAM.md + MIT notice);
-  telemetry policy contents; release channel/CDN owner. See `decisions/`.
+- Wordmark selection (5 PNGs in `new mauscode branding/`); app id is settled in the tree at
+  `dev.mausinc.mauscode` (`package.json` `build.appId`, `rebrand/decisions/naming-system.md`),
+  while `decisions/provisional-assumptions.md` PA-1 still writes `com.maus-inc.mauscode` and needs
+  marking spent; release channel, product domain and CDN owner remain the human's, as does the
+  `package.json` `name` and `version` drift described in
+  `plans/2026-09-13-mauscode-roadmap.md` step 31. JCode vendor form is ratified: copied tree under
+  `runtime/jcode` with `UPSTREAM.md` and the MIT notice. See `decisions/` and
+  `.dump/global/questions.md`.
 - P1 user-facing provisionals needing confirmation: engine toggle labels
   ("Legacy"/"Native"); refusal copy for plan mode / offline / custom endpoints
   on native; whether native stays opt-in per-chat pending the benchmark gate.
   See `decisions/provisional-assumptions.md` (PA-7+).
+
+## Roadmap and issues (2026-09-13)
+
+`plans/2026-09-13-mauscode-roadmap.md` is the single ordered sequence, 35 steps, issued to
+GitHub with the `roadmap` label and generated from `.dump/app/roadmap/NN-<slug>.md`. Issue bodies
+follow `.github/ISSUE_TEMPLATE/roadmap-step.md`, which requires measured evidence with an
+evidence level, a plan in commit order, Always and Ask-first and Never boundaries, verifiable
+acceptance criteria, the exact gate commands, and stated out-of-scope. The issue bodies carry
+step numbers, not prose references, so the order survives a resequence.
+
+Read before implementing anything in the sequence: §5 of the roadmap lists nine corpus claims
+that did not survive re-measurement at `d5bdf69`, including the changelog anchor, which is
+already fixed, and the Codex app-server port, which already shipped. Steps 01 to 04 are the
+prerequisites; steps 10 and 11 are the two critical-risk gates everything unattended depends on.
