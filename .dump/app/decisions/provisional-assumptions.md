@@ -40,18 +40,18 @@ opt-in — overturning any of them is a small, localized change.
   persisted) until the benchmark gate decides the default. Overturn: flip the
   atom default after gate numbers exist.
 
-## PA-20, 2026-09-13, sign-in removal scope
+- PA-20. (2026-09-13, ASSUMED, sign-in removal scope.)
 
-Ratified by the human: remove the built-in app sign-in, the behaviour `ken-jo/1code` had. The three-way
-scope question on roadmap step 45 has not been answered, and the human has twice told the work to proceed,
-so the implementation proceeds on the middle option and this record is where that is written down.
+  Ratified by the human: remove the built-in app sign-in, the behaviour `ken-jo/1code` had. The three-way
+  scope question on roadmap step 45 has not been answered, and the human has twice told the work to proceed,
+  so the implementation proceeds on the middle option and this record is where that is written down.
 
-Assumed unless the human overrides: option A, the app-level gate and `claude-login-modal.tsx` go away;
-option B's keep-list survives, provider OAuth, `auth-store.ts`, `auth-manager.ts`, and the `anthropicAccounts`
-router renamed to credential management for users who hold more than one provider token; option C is refused,
-because removing Anthropic OAuth strands every Pro and Max user who has no API key to paste. The loopback
-callback server at `src/main/index.ts:285` stays, MCP OAuth depends on it, verified by reading its importers.
+  Assumed unless the human overrides: option A, the app-level gate and `claude-login-modal.tsx` go away;
+  option B's keep-list survives, provider OAuth, `auth-store.ts`, `auth-manager.ts`, and the `anthropicAccounts`
+  router renamed to credential management for users who hold more than one provider token; option C is refused,
+  because removing Anthropic OAuth strands every Pro and Max user who has no API key to paste. The loopback
+  callback server at `src/main/index.ts:285` stays, MCP OAuth depends on it, verified by reading its importers.
 
-Consequence if the human chooses C later: a second change that deletes the OAuth path and leaves API keys, and
-it must carry a migration note for users whose only credential is an OAuth token. Nothing in this assumption
-makes that irreversible, which is why the assumption is allowed at all.
+  Consequence if the human chooses C later: a second change that deletes the OAuth path and leaves API keys, and
+  it must carry a migration note for users whose only credential is an OAuth token. Nothing in this assumption
+  makes that irreversible, which is why the assumption is allowed at all.

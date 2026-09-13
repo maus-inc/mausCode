@@ -59,6 +59,11 @@ move to `decisions.md` with the date.
     hatch for lockfile regeneration.
 15. **1Code data auto-migration.** Read-only detection is ratified. If a migration prompt is ever
     wanted, it needs its own design and tests, per the rejected list in `decisions.md`.
+16. **`.dump/ci/research/HANDOFF-fork-harvest-context.md` instruction hygiene.** That handoff
+    tells an agent to push with a token embedded in the remote URL and to co-author with a bot
+    identity. Both are wrong here. `AGENTS.md` now forbids them; confirm the handoff file should
+    be marked superseded rather than edited, since it is a dated record.
+
 17. **Does mausCode model its user?** hermes-agent integrates Honcho for a dialectic user model,
     an evolving picture of preferences and working style. Porting that means holding a persistent
     profile of the human on disk. Options: no user model, local-only profile fields the user can
@@ -71,8 +76,6 @@ move to `decisions.md` with the date.
     recommendation, because a Pro or Max user has no API key to paste. C, remove all Anthropic
     OAuth and keep API keys only, which strands those users. Step 45 asks this before deleting,
     and the answer changes whether `src/main/lib/oauth.ts` and `AUTH_SERVER_PORT` keep a second
-    job or only the MCP one.
-16. **`.dump/ci/research/HANDOFF-fork-harvest-context.md` instruction hygiene.** That handoff
-    tells an agent to push with a token embedded in the remote URL and to co-author with a bot
-    identity. Both are wrong here. `AGENTS.md` now forbids them; confirm the handoff file should
-    be marked superseded rather than edited, since it is a dated record.
+    job or only the MCP one. Not blocking: the work proceeds on the assumption recorded in
+    `app/decisions/provisional-assumptions.md` PA-20, option A plus B's keep-list with C refused, so an
+    override to a harsher scope is a follow-up change with a migration note rather than a stall.
