@@ -153,9 +153,9 @@ The truth is `.dump/app/roadmap/03-build-gate.md` on `arena/01a097c4-mauscode`. 
 - Handoff notes grew a rule. If this step adopts any type under `src/shared/contracts/`, its row in
   `.dump/app/plans/contracts-adoption.md` is updated in the same commit. The measured baseline for that tree,
   re-taken at `f5506b9` on 2026-09-14, is 44 source files at 19,395 lines plus 23 ported test files at 5,465
-  lines, 24,860 total, with zero external importers; the 23 test files do run under `npm run test`. The
-  19,439 and 5,488 rows that ledger §1 currently carries are each one line per counted file too high, and
-  `wc -l src/shared/contracts/*.ts | tail -1` reproduces the corrected total.
+  lines, 24,860 total, with zero external importers; the 23 test files do run under `npm run test`. The ledger
+  carries these rows and a note recording that its first pass read 19,439, 5,488 and 24,927, each one line per
+  counted file too high. `wc -l src/shared/contracts/*.ts | tail -1` reproduces the total.
 
 Where this body and the file disagree, the file wins. A `step {{SNN}}` reference in this body is issue `#NN+2`.
 ```

@@ -35,11 +35,11 @@ The measurements that bear on each answer, all already on the record:
 | Codex default | two constants disagree, re-verified 2026-09-14: `gpt-5.5` against `gpt-5.5/high` | `src/main/lib/trpc/routers/codex.ts:146`, `src/renderer/features/agents/lib/acp-chat-transport.ts:41` |
 | Memory owner | the vendored engine ships its own memory graph, and `src/shared/contracts` holds 24,860 lines with zero importers outside itself, re-verified 2026-09-14 two ways | `.dump/app/research/2026-09-13-hermes-memory-spike.md` §7, `.dump/app/plans/2026-09-12-jules-port-plan.md` F1 |
 
-Verification detail for the last row, because two `.dump` files disagreed on it. At `f5506b9` on 2026-09-14, `wc -l src/shared/contracts/*.ts | tail -1` and a per-file sum of `grep -c ''` both give 24,860, split as 44 source files at 19,395 lines plus 23 test files at 5,465 lines, with no file missing a trailing newline. The 24,860 this step's evidence carried is therefore correct, and the 24,927 that `.dump/app/plans/contracts-adoption.md` §1 records is one line per counted file too high. `.dump/global/decisions.md` carries the correction.
+Verification detail for the last row, because two `.dump` files disagreed on it and the disagreement is now closed. At `f5506b9` on 2026-09-14, `wc -l src/shared/contracts/*.ts | tail -1` and a per-file sum of `grep -c ''` both give 24,860, split as 44 source files at 19,395 lines plus 23 test files at 5,465 lines, with no file missing a trailing newline. The 24,860 this step's evidence carried is therefore correct. The 24,927 that `.dump/app/plans/contracts-adoption.md` §1 recorded was one line per counted file too high, and that file now carries the corrected rows plus a note explaining the error. `.dump/app/second-brain.md` and `.dump/global/decisions.md` carry the same corrected figures.
 
 ## 4. Read first, and what already exists
 
-The recommendation for all four is already argued in §5 of the parity plan, and the memory mapping is in §7 of the hermes spike. `AGENTS.md` says to ask one question at a time, sorted by blast radius, with two or three options and a recommendation. That is what this step is.
+§5 of the parity plan argues the first three and §7 of the hermes spike carries the memory mapping. Both now record which half of each recommendation the human took and which half was refused, because the drag and drop answer went against the plan's own advice. `AGENTS.md` says to ask one question at a time, sorted by blast radius, with two or three options and a recommendation. That is what this step did, batched, before the answers existed.
 
 ## 6. Implementation plan
 
@@ -80,12 +80,12 @@ Run on 2026-09-14, with the observed result rather than the expected one.
 | `grep -c "dnd-kit" package.json bun.lock` | 0 in both files |
 | `grep -n "DEFAULT_CODEX_MODEL" src/main/lib/trpc/routers/codex.ts src/renderer/features/agents/lib/acp-chat-transport.ts` | `gpt-5.5` at `codex.ts:146` and `gpt-5.5/high` at `acp-chat-transport.ts:41` |
 
-Gate report for this change, six Markdown files under `.dump/` and nothing else. Every row is what ran here, not what CI will run.
+Gate report for this change, eight Markdown files under `.dump/` and nothing else. Every row is what ran here, not what CI will run.
 
 | Gate | Result |
 | --- | --- |
 | `npx --yes @biomejs/biome@2.5.13 check .` | Passed. 861 files checked, exit 0, 0 findings, the same count the step 03 record holds. Biome ignores `.md`, so this proves the tree is unchanged rather than that the new prose is formatted |
-| `LINT_BASE=f5506b9ba1d4e2072c2b51eef7fa6b45ae0cf3e0 node scripts/ci/lint-changed.mjs` | Passed, exit 0, `no lintable files changed; skipping`. This is what the PR's `quality` job will do, because the changed set is six `.md` paths and the wrapper's pattern excludes them |
+| `LINT_BASE=f5506b9ba1d4e2072c2b51eef7fa6b45ae0cf3e0 node scripts/ci/lint-changed.mjs` | Passed, exit 0, `no lintable files changed; skipping`. This is what the PR's `quality` job will do, because the changed set is eight `.md` paths and the wrapper's pattern excludes them |
 | `node scripts/ci/typecheck-ratchet.mjs` | **Not run, reported as not run.** The first attempt printed a pass and the pass is false. Without `node_modules`, `npx tsc` fetches the deprecated `tsc` stub, which exits 1 with a banner; `runTsc` accepts any exit-1 output as diagnostics, matches nothing against its error pattern, and reports `0 errors <= 0 baseline` without compiling. Repro is `rm -rf node_modules && node scripts/ci/typecheck-ratchet.mjs`. Step 02 owns that gate and this is a finding for it, not a fix in this step |
 | `npm run typecheck`, `npm run test`, `npm run test:node`, `npm run test:contracts` | Not run. They need `node_modules`, this sandbox has none, and `AGENTS.md` forbids an install in a step that is not the dependency step. The PR's `quality` job is the reference run for all four |
 | `bun run build`, `bun run package:mac` | Not run, same reason, plus the sandbox limits the step 03 record measured: no display, and the release-asset, electronjs.org and nodejs.org hosts are blocked |

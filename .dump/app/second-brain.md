@@ -238,8 +238,9 @@ deleted. Twelve issue bodies are behind their files and the human accepted that 
 so `.dump/app/roadmap/NN-<slug>.md` is the source of truth and `{{SNN}}` resolves to `#NN+2`; see plan
 §4b. Plan §4c records that this session ends at planning, with no step executed and nothing further
 landing on `arena/01a097c4-mauscode`. The vendored contracts tree has an adoption ledger at
-`plans/contracts-adoption.md`, measured at 44 source files and 19,439 lines plus 23 ported test files
-and 5,488 lines, 24,927 total, correcting the 24,860 figure the corpus had carried.
+`plans/contracts-adoption.md`, measured at 44 source files and 19,395 lines plus 23 ported test files
+and 5,465 lines, 24,860 total, which confirms the figure the corpus already carried; the ledger's first
+pass was 67 lines high and its own correction note records that.
 
 ## Instruction truth (2026-09-14)
 
