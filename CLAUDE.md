@@ -59,14 +59,14 @@ The five agent mode names are written out in 38 places beside the declaration. T
 # Development
 bun run dev              # Electron with hot reload
 
-# Gates, the same commands CI runs
-npm run typecheck        # tsc --noEmit
-npm run lint             # node scripts/ci/lint-changed.mjs
-npm run test             # vitest
-npm run test:node        # node:test suites under src/main/lib/runtime
-npm run test:contracts   # vitest over src/shared/contracts
-npm run ratchet:typecheck  # the typecheck gate CI runs, against the baseline
-npm run ratchet:audit      # no new critical advisories
+# Gates. These are the local forms, and two of them are not what CI runs.
+npm run typecheck        # tsc --noEmit, the plain run, not the CI job
+npm run lint             # node scripts/ci/lint-changed.mjs, the CI form
+npm run test             # vitest, the CI form
+npm run test:node        # node:test suites under src/main/lib/runtime, the CI form
+npm run test:contracts   # vitest over src/shared/contracts, the CI form
+npm run ratchet:typecheck  # the typecheck job, against the baseline
+npm run ratchet:audit      # the audit job, no new critical advisories
 
 # Build and package
 bun run build            # electron-vite build, three targets

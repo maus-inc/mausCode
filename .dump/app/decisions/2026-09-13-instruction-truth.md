@@ -166,6 +166,53 @@ exits 1 and prints nothing at all beyond its file count, so a reader cannot tell
 failure from a missing tool. The equivalent `npx @biomejs/biome@2.5.13 ci .` passed
 here, which is how this step knows the lint gate is genuinely clean.
 
+## The Security gate has never passed, and the vendor tree explains why
+
+CI runs four jobs. On this branch the `quality`, `build` and `package` jobs pass. The
+`security` job fails, and it fails identically on the base branch. It has failed on
+every CI run in the visible history, including the eleven runs on
+`arena/01a097c4-mauscode` between 07:15 and 09:19 on 2026-09-14, so this is inherited
+and not caused by the docs change.
+
+The job's steps isolate the cause. Install dependencies passes, and
+`bun run ratchet:audit` passes. The failing step is
+`Secrets scan (gitleaks, pinned + checksum-verified)`, which scans the working tree
+with `gitleaks dir --verbose .`. Correlation is not explanation, so here is the
+measured candidate set, and it is E2 rather than E4 because the gitleaks binary could
+not be downloaded in this sandbox to run the scan directly.
+
+`gitleaks dir` scans every tracked file, and `runtime/jcode` is tracked. The pinned
+JCode tree carries deliberate test fixtures that exist to exercise its own redaction
+logic, and several of them match standard gitleaks rules. The exact locations:
+
+| File | Line | Content |
+| --- | --- | --- |
+| `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 324 | `aws=AKIAABCDEFGHIJKLMNOP` |
+| `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 326 | A `BEGIN PRIVATE KEY` and `END PRIVATE KEY` pair around `secret-material` |
+| `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 264 | `sk-ant-oat01-...` and `sk-or-v1-...` fixtures |
+| `runtime/jcode/crates/jcode-app-core/src/tool/discover.rs` | 2468 | A `BEGIN PRIVATE KEY` prefix fixture |
+| `runtime/jcode/crates/jcode-app-core/src/tool/discover.rs` | 2372, 2471 | `https://user:password@example.com/setup` and `https://private-user:private-password@example.com/config` |
+| `runtime/jcode/src/cli/account.rs` | 132 | `https://user:pass@jcode.sh/account` |
+| `AGENTS.md` | 134 | `https://user:token@github.com/...` inside the rule that forbids exactly that pattern |
+
+The `AKIAABCDEFGHIJKLMNOP` value is `AKIA` plus exactly 16 uppercase characters, which
+is the shape of the AWS access key rule. The two PEM pairs are well-formed start and end
+markers. Both are the kind of thing gitleaks reports by default. The AGENTS.md line is
+the sharpest irony in the file set: the rule that says never to write a credential into
+a URL is itself a credential in a URL.
+
+None of these is a real secret. All of them are fixtures or documentation. So the
+probable fix is a `.gitleaks.toml` that allowlists `runtime/jcode` and that one
+AGENTS.md line, with the reasoning written down, rather than rotating a credential or
+disabling the gate. Nobody owns that today: `grep -rln gitleaks .dump/app/roadmap`
+returns nothing, so the security scan is unowned across all 45 steps. Step 39 is the
+security test suite and does not mention it either.
+
+This is not fixed here. Changing a security gate is a gate policy decision and this is
+a docs step. It is recorded so the next session does not spend an hour proving the same
+thing. Whoever fixes it should run `gitleaks dir --verbose .` locally first and confirm
+the rule names, because this record stops at the evidence.
+
 ## One observation about the binding document
 
 `AGENTS.md` states "No `any`, no `as any`, no `biome-ignore`, and no rule downgrade."

@@ -54,7 +54,7 @@ Tests are colocated with the code they cover and the runners are split by what t
 |-------|---------|----------------|-------|
 | Vitest | `npm run test` | Main-process logic, pure modules, the vendored contracts | 54 under `src/` |
 | `node --test` | `npm run test:node` | `src/main/lib/runtime/*.test.ts`, run with `--experimental-strip-types` | 5 |
-| `node --test` | `npm --prefix packages/runtime-client run test` | The runtime client package, which builds before it tests | 6 |
+| `node --test` | `npm --prefix packages/runtime-client run test` | The runtime client package. Its `test` script is `npm run build && node --test --experimental-strip-types test/*.test.ts`, so it builds `dist` first | 6 |
 | Vitest, scoped | `npm run test:contracts` | Re-runs the `src/shared/contracts` subset alone | part of the 54 |
 
 `vitest.config.ts` sets `environment: "node"`, includes `src/**/*.test.ts`, and excludes `src/main/lib/runtime/*.test.ts` because those run under `node --test` instead. The node environment is deliberate, since the tests cover main-process logic rather than the renderer.
