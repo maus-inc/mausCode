@@ -14,7 +14,7 @@ Date: 2026-09-14, 12:01 to 12:10 UTC. Branch: `arena/01a09fc7-mauscode` at
    with the exact evidence, because the machine has 3.8 GB of RAM and the
    proxy blocks the hosts that serve the electron dist, the native headers
    and the agent binaries. The CI jobs on the step 03 PR are the reference
-   run for those parts, and they are cited there once green.
+   run for those parts, recorded in the CI reference run section below.
 2. The renderer build needs more RAM than this machine has, with or without
    the CI flag. The default heap aborts V8 at 42 s, and the 4 GB flag
    kernel-OOMs the process at 56 s. The recorded "OOM below about 3 GB heap"
@@ -191,12 +191,46 @@ reported as not run, with this probe as the reason, rather than as green.
 | The app starts with no key and the local-only path is what you saw | Not run, no display stack, probe above |
 | The benchmark file exists and every number in it came from that run | This file; all numbers are from the 2026-09-14 12:01-12:10 UTC run on `bb92033` |
 
+## CI reference run
+
+Run 34845477896 on PR #53, created 2026-09-14 12:48 UTC on the
+`pull_request` event at `3e39245`, read from the `gh` API from this
+sandbox:
+
+| Job | Result | Wall |
+| --- | --- | --- |
+| Quality gates (lint, test, typecheck) | pass | 2m 01s |
+| Build (ubuntu-24.04) | pass | 1m 33s |
+| Build (windows-2022) | pass | 3m 09s |
+| Build (macos-14) | pass | 4m 05s |
+| Package (ubuntu-24.04, unsigned) | pass | 2m 45s |
+| Package (macos-14, unsigned) | pass | 4m 53s |
+| Security gates | fail | 18 s |
+
+This is the reference for the renderer bundle (all three build jobs exit
+0), the unsigned artifact (both package jobs complete the full install,
+both binary downloads and `electron-builder --dir`) and the install with
+scripts on a machine that can reach the blocked hosts. The Security gates
+failure carries one error annotation, on the gitleaks step only. It is the
+failure recorded in
+`.dump/ci/audits/2026-09-14-gitleaks-inherited-findings.md`, which fails
+identically on the base branch (run 34831545902). This diff adds no
+secret-shaped string and touches none of the four recorded finding
+locations. Fixing that gate is a gate-semantics change owned by a later
+step, so this one records it rather than widening it.
+
+The per-target bundle bytes sit in the build jobs' "Report bundle sizes"
+step and the unpacked artifact names in the package jobs' electron-builder
+output. The job log host
+(`results-receiver.actions.githubusercontent.com`) is unreachable from this
+sandbox, a fact recorded 2026-09-11, so those numbers are readable from the
+run by anyone who can open the logs and are not re-typed here.
+
 ## Consequence for later steps
 
 Steps 30 onward measure against this run. The local reference for install,
 both fast bundles and all seven gates exists at the numbers above. The
 reference for the renderer bundle, the unsigned artifact and the launch
-check is the set of CI jobs on the step 03 PR, cited in its description
-once green.
+check is the CI reference run section above.
 A step that claims any of those green without the CI citation has not run
 them.
