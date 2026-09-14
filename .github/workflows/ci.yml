@@ -52,6 +52,11 @@ jobs:
         run: bun run test:contracts
       - name: "Typecheck (ratchet: no new errors vs baseline)"
         run: bun run ratchet:typecheck
+      - name: "Typecheck (tsgo, second gate)"
+        # Ratified in .dump/global/decisions.md (closing questions.md item 11) and
+        # landed by roadmap step 02 after the two tools measured a zero delta; see
+        # .dump/app/benchmarks/2026-09-14-tsc-vs-tsgo-typecheck.md.
+        run: bun run ts:check
 
   build:
     name: Build (${{ matrix.os }})
