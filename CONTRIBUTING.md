@@ -22,6 +22,33 @@ Issues that propose work follow `.github/ISSUE_TEMPLATE/roadmap-step.md`, which 
 evidence with a measured level, an implementation plan in commit order, boundaries in three
 tiers, verifiable acceptance criteria, the exact commands, and what stays out of scope.
 
+## CI gates and baselines
+
+The CI `quality` job runs the typecheck gate as `node scripts/ci/typecheck-ratchet.mjs`,
+not as a bare `tsc` call. The script runs `tsc --noEmit`, reduces each error to a
+`file|TS####` key, and compares the list against the baseline file.
+`.github/ci-baselines/typecheck.txt` is empty today, so zero errors is the gate and any
+new type error fails CI. When the error count drops below the baseline, the script
+asks for the smaller baseline to be committed. `npm run typecheck` runs the same
+`tsc --noEmit` locally. The `quality` job also runs `npm run ts:check`
+(`tsgo --noEmit` from the pinned `@typescript/native-preview` package) as a second
+typecheck gate, and `tsc` owns the baseline record.
+
+The `security` job runs the same shape of gate for dependencies.
+`node scripts/ci/audit-ratchet.mjs` compares critical advisories from `bun audit`
+against `.github/ci-baselines/audit-critical.txt`, where each row exempts one named
+advisory.
+
+A baseline row is an exemption, and it is the cheapest way to make a regression
+invisible. A row may only be added by a PR that links a tracking issue, and the PR
+description must name what the row excuses, the human-readable error text for a
+typecheck row or the advisory and the reason it stays for an audit row. The row itself
+must use the exact format the ratchets read: `relative/path.ts|TS####` in the
+typecheck baseline and `package|advisory URL` in the audit baseline. Never add a row
+for a diagnostic the author did not want to fix, and never add a row in the same PR as
+the regression it excuses. Deleting rows and committing a smaller baseline is always
+welcome.
+
 ## Building from Source
 
 Prerequisites: Bun, Python 3.11 (with setuptools), Xcode Command Line Tools (macOS).

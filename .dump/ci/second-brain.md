@@ -1,6 +1,7 @@
 # Second Brain - CI
 
 Owner: CI agent (branch arena/01a08de3-mauscode). Updated: 2026-09-11, run 34551940631 = ALL GREEN.
+Amended 2026-09-14 by step 02 (branch arena/01a09f6e-mauscode): typecheck baseline facts corrected, tsgo wired as the second typecheck gate.
 
 ## Current state
 
@@ -24,8 +25,10 @@ lint gate hardening + format sweep bec0263/66a090b (me).
 
 - Renderer `vite build` needs ≥4 GB Node heap: OOM at 2 GB default (mermaid+
   monaco+shiki static graph). CI sets `NODE_OPTIONS=--max-old-space-size=4096`.
-- tsc exits status 2 (not 1) on error output in this repo's TS 5.9.3; tsc gate
-  has a 110-error inherited baseline (`.github/ci-baselines/`), tsgo differs (114).
+- tsc exits status 2 (not 1) on error output in this repo's TS 5.9.3; the
+  typecheck baseline `.github/ci-baselines/typecheck.txt` is empty as of the
+  2026-09-14 measurement, so zero errors is the gate, and `tsgo --noEmit`
+  reports zero errors on the same tree as CI's second typecheck gate.
 - `bun audit --json` exits 1 when advisories exist; output still parses.
 - Both `main` and `arena/*`/`init` are independent git roots — any merge-base
   logic needs a fallback.
@@ -54,8 +57,9 @@ lint gate hardening + format sweep bec0263/66a090b (me).
    with SHA256SUMS + electron-updater manifests.
 2. Benchmark infra (phase 2): build-time/RSS harness, renderer bundle-size
    budget, main-process micro benches (db migrate, git status, data-batcher).
-3. Ratchet promotions when domains clean up: typecheck → hard gate;
-   biome warn→error per rule (list in biome.json); audit gate critical→high.
+3. Ratchet promotions when domains clean up: biome warn→error per rule (list in
+   biome.json); audit gate critical→high. Typecheck already runs as a hard
+   zero-error gate; its baseline was empty at the 2026-09-14 measurement.
 4. JCode vendoring when runtime lands: pin + checksum verify per the
    download-script pattern; upstream perf baselines recorded in audit §7.
 

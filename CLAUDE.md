@@ -86,9 +86,9 @@ npm run codex:download   # 0.137.0
 
 Three scripts need a note.
 
-`npm run typecheck` runs `tsc --noEmit`. The job CI runs is `npm run ratchet:typecheck`, which compares the error set against `.github/ci-baselines/typecheck.txt`, and that file holds a single newline, so no error is permitted. Anyone editing the baseline needs a linked issue and an expiry note.
+`npm run typecheck` runs `tsc --noEmit`. The job CI runs is `npm run ratchet:typecheck`, which compares the error set against `.github/ci-baselines/typecheck.txt`, and that file holds a single newline, so no error is permitted. The rules for adding a baseline row live in `CONTRIBUTING.md`.
 
-`npm run ts:check` runs `tsgo --noEmit` through `@typescript/native-preview`. No CI job calls it and `tsc` stays the blocking gate. `.dump/global/questions.md` item 11 ratified it as a second gate, and roadmap step 02 owns the measurement that has to come first. Until step 02 merges, treat `tsgo` output as advisory.
+`npm run ts:check` runs `tsgo --noEmit` through `@typescript/native-preview`. The CI `quality` job runs it as a second typecheck gate, and `tsc` owns the baseline record. The 2026-09-14 measurement found zero disagreement between the two tools, recorded in `.dump/app/benchmarks/2026-09-14-tsc-vs-tsgo-typecheck.md`.
 
 `npm run prebuild` runs `npm run build:runtime-client`, and electron-vite triggers it automatically. `@maus-inc/runtime-client` resolves through the `file:packages/runtime-client` dependency to that package's `dist`, so a stale or missing `dist` breaks typecheck with confusing errors. CI installs with `--ignore-scripts` and then builds that package explicitly for this reason.
 
