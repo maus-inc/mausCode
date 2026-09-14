@@ -33,7 +33,7 @@ A second batch was answered 2026-09-14 and is recorded in the same file, `.dump/
 
 GitHub issue bodies were written from these files, and the integration this session runs under can create issues and repo-level labels but cannot edit an issue, comment on one, or add a label to one; every one of those calls returns 403 `Resource not accessible by integration`. That leaves three kinds of drift the human must clear in about a minute of UI work, and every agent must know about them.
 
-- Steps 03, 04, 05, 12, 17, 24, 27, 31, 32, 43 and 45 have a body behind their file, because the ratifications above landed after the bodies were written. `NN-<slug>.md` is the truth, the issue is a pointer.
+- Steps 02, 03, 04, 05, 12, 17, 24, 27, 31, 32, 43 and 45 have a body behind their file, because the ratifications above landed after the bodies were written. `NN-<slug>.md` is the truth, the issue is a pointer.
 - Six bodies, for steps 04, 05, 12, 17, 24 and 43, resolve cross-references as `step {{SNN}}` tokens instead of issue numbers, because `PATCH` was unavailable when the numbers were back-filled. Read `{{SNN}}` as issue `#NN+2`.
 - No issue carries the `roadmap` label. The label exists in the repository, and creating an issue with `--label roadmap` silently produced `labels: []`. Bulk-apply `roadmap` to #3 through #48 in the web UI. The `roadmap` label is also the trigger named in step 22's issue adapter, so that step is blocked until the labels exist.
 - Probe issue #49, "zz-probe-write-test", was created while testing what the integration could write and cannot be deleted or closed from here. Close it in the UI.
