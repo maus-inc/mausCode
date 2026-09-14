@@ -40,11 +40,14 @@ against `.github/ci-baselines/audit-critical.txt`, where each row exempts one na
 advisory.
 
 A baseline row is an exemption, and it is the cheapest way to make a regression
-invisible. A row may only be added by a PR that links a tracking issue and names what
-the row excuses. That means the advisory id for the audit baseline, or the file and
-error text for the typecheck baseline. Never add a row for a diagnostic the author did
-not want to fix, and never add a row in the same PR as the regression it excuses.
-Deleting rows and committing a smaller baseline is always welcome.
+invisible. A row may only be added by a PR that links a tracking issue, and the PR
+description must name what the row excuses, the human-readable error text for a
+typecheck row or the advisory and the reason it stays for an audit row. The row itself
+must use the exact format the ratchets read: `relative/path.ts|TS####` in the
+typecheck baseline and `package|advisory URL` in the audit baseline. Never add a row
+for a diagnostic the author did not want to fix, and never add a row in the same PR as
+the regression it excuses. Deleting rows and committing a smaller baseline is always
+welcome.
 
 ## Building from Source
 

@@ -20,9 +20,11 @@ a 110-error baseline also survived, in the `typecheck-ratchet.mjs` header and in
 1. The baseline policy lives in exactly one place, the "CI gates and baselines"
    section of `CONTRIBUTING.md`. It names the script CI runs, the baseline file,
    the empty-baseline means zero-errors consequence, and the rule for adding a
-   row: only a PR with a linked issue may add one, it must name the advisory id
-   or the file and error text the row excuses, never for a diagnostic the author
-   did not want to fix, never in the same PR as the regression it excuses.
+   row: only a PR with a linked issue may add one, the row must match the format
+   the ratchets read (`relative/path.ts|TS####` for typecheck, `package|advisory
+   URL` for audit), the PR description names what the row excuses, and rows are
+   never added for a diagnostic the author did not want to fix, never in the
+   same PR as the regression they excuse.
 2. `docs/backend-porting-recipe.md` section 9 links to `CONTRIBUTING.md` instead
    of restating a mechanism. `CLAUDE.md` points at the same section instead of
    carrying its own variant of the rule.
