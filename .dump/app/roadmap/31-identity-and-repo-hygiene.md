@@ -11,7 +11,7 @@
 
 ## 1. Outcome
 
-The identity fields the rebrand decided are the identity fields in the tree, the records that disagree are corrected, and the loose ends a rename left behind are closed: a broken icon script, duplicate font archives at the repository root, re-record marks on demo media, and one audit of the legacy-name classification so nobody re-audits it. Ratified 2026-09-14, so these are decisions rather than open questions: `build.appId` stays `dev.mausinc.mauscode`, the display name is `mausCode`, the npm name and CLI stay `mauscode`, orphaned font archives and stray media at the repository root are removed, and this step adds a CI branding guard that fails on `21st` or T3 identity strings outside vendored comments and licence files. The icon script is fixed by step 12 declaring `sharp`, so here it is verified, not retired.
+The identity fields the rebrand decided are the identity fields in the tree, the records that disagree are corrected, and the loose ends a rename left behind are closed: a broken icon script, duplicate font archives at the repository root, re-record marks on demo media, and one audit of the legacy-name classification so nobody re-audits it. Ratified 2026-09-14, so these are decisions rather than open questions: `build.appId` stays `dev.mausinc.mauscode`, the display name is `mausCode`, the npm name and CLI stay `mauscode`, the stray font archives and branding masters at the repository root move to `assets/branding/` and are labelled design inputs rather than build inputs, and this step adds a CI branding guard that fails on `21st` or T3 identity strings outside vendored comments and licence files. The icon script is fixed by step 12 declaring `sharp`, so here it is verified, not retired. Two loose ends were decided against a cleanup: the three demo GIFs in `assets/`, 10.5 MB with the old name burned in, stay where they are until a README pass needs them, and `.github/workflows/lock-regen-temp.yml` is kept and renamed into a documented, manually dispatched escape hatch instead of deleted.
 
 ## 2. Why it matters
 
@@ -41,7 +41,7 @@ Two verified drifts that affect a shipped artifact. `package.json` reads `"name"
 2. Sweep every place the old version or name is asserted: `README.md`, `UPSTREAM.md`, `.env.example`, and any test that snapshots an app name. Grep for `0.0.72` and for `mauscode-desktop` and reconcile each hit deliberately.
 3. Correct `.dump/app/decisions/provisional-assumptions.md` PA-1 to record the shipped app id and mark the item spent, and update the capability section of `.dump/app/decisions/provider-agnostic-backends-upstream-policy-2026-09-11.md` to state what exists now, naming `src/main/lib/providers/` and the fact that no renderer file imports the registry yet.
 4. Decide the icon script: add `sharp` as an exact devDependency, or rewrite `scripts/generate-icon.mjs` to use the tooling already in the repository, or delete it and record that icons are generated from the masters as `.dump/rebrand/second-brain.md` describes. Do not leave a script that cannot run.
-5. Move `geist-pixel-circlefont.zip`, `neue-haas-grotesk-display-pro.zip` and `pathway-extreme-latin-100-normal.ttf` into the branding masters directory or out of git, and state which in the commit, since step 30 handles the shipped fonts.
+5. Move `geist-pixel-circlefont.zip`, `neue-haas-grotesk-display-pro.zip`, `pathway-extreme-latin-100-normal.ttf` and the `new mauscode branding/` directory into `assets/branding/`, keeping the directory name free of spaces by using `assets/branding/`, and add `assets/branding/README.md` saying these are design inputs, never build inputs, and that no shipped code may import them. Do not touch `assets/*.gif`; the human kept them on 2026-09-14. Confirm `package-lock.json` is absent at the root and that nothing regenerates it, since `bun.lock` is the lockfile.
 6. Write the legacy-name classification result into `.dump/app/audits/2026-09-13-legacy-identity-sweep.md` so the audit directory has content and the next reader has a verified list instead of a grep to redo, including the rule for each surviving string.
 7. Handle the demo media per `assets/RE-RECORD.md`, either replaced or documented as deferred with the reason, and check `src/renderer/icons/framework-icons.tsx` for the placeholder artwork the identity audit flagged.
 
@@ -70,7 +70,7 @@ bun run build:runtime-client && NODE_OPTIONS=--max-old-space-size=4096 bun run b
 
 ## 12. Benchmark record
 
-Repository weight moved by the font decision, and the packaged app's resource size before and after, in `.dump/app/benchmarks/`.
+Repository weight moved by the font and branding decision, and the packaged app's resource size before and after, in `.dump/app/benchmarks/`. Record the clone size too: a root file is paid for by everyone who clones, and the branding move is expected to change packaged size by zero and checkout tidiness by a lot.
 
 ## 13. Rollback
 

@@ -13,6 +13,8 @@
 
 One paragraph, in `CONTRIBUTING.md` and `docs/backend-porting-recipe.md` §9, says what the typecheck ratchet is, that `.github/ci-baselines/typecheck.txt` is currently empty, and therefore that zero errors is the gate. It also says what adding a line to a baseline file means and who may do it.
 
+The same step lands the second typecheck gate the human ratified on 2026-09-14: `npm run ts:check` runs `tsgo --noEmit` and is currently used by no CI job, so it joins CI as a second gate rather than being deleted. `tsc` stays the blocking zero-error gate and the baseline file stays its record. Before the gate is wired, measure the disagreement between the two tools in this tree, list every case in the PR with a one-line reason, and either fix it or justify it; suppressing a tool to make the other green is refused in advance. If the delta cannot reach zero in one change, ship the measurement and the policy text, and hold the wiring as a follow-up on this issue instead of wiring a red gate.
+
 ## 2. Why it matters
 
 The recipe asserts zero errors and attributes it to a mechanism that is not how the gate works. A reader who trusts the recipe runs one command and gets a different answer than CI. And a baseline entry is the cheapest way to make a regression invisible, so the permission to add one has to be written down.
@@ -41,6 +43,7 @@ The recipe asserts zero errors and attributes it to a mechanism that is not how 
 2. Write the policy paragraph once. Put it in `CONTRIBUTING.md` and link it from the recipe rather than restating it.
 3. Add the rule: a baseline line may only be added by a PR that links an issue, carries the advisory id or the file and error text, and never for a warning the author did not want to fix.
 4. Delete nothing from `AGENTS.md`. Its facts already agree, and this step exists so the other documents agree with it.
+5. Then run `npx typescript-go tsgo --noEmit` or `npm run ts:check`, capture both error lists, diff them, and write the delta into the PR and into `.dump/app/benchmarks/`. Add the `ts:check` job to `.github/workflows/ci.yml` only when that diff is empty or every line of it is explained, and record which of the two happened.
 
 ## 8. Boundaries
 
