@@ -1,0 +1,20 @@
+version = 1
+
+exclude_patterns = [
+  "build/**",
+  "out/**",
+  "release/**",
+  "resources/bin/**",
+  "runtime/jcode/**",
+  "src/main/lib/codex-app-server/src/_generated/**",
+]
+
+[[analyzers]]
+name = "javascript"
+enabled = true
+
+  [analyzers.meta]
+  # The CI scripts under scripts/ci are ES modules. Without this the analyzer
+  # parses them as scripts and reports JS-0833 on every import line.
+  module_system = "es-modules"
+  environment = ["nodejs", "browser"]
