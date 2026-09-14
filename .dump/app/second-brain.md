@@ -187,12 +187,13 @@ Detail lives in `research/` and `plans/`; this file states what is true.
 Roadmap step 03, issue #5, executed on `arena/01a09fc7-mauscode` (base
 `arena/01a097c4-mauscode`). The sandbox (Debian 12, 2 cores, 3.8 GB RAM, no
 display stack, proxy-restricted network) runs the frozen-lockfile install,
-both fast bundles and all seven gate commands, all green at the numbers in
+both fast bundles and all nine gate commands, all green at the numbers in
 `benchmarks/2026-09-13-build-gate.md`. It cannot run the renderer build under
 either the 1.91 GB default heap or the 4 GB CI flag, and it cannot run the
 binary downloads, packaging or the launch test; each is recorded there with
-the exact failure. The CI jobs on the step
-03 PR are the reference run for those parts. One fact in
+the exact failure. The CI jobs on the step 03 PR are the reference run for
+the renderer build, the downloads and the packaging; no CI job launches
+the packaged app, so the launch check stays open. One fact in
 `.dump/ci/second-brain.md` is stale as of this run: GitHub release assets
 now resolve to `release-assets.githubusercontent.com`, which is blocked like
 the `objects.githubusercontent.com` host it replaced; correcting that file

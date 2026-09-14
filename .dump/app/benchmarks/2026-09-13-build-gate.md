@@ -1,7 +1,9 @@
 # Build gate reference run (roadmap step 03)
 
-Date: 2026-09-14, 12:01 to 12:10 UTC. Branch: `arena/01a09fc7-mauscode` at
-`bb92033`, base `arena/01a097c4-mauscode`. Step file:
+Date: 2026-09-14, 12:01 to 12:10 UTC. Branch: `arena/01a09fc7-mauscode`,
+base `arena/01a097c4-mauscode`. The local commands ran on the tree at
+`bb92033`; the commits this PR adds on top are docs-only under `.dump`, so
+the built and gated tree is source-identical at the PR head. Step file:
 `.dump/app/roadmap/03-build-gate.md`. Issue: #5.
 
 ## Conclusions
@@ -14,7 +16,10 @@ Date: 2026-09-14, 12:01 to 12:10 UTC. Branch: `arena/01a09fc7-mauscode` at
    with the exact evidence, because the machine has 3.8 GB of RAM and the
    proxy blocks the hosts that serve the electron dist, the native headers
    and the agent binaries. The CI jobs on the step 03 PR are the reference
-   run for those parts, recorded in the CI reference run section below.
+   run for the renderer build, the downloads and the packaging, recorded in
+   the CI reference run section below. No CI job launches the packaged app,
+   so the launch check is covered by neither the sandbox nor CI and stays
+   open.
 2. The renderer build needs more RAM than this machine has, with or without
    the CI flag. The default heap aborts V8 at 42 s, and the 4 GB flag
    kernel-OOMs the process at 56 s. The recorded "OOM below about 3 GB heap"
@@ -124,10 +129,12 @@ This is the OOM the step asks to be recorded as an environment fact rather
 than a defect, and the difference between the two runs is the ceiling, not
 the tree.
 
-### Gates, all seven run here, all exit 0
+### Gates, the step's seven commands plus the two AGENTS.md additions, all run here, all exit 0
 
-Same `NODE_OPTIONS=--max-old-space-size=4096` cap as the CI workflow-level
-env, which is a ceiling rather than an allocation.
+The seven commands are the step's implementation list. The two additions
+complete the mandatory set in the `AGENTS.md` verification gate. Same
+`NODE_OPTIONS=--max-old-space-size=4096` cap as the CI workflow-level env,
+which is a ceiling rather than an allocation.
 
 | Gate | Command | Result | Wall |
 | --- | --- | --- | --- |
@@ -138,6 +145,8 @@ env, which is a ceiling rather than an allocation.
 | contracts | `npm run test:contracts` | 23 test files, 382 tests, 382 passed | 7.51 s |
 | lint-changed | `node scripts/ci/lint-changed.mjs` | no merge base with origin/main, the documented independent-roots fallback, so 955 files in scope, 806 lintable checked, 0 findings | 3 s |
 | ratchet | `node scripts/ci/typecheck-ratchet.mjs` | 0 errors <= 0 baseline | 39 s |
+| ts:check | `npm run ts:check` | `tsgo --noEmit`, 0 errors | 19 s |
+| runtime-client typecheck | `npm --prefix packages/runtime-client run typecheck` | `tsc --noEmit` on the package and its `tsconfig.test.json`, 0 errors | 2 s |
 
 ### Downloads, both blocked, evidence quoted
 
@@ -186,7 +195,7 @@ reported as not run, with this probe as the reason, rather than as green.
 | Criterion | Status |
 | --- | --- |
 | `bun run build` exits 0 with the heap flag; the failure without it is an environment fact | Not on this machine, kernel OOM at the 4 GB ceiling on 3.8 GB of RAM. The no-flag abort is recorded above. The CI build job on the step 03 PR is the reference exit-0 run |
-| All five gates report passed with counts | Passed here with counts, plus the two CI scripts |
+| All five gates report passed with counts | Passed here with counts, plus the two CI scripts and the two AGENTS.md verification additions |
 | One unsigned artifact exists and its size is recorded | Not produced here, blocked as quoted. The CI package job produces it; its log does not print the byte size, so that number stays unmeasured until a later step adds a size line to the job |
 | The app starts with no key and the local-only path is what you saw | Not run, no display stack, probe above |
 | The benchmark file exists and every number in it came from that run | This file; all numbers are from the 2026-09-14 12:01-12:10 UTC run on `bb92033` |
@@ -210,7 +219,10 @@ sandbox:
 This is the reference for the renderer bundle (all three build jobs exit
 0), the unsigned artifact (both package jobs complete the full install,
 both binary downloads and `electron-builder --dir`) and the install with
-scripts on a machine that can reach the blocked hosts. The Security gates
+scripts on a machine that can reach the blocked hosts. No CI job launches
+the packaged app, so the launch check is not covered by CI either; it
+stays open until a machine with a display starts the packaged app and
+records it. The Security gates
 failure carries one error annotation, on the gitleaks step only. It is the
 failure recorded in
 `.dump/ci/audits/2026-09-14-gitleaks-inherited-findings.md`, which fails
@@ -228,9 +240,12 @@ run by anyone who can open the logs and are not re-typed here.
 
 ## Consequence for later steps
 
-Steps 30 onward measure against this run. The local reference for install,
-both fast bundles and all seven gates exists at the numbers above. The
-reference for the renderer bundle, the unsigned artifact and the launch
-check is the CI reference run section above.
-A step that claims any of those green without the CI citation has not run
+Steps 30 onward measure against this run. The local reference for
+install, both fast bundles and all nine gate commands exists at the
+numbers above. The reference for the renderer bundle and the unsigned
+artifact is the CI reference run section above. The launch check has no
+reference yet: no machine in this run had a display and no CI job starts
+the packaged app, so a step that needs it runs it, records it and cites
+the run.
+A step that claims any of those green without the citation has not run
 them.
