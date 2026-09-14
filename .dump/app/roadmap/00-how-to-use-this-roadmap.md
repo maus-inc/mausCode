@@ -86,7 +86,16 @@ dated drift comment saying what changed, with the exact text and a posting loop 
   alone is a review finding.
 - A drift comment is the notice mechanism for this repository, so post one instead of quietly editing an issue body
   to match a file. If the integration ever gains issue write scope, the twelve are synced in one pass, the tokens
-  are resolved, and §4b of the plan is deleted rather than maintained.
+  are resolved, and §4b of the plan is deleted rather than maintained. The notices for the current twelve are
+  written and dry-run but **unposted**, because the planning integration lost even issue-creation rights before it
+  could post them; the loop is §1 of the pack file.
+- **A bot may be reading the bodies, which makes a stale body a wrong work order rather than a stale summary.**
+  CodeRabbit generated implementation plans on #3 through #14 within minutes of filing, and two of them encode
+  decisions the human reversed: #7 proposes the hardcoded Codex constant that step 05 replaced with a runtime
+  resolver, and #14 carries none of the ratified dependency work. Its plan for #34 also states that its checkout
+  contains no `.dump/` tree at all, so whatever branch that bot reads, it is not this one. If you assign a step to
+  an automated planner, first confirm it is reading a branch that contains the step files, and do not accept its
+  plan as evidence for anything.
 
 ## 7. Numbering, if a step has to be added
 

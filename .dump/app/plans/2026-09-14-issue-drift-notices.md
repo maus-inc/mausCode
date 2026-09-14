@@ -6,9 +6,31 @@ accessible by integration`, verified by probe the same day. The human accepted t
 and chose comments over rewriting bodies, which keeps every issue number stable, so `step NN` still means
 `#NN+2` and step 22's label adapter is unaffected.
 
-Each block below is the exact comment text for one issue. Posting them is a one-minute copy of the script in
-§1. After they are posted this file stays as the record of what was said; it is not a scratchpad and it is not
-re-written later, it is superseded by the issues themselves.
+Each block below is the exact comment text for one issue. **Nothing in this file has been posted.** The planning
+integration was asked to run the loop on 2026-09-14 and every write it attempted returned 403 `Resource not
+accessible by integration`: `gh issue comment` (GraphQL), `POST /repos/maus-inc/mausCode/issues/4/comments` (REST),
+`PATCH` on the same issue, and, new since the filing of #3 to #48 an hour earlier, `POST /repos/.../issues` itself,
+which is how the 46 issues were created in the first place. Reads on the same endpoints succeed, and repo-level
+`POST /labels` still works, which is why this pack exists as a file rather than as thirteen comments. Posting is
+therefore a human action: run §1 from a clone with your own `gh`.
+
+## 0a. Why this is now urgent rather than cosmetic
+
+`gh api repos/maus-inc/mausCode/issues/N/comments` on #3 through #14 shows an automatic reviewer already acting on
+these issues: **CodeRabbit has posted an implementation plan on them**, one comment on most and two on #4 and #11,
+all dated 2026-09-13T22:2x, i.e. within minutes of filing, with a follow-up revision on #4 at
+2026-09-14T07:53Z. Those plans were written from the bodies, so they encode the decisions the human has since
+reversed. Three verified examples:
+
+| Issue | What its generated plan proposes | What was ratified instead |
+| --- | --- | --- |
+| #7, step 05 | "Replace the duplicated `DEFAULT_CODEX_MODEL` literals … with imports of the shared constants", with a hardcoded model id value of `gpt-5.3-codex` | A runtime resolver: read the model catalog from the pinned Codex CLI, static fallback, loud refusal when neither answers. The plan ships exactly the bug the step exists to kill |
+| #14, step 12 | No mention of `@dnd-kit`, `sharp`, or the SDK and CLI pins | This step is the only dependency step: `0.3.270` and `2.1.270`, three drag-and-drop packages, and `sharp` as a devDependency |
+| #34, step 32 | "Upload artifacts, checksums, and manifest to a draft GitHub Release with … an unsigned marker", and it reports that its checkout is **missing** `.github/workflows/ci.yml`, `scripts/ci/*`, `packages/runtime-client`, `src/shared/app-identity.ts` and the whole `.dump/` tree | Unsigned is now correct by decision rather than by accident, but the missing-files note is the real signal: the bot is planning against a base that is not `arena/01a097c4-mauscode`, so it cannot read the step files at all |
+
+That third row changes the recommendation. Syncing the twelve bodies fixes drift against decisions; it does not
+fix a reviewer whose checkout lacks the corpus. Both need doing, and the second is a configuration call, filed as
+`questions.md` item 19.
 
 ## 0. Which issues and why
 

@@ -7,8 +7,22 @@ move to `decisions.md` with the date, and their number stays here with a one-lin
 citation by item number never rots. A new question is appended here before it goes anywhere else,
 and a question that can be answered by measurement is not a question, it is a task.
 
-**No item is open.** All eighteen were answered between 2026-09-13 and 2026-09-14, in four batches,
-each recorded in `decisions.md` with the rejected option named.
+Eighteen items were answered between 2026-09-13 and 2026-09-14, in four batches, each recorded in
+`decisions.md` with the rejected option named. One item has since been added, because it is a configuration
+choice on your side of a tool the code cannot see.
+
+## Open
+
+19. **Automatic review or planning on these issues while the bodies lag.** `gh api` shows CodeRabbit posted an
+   implementation plan on #3 through #14 within minutes of filing, with a revision on #4 the next morning. Two of
+   those plans are now wrong on their face: #7 proposes the hardcoded Codex constant the human replaced with a
+   runtime resolver, and #14 contains none of the ratified dependency work. Worse, #34's plan says its checkout has
+   no `.dump/` tree, no `scripts/ci/*` and no `packages/runtime-client`, so whatever branch that bot reads, it is
+   not `arena/01a097c4-mauscode`. Options: (a) pause issue-triggered planning until the twelve bodies are synced
+   and the bot's base branch is set to this one; (b) sync the bodies now with the loop in
+   `.dump/app/plans/2026-09-14-issue-drift-notices.md` §3 and accept that plans written from the old base stay
+   wrong; (c) let it run and treat bot plans as drafts an agent must re-derive from the files. Recommendation (a)
+   then (b), because a confident wrong plan costs more than a missing one. Blocking nothing in the roadmap itself.
 
 ## Answered 2026-09-13, batch 1
 
