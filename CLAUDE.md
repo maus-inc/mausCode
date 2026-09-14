@@ -41,6 +41,7 @@ bun run package:linux    # Build Linux (AppImage + DEB)
 # Database (Drizzle + SQLite)
 bun run db:generate      # Generate migrations from schema
 bun run db:push          # Push schema directly (dev only)
+bun run ts:check         # Run the local tsgo helper. This is not a CI gate.
 ```
 
 ## Architecture
@@ -57,7 +58,7 @@ src/
 │       │   ├── index.ts     # DB init, auto-migrate on startup
 │       │   ├── schema/      # Drizzle table definitions
 │       │   └── utils.ts     # ID generation
-│       └── trpc/routers/    # tRPC routers (projects, chats, claude)
+│       └── trpc/routers/    # 37 tRPC router modules, including the mounted changes router
 │
 ├── preload/                 # IPC bridge (context isolation)
 │   └── index.ts             # Exposes desktopApi + tRPC bridge
@@ -72,14 +73,24 @@ src/
     │   │   ├── atoms/       # Jotai atoms for agent state
     │   │   └── stores/      # Zustand store for sub-chats
     │   ├── sidebar/         # Chat list, archive, navigation
-    │   ├── sub-chats/       # Tab/sidebar sub-chat management
-    │   └── layout/          # Main layout with resizable panels
+    │   ├── automations/     # Automated agent workflows
+    │   ├── changes/         # Change and pull request views
+    │   ├── details-sidebar/ # Project and chat details
+    │   ├── file-viewer/     # File browsing and previews
+    │   ├── hooks/           # Shared feature hooks
+    │   ├── kanban/          # Kanban views
+    │   ├── layout/          # Main layout with resizable panels
+    │   ├── mentions/        # Mention handling
+    │   ├── onboarding/      # First-run setup
+    │   ├── projects/        # Project management
+    │   ├── settings/        # Application settings
+    │   └── terminal/        # Terminal views
     ├── components/ui/       # Radix UI wrappers (button, dialog, etc.)
     └── lib/
         ├── atoms/           # Global Jotai atoms
         ├── stores/          # Global Zustand stores
         ├── trpc.ts          # Real tRPC client
-        └── mock-api.ts      # DEPRECATED - being replaced with real tRPC
+        └── mock-api.ts      # Legacy mock API still imported by four renderer files; migration to real tRPC is in progress
 ```
 
 ## Database (Drizzle ORM)
@@ -120,8 +131,8 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 - **React Query**: Server state via tRPC (auto-caching, refetch)
 
 ### Claude Integration
-- Dynamic import of `@anthropic-ai/claude-code` SDK
-- Two modes: "plan" (read-only) and "agent" (full permissions)
+- Dynamic import of `@anthropic-ai/claude-agent-sdk` version `0.2.45`
+- Five agent modes: "plan", "ask", "edit", "agent", and "turbo", defined by `AgentMode` in `src/renderer/features/agents/atoms/index.ts`. Worktree selection uses "local" and "worktree" through `WorkMode` in the same module.
 - Session resume via `sessionId` stored in SubChat
 - Message streaming via tRPC subscription (`claude.onMessage`)
 
@@ -134,7 +145,7 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
 | Backend | tRPC, Drizzle ORM, better-sqlite3 |
-| AI | @anthropic-ai/claude-code |
+| AI | @anthropic-ai/claude-agent-sdk 0.2.45 |
 | Package Manager | bun |
 
 ## File Naming

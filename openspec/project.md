@@ -11,7 +11,7 @@
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
 | Backend | tRPC, Drizzle ORM, better-sqlite3 |
-| AI | @anthropic-ai/claude-code |
+| AI | @anthropic-ai/claude-agent-sdk |
 | Package Manager | bun |
 
 ## Project Conventions
@@ -30,7 +30,7 @@
   - Zustand: Sub-chat tabs and pinned state (persisted to localStorage)
   - React Query: Server state via tRPC (auto-caching, refetch)
 - **Database**: Drizzle ORM with SQLite, auto-migration on app startup
-- **Claude Integration**: Dynamic import of `@anthropic-ai/claude-code` SDK with two modes: "plan" (read-only) and "agent" (full permissions)
+- **Claude Integration**: Dynamic import of `@anthropic-ai/claude-agent-sdk` version `0.2.45` with five agent modes: "plan", "ask", "edit", "agent", and "turbo". Worktree selection uses "local" and "worktree".
 
 ### Testing Strategy
 [Testing approach not yet established - to be defined]
