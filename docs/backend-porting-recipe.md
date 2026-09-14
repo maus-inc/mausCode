@@ -159,8 +159,13 @@ Accept: `npx vitest run src/main/lib/<backend>` green without any binary.
 
 ## 9. Gates + review (every backend, every change)
 
-1. `npx tsc -p tsconfig.json --noEmit` — zero errors (the baseline is 0;
-   never typecheck a config that does not exist — verify the `-p` target).
+1. Run the typecheck gate the way CI runs it:
+   `node scripts/ci/typecheck-ratchet.mjs`. It compares `tsc --noEmit`
+   against `.github/ci-baselines/typecheck.txt`, which is empty, so zero
+   errors is the gate. The baseline policy lives in `CONTRIBUTING.md`.
+   Locally, `npm run typecheck` and `npm run ts:check` run the two
+   typecheckers without the baseline comparison. Never typecheck a config
+   that does not exist; verify any `-p` target.
 2. `npx vitest run src/main/lib/<backend> src/shared/contracts` — green.
 3. `node --test --experimental-strip-types src/main/lib/runtime/*.test.ts`
    — 27/27 (if runtime touched; else still run).
