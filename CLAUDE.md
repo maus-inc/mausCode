@@ -19,269 +19,244 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file is the architecture map for mausCode. The binding rules for agents live in `AGENTS.md` and the review protocol lives in `FULL-REVIEW.md`. Roadmap step 01 measured every path and count on this page against the tree at `7c89af0` on 2026-09-14. When a path here disagrees with the tree, the tree wins and your change corrects this file in the same commit.
 
 ## What is this?
 
-**mausCode** - A local-first agent workspace by maus-inc. Users create chat sessions linked to local project folders, run coding agents (Claude Code, Codex) in isolated git worktrees in Plan or Agent mode, and see real-time tool execution (bash, file edits, web search, etc.). Product/UI foundation inherited from the archived 1Code project (Apache-2.0) - see `UPSTREAM.md`.
+**mausCode** is a local-first agent workspace by maus-inc. A user creates chat sessions linked to local project folders, runs coding agents in isolated git worktrees, and watches tool execution in real time. The product and interface foundation came from the archived 1Code project under Apache-2.0, recorded in `UPSTREAM.md`.
+
+The data model has three levels. A project is a local folder. A chat belongs to one project and owns the worktree and the pull request link. A sub-chat belongs to one chat and owns the runtime session, the provider binding and the agent mode.
+
+## Agent modes
+
+`AgentMode` has five values and `AGENT_MODES` orders them by autonomy. Shift and Tab cycle them in that order. The declaration is `src/renderer/features/agents/atoms/index.ts`.
+
+| Mode | Behaviour |
+| --- | --- |
+| `plan` | Read-only. The agent plans and does not change files. |
+| `ask` | The agent asks before editing files and before running commands. |
+| `edit` | The agent edits files freely, and the runtime blocks dangerous deletions. |
+| `agent` | The default and the canonical value. The agent edits and runs commands, and the runtime blocks dangerous deletions. |
+| `turbo` | The agent runs everything without asking, and dangerous deletions are not blocked. |
+
+Two files hold the mode behaviour and they must stay in step. `src/renderer/features/agents/lib/mode-display.ts` holds the label and the tooltip per mode, and `src/main/lib/trpc/routers/claude.ts` holds the `canUseTool` switch that enforces them. The tooltip comment in `src/renderer/features/agents/lib/mode-display.ts` requires the two to match.
+
+Each mode also has a slash command. `src/renderer/features/agents/commands/builtin-commands.ts` declares 13 of them, `/plan`, `/ask`, `/edit`, `/agent` and `/turbo` for the modes, and `/clear`, `/compact`, `/review`, `/pr-comments`, `/release-notes`, `/security-review`, `/commit` and `/worktree-setup` for the rest.
+
+Three other unions use the word mode. Only the first list above is made of agent modes.
+
+- `WorkMode` is `local` or `worktree`, declared in the same renderer atoms file. It chooses where the chat runs, not how much the agent may do.
+- `ProviderInteractionMode` is `default` or `plan`, declared in `src/shared/contracts/orchestration.ts`. That tree is vendored vocabulary with no importer outside its own directory.
+- `RuntimeMode` is `approval-required`, `auto-accept-edits`, `auto` or `full-access`, declared in the same contracts file, and unused today.
+
+The five agent mode names are written out in 38 places beside the declaration. That is 14 inline `z.enum` literals across 12 routers in `src/main/lib/trpc/routers`, and 24 TypeScript unions across the transports, the print adapters and the stores. `sub_chats.mode` carries a column default of `agent`. Change the renderer declaration first, and read roadmap step 06 before you add another copy.
 
 ## Commands
 
+`package.json` holds 29 scripts. These are the ones that matter for a code change.
+
 ```bash
 # Development
-bun run dev              # Start Electron with hot reload
+bun run dev              # Electron with hot reload
 
-# Build
-bun run build            # Compile app
-bun run package          # Package for current platform (dir)
-bun run package:mac      # Build macOS (DMG + ZIP)
-bun run package:win      # Build Windows (NSIS + portable)
-bun run package:linux    # Build Linux (AppImage + DEB)
+# Gates. These are the local forms, and two of them are not what CI runs.
+npm run typecheck        # tsc --noEmit, the plain run, not the CI job
+npm run lint             # node scripts/ci/lint-changed.mjs, the CI form
+npm run test             # vitest, the CI form
+npm run test:node        # node:test suites under src/main/lib/runtime, the CI form
+npm run test:contracts   # vitest over src/shared/contracts, the CI form
+npm run ratchet:typecheck  # the typecheck job, against the baseline
+npm run ratchet:audit      # the audit job, no new critical advisories
 
-# Database (Drizzle + SQLite)
-bun run db:generate      # Generate migrations from schema
-bun run db:push          # Push schema directly (dev only)
+# Build and package
+bun run build            # electron-vite build, three targets
+bun run package          # electron-builder --dir, no publish
+bun run package:mac      # macOS DMG and ZIP
+bun run package:win      # Windows NSIS and portable
+bun run package:linux    # Linux AppImage and DEB
+
+# Database, Drizzle and SQLite
+npm run db:generate      # generate a migration from the schema
+npm run db:push          # push the schema directly, dev only
+
+# Bundled agent binaries, version pinned in the script
+npm run claude:download  # 2.1.45
+npm run codex:download   # 0.137.0
 ```
+
+Three scripts need a note.
+
+`npm run typecheck` runs `tsc --noEmit`. The job CI runs is `npm run ratchet:typecheck`, which compares the error set against `.github/ci-baselines/typecheck.txt`, and that file holds a single newline, so no error is permitted. Anyone editing the baseline needs a linked issue and an expiry note.
+
+`npm run ts:check` runs `tsgo --noEmit` through `@typescript/native-preview`. No CI job calls it and `tsc` stays the blocking gate. `.dump/global/questions.md` item 11 ratified it as a second gate, and roadmap step 02 owns the measurement that has to come first. Until step 02 merges, treat `tsgo` output as advisory.
+
+`npm run prebuild` runs `npm run build:runtime-client`, and electron-vite triggers it automatically. `@maus-inc/runtime-client` resolves through the `file:packages/runtime-client` dependency to that package's `dist`, so a stale or missing `dist` breaks typecheck with confusing errors. CI installs with `--ignore-scripts` and then builds that package explicitly for this reason.
 
 ## Architecture
 
 ```
 src/
-├── main/                    # Electron main process
-│   ├── index.ts             # App entry, window lifecycle
-│   ├── auth-manager.ts      # OAuth flow, token refresh
-│   ├── auth-store.ts        # Encrypted credential storage (safeStorage)
-│   ├── windows/main.ts      # Window creation, IPC handlers
+├── main/                      # Electron main process, the Node side
+│   ├── index.ts               # App entry, window lifecycle, OAuth deep links, menus
+│   ├── constants.ts           # IS_DEV, PROTOCOL, AUTH_SERVER_PORT, DEV_USER_DATA_NAME
+│   ├── auth-manager.ts        # OAuth flow and token refresh
+│   ├── auth-store.ts          # Encrypted credentials through Electron safeStorage
+│   ├── windows/main.ts        # Windows and the raw ipcMain surface behind desktopApi
 │   └── lib/
-│       ├── db/              # Drizzle + SQLite
-│       │   ├── index.ts     # DB init, auto-migrate on startup
-│       │   ├── schema/      # Drizzle table definitions
-│       │   └── utils.ts     # ID generation
-│       └── trpc/routers/    # tRPC routers (projects, chats, claude)
+│       ├── db/                # Drizzle schema plus startup migrate()
+│       ├── runtime/           # Native runtime host: manager, translate, sessions,
+│       │                      #   endpoints, credentials, mcp-config
+│       ├── codex-app-server/  # Codex app-server adapter and its mock peer
+│       ├── providers/         # Ten capability profiles
+│       └── trpc/routers/      # 37 files, 36 routers mounted by createAppRouter
 │
-├── preload/                 # IPC bridge (context isolation)
-│   └── index.ts             # Exposes desktopApi + tRPC bridge
+├── preload/                   # IPC bridge under context isolation
+│   └── index.ts               # Exposes desktopApi plus the tRPC bridge
 │
-└── renderer/                # React 19 UI
-    ├── App.tsx              # Root with providers
-    ├── features/
-    │   ├── agents/          # Main chat interface
-    │   │   ├── main/        # active-chat.tsx, new-chat-form.tsx
-    │   │   ├── ui/          # Tool renderers, preview, diff view
-    │   │   ├── commands/    # Slash commands (/plan, /agent, /clear)
-    │   │   ├── atoms/       # Jotai atoms for agent state
-    │   │   └── stores/      # Zustand store for sub-chats
-    │   ├── sidebar/         # Chat list, archive, navigation
-    │   ├── sub-chats/       # Tab/sidebar sub-chat management
-    │   └── layout/          # Main layout with resizable panels
-    ├── components/ui/       # Radix UI wrappers (button, dialog, etc.)
+└── renderer/                  # React 19 UI, mapped by the @/ alias
+    ├── App.tsx                # Root providers and onboarding routing
+    ├── features/              # 14 folders, listed below
+    ├── components/ui/         # Radix UI wrappers
     └── lib/
-        ├── atoms/           # Global Jotai atoms
-        ├── stores/          # Global Zustand stores
-        ├── trpc.ts          # Real tRPC client
-        └── mock-api.ts      # DEPRECATED - being replaced with real tRPC
+        ├── atoms/             # Global Jotai atoms
+        ├── stores/            # Global Zustand stores
+        ├── trpc.ts            # Real tRPC client
+        └── mock-api.ts        # In-process tRPC stand-in, still imported by 4 files
 ```
 
-## Database (Drizzle ORM)
+The 14 folders under `src/renderer/features/` are `agents`, `automations`, `changes`, `details-sidebar`, `file-viewer`, `hooks`, `kanban`, `layout`, `mentions`, `onboarding`, `projects`, `settings`, `sidebar` and `terminal`.
 
-**Location:** `{userData}/data/agents.db` (SQLite)
+`src/main/lib/trpc/routers/` holds 37 files. Thirty-five of them are router modules, `src/main/lib/trpc/routers/agent-utils.ts` holds the agent markdown parser, and `src/main/lib/trpc/routers/index.ts` mounts 36 routers. The 36th is `changes`, built by `createGitRouter()` in `src/main/lib/git`.
 
-**Schema:** `src/main/lib/db/schema/index.ts`
+Repositories outside `src/` that a step may need:
+
+| Path | What it is |
+| --- | --- |
+| `packages/runtime-client` | Fork of the JCode SDK, recorded in `UPSTREAM.md` and `NOTICE`. Its `dist` is a build input for main. |
+| `runtime/jcode` | The pinned JCode engine, vendored at commit `ce4e789`, MIT. `runtime/jcode/UPSTREAM.md` records the pin, the licence and what is excluded. |
+| `src/shared` | What the main process and the renderer must agree on. |
+| `src/shared/contracts` | Ported Effect schemas, 44 source files and 23 test files, with no importer outside the directory yet. Start at `src/shared/contracts/README.md`. |
+| `scripts/ci` | The gate scripts CI runs, `scripts/ci/lint-changed.mjs`, `scripts/ci/typecheck-ratchet.mjs` and `scripts/ci/audit-ratchet.mjs`. |
+| `benchmarks` | Performance records. `CONTRIBUTING.md` requires a measured delta here for any change that moves startup, memory, rendering or file weight. |
+| `drizzle` | Generated migration SQL, applied at startup. |
+| `.dump` | The engineering memory. Research, plans, decisions, audits and benchmarks per capability. |
+| `openspec` | Change proposals and their specs. Read `openspec/AGENTS.md` before writing one. |
+
+## Database
+
+SQLite through better-sqlite3 and Drizzle. The schema is one file, `src/main/lib/db/schema/index.ts`, and it declares 11 tables.
+
+The three that carry the product:
 
 ```typescript
-// Three main tables:
-projects    → id, name, path (local folder), timestamps
-chats       → id, name, projectId, worktree fields, timestamps
-sub_chats   → id, name, chatId, sessionId, mode, messages (JSON)
+projects    → id, name, path, git remote fields, iconPath, accentColor, rail fields
+chats       → id, name, projectId, worktree fields, baseBranch, prUrl, prNumber
+sub_chats   → id, name, chatId, sessionId, streamId, mode, provider, messages
 ```
 
-**Auto-migration:** On app start, `initDatabase()` runs migrations from `drizzle/` folder (dev) or `resources/migrations` (packaged).
+The other eight hold credentials and per-provider settings, `anthropic_accounts`, `anthropic_settings`, `native_endpoint_settings`, and one credential table each for `claude_code`, `qwen`, `cline`, `openclaw` and `roo`.
 
-**Queries:**
+Every primary key gets its value from `createId()` in `src/main/lib/db/utils.ts`.
+
+The database lives at `{userData}/data/agents.db`. `initDatabase()` in `src/main/lib/db/index.ts` calls `migrate()` on startup. Dev reads migration SQL from `drizzle/`, and a packaged build reads it from the app's `resources/migrations`, which `extraResources` in `package.json` copies from `drizzle/`.
+
 ```typescript
-import { getDatabase, projects, chats } from "../lib/db"
 import { eq } from "drizzle-orm"
+import { chats, getDatabase, projects } from "../lib/db"
 
 const db = getDatabase()
 const allProjects = db.select().from(projects).all()
 const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all()
 ```
 
-## Key Patterns
+Never hand-write migration SQL that `drizzle-kit generate` can emit, and never edit or renumber a migration that has shipped. `AGENTS.md` carries the full rule set under Database migrations.
 
-### IPC Communication
-- Uses **tRPC** with `trpc-electron` for type-safe main↔renderer communication
-- All backend calls go through tRPC routers, not raw IPC
-- Preload exposes `window.desktopApi` for native features (window controls, clipboard, notifications)
+## Key patterns
 
-### State Management
-- **Jotai**: UI state (selected chat, sidebar open, preview settings)
-- **Zustand**: Sub-chat tabs and pinned state (persisted to localStorage)
-- **React Query**: Server state via tRPC (auto-caching, refetch)
+### IPC
 
-### Claude Integration
-- Dynamic import of `@anthropic-ai/claude-code` SDK
-- Two modes: "plan" (read-only) and "agent" (full permissions)
-- Session resume via `sessionId` stored in SubChat
-- Message streaming via tRPC subscription (`claude.onMessage`)
+The main process exposes tRPC over Electron IPC through `trpc-electron` and `superjson`. Every backend call goes through a router rather than raw IPC. `src/main/windows/main.ts` registers a separate raw `ipcMain.handle` surface that backs `window.desktopApi` for window controls, clipboard, dialogs, notifications, theme and the git watcher.
 
-## Tech Stack
+### State
+
+Jotai holds UI state, atoms live beside their feature, and `src/renderer/lib/window-storage.ts` scopes a chat selection per window. Zustand holds the sub-chat tabs and the message stores, and their keys carry a window id prefix. React Query holds server state read through tRPC.
+
+### Claude integration
+
+The Claude Code path imports `@anthropic-ai/claude-agent-sdk` dynamically, so the bundle never statically requires it. `src/main/lib/trpc/routers/claude.ts` owns the `chat` subscription, the mode switch that enforces permissions, and session resume through the `session_id` stored on the sub-chat. Streaming reaches the renderer as UI message chunks.
+
+The provider surface is wider than Claude. Thirteen providers have a router: `claude`, `codex`, `cursor`, `grok`, `qwen`, `cline`, `openclaw`, `roo`, `opencode`, `gemini`, `openrouter`, `ollama` and `hermes`.
+
+Ten of those have a capability profile in `src/main/lib/providers/`: `claude`, `cline`, `codex`, `cursor`, `grok`, `hermes`, `openclaw`, `opencode`, `qwen` and `roo`. The manifest shape is `providerCapabilitySchema` in `src/shared/provider-capabilities.ts`, with `security`, `performance` and `features` sections, and `src/main/lib/trpc/routers/providers.ts` serves it. `gemini`, `openrouter` and `ollama` have a router and no profile, so a step that needs a capability answer for one of those three has to write the profile first.
+
+## Tech stack
+
+Versions are the ones `bun.lock` resolves.
 
 | Layer | Tech |
-|-------|------|
-| Desktop | Electron 33.4.5, electron-vite, electron-builder |
-| UI | React 19, TypeScript 5.4.5, Tailwind CSS |
+| --- | --- |
+| Desktop | Electron 39.4.0, electron-vite 3.1.0, electron-builder 25.1.8 |
+| UI | React 19.2.1, TypeScript declared `^5.4.5` and resolved to 5.9.3, Tailwind CSS 3.4.19 |
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
-| Backend | tRPC, Drizzle ORM, better-sqlite3 |
-| AI | @anthropic-ai/claude-code |
-| Package Manager | bun |
+| Backend | tRPC over Electron IPC, Drizzle ORM, better-sqlite3 |
+| AI | `@anthropic-ai/claude-agent-sdk` 0.2.45, plus the Codex app-server adapter |
+| Schemas | Effect 4.0.0-rc.112, an exact pin, load bearing for `src/shared/contracts` |
+| Lint and format | Biome 2.5.13, every rule at error |
+| Tests | Vitest 4.1.11 and `node --test` |
+| Package manager | bun |
 
-## File Naming
+## File naming
 
-- Components: PascalCase (`ActiveChat.tsx`, `AgentsSidebar.tsx`)
-- Utilities/hooks: camelCase (`useFileUpload.ts`, `formatters.ts`)
-- Stores: kebab-case (`sub-chat-store.ts`, `agent-chat-store.ts`)
-- Atoms: camelCase with `Atom` suffix (`selectedAgentChatIdAtom`)
+Files are kebab-case. Component symbols are PascalCase. Examples taken from the tree:
 
-## Important Files
+- `src/renderer/features/agents/main/active-chat.tsx` exports `ChatView`
+- `src/renderer/features/sidebar/agents-sidebar.tsx` exports `AgentsSidebar`
+- `src/renderer/features/agents/ui/agent-diff-view.tsx` exports `AgentDiffView`
 
-- `electron.vite.config.ts` - Build config (main/preload/renderer entries)
-- `src/main/lib/db/schema/index.ts` - Drizzle schema (source of truth)
-- `src/main/lib/db/index.ts` - DB initialization + auto-migrate
-- `src/renderer/features/agents/atoms/index.ts` - Agent UI state atoms
-- `src/renderer/features/agents/main/active-chat.tsx` - Main chat component
-- `src/main/lib/trpc/routers/claude.ts` - Claude SDK integration
+The tree holds 228 kebab-case `.tsx` files against 4 PascalCase ones. The four are `src/renderer/App.tsx` as the entry point, `src/renderer/contexts/TRPCProvider.tsx`, `src/renderer/contexts/WindowContext.tsx` and `src/renderer/features/terminal/TerminalSearch.tsx`.
 
-## Debugging First Install Issues
+Hooks are kebab-case files whose names start with `use`, such as `src/renderer/features/agents/hooks/use-changed-files-tracking.ts`. Zustand stores are kebab-case, such as `src/renderer/features/agents/stores/sub-chat-store.ts`. Jotai atoms are camelCase with an `Atom` suffix, such as `selectedAgentChatIdAtom`.
 
-When testing auth flows or behavior for new users, you need to simulate a fresh install:
+## Important files
+
+- `src/main/lib/db/schema/index.ts` is the schema source of truth.
+- `src/main/lib/db/index.ts` initializes the database and runs migrations.
+- `src/renderer/features/agents/atoms/index.ts` declares the agent modes and the agent UI state atoms.
+- `src/renderer/features/agents/main/active-chat.tsx` is the main chat surface.
+- `src/main/lib/trpc/routers/claude.ts` holds the Claude SDK integration and the permission switch.
+- `src/main/lib/trpc/routers/index.ts` mounts every router.
+- `electron.vite.config.ts` defines the main, preload and renderer entries.
+
+## Debugging first install issues
+
+To simulate a fresh install, clear the app data and run dev again.
 
 ```bash
-# 1. Clear all app data (auth, database, settings)
+# 1. Clear app data, which holds auth, the database and settings
 rm -rf ~/Library/Application\ Support/mausCode\ Dev/
 
-# 2. Reset macOS protocol handler registration (if testing deep links)
+# 2. Reset the macOS protocol handler registration when testing deep links
 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -kill -r -domain local -domain system -domain user
 
-# 3. Clear app preferences
-defaults delete dev.mausinc.mauscode.dev  # Dev mode
-defaults delete dev.mausinc.mauscode      # Production
-
-# 4. Run in dev mode with clean state
+# 3. Run with clean state
 bun run dev
 ```
 
-**Common First-Install Bugs:**
-- **OAuth deep link not working**: macOS Launch Services may not immediately recognize protocol handlers on first app launch. User may need to click "Sign in" again after the first attempt.
-- **Folder dialog not appearing**: Window focus timing issues on first launch. Fixed by ensuring window focus before showing `dialog.showOpenDialog()`.
+Dev and production are kept apart by two mechanisms, both declared in `src/main/constants.ts`. Dev derives its userData folder name from `DEV_USER_DATA_NAME`, which is `mausCode Dev`, so the two installs never share a database. Dev registers the `mauscode-dev` deep link protocol while production registers `mauscode`. Both installs share the `dev.mausinc.mauscode` app id from `package.json`, and `AUTH_SERVER_PORT` differs so the two can run side by side.
 
-**Dev vs Production App:**
-- Dev mode uses `mauscode-dev://` protocol
-- Dev mode uses separate userData path (`~/Library/Application Support/mausCode Dev/`)
-- This prevents conflicts between dev and production installs
+Two first-install bugs are known. The OAuth deep link may need a second click on first launch, because macOS Launch Services does not always register a protocol handler immediately. The folder dialog can also miss the first attempt when the window is not yet focused, and the fix is to focus the window before `dialog.showOpenDialog()`.
 
-## Releasing a New Version
+## Releasing a new version
 
-### Prerequisites for Notarization
+Release artifacts are unsigned by design. The human refused signing and notarization for mausCode on 2026-09-14, and `.dump/global/decisions.md` records that decision with the rejected option named. There is no notarization identity, no keychain profile and no plan to add one, so a signing or notarization step must never be reintroduced here.
 
-mausCode must re-provision its own Apple signing/notarization credentials (the inherited
-`21st-notarize` keychain profile belongs to the upstream project and is not available to maus-inc).
+`SHA256SUMS` is the integrity story. A user who wants to run a build confirms the checksum, and the README states the one-time right-click Open that Gatekeeper requires.
 
-- Create a maus-inc keychain profile, e.g. `mauscode-notarize`:
-  `xcrun notarytool store-credentials "mauscode-notarize" --apple-id MAUS_APPLE_ID --team-id MAUS_TEAM_ID`
-- Update `electron-builder.yml` / CI to use the new identity
+Auto-update stays off until a build sets `MAIN_VITE_UPDATE_FEED_URL`. That default is what makes publishing an unsigned artifact safe, and `src/shared/app-identity.ts` holds `DEFAULT_UPDATE_FEED_URL` as empty. Never reintroduce a third-party update host. The inherited `cdn.21st.dev` channel served 1Code's manifests and must not come back.
 
-### Release Commands
+Roadmap step 32 builds the release workflow and owns the artifact matrix, the alpha and stable channels, and the manifest paths. Until that step lands, the only release surface in the tree is `electron-builder.yml`, the `package:*` scripts, and `dist:manifest` which runs `scripts/generate-update-manifest.mjs`.
 
-```bash
-# Full release (build, sign, submit notarization, upload to CDN)
-bun run release
+## Where the live status lives
 
-# Or step by step:
-bun run build              # Compile TypeScript
-bun run package:mac        # Build & sign macOS app
-bun run dist:manifest      # Generate latest-mac.yml manifests
-./scripts/upload-release-wrangler.sh  # Submit notarization & upload to R2 CDN
-```
-
-### Bump Version Before Release
-
-```bash
-npm version patch --no-git-tag-version  # 0.0.27 → 0.0.28
-```
-
-### After Release Script Completes
-
-1. Wait for notarization (2-5 min): `xcrun notarytool history --keychain-profile "mauscode-notarize"`
-2. Staple DMGs: `cd release && xcrun stapler staple *.dmg`
-3. Re-upload stapled DMGs to R2 and GitHub (see RELEASE.md for commands)
-4. Update changelog: `gh release edit v0.0.X --notes "..."`
-5. **Upload manifests (triggers auto-updates!)** — see RELEASE.md
-6. Sync to public: `./scripts/sync-to-public.sh`
-
-### Files Uploaded to CDN
-
-| File | Purpose |
-|------|---------|
-| `latest-mac.yml` | Manifest for arm64 auto-updates |
-| `latest-mac-x64.yml` | Manifest for Intel auto-updates |
-mausCode release artifacts use the `mausCode` product name (e.g. `mausCode-{version}-arm64-mac.zip`).
-Upload targets are mausCode's own release CDN, configured via `MAIN_VITE_UPDATE_FEED_URL` —
-the inherited `cdn.21st.dev` channel is gone and must never be re-added.
-
-| File | Purpose |
-|------|---------|
-| `latest-mac.yml` | Manifest for arm64 auto-updates |
-| `latest-mac-x64.yml` | Manifest for Intel auto-updates |
-| `mausCode-{version}-arm64-mac.zip` | Auto-update payload (arm64) |
-| `mausCode-{version}-mac.zip` | Auto-update payload (Intel) |
-| `mausCode-{version}-arm64.dmg` | Manual download (arm64) |
-| `mausCode-{version}.dmg` | Manual download (Intel) |
-
-### Auto-Update Flow
-
-Auto-update is disabled until `MAIN_VITE_UPDATE_FEED_URL` is configured at build time. Once configured:
-
-1. App checks `{feed-url}/latest-mac.yml` on startup and when window regains focus (with 1 min cooldown)
-2. If version in manifest > current version, shows "Update Available" banner
-3. User clicks Download → downloads ZIP in background
-4. User clicks "Restart Now" → installs update and restarts
-
-## Current Status (WIP)
-
-**Done:**
-- Drizzle ORM setup with schema (projects, chats, sub_chats)
-- Auto-migration on app startup
-- tRPC routers structure
-
-**In Progress:**
-- Replacing `mock-api.ts` with real tRPC calls in renderer
-- ProjectSelector component (local folder picker)
-
-**Planned:**
-- Git worktree per chat (isolation)
-- Claude Code execution in worktree path
-- Full feature parity with web app
-
-## Debug Mode
-
-When debugging runtime issues in the renderer or main process, use the structured debug logging system. This avoids asking the user to manually copy-paste console output.
-
-**Start the server:**
-```bash
-bun packages/debug/src/server.ts &
-```
-
-**Instrument renderer code** (no import needed, fails silently):
-```js
-fetch('http://localhost:7799/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:'TAG',msg:'MESSAGE',data:{},ts:Date.now()})}).catch(()=>{});
-```
-
-**Read logs:** Read `.debug/logs.ndjson` - each line is a JSON object with `tag`, `msg`, `data`, `ts`.
-
-**Clear logs:** `curl -X DELETE http://localhost:7799/logs`
-
-**Workflow:** Hypothesize → instrument → user reproduces → read logs → fix with evidence → verify → remove instrumentation.
-
-See `packages/debug/INSTRUCTIONS.md` for the full protocol.
+This file describes architecture, and it does not carry a status list. A status list inside an instruction file is how the drift this page just corrected happened. The current state of the product, what shipped and what is open, lives in `.dump/app/second-brain.md`. The ordered work sequence lives in `.dump/app/plans/2026-09-13-mauscode-roadmap.md`, and every step closes with a dated record under `.dump`.

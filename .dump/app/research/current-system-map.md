@@ -4,6 +4,30 @@ Provenance: 1Code tree at origin/main 9f1bc76 ("Release v0.0.72"); JCode upstrea
 1jehuang/jcode ce4e789 (v0.84.0). All paths relative to repo root unless noted.
 Verified by reading source, not docs.
 
+## 0. Correction record, 2026-09-14
+
+Roadmap step 01 re-measured this map against the tree at `7c89af0`. Six rows were
+false and are corrected inline. Each value below is the re-measured one, and the
+row that carries it names the section.
+
+| Claim as written | Re-measured 2026-09-14 | Where |
+| --- | --- | --- |
+| `createAppRouter` exposes 20 routers | 36 routers mounted, from 37 files in `src/main/lib/trpc/routers`. The 36th is `changes` from `createGitRouter()` in `src/main/lib/git` | §2 |
+| `src/main/lib/credential-manager.ts` is dead code with 821 lines and zero references | The file is gone. Nothing references it | §2, §18 |
+| No test files anywhere in the repo; no test runner configured | 71 `.test.ts` files. Vitest runs 54 under `src/`, `npm run test:node` runs 5 more under `src/main/lib/runtime`, and `packages/runtime-client` runs 6 through its own `node --test`. `runtime/jcode/sdk/typescript/test/` holds 6 that CI does not run | §2 |
+| `mock-api.ts` is marked DEPRECATED | It is live. Four renderer files import it and it must not be removed without rewiring them | §2, §18 |
+| `mock-api.ts` is imported by 6 chat UI files | Four importers, named at the §18 row | §18 |
+| `credential-manager.ts` verdict REMOVE | Done, so the row is spent rather than pending | §18 |
+
+Two entries that look like dead paths are not repo files and are left as written.
+`window-settings.json` is the persisted frame preference and project `.mcp.json` is
+a user config the app reads. Neither is tracked, and neither should be.
+
+Provenance is unchanged. The map describes the inherited 1Code app as it stood at
+`9f1bc76`, and the corrections above are what changed underneath it. When a later
+step needs current architecture rather than the inherited baseline, read
+`CLAUDE.md`.
+
 ## 1. Current frontend architecture
 
 - Electron renderer (React 19, TS, Tailwind, Radix, `@/` → `src/renderer/`).
@@ -34,7 +58,7 @@ Verified by reading source, not docs.
   Native deps externalized: `electron`, `better-sqlite3`, `@anthropic-ai/claude-agent-sdk`
   (dynamic import only).
 - IPC is **tRPC over Electron IPC** (`trpc-electron` `ipcLink`, superjson transformer).
-  `createAppRouter(getWindow)` exposes 20 routers (`trpc/routers/index.ts`): projects,
+  `createAppRouter(getWindow)` exposes 36 routers (`trpc/routers/index.ts`): projects,
   chats, claude, claudeCode, claudeSettings, anthropicAccounts, ollama, codex, terminal,
   external, files, debug, skills, agents, worktreeConfig, sandboxImport, commands, voice,
   plugins, changes (git via `createGitRouter()`). Context is just `{ getWindow }`; there
@@ -45,10 +69,13 @@ Verified by reading source, not docs.
 - `src/main/index.ts` (1000+ lines): lifecycle, OAuth deep links, menus (About 1Code,
   `1code` PATH installer), trusted origins (`21st.dev`, localhost), API base
   `https://21st.dev`, auth windows. `src/main/lib/platform/` per-OS darwin/linux/windows.
-- Dead code found: `src/main/lib/credential-manager.ts` (821 lines) imports
-  `./types.ts`, `../credentials/*`, `../auth/*` — none exist — and is imported by
-  nothing. `renderer/lib/mock-api.ts` is marked DEPRECATED. No test files anywhere
-  in the repo; no test runner configured.
+- Dead code: `src/main/lib/credential-manager.ts` was 821 lines that imported
+  `./types.ts`, `../credentials/*` and `../auth/*`, none of which existed, and
+  nothing imported it. It has since been deleted. `renderer/lib/mock-api.ts` is
+  live, not deprecated: four renderer files import it as the tRPC stand-in. See
+  `.dump/app/decisions/2026-09-14-mock-api-disposition.md`. The repository now
+  holds 71 test files across Vitest and `node --test`, so the inherited baseline
+  of no tests and no runner no longer applies.
 
 ## 3. Current agent execution path
 
@@ -379,8 +406,8 @@ product modules; never rewrite a stable module for cleanliness.
 | CLI (`1code` command) | `src/main/lib/cli.ts`, `src/main/lib/platform/` | REIMPLEMENT | Becomes `mauscode` CLI surface |
 | Worktree config/naming | `src/main/lib/git/worktree*` | KEEP | Good product behavior, no backend coupling |
 | Renderer `features/*` (agents, terminal, changes, kanban, …) | `src/renderer/` | KEEP as reference implementation | No redesign before the native vertical slice works |
-| `credential-manager.ts` (821 lines) | `src/main/lib/credential-manager.ts` | REMOVE | Dead: imports nonexistent modules, zero references |
-| `mock-api.ts` | `src/renderer/lib/mock-api.ts` | KEEP | Actively imported by 6 chat UI files as the tRPC bridge; the DEPRECATED label in CLAUDE.md is stale — the file was investigated 2026-09-11 and must not be removed without rewiring its importers |
+| `credential-manager.ts` (821 lines) | `src/main/lib/credential-manager.ts` | REMOVE | Spent. The file is deleted and nothing referenced it |
+| `mock-api.ts` | `src/renderer/lib/mock-api.ts` | KEEP | Live tRPC stand-in with 4 importers: `src/renderer/features/agents/main/active-chat.tsx`, `src/renderer/features/agents/mentions/agents-file-mention.tsx`, `src/renderer/features/agents/ui/agents-content.tsx` and `src/renderer/features/agents/ui/sub-chat-selector.tsx`. The DEPRECATED label in CLAUDE.md was stale and is removed. It must not be deleted without rewiring those four first |
 
 ## 19. Inherited service coupling points (strip list)
 
