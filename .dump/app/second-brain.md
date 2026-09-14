@@ -159,16 +159,24 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   `2026-09-13-hermes-memory-spike.md` (memory as a provider *lifecycle*: static prompt block vs per-turn recall,
   `queue_prefetch` consumed next turn, fail-closed pre-compress checkpoint, unattended writes limited to `add`).
 
-## Unresolved user-facing decisions
+## User-facing decisions (2026-09-14)
 
-- Wordmark selection (5 PNGs in `new mauscode branding/`); app id is settled in the tree at
-  `dev.mausinc.mauscode` (`package.json` `build.appId`, `rebrand/decisions/naming-system.md`),
-  while `decisions/provisional-assumptions.md` PA-1 still writes `com.maus-inc.mauscode` and needs
-  marking spent; release channel, product domain and CDN owner remain the human's, as does the
-  `package.json` `name` and `version` drift described in
-  `plans/2026-09-13-mauscode-roadmap.md` step 31. JCode vendor form is ratified: copied tree under
-  `runtime/jcode` with `UPSTREAM.md` and the MIT notice. See `decisions/` and
-  `.dump/global/questions.md`.
+- All eighteen numbered items in `.dump/global/questions.md` are answered, in four batches across
+  2026-09-13 and 2026-09-14, each recorded in `.dump/global/decisions.md` with the rejected option
+  named. Closed here: app id `dev.mausinc.mauscode` with display name `mausCode` and npm name and CLI
+  `mauscode`, PA-1 corrected to call `com.maus-inc.mauscode` stale, `package.json` `name` `mauscode` and
+  `version` `0.1.0` as the step 31 targets, channels alpha and stable on GitHub Releases with no CDN, and
+  no signing or notarization anywhere, so artifacts are unsigned by design with SHA256SUMS as the
+  integrity story. 1Code data stays read-only detection permanently, with no import button and no
+  migration. JCode vendor form is ratified: copied tree under `runtime/jcode` with `UPSTREAM.md` and the
+  MIT notice.
+- Still a taste call, and nothing else is: which wordmark is the product's, among the five PNGs in the
+  branding masters directory that roadmap step 31 relocates to `assets/branding/`. It blocks no step;
+  step 25 and any marketing pass need an answer.
+- P1 user-facing provisionals needing confirmation: engine toggle labels
+  ("Legacy"/"Native"); refusal copy for plan mode / offline / custom endpoints
+  on native; whether native stays opt-in per-chat pending the benchmark gate.
+  See `decisions/provisional-assumptions.md` (PA-7+). Each is a small localized change to overturn.
 - P1 user-facing provisionals needing confirmation: engine toggle labels
   ("Legacy"/"Native"); refusal copy for plan mode / offline / custom endpoints
   on native; whether native stays opt-in per-chat pending the benchmark gate.
@@ -206,3 +214,12 @@ Read before implementing anything in the sequence: §5 of the roadmap lists nine
 that did not survive re-measurement at `d5bdf69`, including the changelog anchor, which is
 already fixed, and the Codex app-server port, which already shipped. Steps 01 to 04 are the
 prerequisites; steps 10 and 11 are the two critical-risk gates everything unattended depends on.
+
+State on 2026-09-14, after the decision batches. The `roadmap` label is on all 46 issues, #3 to #48,
+applied by the human in the web UI, so step 22's issue trigger is live; the write probe issue is
+deleted. Twelve issue bodies are behind their files and the human accepted that as the steady state,
+so `.dump/app/roadmap/NN-<slug>.md` is the source of truth and `{{SNN}}` resolves to `#NN+2`; see plan
+§4b. Plan §4c records that this session ends at planning, with no step executed and nothing further
+landing on `arena/01a097c4-mauscode`. The vendored contracts tree has an adoption ledger at
+`plans/contracts-adoption.md`, measured at 44 source files and 19,439 lines plus 23 ported test files
+and 5,488 lines, 24,927 total, correcting the 24,860 figure the corpus had carried.

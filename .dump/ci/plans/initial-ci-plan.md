@@ -73,6 +73,12 @@ JCode/runtime binary bundling slots in via the pinned-download script pattern
 once the runtime is integrated. Signing/notarization slots in behind
 feature-flag secrets only after the human picks channels.
 
+**Superseded 2026-09-14.** Both open halves of that sentence were answered: channels are alpha and
+stable, defined by roadmap step 32, and signing does not slot in behind anything, because the human
+refused it for this program. Unsigned artifacts plus SHA256SUMS are the plan, and the four-target matrix
+stays as written above. See `.dump/global/questions.md` items 7 and 8, closed in
+`.dump/global/decisions.md`.
+
 ## Phase 4 — repo health ratchets
 
 Raise gates as domains fix debt: typecheck ratchet → hard gate at 0; biome from

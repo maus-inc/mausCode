@@ -11,7 +11,7 @@
 
 ## 1. Outcome
 
-A manually dispatched release workflow that builds every target, produces unsigned artifacts with a checksum file and an updater manifest, publishes them to GitHub Releases as a draft, and stops there until a human promotes it. Ratified 2026-09-14: the workflow defines two channels, alpha and stable, each with its own manifest and feed path, and it leaves a clearly marked notary placeholder that fails with an instruction rather than silently skipping. Signing itself waits on the human's Apple developer account, recorded as `questions.md` item 8.
+A manually dispatched release workflow that builds every target, produces unsigned artifacts with a checksum file and an updater manifest, publishes them to GitHub Releases as a draft, and stops there until a human promotes it. Ratified 2026-09-14, on two points answered the same day. Two channels, alpha and stable, each with its own manifest and feed path. All four targets stay in the matrix, which is a deliberate CI-minute cost, because cross-platform breakage should surface at release time rather than in a nightly someone skips. And there is no signing job and no notary placeholder at all, because the human answered the signing question as never: the release is unsigned by design, its integrity story is the checksum file, the README states the one-time right-click Open a user needs to get past Gatekeeper, and auto-update stays off unless a feed URL is set at build time, which is what makes publishing an unsigned artifact safe rather than dangerous. Adding signing later is a new decision with its own step, not a TODO left in this one.
 
 ## 2. Why it matters
 
@@ -39,14 +39,14 @@ There is no release automation at all: `.github/workflows/` contains only `ci.ym
 2. Matrix mac x64 and arm64, windows x64, linux x64, each doing full install, the two binary downloads for that platform, `build:runtime-client`, the build with the heap flag, then `electron-builder` for that target.
 3. Write `SHA256SUMS` next to the artifacts, run `dist:manifest`, and attach both to a draft GitHub Release. Publishing stays a human click, and the workflow must not promote its own draft.
 4. Verify before upload: recompute each checksum in the job, and fail if a file size or hash disagrees with what the manifest names, so a truncated artifact cannot be published.
-5. Keep signing behind secrets that are absent by default, and document that a missing identity yields an unsigned artifact rather than a red build, which is what the `package` job already proves.
+5. Configure nothing for signing, and say so in the release notes and the README: the artifacts are unsigned by design rather than unsigned by accident, and the checksum file is the integrity story. Do not leave a secrets-dependent branch in the workflow for a future identity, since a code path that never runs in CI is where a release trust bug hides.
 6. Record per-artifact size in the release body, since a size regression on a shipped binary is the one performance metric a user can see.
 7. `gh release view` the draft as the acceptance check, and print the exact commands the job ran, per the CI plan's note that a review should cite real output.
 
 ## 8. Boundaries
 
 - Always: manual dispatch, unsigned by default, checksums published, draft release only, `contents: write` scoped to the one step that needs it.
-- Ask first: any notarization or signing secret, which is the human's account decision, item 8 in `.dump/global/questions.md`, and any change to `dist:manifest` output shape, which is a release-trust change.
+- Ask first: any reintroduction of signing or notarization, which the human refused on 2026-09-14 (item 8 in `.dump/global/questions.md`, closed in `decisions.md`), and any change to `dist:manifest` output shape, which is a release-trust change.
 - Never: publishing on a push event, an update host hardcoded in a workflow, a token in a URL, auto-promoting a draft, or an artifact without a checksum.
 
 ## 10. Acceptance criteria
@@ -56,7 +56,7 @@ There is no release automation at all: `.github/workflows/` contains only `ci.ym
 - [ ] Two consecutive runs on the same commit produce identical checksums, which is the reproducibility claim.
 - [ ] `shasum -c` against the published file passes on a downloaded artifact.
 - [ ] A truncated artifact fails the verification step rather than publishing, proven by a forced test.
-- [ ] With no signing secret, the job is green and says unsigned in the release notes.
+- [ ] The job is green with no signing identity configured anywhere, and the release notes state that artifacts are unsigned by design and link the checksum file.
 
 ## 11. Verification
 

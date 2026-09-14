@@ -37,7 +37,7 @@ Every later step quotes these documents. A wrong path costs an agent a read cycl
 ## 6. Implementation plan
 
 1. Measure, do not copy: `ls src/main/lib/trpc/routers`, count exported procedures, grep the mode union in `src/shared`, and read `package.json` dependencies for the real SDK name and version.
-2. Rewrite the `CLAUDE.md` sections that are wrong: router inventory, mode taxonomy, SDK package name, directory map. Keep the release and notarization sections, they are inherited process, not architecture.
+2. Rewrite the `CLAUDE.md` sections that are wrong: router inventory, mode taxonomy, SDK package name, directory map. Keep the release sections, since they are inherited process rather than architecture, but correct them: the artifacts are unsigned by design, there is no notarization identity and none is planned, a decision the human settled on 2026-09-14 and recorded in `.dump/global/decisions.md`.
 3. Same pass on `openspec/project.md`.
 4. Reconcile `docs/current-system-map.md` with the `.dump` copy, then delete one of the two copies and leave a pointer. One fact, one file.
 5. Resolve the `mock-api.ts` contradiction in favour of the tree, record the decision in `.dump/app/decisions/`, and fix the plan file that asserted the deletion.

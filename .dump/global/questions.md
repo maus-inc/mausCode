@@ -4,15 +4,23 @@ One entry per question that only a person can settle, because it needs money, an
 public promise, or a product taste the code cannot express. Each entry carries the measurement
 that bears on it, so an answer is cheap to give and expensive to get wrong. Answered entries
 move to `decisions.md` with the date, and their number stays here with a one-line answer so a
-citation by item number never rots.
+citation by item number never rots. A new question is appended here before it goes anywhere else,
+and a question that can be answered by measurement is not a question, it is a task.
 
-## Answered
+**No item is open.** All eighteen were answered between 2026-09-13 and 2026-09-14, in four batches,
+each recorded in `decisions.md` with the rejected option named.
 
-Batch 1, 2026-09-13, recorded in `decisions.md` and folded into the roadmap plan §4a: the Claude Agent SDK
-line (item 1), the drag and drop library (2), the Codex default constant (3), the memory store owner (4),
-and the built-in sign-in scope (18).
+## Answered 2026-09-13, batch 1
 
-Batch 2, 2026-09-14, recorded in `decisions.md`, plan §4a, and the six step bodies it moved:
+1. Claude Agent SDK `0.3.270` with Claude CLI `2.1.270`, not the changelog note's `0.2.63`. Step 12 lands it.
+2. `@dnd-kit` approved as an explicit exception to the no-new-dependency rule, added by step 12 with exact
+   pins and a recorded bundle delta.
+3. Codex default read from the pinned CLI at runtime, static fallback, loud refusal when neither answers.
+4. Memory ownership hybrid: the runtime proposes, mausCode stores, the user accepts.
+18. Built-in sign-in scope: gate and login modal out, provider OAuth and the credential switcher kept.
+   Ratified as PA-20, which step 45 now executes.
+
+## Answered 2026-09-14, batch 2
 
 5. `name` `mauscode` and `version` `0.1.0` are the target values, and the stale `mauscode-desktop` and
    `0.0.72` records are corrected by step 31 rather than the other way round.
@@ -29,20 +37,21 @@ Batch 2, 2026-09-14, recorded in `decisions.md`, plan §4a, and the six step bod
 17. No user model and no user-derived profile, local storage included. The data-egress doctrine in
     `AGENTS.md` is the rule, and step 27's egress policy is where it is enforced.
 
-## Still open
+## Answered 2026-09-14, batch 3
 
-Only two items need a person and neither is a code decision.
+9. Left in place. The three demo GIFs stay in `assets/` unreferenced, and re-recording is deferred to the
+   README pass that happens after the interface settles.
+11. Wired. Step 02 lands `tsgo --noEmit` as a second CI gate after the disagreement with `tsc` is measured
+   and each case justified; `tsc` remains the blocking gate.
+13. Moved to `assets/branding/` in git, labelled design inputs, never build inputs. `package-lock.json` is
+   already gone from the root, verified this session, and stays gone.
+14. Kept and made legitimate. Step 31 renames `.github/workflows/lock-regen-temp.yml` to a supported,
+   manually dispatched workflow with the conditions for its use written in the file.
 
-8. **Apple signing and notarization.** Needs a developer account and a re-provisioned keychain; the
-   inherited `21st-notarize` identity is gone. This is money and an admin seat, not code, so step 32 ships
-   the workflow with a placeholder that fails loudly until this is settled.
-9. Answered 2026-09-14: left in place. The three GIFs stay in `assets/` unreferenced, and re-recording is
-   deferred to the README pass that happens after the interface settles.
-11. Answered 2026-09-14: wired. Step 02 lands `tsgo --noEmit` as a second CI gate after the disagreement
-   with `tsc` is measured and each case justified; `tsc` remains the blocking gate.
-13. Answered 2026-09-14: moved to `assets/branding/` in git, labelled design inputs, never build inputs.
-   `package-lock.json` is already gone from the root, verified this session, and stays gone.
-14. Answered 2026-09-14: kept and made legitimate. Step 31 renames it to a supported manually dispatched
-   workflow with the conditions for its use written in the file.
-15. **1Code data auto-migration.** Read-only detection is ratified. If a migration prompt is ever wanted,
-   it needs its own design and tests, per the rejected list in `decisions.md`.
+## Answered 2026-09-14, batch 4
+
+8. Not wanted. No signing and no notarization anywhere: unsigned artifacts plus checksums, documented
+   Gatekeeper bypass, and auto-update off by default. Step 32's notary placeholder is deleted rather than
+   left to fail.
+15. Never. 1Code data stays read-only detection permanently, with no import button and no migration, so
+   nothing a user has is ever written by us.

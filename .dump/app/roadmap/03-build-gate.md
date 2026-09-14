@@ -69,7 +69,7 @@ No source change expected. If you must change something to get a green build, it
 
 ## 14. Out of scope
 
-Fixing the renderer bundle size, which is step {{S30}}; signing and notarization, which need the human; the dependency bump, which is step {{S12}}.
+Fixing the renderer bundle size, which is step {{S30}}; signing and notarization, which the human refused outright on 2026-09-14 so no artifact is ever signed; the dependency bump, which is step {{S12}}.
 
 ## 15. Handoff notes
 
