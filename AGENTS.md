@@ -50,7 +50,7 @@ Prevention beats review. These are the failure classes recorded in `FULL-REVIEW.
 
 ## How to work a roadmap step
 
-Every step is a GitHub issue labelled `roadmap`, generated from `.dump/app/roadmap/NN-<slug>.md`. The issue body opens with this file verbatim, so the rules travel with the work. Decompose before you build, and write the answer in the issue's sections rather than in your head.
+Every step is a GitHub issue labelled `roadmap`, generated from `.dump/app/roadmap/NN-<slug>.md`. The issue body opens with this file verbatim, so the rules travel with the work. Decompose before you build, and write the answer in the issue's sections rather than in your head. The step number maps to an issue number by adding two, and `.dump/app/roadmap/00-how-to-use-this-roadmap.md` is the operator's manual for the sequence, including what each numbered section of a step is for and what closing one requires.
 
 1. Run `find-skills` first, always, from `.agents/skills/find-skills/SKILL.md`, and search before you design rather than after. Name in your report which skills you looked for, what you found, what you installed or refused, and how each one changed the approach. Use `npx skills find` for discovery, read the candidate `SKILL.md` before installing, and apply the quality bar in Skill routing below. If the toolchain is unavailable in your environment, say so plainly and continue with the project skills.
 2. Read the step, then restate it in one line: outcome, owner, demo. If the restatement is vague, the step is not ready and you ask before coding.

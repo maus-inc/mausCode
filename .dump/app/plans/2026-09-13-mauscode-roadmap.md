@@ -6,7 +6,7 @@
 
 ## 1. Reading order
 
-1. `AGENTS.md` at the repository root. Binding rules, verification gates, parallel-agent lanes.
+1. `AGENTS.md` at the repository root. Binding rules, verification gates, parallel-agent lanes. Then `.dump/app/roadmap/00-how-to-use-this-roadmap.md` for the machinery around the sequence: the three artifacts per step, what each numbered section is for, the dependency rule, the paste-ready handoff prompt, and what closing a step requires.
 2. `docs/design-system-baseline.md` before interface work, `docs/backend-porting-recipe.md` before provider work, `docs/ci-gotchas.md` before gate work, `FULL-REVIEW.md` before claiming anything is done.
 3. `.dump/app/second-brain.md`, then the specific `research/` file named by your step.
 4. `.agents/skills/find-skills/SKILL.md`, which you run before designing, as described next.
@@ -151,11 +151,13 @@ repository ground rules, verbatim` heading, so the rules travel with the work. F
 45 issues plus the index, #48, which resolves a `{{SNN}}` reference to its issue number. Editing and
 commenting on issues is blocked for this integration, so the tokens stay in the bodies and the index
 issue is the resolution; the arithmetic on this board is issue number equals step number plus two.
-Two consequences of that block, both recorded so nobody is misled: the `roadmap` label exists but
-could not be attached to any issue, and any step body revised in this directory after filing, which
-includes #45's step 43 body, is newer on disk than on GitHub, because an issue cannot be edited here.
-The file is the authority, as `AGENTS.md` requires, and closing an issue against the GitHub copy
-alone is a review finding.
+Two consequences of that block, recorded so nobody is misled. The `roadmap` label existed but could not be
+attached by the integration; the human applied it to all 46 issues in the web UI on 2026-09-14, verified with
+`gh issue list --label roadmap --limit 200`, which is what unblocks step 22's trigger. And any step body revised
+in this directory after filing is newer on disk than on GitHub, because an issue cannot be edited here: twelve
+of them are behind, the human accepted that as the steady state, and dated drift notices are posted as comments
+from `.dump/app/plans/2026-09-14-issue-drift-notices.md`. The file is the authority, as `AGENTS.md` requires, and
+closing an issue against the GitHub copy alone is a review finding.
 
 ```sh
 { printf '## Starter: the repository ground rules, verbatim\n\n'; cat AGENTS.md;
