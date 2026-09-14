@@ -7,7 +7,7 @@ only); PA-7+ are P1 user-facing provisionals already shipped behind the Native
 opt-in — overturning any of them is a small, localized change.
 
 - PA-1. (SPENT 2026-09-11: user decision #4 locked mausCode/maus-inc and the
-  rename was executed — package `mauscode`, appId `com.maus-inc.mauscode`,
+  rename was executed — package `mauscode`, appId `com.maus-inc.mauscode` as written then, which the tree never used: `build.appId` reads `dev.mausinc.mauscode` and that value was ratified 2026-09-14 as canonical, so read `com.maus-inc.mauscode` below as stale,
   productName `mausCode`, CLI shim `mauscode`.) Was: CLI command will be
   `mauscode`; no renames until confirmed.
 - PA-2. Canonical wordmark undecided; no logo committed to product surfaces by this

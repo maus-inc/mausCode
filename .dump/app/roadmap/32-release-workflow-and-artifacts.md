@@ -11,7 +11,7 @@
 
 ## 1. Outcome
 
-A manually dispatched release workflow that builds every target, produces unsigned artifacts with a checksum file and an updater manifest, publishes them to GitHub Releases as a draft, and stops there until a human promotes it.
+A manually dispatched release workflow that builds every target, produces unsigned artifacts with a checksum file and an updater manifest, publishes them to GitHub Releases as a draft, and stops there until a human promotes it. Ratified 2026-09-14: the workflow defines two channels, alpha and stable, each with its own manifest and feed path, and it leaves a clearly marked notary placeholder that fails with an instruction rather than silently skipping. Signing itself waits on the human's Apple developer account, recorded as `questions.md` item 8.
 
 ## 2. Why it matters
 

@@ -11,7 +11,7 @@
 
 ## 1. Outcome
 
-The identity fields the rebrand decided are the identity fields in the tree, the records that disagree are corrected, and the loose ends a rename left behind are closed: a broken icon script, duplicate font archives at the repository root, re-record marks on demo media, and one audit of the legacy-name classification so nobody re-audits it.
+The identity fields the rebrand decided are the identity fields in the tree, the records that disagree are corrected, and the loose ends a rename left behind are closed: a broken icon script, duplicate font archives at the repository root, re-record marks on demo media, and one audit of the legacy-name classification so nobody re-audits it. Ratified 2026-09-14, so these are decisions rather than open questions: `build.appId` stays `dev.mausinc.mauscode`, the display name is `mausCode`, the npm name and CLI stay `mauscode`, orphaned font archives and stray media at the repository root are removed, and this step adds a CI branding guard that fails on `21st` or T3 identity strings outside vendored comments and licence files. The icon script is fixed by step 12 declaring `sharp`, so here it is verified, not retired.
 
 ## 2. Why it matters
 

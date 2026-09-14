@@ -73,4 +73,4 @@ Fixing the renderer bundle size, which is step {{S30}}; signing and notarization
 
 ## 15. Handoff notes
 
-Update `.dump/app/plans/2026-09-12-jules-port-plan.md` §11.1 row "app build, then packaging" with the measured result and the date, so nobody re-derives it.
+Update `.dump/app/plans/2026-09-12-jules-port-plan.md` §11.1 row "app build, then packaging" with the measured result and the date, so nobody re-derives it. If this step adopts any type under `src/shared/contracts/`, update its row in `.dump/app/plans/contracts-adoption.md` in the same commit; the ledger's measured baseline is 44 source files at 19,439 lines, 23 test files at 5,488 lines, and zero external importers.

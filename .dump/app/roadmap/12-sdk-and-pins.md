@@ -39,6 +39,7 @@ Three pins move as one because they are the same product's wire format: SDK at `
 4. Wire adaptive thinking, effort and prompt suggestions to the mode and model selectors, keeping the mode taxonomy ratified in `AGENTS.md` untouched. No new mode.
 5. Re-run the recipe §4 closed-dialect check on the new chunk kinds in the same commit, and update `src/main/lib/claude/transform.ts` types from step 09 if the stream shape changed.
 5b. Add `@dnd-kit/core`, `@dnd-kit/sortable` and `@dnd-kit/utilities` in their own commit, exact pins, `bun install` to regenerate `bun.lock`, and a note that steps 17, 18 and 37 consume them through one shared context at the agents layout root. Record bundle bytes per target with and without them, since this is the dependency a performance claim will be checked against.
+5c. Declare `sharp` as a devDependency with an exact pin. `scripts/generate-icon.mjs:21` imports it while `package.json` declares nothing, so the icon script runs only when a transitive copy happens to be hoisted; a fresh install with `--ignore-scripts` cannot run it. This is the second and last approved dependency exception after `@dnd-kit`, and the reason it belongs here is that this is the only step allowed to touch `package.json` and `bun.lock`.
 6. Confirm the binary integrity path still verifies: run `bun run claude:download` and `bun run codex:download` and record the hash check outcome.
 7. `bun run build` with the 4 GB heap flag and `bun run package:linux` after the bump, because a native module mismatch only shows up at packaging.
 

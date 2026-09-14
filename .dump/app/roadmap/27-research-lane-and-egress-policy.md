@@ -13,6 +13,8 @@
 
 A research lane: the agent can search and fetch on its own initiative when the task needs it, and every such call passes one egress policy that names the allowed hosts, the byte caps and the redaction. The policy is a capability the app reports, not a hope.
 
+The acceptance test is the doctrine the human ratified on 2026-09-14, quoted in `AGENTS.md`: nothing leaves the machine that the user did not ask for, and anything that can leave is visible where the user can see it. A search or a fetch that cannot be traced to a user request, a recorded URL, a byte cap and a redaction rule does not ship. No user-derived profile or behavioural model is stored, locally included, so nothing here writes facts about the human to disk.
+
 ## 2. Why it matters
 
 Triage row 51 accepted proactive web search and left the shape to this plan, and the plan's answer is that the search is not the risky part. The risky part is an unattended run reaching the network with no record. Ten provider profiles already declare `egress: ["provider-configured"]` in `src/main/lib/providers/`, verified this session, which is the honest statement that we currently know nothing about what those CLIs fetch on their own. This step makes the app's own fetches governed and visible, and records the boundary of what we cannot govern.

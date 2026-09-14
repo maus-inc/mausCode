@@ -25,6 +25,17 @@ The four §11.3 decisions and the sign-in scope were answered in one batch the s
 | Memory owner | Hybrid, the runtime may propose and mausCode stores | Step 24 and step 43 share one proposal queue and one accept surface, and the engine's own memory store stays dark |
 | Sign-in scope | Gate and login modal out, provider OAuth and the credential switcher kept | Step 45 proceeds from an assumption to a ratified scope, recorded as PA-20 |
 
+A second batch was answered 2026-09-14 and is recorded in the same file, `.dump/global/decisions.md`. Five of its answers move steps: `sharp` is declared as a devDependency by step 12 rather than retiring the icon script, package identity is closed at `dev.mausinc.mauscode` with the display name `mausCode` and a CI branding guard in step 31, the data-egress doctrine is the acceptance test for step 27 and now a rule in `AGENTS.md`, the vendored contracts are kept and absorbed per use with the ledger at `.dump/app/plans/contracts-adoption.md`, and step 32 defines alpha and stable channels with a notary placeholder while signing waits on the human's Apple account. The sixth closes handoff-document hygiene as a convention in `AGENTS.md`, with no root `HANDOFF.md` tracked.
+
+## 4b. Known drift between the issues and these files
+
+GitHub issue bodies were written from these files, and the integration this session runs under can create issues and repo-level labels but cannot edit an issue, comment on one, or add a label to one; every one of those calls returns 403 `Resource not accessible by integration`. That leaves three kinds of drift the human must clear in about a minute of UI work, and every agent must know about them.
+
+- Steps 03, 04, 05, 12, 17, 24, 27, 31, 32, 43 and 45 have a body behind their file, because the ratifications above landed after the bodies were written. `NN-<slug>.md` is the truth, the issue is a pointer.
+- Six bodies, for steps 04, 05, 12, 17, 24 and 43, resolve cross-references as `step {{SNN}}` tokens instead of issue numbers, because `PATCH` was unavailable when the numbers were back-filled. Read `{{SNN}}` as issue `#NN+2`.
+- No issue carries the `roadmap` label. The label exists in the repository, and creating an issue with `--label roadmap` silently produced `labels: []`. Bulk-apply `roadmap` to #3 through #48 in the web UI. The `roadmap` label is also the trigger named in step 22's issue adapter, so that step is blocked until the labels exist.
+- Probe issue #49, "zz-probe-write-test", was created while testing what the integration could write and cannot be deleted or closed from here. Close it in the UI.
+
 ## 2. The sequence
 
 `Estimate` is small, medium or large. `Risk` follows `FULL-REVIEW.md` §3.2. Nothing in the second half of the table may start before its `Depends` column is merged.
