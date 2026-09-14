@@ -223,3 +223,26 @@ so `.dump/app/roadmap/NN-<slug>.md` is the source of truth and `{{SNN}}` resolve
 landing on `arena/01a097c4-mauscode`. The vendored contracts tree has an adoption ledger at
 `plans/contracts-adoption.md`, measured at 44 source files and 19,439 lines plus 23 ported test files
 and 5,488 lines, 24,927 total, correcting the 24,860 figure the corpus had carried.
+
+## Instruction truth (2026-09-14)
+
+Roadmap step 01, issue #3, executed on `arena/01a09f45-mauscode` at `7c89af0`. `CLAUDE.md`
+and `openspec/project.md` now describe the tree; every path in both resolves. What was false:
+the router count (36 mounted from 37 files, not 20), the agent mode count (five, `plan`, `ask`,
+`edit`, `agent`, `turbo`, declared in `src/renderer/features/agents/atoms/index.ts`, not two),
+the SDK name (`@anthropic-ai/claude-agent-sdk` 0.2.45, not `@anthropic-ai/claude-code`), a
+renderer `features/sub-chats/` folder that does not exist, a file naming convention stated
+backwards, a Debug Mode section pointing at an absent `packages/debug/`, a notarization
+procedure for a program that refuses signing, and a "three main tables" database when the
+schema declares 11.
+
+Two step-file claims did not survive measurement and are corrected in
+`.dump/app/roadmap/01-instruction-truth.md`. Only one system map exists, at
+`research/current-system-map.md`, so no duplicate had to be deleted; and `ts:check` was already
+assigned to step 02 by answers item 11, so step 01 left the script alone and documented the
+handoff. `mock-api.ts` is KEEP with four importers, decided in
+`decisions/2026-09-14-mock-api-disposition.md`, which closes the contradiction roadmap section 5
+carried. The full record is `decisions/2026-09-13-instruction-truth.md`.
+
+One finding is recorded and unowned: the five agent mode names are written out in 38 places
+beside the declaration, 14 zod enums and 24 TypeScript unions. No roadmap step covers it.

@@ -129,8 +129,12 @@ invalidate caches immediately. Local-only mode: full product, zero account.
 - P0. Foundations (no behavior change): OpenSpec proposal for protocol; `docs/
   protocol.md` v0; runtime-client package skeleton (connect/ping/list_sessions
   against stock JCode); `mauscode doctor` stub; benchmark harness; kill dead code
-  (`credential-manager.ts`, mock-api) after confirming zero refs; secret-refactor
-  `customConfig.token` → credential ref.
+  (`credential-manager.ts`) after confirming zero refs, done, the file is deleted;
+  secret-refactor `customConfig.token` → credential ref.
+  CORRECTED 2026-09-14 by roadmap step 01: this line used to name `mock-api` as dead
+  code to kill. The reference check returns four importers, not zero, so `mock-api`
+  is KEEP. Measured list and reasoning in
+  `.dump/app/decisions/2026-09-14-mock-api-disposition.md`.
 - P1. Native local execution: daemon spawn + lifecycle in Electron main; `chat` path
   for one provider routed through harness `send_message`; ApiEvent→UIMessageChunk
   translation; cancel/permission/rewind/compact mapped; sessionId = JCode id;
