@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Typecheck ratchet — blocks NEW type errors while the inherited tree is fixed.
+ * Typecheck ratchet, the blocking typecheck gate in the CI quality job.
  *
- * The repository inherited a red typecheck baseline (110 errors at 0.0.72).
- * A hard gate would block unrelated work; a skipped gate would hide new debt.
- * This script compares the current `tsc --noEmit` error set against the
- * recorded baseline and fails only on regressions.
+ * Compares the current `tsc --noEmit` error set against the recorded
+ * baseline and fails on regressions. The baseline file,
+ * `.github/ci-baselines/typecheck.txt`, is empty, so zero errors is the
+ * gate and any error fails. When the tree improves, commit the smaller
+ * baseline with --update.
  *
  * Keys are `relative/path.ts|TS####` (line numbers excluded on purpose, they
  * shift as files are edited). Multiplicity is preserved by the multiset
