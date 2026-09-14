@@ -40,7 +40,7 @@ opt-in — overturning any of them is a small, localized change.
   persisted) until the benchmark gate decides the default. Overturn: flip the
   atom default after gate numbers exist.
 
-- PA-20. (2026-09-13, ASSUMED, sign-in removal scope.)
+- PA-20. (2026-09-13, RATIFIED by the human the same day, sign-in removal scope. Option C stays refused; an override to it is a follow-up change with its own migration note.)
 
   Ratified by the human: remove the built-in app sign-in, the behaviour `ken-jo/1code` had. The three-way
   scope question on roadmap step 45 has not been answered, and the human has twice told the work to proceed,

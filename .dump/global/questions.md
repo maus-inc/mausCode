@@ -7,20 +7,8 @@ move to `decisions.md` with the date.
 
 ## Blocking a roadmap step
 
-1. **Claude Agent SDK line.** `0.3.270` recommended, or the literal `0.2.63` named in the
-   inherited release notes. Blocks step 12. Measured: `package.json` pins `0.2.45`, and the
-   three registry entries that would unlock adaptive thinking, effort and prompt suggestions
-   sit behind this bump.
-2. **Drag and drop for panes and queue rows.** Native HTML5, recommended, or
-   `@dnd-kit`. Blocks step 17 and step 18. No-new-dependency is the default posture, so
-   `@dnd-kit` is a scope change, not a preference.
-3. **Codex default model.** Keep `gpt-5.5`, recommended, and record the deviation from the
-   release note, or follow the note's `gpt-5.4`. Blocks step 06. Measured: two constants
-   already disagree, `src/main/lib/trpc/routers/codex.ts:146` against
-   `src/renderer/features/agents/lib/acp-chat-transport.ts:41`.
-4. **Who owns agent memory.** App-side table plus provider, recommended, or read the vendored
-   engine's memory. Blocks step 24. The app-side answer keeps the instruction path, the
-   budget and the unattended write gate under our control.
+Answered 2026-09-13 and moved to `decisions.md`, the SDK line, the drag and drop library, the Codex default, and the memory owner, plus the sign-in scope at item 18. The remaining items below are still open.
+
 5. **Package identity drift.** `package.json` on this branch reads `name: mauscode`,
    `version: 0.0.72`, while `rebrand/audits/ui-rebrand-audit.md` and `ci/second-brain.md`
    record `mauscode-desktop` and `0.1.0`. Confirm the target values before step 31 changes them,
@@ -70,12 +58,3 @@ move to `decisions.md` with the date.
     read and edit in settings, or a full dialectic model. Recommendation, the middle one, and it
     gates any future personalisation step. Blocks nothing yet, and step 44's decay rules assume
     the answer stays local.
-18. **How far does the sign-in removal go?** Chosen behaviour is "remove the built-in app
-    sign-in"; three scopes remain. A, drop the gate only. B, drop the gate and the login modal and
-    keep provider OAuth plus the account switcher in settings as credential management, the
-    recommendation, because a Pro or Max user has no API key to paste. C, remove all Anthropic
-    OAuth and keep API keys only, which strands those users. Step 45 asks this before deleting,
-    and the answer changes whether `src/main/lib/oauth.ts` and `AUTH_SERVER_PORT` keep a second
-    job or only the MCP one. Not blocking: the work proceeds on the assumption recorded in
-    `app/decisions/provisional-assumptions.md` PA-20, option A plus B's keep-list with C refused, so an
-    override to a harsher scope is a follow-up change with a migration note rather than a stall.

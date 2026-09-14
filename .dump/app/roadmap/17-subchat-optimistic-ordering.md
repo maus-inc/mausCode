@@ -39,7 +39,7 @@ A new sub-chat awaits a round trip before the pane appears, and the backend sile
 3. Backend: make the update path raise instead of no-op when the sub-chat is missing, and let the create accept a client id so an optimistic row can be settled against a real one.
 4. Add `sub_chats.sortOrder`, nullable with a default of 0, in one generated migration, plus `reorderSubChats` mirroring the projects procedure. Backfill existing rows by current creation order in a separate migration, per the expand and contract rule.
 5. `chats.get`: select the narrowed column set the way `list` already does, and cache `fileCount`, `additions` and `deletions` as columns updated where the stats are computed, so the sidebar reads numbers rather than parsing a blob.
-6. Drag to split and drag to reorder, using the native HTML5 path the ratified decision names. Pinned panes stay pinned through a reorder, which is the case a naive index sort breaks.
+6. Drag to split and drag to reorder with `@dnd-kit`, the dependency added in step 12, mounted as one shared `DndContext` at the agents layout root, so the three drag surfaces, panes, sub-chat rows and the queue, never grow three separate drag implementations. Pinned panes stay pinned through a reorder, which is the case a naive index sort breaks, and keyboard reordering comes from the library rather than a bolt-on handler.
 7. Tests: create reconciliation including the failure rollback, reorder persistence across a reload, and a `chats.get` payload assertion that pins the narrowed shape.
 
 ## 8. Boundaries

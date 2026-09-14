@@ -11,7 +11,7 @@
 
 ## 1. Outcome
 
-One Codex default model constant in `src/shared/`, read by the main-process router and the renderer transport, so a chat created with no model chosen sends the same string whichever path it takes.
+One Codex default model resolution in `src/shared/`, read by the main-process router and the renderer transport, so a chat created with no model chosen sends the same string whichever path it takes. Ratified on 2026-09-13, this is a resolver rather than a constant: the pinned CLI's model catalog is read at runtime and cached, a static default carries the offline case, and the two divergent constants disappear.
 
 ## 2. Why it matters
 
@@ -33,6 +33,7 @@ Two constants already disagree, verified this session: `DEFAULT_CODEX_MODEL = "g
 
 1. Grep every `DEFAULT_CODEX_MODEL` and `gpt-5.` occurrence in `src` and write the list into the PR, so the reviewer can see the consumer set.
 2. Add `src/shared/codex-defaults.ts` exporting the model id and, separately, the reasoning effort, as two values rather than one slash-joined string. A joined string is why the two constants differed in the first place.
+3. Add the runtime half in main, `src/main/lib/providers/codex-models.ts`: ask the pinned binary for its catalog at probe time, cache it per binary version, validate every id against the static list, and fall back to the static default with the reason surfaced rather than guessed. `AGENTS.md` local-first applies, so no path in this resolver may require a network round trip at turn time.
 3. Point both call sites at it. Keep the transport's effort handling where it is, and pass the effort as its own field.
 4. Record the chosen default from step {{S04}} and, if it deviates from the inherited release note, say so in the module comment with the date.
 5. Add one test asserting both importers resolve the same value, so the drift cannot come back.

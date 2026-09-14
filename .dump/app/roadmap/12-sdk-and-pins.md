@@ -11,7 +11,7 @@
 
 ## 1. Outcome
 
-The Claude Agent SDK, the bundled CLI pin and the Codex binary pin move together to the line the decision names, the three missing tool registry entries appear, and the adaptive thinking, effort and prompt-suggestion surfaces become reachable.
+The Claude Agent SDK moves to `0.3.270`, the bundled CLI to `2.1.270` and the Codex pin follows, as ratified on 2026-09-13, the three missing tool registry entries appear, the adaptive thinking, effort and prompt-suggestion surfaces become reachable, and `@dnd-kit` arrives here with exact pins, because this is the only step allowed to touch `package.json` and `bun.lock` and the approved drag and drop decision needs it.
 
 ## 2. Why it matters
 
@@ -38,6 +38,7 @@ Three pins move as one because they are the same product's wire format: SDK at `
 3. Add the three registry entries with the renderer shapes the SDK actually emits, each with a test that renders a captured payload, plus a fixture per tool.
 4. Wire adaptive thinking, effort and prompt suggestions to the mode and model selectors, keeping the mode taxonomy ratified in `AGENTS.md` untouched. No new mode.
 5. Re-run the recipe §4 closed-dialect check on the new chunk kinds in the same commit, and update `src/main/lib/claude/transform.ts` types from step 09 if the stream shape changed.
+5b. Add `@dnd-kit/core`, `@dnd-kit/sortable` and `@dnd-kit/utilities` in their own commit, exact pins, `bun install` to regenerate `bun.lock`, and a note that steps 17, 18 and 37 consume them through one shared context at the agents layout root. Record bundle bytes per target with and without them, since this is the dependency a performance claim will be checked against.
 6. Confirm the binary integrity path still verifies: run `bun run claude:download` and `bun run codex:download` and record the hash check outcome.
 7. `bun run build` with the 4 GB heap flag and `bun run package:linux` after the bump, because a native module mismatch only shows up at packaging.
 
@@ -53,7 +54,7 @@ Three pins move as one because they are the same product's wire format: SDK at `
 - [ ] `MultiEdit`, `tool-Agent` and `TaskOutput` render in a captured transcript, with tests.
 - [ ] Every behaviour change read in step 1 is either handled or recorded as a known gap in `.dump`.
 - [ ] Gates green, `bun run build` green, `package:linux` green.
-- [ ] No new dependency beyond the version moves.
+- [ ] No new dependency beyond the version moves and the three `@dnd-kit` packages the human approved, each pinned exactly, with the lockfile proof and the bundle delta recorded.
 
 ## 11. Verification
 

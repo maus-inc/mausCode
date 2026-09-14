@@ -13,6 +13,18 @@
 5. Your issue, which is self-contained by design. Its body opens with `AGENTS.md` verbatim, then the step. `.github/ISSUE_TEMPLATE/roadmap-step.md` is the format, and each body carries evidence, plan, boundaries, acceptance criteria, verification and out-of-scope.
 6. Run `find-skills` before you write anything, as `AGENTS.md` requires, and name in your report which skills you loaded. For any user-facing layout, copy or motion, research how the best tools in the category solve it, prototype the screen in HTML under `.dump/<domain>/research/`, and put two or four options to the human before implementing. The human owns design taste, and a weaker option chosen for convenience is a finding, not a shortcut.
 
+## 4a. Decisions ratified 2026-09-13
+
+The four §11.3 decisions and the sign-in scope were answered in one batch the same day and are recorded in `.dump/global/decisions.md`. They change the plan in three visible ways.
+
+| Decision | Answer | Effect on this plan |
+| --- | --- | --- |
+| SDK line | Claude Agent SDK `0.3.270`, Claude CLI `2.1.270` | Step 12 is the land, gated by its own spike; 13, 19, 20, 23, 24 and 35 unblock behind it |
+| Drag and drop | `@dnd-kit`, an approved exception to the no-new-dependency rule | The three packages are added by step 12, the only dependency step. Steps 17, 18 and 37 share one `DndContext` at the agents layout root, and step 30 records the bundle delta they cost |
+| Codex default | Read the model catalog from the pinned CLI at runtime, static fallback, loud refusal when neither answers | Step 05 grows from a constant swap into a resolver with a cache and an offline path, and the divergence at `codex.ts:146` against `acp-chat-transport.ts:41` ends |
+| Memory owner | Hybrid, the runtime may propose and mausCode stores | Step 24 and step 43 share one proposal queue and one accept surface, and the engine's own memory store stays dark |
+| Sign-in scope | Gate and login modal out, provider OAuth and the credential switcher kept | Step 45 proceeds from an assumption to a ratified scope, recorded as PA-20 |
+
 ## 2. The sequence
 
 `Estimate` is small, medium or large. `Risk` follows `FULL-REVIEW.md` §3.2. Nothing in the second half of the table may start before its `Depends` column is merged.
@@ -22,7 +34,7 @@
 | 01 | Make the instruction files describe the tree that exists | W0, P0-4 | medium | none | M1 |
 | 02 | Write the gate policy down so baselines cannot drift silently | P0-3 | medium | 01 | M1 |
 | 03 | Prove the app builds end to end and record the numbers | build gate | high | 01, 02 | M1 |
-| 04 | Answer the four program decisions that gate later steps | §11.3 | high | 01 | M1 |
+| 04 | Answer the four program decisions that gate later steps | §11.3, **answered 2026-09-13, see §4a** | high | 01 | M1 |
 | 05 | Give Codex one default model constant | P1-5 | medium | 04 | M1 |
 | 06 | Wire or delete the shortcuts that do nothing | P4 | medium | 01 | M1 |
 | 07 | Record run state in the database so runs stop lying | W1 | high | 01, 03 | M1 |

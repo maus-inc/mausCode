@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Step | 04 of 45, the four open decisions in §11.3 |
+| Step | 04 of 45, the four open decisions in §11.3. **ANSWERED 2026-09-13**, see §15 and §4a of the roadmap plan |
 | Area | decision |
 | Risk | high, because four steps are waiting on it |
 | Depends on | {{S01}} |
@@ -11,7 +11,14 @@
 
 ## 1. Outcome
 
-Four answers recorded in `.dump/global/questions.md` and copied into `decisions.md`. Each answer names the option, the date and the consequence for the steps it unblocks. Steps {{S12}}, {{S17}}, {{S18}} and {{S24}} may not start before their answer exists.
+Answered on 2026-09-13 and recorded in `.dump/global/decisions.md`, the four this step owed, plus the sign-in scope from step 45. The answers, and what they unblock:
+
+- Claude Agent SDK `0.3.270` with Claude CLI `2.1.270`, not the release note's `0.2.63`. Unblocks steps 12, and after it 13, 19, 20, 23, 24 and 35. The breaking-ish step is gated by the spike inside step 12.
+- Drag and drop: `@dnd-kit`, an approved exception to the no-new-dependency rule. Unblocks 17, 18 and 37, and it changes 12, because the dependency step is the only one allowed to touch `package.json` and `bun.lock`.
+- Codex default: read the model catalog from the pinned CLI at runtime with a static fallback and a loud refusal when neither is available. Unblocks 05, which grows from a constant swap into a resolver.
+- Memory: hybrid, the runtime may propose and mausCode stores behind one accept surface. Unblocks 24, and it links 24 to 43 through a shared proposal queue.
+
+The step closes by verifying the record, not by asking again. If a later answer overrides one of these, the override is a new dated entry and the affected steps get a comment.
 
 ## 2. Why it matters
 
@@ -34,7 +41,7 @@ The recommendation for all four is already argued in §5 of the parity plan, and
 
 ## 6. Implementation plan
 
-1. Put the four questions to the human, one each, with the measured fact above and the recommendation.
+1. Ask the four questions, one each, with the measured fact above and the recommendation. Done, batched with the sign-in scope on 2026-09-13, so this step is now verification.
 2. Record each answer in `.dump/global/decisions.md`, dated, and cross it out of `questions.md`.
 3. Update the two plan files so the decision is not re-opened, and add the answer line to each blocked issue as a comment.
 

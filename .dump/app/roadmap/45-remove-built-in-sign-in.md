@@ -9,6 +9,10 @@
 | Blocks | {{S42}} |
 | Estimate | small to medium, smaller than the audit implied |
 
+## 0b. Decision
+
+Scope ratified by the human on 2026-09-13, PA-20 confirmed. The app-level gate and the Claude login modal are removed. Provider OAuth, `auth-store.ts`, `auth-manager.ts` and the multi-token switcher stay, reframed as credential management in settings. Option C, dropping Anthropic OAuth so only API keys remain, is refused; an override later is its own change carrying a migration note for users whose only credential is an OAuth token.
+
 ## 1. Outcome
 
 mausCode has no built-in app sign-in. The window opens into local work, a provider credential is configured in settings, and the account scaffolding that implied a hosted identity is removed rather than hidden. Provider and MCP OAuth keep working, because those are credential paths, not an app account.
@@ -38,9 +42,9 @@ Measured this session, and the measurements matter because they are smaller than
 
 ## 6. Implementation plan
 
-1. Ask the human the scope question first, one question, three options, because two of them are irreversible for some users. Option A, remove the app-level sign-in gate only. Option B, the recommendation, remove the gate and the sign-in modal while keeping provider OAuth and the account list in settings as credential management. Option C, remove all Anthropic OAuth sign-in and keep API keys only, which strands Pro and Max users who have no key. Record the answer in `.dump/global/decisions.md`.
-2. Remove the gate from window bootstrap and from `agents-layout.tsx`, and delete `claude-login-modal.tsx` rather than hiding it. Its OAuth success retry at `:128` needs a home, so move the retry into the settings flow where a credential is added, and prove an added credential resumes a stalled turn.
-3. Rename what option B keeps rather than deleting it, `anthropic-accounts` becomes credentials management, since `agents-models-tab.tsx` uses `list`, `getActive` and `setActive` for switching between provider tokens, which is a real feature. `migrateLegacy` stays if it still migrates something, and goes if the legacy path is gone.
+1. Scope is settled, see `0b`, so do not re-open it. Remove the gate from window bootstrap and from `agents-layout.tsx`, and delete `claude-login-modal.tsx` rather than hiding it, while provider OAuth, `auth-store.ts`, `auth-manager.ts` and the account switcher in settings stay, reframed as credential management.
+2. The modal's OAuth success retry at `:128` needs a home, so move the retry into the settings flow where a credential is added, and prove that an added credential resumes a stalled turn instead of requiring a restart.
+3. Rename what the ratified scope keeps rather than deleting it, `anthropic-accounts` becomes credentials management, since `agents-models-tab.tsx` uses `list`, `getActive` and `setActive` for switching between provider tokens, which is a real feature. `migrateLegacy` stays if it still migrates something, and goes if the legacy path is gone.
 4. Delete `src/main/lib/subscription/` references, and the plan-gate or analytics-identity plumbing that would consult a hosted subscription, then correct `CLAUDE.md`, which documents a `subscription/` module and a `src/shared/subscription-gate.ts` that do not exist, verified above.
 5. Leave the callback server, `src/main/index.ts:285` and `AUTH_SERVER_PORT`, alone except to confirm it stays loopback-bound and keeps redacting codes, since MCP OAuth depends on it.
 6. Empty states: no account means the first screen is the project picker, and a provider with no credential says so inline in the composer instead of opening a login dialog. This is user-facing design, so prototype both empty states in HTML, research how two other local-first agent tools handle "no account, one key", and bring two or three layout options to the human before building.
