@@ -123,14 +123,51 @@ jobs:
         run: bun run ratchet:audit
       - name: Secrets scan (gitleaks, pinned + checksum-verified)
         # gitleaks-action requires a paid license for org-owned repos; the CLI does not.
+        # A findings table goes to the step summary (rule, file, line; values redacted)
+        # because job logs are not readable from every environment that triages this
+        # gate. The JSON report stays on the runner and is never uploaded.
         run: |
+          set -Eeuo pipefail
+          trap 'echo "::error title=Secrets scan step failed::line ${LINENO}: ${BASH_COMMAND}"' ERR
           VERSION=8.30.1
           EXPECTED=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
           TARBALL="gitleaks_${VERSION}_linux_x64.tar.gz"
           curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${TARBALL}" -o /tmp/gitleaks.tar.gz
           echo "${EXPECTED}  /tmp/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
-          /tmp/gitleaks dir --verbose .
+          rm -f /tmp/gitleaks-report.json
+          status=0
+          /tmp/gitleaks dir --config .gitleaks.toml --verbose --redact \
+            --report-format json --report-path /tmp/gitleaks-report.json . || status=$?
+          if [ "$status" -ne 0 ]; then
+            if [ -s /tmp/gitleaks-report.json ]; then
+              # Annotations, not just the step summary: the summary shows on the job
+              # page, while annotations are readable through the check-run API, which
+              # is the only route available when job logs are unreachable. The index
+              # annotation comes first and carries every finding, because GitHub
+              # displays at most ten annotations per step, so per-finding annotations
+              # alone would silently drop the tail.
+              count=$(jq 'length' /tmp/gitleaks-report.json)
+              index=$(jq -r '.[]? | "\(.RuleID) \(.File):\(.StartLine)"' /tmp/gitleaks-report.json |
+                awk 'NR>1{printf "%%0A"} {printf "%s", $0}')
+              echo "::error title=gitleaks: ${count} finding(s), values redacted::${index}"
+              jq -r '.[]? | "::error file=\(.File),line=\(.StartLine),title=gitleaks \(.RuleID)::\(.RuleID) at \(.File):\(.StartLine), value redacted"' \
+                /tmp/gitleaks-report.json > /tmp/gitleaks-annotations.txt || true
+              cat /tmp/gitleaks-annotations.txt
+              {
+                echo "### Secrets scan failed (gitleaks ${VERSION})"
+                echo
+                echo "Values are redacted; rule, file and line only."
+                echo
+                echo "| Rule | File | Line |"
+                echo "| --- | --- | --- |"
+                jq -r '.[]? | "| \(.RuleID) | \(.File) | \(.StartLine) |"' /tmp/gitleaks-report.json
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error title=Secrets scan::exit ${status} with no JSON report, read the step log"
+            fi
+            exit "$status"
+          fi
       - name: Dependency review (PR-affecting changes)
         if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v4

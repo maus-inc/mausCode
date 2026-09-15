@@ -14,6 +14,13 @@ which is how the 46 issues were created in the first place. Reads on the same en
 `POST /labels` still works, which is why this pack exists as a file rather than as thirteen comments. Posting is
 therefore a human action: run §1 from a clone with your own `gh`.
 
+**Update, 2026-09-15: the wall is issue-scoped, not global.** Probed on branch `arena/01a0a08a-mauscode`,
+`POST /repos/maus-inc/mausCode/issues/54/comments` and `PATCH /repos/maus-inc/mausCode/pulls/54` both succeed,
+while `gh issue comment 20`, `POST /repos/maus-inc/mausCode/issues/20/comments` and `PATCH` on that issue still
+return 403. So the installation carries pull-request write and issue read-only, which is a narrower and more
+useful statement than the 2026-09-14 note above. PR review replies and body edits can be written from an agent
+session; the thirteen notices below still cannot, and §1 still needs a human, or an `Issues: write` grant.
+
 ## 0a. Why this is now urgent rather than cosmetic
 
 `gh api repos/maus-inc/mausCode/issues/N/comments` on #3 through #14 shows an automatic reviewer already acting on
@@ -49,6 +56,21 @@ fix a reviewer whose checkout lacks the corpus. Both need doing, and the second 
 | #45 | 43 | skill proposals merge into step 24's single accept surface |
 | #47 | 45 | scope ratified as PA-20 rather than assumed |
 | #48 | index | label work verified done, drift accepted, section numbering for the plan recorded |
+
+## 0b. What roadmap step 04 needs from this file
+
+Step 04's third acceptance criterion asks for one comment each on #14, #19, #20 and #26, saying the step is
+unblocked and naming the answer that unblocks it. Three of those four are blocks in this file, at `#14 · step 12`,
+`#19 · step 17` and `#26 · step 24`, and they already name the answer.
+
+The fourth, #20, is not here and should not be turned into a drift notice: its body already reads
+`| Depends on | {{S04}} decision 2, {{S17}} |`, so nothing about it is stale. Its comment text lives in
+`.dump/app/roadmap/04-open-decisions.md` §15 with its own one-line command. Posting that plus this file's loop is
+everything step 04 owes, and no separate comment pack is needed.
+
+All four were re-attempted on 2026-09-15 and all four returned 403, so the state is unchanged from the date above.
+The extractor's block numbers are positional: `005`, `006` and `007` are the notices for #14, #19 and #26, which
+§15 puts in one loop for whoever runs the four commands.
 
 ## 1. Posting them
 
@@ -90,8 +112,8 @@ ls -l /tmp/bodies
 
 Then edit issue `#NN+2` in the browser and paste the matching file.
 
-One thing to know before you do it: the step **files** keep `{{SNN}}` tokens on purpose, all 81 of them across
-these twelve, because a token lets the plan be resequenced without editing prose, while the filed GitHub bodies
+One thing to know before you do it: the step **files** keep `{{SNN}}` tokens on purpose, 77 of them across these
+twelve, counted 2026-09-14, because a token lets the plan be resequenced without editing prose, while the filed GitHub bodies
 were written with the real numbers substituted. So resolve the tokens as you generate, or you will put the token
 form back into GitHub. The loop below does the substitution inline, and it is exact because the rule is arithmetic:
 `step {{SNN}}` is issue `#NN+2`.
@@ -140,9 +162,11 @@ The truth is `.dump/app/roadmap/03-build-gate.md` on `arena/01a097c4-mauscode`. 
   They are out of scope because the human **refused them outright** on 2026-09-14, so no later step waits on a
   certificate decision. Recorded in `.dump/global/decisions.md`.
 - Handoff notes grew a rule. If this step adopts any type under `src/shared/contracts/`, its row in
-  `.dump/app/plans/contracts-adoption.md` is updated in the same commit. The measured baseline for that tree is
-  44 source files at 19,439 lines plus 23 ported test files at 5,488 lines, 24,927 total, with zero external
-  importers; the 23 test files do run under `npm run test`.
+  `.dump/app/plans/contracts-adoption.md` is updated in the same commit. The measured baseline for that tree,
+  re-taken at `f5506b9` on 2026-09-14, is 44 source files at 19,395 lines plus 23 ported test files at 5,465
+  lines, 24,860 total, with zero external importers; the 23 test files do run under `npm run test`. The ledger
+  carries these rows and a note recording that its first pass read 19,439, 5,488 and 24,927, each one line per
+  counted file too high. `wc -l src/shared/contracts/*.ts | tail -1` reproduces the total.
 
 Where this body and the file disagree, the file wins. A `step {{SNN}}` reference in this body is issue `#NN+2`.
 ```
@@ -174,8 +198,9 @@ because steps 05, 12, 17, 18, 24, 37 and 43 already carry the consequences.
 The truth is `.dump/app/roadmap/05-codex-default-constant.md`. The step is no longer a constant swap. The human
 ratified reading the model catalog from the pinned Codex CLI at runtime, so it becomes a resolver: a cache, a
 static fallback when the CLI cannot answer, and a loud refusal when neither source answers. The bug it kills is
-the divergence between `src/main/routers/codex.ts:146` (`gpt-5.5`) and `src/main/lib/acp-chat-transport.ts:41`
-(`gpt-5.5/high`), which is one value written in two places.
+the divergence between `src/main/lib/trpc/routers/codex.ts:146` (`gpt-5.5`) and
+`src/renderer/features/agents/lib/acp-chat-transport.ts:41` (`gpt-5.5/high`), which is one value written in two
+places.
 
 Where this body and the file disagree, the file wins. A `step {{SNN}}` reference in this body is issue `#NN+2`.
 ```
@@ -334,10 +359,12 @@ Three things changed since this index was written, and none of them moves the or
 2. **Twelve bodies are behind their files and that is accepted as the steady state**, not a queue of fixes: the
    integration that created these issues can create but not edit, comment or label, all verified 403. Twelve
    drift notices are being posted as comments from `.dump/app/plans/2026-09-14-issue-drift-notices.md`. For any
-   issue in this range: `.dump/app/roadmap/NN-<slug>.md` is the source of truth, `#NN+2` is its issue, and a
-   `step {{SNN}}` token resolves to `#NN+2`.
-3. **All 18 open questions are answered**, in four batches, recorded with their rejected options in
-   `.dump/global/decisions.md`; `.dump/global/questions.md` is now a closed ledger. The consequences landed in
+   issue in this range: `.dump/app/roadmap/NN-<slug>.md` is the source of truth, and `#NN+2` is its issue.
+   Unresolved `{{SNN}}` tokens are in **38 of these 46 bodies**, not the six this plan first recorded, and they
+   resolve the same way.
+3. **Eighteen open questions are answered**, in four batches, recorded with their rejected options in
+   `.dump/global/decisions.md`, and one question was added after them, so `.dump/global/questions.md` carries
+   exactly one open item, question 19 on automatic review planning. The consequences landed in
    steps 02, 03, 04, 05, 12, 17, 24, 27, 31, 32, 43 and 45. Notably: no signing or notarization anywhere, all four
    release targets kept, `@dnd-kit` and `sharp` as the only dependency exceptions, `tsgo` as a measured second
    typecheck gate, the vendored contracts kept and absorbed per use with a ledger, the data-egress doctrine as a

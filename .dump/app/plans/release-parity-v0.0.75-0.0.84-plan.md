@@ -54,11 +54,11 @@ Still open from P0's intent: a `ci` script that runs exactly the three gates in 
 
 | # | Item | Verdict |
 | --- | --- | --- |
-| P1-1 | `@anthropic-ai/claude-agent-sdk` `0.2.45` → the 0.3 line (release notes said `0.2.63`; the old plan recommended `0.3.270`) | **Open — pinned at `0.2.45`.** This is a decision, not a chore: see §5.1. |
-| P1-2 | CLI parity pin `2.1.45` → `2.1.270` (notes said `2.1.63`) | **Open.** Ships through `scripts/download-*`; must move with P1-1. |
-| P1-3 | Codex binary `0.137.0` → `rust-v0.154.0` | **Open — pinned at `0.137.0`** (`package.json:23-24`). |
+| P1-1 | `@anthropic-ai/claude-agent-sdk` `0.2.45` → the 0.3 line (release notes said `0.2.63`; the old plan recommended `0.3.270`) | **Decided 2026-09-13 — `0.3.270`**, recorded in `.dump/global/decisions.md`. Step 12 lands it behind its own 0.2 to 0.3 spike. See §5.1. |
+| P1-2 | CLI parity pin `2.1.45` → `2.1.270` (notes said `2.1.63`) | **Decided 2026-09-13 — `2.1.270`.** Ships through `scripts/download-*` in the same commit as P1-1, because the two pins are one product's wire format. |
+| P1-3 | Codex binary `0.137.0` → `rust-v0.154.0` | **Open — pinned at `0.137.0`** (`package.json:23-24`). No step-04 decision names its target; step 12's file says the Codex pin follows, so whoever lands step 12 reads the changelog and states the target there. |
 | P1-4 | PostHog: confirm the unified key reaches every build | **Key present once**, as a fallback literal in `src/main/lib/analytics.ts:15`; the check that no stale per-platform key survives elsewhere still needs a grep in `.env*` and CI vars *(not runnable here)*. |
-| P1-5 | One Codex model catalog; `gpt-5.5` vs the note's `gpt-5.4` | **Open, and worse than described** — two constants already disagree (`codex.ts:146` `"gpt-5.5"` vs `acp-chat-transport.ts:41` `"gpt-5.5/high"`). Fix = one shared constant in `src/shared/`, plus recording the deliberate deviation from the release note. |
+| P1-5 | One Codex model catalog; `gpt-5.5` vs the note's `gpt-5.4` | **Decided 2026-09-13, and worse than described.** Two constants still disagree, `src/main/lib/trpc/routers/codex.ts:146` `"gpt-5.5"` against `src/renderer/features/agents/lib/acp-chat-transport.ts:41` `"gpt-5.5/high"`, both verified at `f5506b9`. The ratified fix is neither literal: main reads the catalog from the pinned Codex CLI at runtime, with a cache, a static fallback when the CLI cannot answer, and a loud refusal when neither source answers. Step 05 becomes that resolver. See §5.3. |
 | P1-6 | Changelog anchor double-`#` | **Open — bug confirmed live** (`use-just-updated.ts:53-54`). |
 
 ## P2 — Adopt what SDK 0.3 actually gives us
@@ -107,19 +107,21 @@ Unchanged: unit tests for the new store procedures and the diff/PR paths, CI pat
 
 ---
 
-## 5. The three decisions, still open, with the measurements that bear on them
+## 5. The three decisions, answered 2026-09-13
 
-### 5.1 SDK `0.3.270` (recommended) vs the note's literal `0.2.63`
+**Status: closed. Do not re-open these here.** The human answered all three on 2026-09-13 and the answers live in `.dump/global/decisions.md`; roadmap step 04 is the record form. The recommendations below are kept as reasoning, and each one now states which half the human took and which half was refused, so a later reader does not find a live recommendation to reverse a ratified decision.
 
-The pin today is `0.2.45` (`package.json:49`). Staying on 0.2.x means P2 is mostly unimplementable: `promptSuggestions`, the 32 hook events and session control requests are 0.3 surfaces, and `tool-Agent` output shapes changed. Recommendation: `0.3.270`, with the deviation recorded in the release-parity note as intentional, and with one extra task the old plan should have had — `docs/backend-porting-recipe.md` §4's closed chunk dialect must be re-checked against 0.3's stream events in the same commit, since a widened dialect breaks the mock peers every backend ships.
+### 5.1 SDK `0.3.270` (ratified) vs the note's literal `0.2.63` (refused) and the `0.2.45` pin (refused)
 
-### 5.2 Drag-and-drop: native HTML5 (recommended) vs `@dnd-kit`
+The pin today is `0.2.45` (`package.json:49`). Staying on 0.2.x means P2 is mostly unimplementable: `promptSuggestions`, the 32 hook events and session control requests are 0.3 surfaces, and `tool-Agent` output shapes changed. **Ratified: `0.3.270`, with Claude CLI `2.1.270`.** The deviation from the inherited release note is a recorded choice rather than an accident, and it carries one extra task this section already named: `docs/backend-porting-recipe.md` §4's closed chunk dialect must be re-checked against 0.3's stream events in the same commit, since a widened dialect breaks the mock peers every backend ships. Roadmap step 12 is the land, and its 0.2 to 0.3 spike gates it.
 
-Native is zero new dependencies and this repo's rule for `src/renderer` is to keep the surface small; the cost is multi-pane split indicators written by hand. `@dnd-kit` is better at exactly the interaction P4 wants (drop-on-pinned-pane), at the price of a runtime dependency and a second mental model of focus. Recommendation: native, and revisit only if the split-target hit-testing turns into a bug magnet.
+### 5.2 Drag-and-drop: native HTML5 (refused) vs `@dnd-kit` (ratified)
 
-### 5.3 Codex default `gpt-5.5` (recommended) vs the note's `gpt-5.4`
+**This section's own recommendation was refused.** It argued native on the grounds that zero new dependencies beats a new mental model of focus, at the cost of hand-written split-target hit-testing. **The human chose `@dnd-kit`** as an explicit exception to the no-new-dependency rule, because steps 17, 18 and 37 all need the same interaction and three hand-rolled drag implementations is the outcome the exception avoids. The three packages land in step 12, the only step allowed to touch `package.json` and `bun.lock`, with exact pins, and step 30 records the bundle delta they cost. Revisit only if the dependency's weight in the renderer budget turns out to be unaffordable, which step 30 measures rather than this file arguing.
 
-Already recorded as a deviation in the old plan; the new fact is that the renderer hardcodes `"gpt-5.5/high"` (`acp-chat-transport.ts:41`), so "one catalog" is required regardless of which model wins. Recommendation: `gpt-5.5`, single constant in `src/shared/`, note the deviation.
+### 5.3 Codex default: `gpt-5.5` (refused) vs the note's `gpt-5.4` (refused) vs a runtime read (ratified)
+
+Already recorded as a deviation in the old plan; the new fact is that the renderer hardcodes `"gpt-5.5/high"` at `src/renderer/features/agents/lib/acp-chat-transport.ts:41` while main holds `"gpt-5.5"` at `src/main/lib/trpc/routers/codex.ts:146`, so "one catalog" is required regardless of which model wins. **Ratified: neither literal.** The model catalog is read from the pinned Codex CLI at runtime, with a cache, a static fallback when the CLI cannot answer, and a loud refusal when neither source answers. Step 05 changes shape accordingly, from a constant swap into a resolver, and the resolver is what ends the divergence between those two files. Picking either literal stays rejected, because a hardcoded id goes stale on the next CLI release and that is the bug this row exists to kill.
 
 ### 5.4 New from the P0-3 work
 

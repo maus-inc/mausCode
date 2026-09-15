@@ -2,6 +2,7 @@
 
 Owner: CI agent (branch arena/01a08de3-mauscode). Updated: 2026-09-11, run 34551940631 = ALL GREEN.
 Amended 2026-09-14 by step 02 (branch arena/01a09f6e-mauscode): typecheck baseline facts corrected, tsgo wired as the second typecheck gate.
+Amended 2026-09-15 by step 04 (branch arena/01a0a08a-mauscode): the lint gate's base resolution fixed after a force push crashed it, then hardened against SonarCloud jssecurity:S8705; the secrets job now publishes its findings to the step summary, and the DeepSource analyzer is configured for `.mjs`. Facts below.
 
 ## Current state
 
@@ -30,10 +31,54 @@ lint gate hardening + format sweep bec0263/66a090b (me).
   2026-09-14 measurement, so zero errors is the gate, and `tsgo --noEmit`
   reports zero errors on the same tree as CI's second typecheck gate.
 - `bun audit --json` exits 1 when advisories exist; output still parses.
-- Both `main` and `arena/*`/`init` are independent git roots — any merge-base
-  logic needs a fallback.
+- `main` is an ancestor of `arena/01a097c4-mauscode`, so a merge base exists
+  upstream (`compare/arena/01a097c4-mauscode...main` reports `behind`).
+  Corrected 2026-09-15: earlier text here called `main` and `arena/*`
+  independent git roots, which was a shallow-clone artifact of the arena
+  sandbox, 7 commits deep. Keep the two-dot fallback anyway, for shallow clones
+  and genuinely unrelated history.
+- A force push orphans the previous head, and a push event passes that head as
+  `LINT_BASE`, so the gate must tolerate a base ref the clone cannot resolve.
+  It did not until 2026-09-15, when quality died at the lint step on run
+  34865816781 while the same commit's PR run passed; `scripts/ci/lint-changed.mjs`
+  now falls back to `origin/main` and then to the whole tree. Repro without CI:
+  `LINT_BASE=<orphaned-sha> node scripts/ci/lint-changed.mjs`.
 - gitleaks-action v2 = paid license for org-owned repos; use CLI pinned w/
-  sha256 (v8.30.1, verified in the security job).
+  sha256 (v8.30.1, verified in the security job). Since 2026-09-15 the step
+  writes a redacted rule/file/line table to `$GITHUB_STEP_SUMMARY`, so a red
+  secrets job can be read through the API with
+  `gh api repos/maus-inc/mausCode/check-runs/<id> --jq .output.summary`; the
+  check-run annotation itself carries only the exit code.
+- DeepSource's JavaScript analyzer reads `.mjs` as a script and reports JS-0833
+  on the first import, whatever `module_system` says, and it reads
+  `.deepsource.toml` from the default branch, so an exclusion written inside a
+  pull request is inert for that pull request. Both are measured, 2026-09-15:
+  red at `8e3cdf9`, `f83e874` and `ad93a44`, green at `d042966` where the same
+  `.mjs` files existed but none was in the diff, and red at `ad93a44` with the
+  exclusion present at that head. The analyzer also reviews every file a pull
+  request touches, so a one-line edit to a ported file pulls that file's whole
+  backlog in as new issues.
+- Do not convert a touched `.mjs` to CommonJS to dodge JS-0833. Measured at
+  `1d75ddf`: the rename made a whole file new code, two pre-existing
+  `javascript:S4036` PATH findings entered Sonar's leak period with it, and the
+  required quality gate failed with Security Rating B. Sonar's leak period
+  follows the file, not the lines, across a rename.
+- DeepSource's analysis quota is organization-level, and when it runs out every
+  DeepSource check is `skipped` with "Analysis quota is exhausted". A skipped
+  check is not a green one, and the fix is on the account, not in the repo.
+  `GET /commits/{sha}/status` reads a third-party verdict; the analyzer's own
+  findings live on its dashboard, not in the GitHub API.
+- The `security` job's third step, `actions/dependency-review-action@v4`,
+  needs the repository's Dependency graph feature (Settings, Code security and
+  analysis). It was disabled until 2026-09-15, so the step failed with
+  "Dependency review is not supported on this repository"; it is enabled now.
+  A green secrets step is what let that failure surface at all.
+- SonarCloud `jssecurity:S8705` (issue `AaClMoDr11SIv2-9SZIh`) flagged
+  `lint-changed.mjs` for passing `LINT_BASE` into git's argument list. Git is
+  now called with constant args: a supplied base is matched against
+  `git rev-list --all` output and the diffs use the sha git printed, with
+  `--end-of-options` on the refs. Do not re-introduce an env or argv value as
+  an argument to git; `execFileSync` counts the whole argument list as a sink.
 - api.github.com anonymous limit 60/hr/IP is hit on shared macOS runners →
   pass `GITHUB_TOKEN` to anything touching the API (codex/claude downloaders).
 - GH job logs unreachable from the arena sandbox (Azure blob host blocked);

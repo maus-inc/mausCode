@@ -1,0 +1,59 @@
+# gitleaks configuration for this repository.
+#
+# `gitleaks dir .` loads this file from the scan target on its own, and the CI
+# step also passes `--config .gitleaks.toml`, so a rename cannot quietly fall
+# back to the default rules.
+#
+# What is excused here, and why by value rather than by path: `runtime/jcode`
+# is the pinned upstream engine, its tests and repro harnesses feed fake
+# credentials to the engine's own redaction and input-handling code, and
+# editing those fixtures would drift from upstream. Each entry below is one
+# such placeholder string, matched against the line gitleaks reports. Excusing
+# the value cannot excuse a real credential, because a real credential is not
+# `tok_abc123xyz` or four repetitions of `0123456789abcdef`. A path exemption
+# could, so there is none.
+#
+# Nothing under `src/`, `docs/` or `.dump/` is excused. The findings this
+# repository owned were fixed instead: the fixture UUID in
+# `src/main/lib/codex-app-server/src/protocol.test.ts`, and the
+# credential-shaped literals that `.dump` prose used to quote. That is the
+# tradeoff this file refuses to take, and the audit that records the whole
+# finding list is `.dump/ci/audits/2026-09-14-gitleaks-inherited-findings.md`.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "placeholder values in the vendored engine's own tests and repro harnesses"
+regexTarget = "line"
+regexes = [
+  # crates/jcode-base/src/auth/cursor_tests.rs, a mock vscdb access token
+  '''tok_abc123xyz''',
+  # crates/jcode-base/src/gateway_tests.rs and tests/e2e/test_support/mod.rs,
+  # two repeated hex runs used as websocket gateway tokens
+  '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+  '''fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210''',
+  # crates/jcode-base/src/secret_input_pty_tests.rs, the secret typed at a pty
+  '''AIzaSECRET12345''',
+  # crates/jcode-fuzzy/src/lib.rs, two model-name strings that trip the
+  # generic-api-key rule because they contain the word "api"
+  '''claude-opus-4\.5 anthropic api premium''',
+  '''claude-opus-4-5-2025 anthropic-api responses''',
+  # crates/jcode-base/src/auth/tests.rs, an unsigned JWT built for a test
+  '''eyJhbGciOiJub25lIn0\.eyJleHAiIjo0MTAyNDQ0ODAwfQ\.''',
+  # crates/jcode-base/src/auth/copilot_auth_tests.rs, a host key that carries
+  # a token suffix
+  '''api\.github\.com:Iv1\.b507a08c87ecfe98''',
+  # scripts/repro/tls-bad-record-mac/src/main.rs, a repro request header
+  '''sk-test-1234567890''',
+  # crates/jcode-provider-anthropic-runtime/src/lib.rs, where "oauth" in a
+  # re-export list reads as the rule's "auth" keyword
+  '''anthropic_map_tool_name_from_oauth''',
+  # crates/jcode-base/src/message/tests.rs, the engine's AWS access key
+  # fixture and the assertion that quotes it
+  '''AKIAABCDEFGHIJKLMNOP''',
+  # src/main/lib/codex-app-server/src/protocol.test.ts, the idempotency key of
+  # an upstream ported test, a UUID that reads as a generic API key. The file
+  # says "Verbatim except this header", so the value is excused here instead of
+  # editing the port.
+  '''8ae96ff3-3425-4f4c-8772-b6fd61502868''',
+]

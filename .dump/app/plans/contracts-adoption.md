@@ -18,17 +18,27 @@ job is to make each absorption visible rather than to delete the schemas on a co
 | --- | --- | --- |
 | Files in `src/shared/contracts/` | 67 | `ls src/shared/contracts/*.ts \| wc -l` |
 | Source files | 44 | same, minus `*.test.ts` |
-| Source lines | 19,439 | `wc -l` over the same set |
+| Source lines | 19,395 | `wc -l` over the same set |
 | Test files | 23 | `ls src/shared/contracts/*.test.ts \| wc -l` |
-| Test lines | 5,488 | same |
-| Total lines | 24,927 | `wc -l src/shared/contracts/*.ts \| tail -1` |
+| Test lines | 5,465 | same |
+| Total lines | 24,860 | `wc -l src/shared/contracts/*.ts \| tail -1` |
 | Importers outside the directory | 0 | the script in §4 |
 | Tests that run | all 23 files | `vitest.config.ts` includes `src/**/*.test.ts`, excludes only `src/main/lib/runtime/*` |
 | Declared dependency the schemas need | `effect@4.0.0-rc.112` in `package.json` `dependencies` | `node -p "require('./package.json').dependencies.effect"` |
 
+**Correction, 2026-09-14.** This table's first pass recorded 19,439 source lines, 5,488 test lines and
+24,927 total. Each figure was exactly one line per counted file above the tree's value, so the source
+count was 44 lines too high, the test count 23 too high and the total 67 too high. Re-measured at
+`f5506b9`, `wc -l src/shared/contracts/*.ts | tail -1` gives 24,860, and summing `grep -c ''` per file
+over the same set gives the same total, which also rules out a file missing its trailing newline. The
+plan corpus's 24,860 was therefore right and this file's claim to have corrected it was wrong, which is
+what `.dump/global/decisions.md` now records. The lesson is the one `AGENTS.md` already carries: a
+measurement earns its row only when the command that reproduces it is written beside it, and this table
+had the commands but not the run.
+
 Two facts change the delete-versus-keep arithmetic, and both were found while measuring rather than
 arguing. First, the 23 `*.test.ts` files are inside `src/`, so `npm run test` already runs them: the
-tree is not inert, it is a 5,488-line schema-validation corpus that keeps the ported definitions
+tree is not inert, it is a 5,465-line schema-validation corpus that keeps the ported definitions
 parseable against the pinned `effect` version. Second, deleting the directory would delete that
 coverage as a side effect, which is the wrong way to lose tests.
 

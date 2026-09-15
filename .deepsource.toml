@@ -7,6 +7,17 @@ exclude_patterns = [
   "resources/bin/**",
   "runtime/jcode/**",
   "src/main/lib/codex-app-server/src/_generated/**",
+  # Every file in scripts/ci is an ES module, and the analyzer's parser reads
+  # .mjs as a script regardless of module_system below, reporting JS-0833 on
+  # the first import. Measured on 2026-09-15: red at 8e3cdf9 and f83e874 and
+  # ad93a44, green at d042966, where the files were present but not in the
+  # analyzer's diff. The analyzer reads this configuration from the default
+  # branch, and main carries no .deepsource.toml, so this entry is inert for a
+  # pull request and takes effect once the configuration is on that branch.
+  # Converting the one file a pull request touches to CommonJS was implemented
+  # and reverted the same day: it moved two pre-existing javascript:S4036
+  # findings into Sonar's new code and failed the required quality gate.
+  "scripts/ci/**",
 ]
 
 [[analyzers]]
@@ -14,7 +25,9 @@ name = "javascript"
 enabled = true
 
   [analyzers.meta]
-  # The CI scripts under scripts/ci are ES modules. Without this the analyzer
-  # parses them as scripts and reports JS-0833 on every import line.
+  # The repository is ES modules everywhere except the vendored runtime, and
+  # this key is still correct for the .js and .ts files the analyzer does
+  # parse. It does not settle the .mjs parse error, which the exclusion above
+  # handles.
   module_system = "es-modules"
   environment = ["nodejs", "browser"]

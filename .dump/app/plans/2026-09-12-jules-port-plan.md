@@ -37,7 +37,7 @@ that we would otherwise design from scratch: `pullRequest.ts` (1,265 L, `PullReq
 approvals/attachments/`RuntimeMode`), `environment.ts` + `environmentHttp.ts` (843 L, placements/env
 policy), `previewAutomation.ts` (951 L), `settings.ts` (1,408 L), `review.ts`, `device.ts`, `relay.ts`
 (1,125 L), `agentSessions.ts`. `grep -rl "contracts" src/main src/renderer src/preload` → **0 importers**.
-23 of its 65 test files already run in CI (`test:contracts`).
+23 of its 67 `.ts` files are ported tests and they already run in CI (`test:contracts`). Measured again at `f5506b9` on 2026-09-14, `wc -l src/shared/contracts/*.ts | tail -1` gives 24,860 over 44 source files at 19,395 lines and 23 test files at 5,465 lines, and summing `grep -c ''` per file reproduces the same total, so 24,860 is the tree's count and the 65-file claim this line used to make was wrong. `.dump/app/plans/contracts-adoption.md` §1 carries the same figures, corrected there on 2026-09-14 from a first pass that read 19,439, 5,488 and 24,927, each one line per counted file too high.
 → The program's cheapest 30% is *consuming this layer*, not inventing parallel DTOs. `add-fork-harvest-transplants`
 holds the T3 server phase (5/67) and notes this explicitly; that hold stays — we take the contracts we
 already vendored, not their Effect runtime.
@@ -621,12 +621,15 @@ port hermes-agent memory system and logic"*, confirmed for AGENTS.md too.
   shutdown drain) on daemon threads; and a shared `is_trivial_prompt` gate — bare `yes|no|ok|thanks|continue|lgtm`
   and anything starting with `/` skip recall entirely, because "skipping recall saves a round-trip and keeps stale
   context from derailing one-word replies".
-- [ ] Two things W10 must decide before coding, not during: **(a) who owns the store** — an app-side
-  `memory_entries` table + provider (recommended: the injection decision lives where the prompt is assembled, which
-  is main-process code per recipe §0) versus reading the vendored JCode engine's own memory through the CLI
-  (less code, but every injection then depends on CLI output shapes and the one-provider rule can't be enforced);
-  **(b) unattended write policy** — adopt hermes' fail-closed gate (`tools/memory_tool.py:132-134`): background
-  and scheduled forks may `add`, never `replace`/`remove`, which is the same principle as §6's EvidenceBundle rule.
+- [ ] Two things W10 must decide before coding, not during. **(a) who owns the store — answered 2026-09-13: hybrid.**
+  The runtime may **propose** a memory, mausCode **stores** it, the user **accepts** it, and the engine's own store
+  stays dark so nothing is written twice. Two options were refused rather than deferred. The app owning the store
+  outright is the option this line used to recommend, and it would have left the vendored engine's graph as a second
+  writer. The engine owning it is option B of `.dump/app/research/2026-09-13-hermes-memory-spike.md` §7, and it makes
+  every injection decision depend on CLI output shapes while the one-provider rule stays unenforceable. Recorded in
+  `.dump/global/decisions.md`; step 24 executes it. **(b) unattended write policy** — adopt hermes' fail-closed gate
+  (`tools/memory_tool.py:132-134`): background and scheduled forks may `add`, never `replace`/`remove`, which is the
+  same principle as §6's EvidenceBundle rule.
 - [ ] Placement is a correctness requirement, not a style choice: hermes splits the prompt into a `stable` prefix
   (system + skill index) and a `volatile` tail containing memory + user profile (`context_breakdown.py:25`,
   `:64-74`, `:125-137`) *specifically* so upstream prompt caching survives per-turn recall, and counts memory as

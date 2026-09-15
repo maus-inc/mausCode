@@ -187,7 +187,7 @@ logic, and several of them match standard gitleaks rules. The exact locations:
 
 | File | Line | Content |
 | --- | --- | --- |
-| `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 324 | `aws=AKIAABCDEFGHIJKLMNOP` |
+| `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 324 | `aws=AKIA` plus 16 uppercase chars |
 | `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 326 | A `BEGIN PRIVATE KEY` and `END PRIVATE KEY` pair around `secret-material` |
 | `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 264 | `sk-ant-oat01-...` and `sk-or-v1-...` fixtures |
 | `runtime/jcode/crates/jcode-app-core/src/tool/discover.rs` | 2468 | A `BEGIN PRIVATE KEY` prefix fixture |
@@ -195,7 +195,7 @@ logic, and several of them match standard gitleaks rules. The exact locations:
 | `runtime/jcode/src/cli/account.rs` | 132 | `https://user:pass@jcode.sh/account` |
 | `AGENTS.md` | 134 | `https://user:token@github.com/...` inside the rule that forbids exactly that pattern |
 
-The `AKIAABCDEFGHIJKLMNOP` value is `AKIA` plus exactly 16 uppercase characters, which
+The AWS fixture value is `AKIA` plus exactly 16 uppercase characters, which
 is the shape of the AWS access key rule. The two PEM pairs are well-formed start and end
 markers. Both are the kind of thing gitleaks reports by default. The AGENTS.md line is
 the sharpest irony in the file set: the rule that says never to write a credential into
