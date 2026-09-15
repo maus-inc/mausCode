@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { matchesHotkey, matchesShortcutAction } from "./match-hotkey"
+import { getResolvedHotkey, isCustomHotkey } from "./shortcut-registry"
 import type { CustomHotkeysConfig } from "./types"
 
 const DEFAULT_CONFIG: CustomHotkeysConfig = { version: 1, bindings: {} }
@@ -101,6 +102,22 @@ describe("matchesShortcutAction", () => {
         "toggle-focus",
         config,
       ),
+    ).toBe(true)
+  })
+})
+
+describe("explicit null bindings", () => {
+  it("treats an explicit null reset the same as an unset binding", () => {
+    const config: CustomHotkeysConfig = { version: 1, bindings: { "stop-generation": null } }
+    expect(isCustomHotkey("stop-generation", config)).toBe(false)
+    expect(getResolvedHotkey("stop-generation", config)).toBe("esc")
+    expect(matchesShortcutAction(keyEvent({ key: "Escape" }), "stop-generation", config)).toBe(true)
+  })
+
+  it("still evaluates altKeys when the binding is a null reset", () => {
+    const config: CustomHotkeysConfig = { version: 1, bindings: { "toggle-focus": null } }
+    expect(
+      matchesShortcutAction(keyEvent({ key: "Escape", ctrlKey: true }), "toggle-focus", config),
     ).toBe(true)
   })
 })

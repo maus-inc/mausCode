@@ -246,8 +246,9 @@ export function getResolvedHotkey(
 ): string | null {
   const customHotkey = config.bindings[actionId]
 
-  // If explicitly set (including to a custom value), use it
-  if (customHotkey !== undefined) {
+  // If explicitly set to a hotkey, use it. An explicit null reset means
+  // default, same as an unset binding, per the CustomHotkeysConfig contract.
+  if (customHotkey) {
     return customHotkey
   }
 
@@ -274,7 +275,8 @@ export function getResolvedKeys(
  * Check if an action has a custom (non-default) hotkey
  */
 export function isCustomHotkey(actionId: ShortcutActionId, config: CustomHotkeysConfig): boolean {
-  return config.bindings[actionId] !== undefined
+  // Null is a reset to default, not a custom binding
+  return config.bindings[actionId] != null
 }
 
 /**

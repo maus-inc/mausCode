@@ -3293,10 +3293,24 @@ const ChatViewInner = memo(function ChatViewInner({
       let shouldStop = false
       let shouldSkipQuestions = false
 
+      // Ctrl+C is the uncustomized alt interrupt: it falls through to the
+      // branch below, which keeps copy-with-selection working and never
+      // skips pending questions. A customized stop-generation binding takes
+      // the primary path even when it names Ctrl+C, because the user chose it.
+      const isUncustomizedCtrlC =
+        !isCustomHotkey("stop-generation", customHotkeys) &&
+        e.ctrlKey &&
+        !e.metaKey &&
+        e.code === "KeyC"
+
       // Primary interrupt key (default Esc without modifiers, works even from
       // input fields, like terminal Ctrl+C). Cmd/Ctrl combos never match the
       // default binding, leaving Cmd+Esc to the toggle-focus hook.
-      if (isStreaming && matchesShortcutAction(e, "stop-generation", customHotkeys)) {
+      if (
+        isStreaming &&
+        !isUncustomizedCtrlC &&
+        matchesShortcutAction(e, "stop-generation", customHotkeys)
+      ) {
         const target = e.target as HTMLElement
 
         // Allow ESC to propagate if it originated from a modal/dialog/dropdown

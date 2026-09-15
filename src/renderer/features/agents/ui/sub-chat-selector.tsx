@@ -62,6 +62,7 @@ interface SearchHistoryPopoverProps {
   pendingPlanApprovals: Set<string>
   allSubChatsLength: number
   onSelect: (subChat: SubChatMeta) => void
+  searchHotkey?: string | null
 }
 
 export interface SearchHistoryPopoverRef {
@@ -78,6 +79,7 @@ const SearchHistoryPopover = memo(
       pendingPlanApprovals,
       allSubChatsLength,
       onSelect,
+      searchHotkey,
     },
     ref,
   ) {
@@ -158,7 +160,7 @@ const SearchHistoryPopover = memo(
             </TooltipTrigger>
             <TooltipContent side="bottom">
               Search chats
-              <Kbd>/</Kbd>
+              {searchHotkey && <Kbd>{searchHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
         }
@@ -247,6 +249,7 @@ export function SubChatSelector({
   const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
   const archiveAgentHotkey = useResolvedHotkeyDisplay("archive-agent")
   const newAgentHotkey = useResolvedHotkeyDisplay("new-agent")
+  const searchChatsHotkey = useResolvedHotkeyDisplay("search-chats")
 
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
@@ -933,6 +936,7 @@ export function SubChatSelector({
             pendingPlanApprovals={pendingPlanApprovals}
             allSubChatsLength={allSubChats.length}
             onSelect={handleSelectFromHistory}
+            searchHotkey={searchChatsHotkey}
           />
         </div>
       }

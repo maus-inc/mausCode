@@ -68,6 +68,13 @@ Deleted (2): `undo-archive`, `create-pr`. Users with saved localStorage bindings
 15. CodeAnt flagged that the `cmd` modifier only matches `metaKey`, so renderer-side Cmd defaults never respond to Ctrl on Windows and Linux. Recorded, not fixed: this is the matcher's original semantics (extracted verbatim), and redefining `cmd` on non-mac platforms would change every binding's meaning. Electron menu accelerators (`CmdOrCtrl`) carry the primary keys on Windows and Linux.
 16. SonarCloud S3776 flagged `matchesHotkey` at cognitive complexity 33 against the 15 cap, and S7755 asked for `.at(-1)`. Both valid, both fixed: the per-key alias `if` chain became the `KEY_ALIASES` lookup table, so adding an alias is a table row, and the complexity dropped below the cap. The matcher tests lock every alias, so the refactor is semantically identical.
 
+## CodeRabbit round on PR #56
+
+17. CodeRabbit caught a real regression this step introduced: the primary stop block matched Ctrl+C through the registry altKeys, so with pending questions on screen Ctrl+C skipped the questions instead of stopping, and the copy-with-selection guard in the dedicated Ctrl+C branch was bypassed. Fixed: the uncustomized Ctrl+C combo is excluded from the primary block and keeps its dedicated branch; a user-customized binding that names Ctrl+C still takes the primary path, because the user chose it.
+18. `getResolvedHotkey` and `isCustomHotkey` treated an explicit `null` binding as a custom value, dead-ending the shortcut, while `CustomHotkeysConfig` documents null as a reset to default. The settings tab resets by deleting keys today, so the bug was latent, not live. Fixed to treat null as unset, with tests.
+19. The search-history popover tooltip hard-coded a `/` hint; it now renders `useResolvedHotkeyDisplay("search-chats")` passed down as a prop, so the hint follows rebindings like the other tooltips.
+20. CodeRabbit's docstring-coverage warning (46% against an 80% default) is declined: the repo's written rule is no comments on new code except non-obvious constraints, so comment padding to satisfy a bot threshold would violate the tree's own standard.
+
 ## Gates run for this record (E4, 2026-09-15)
 
 `bun x biome check .` via npx (0 findings), `npm run typecheck` (0 errors), `npm run test` (654 passed), `npm run test:node` (27 passed), `npm run test:contracts` (382 passed), `node scripts/ci/lint-changed.mjs` (pass), `node scripts/ci/typecheck-ratchet.mjs` (0 <= 0), `npm --prefix packages/runtime-client run typecheck` (pass), `npm run build:runtime-client` (pass). `bun run build` and `bun run package:mac` not run: no behaviour ships without a release build, and CI runs the three-platform build on the PR.
