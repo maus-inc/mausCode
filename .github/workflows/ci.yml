@@ -43,7 +43,7 @@ jobs:
         # (falls back to origin/main for branch creation).
         env:
           LINT_BASE: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
-        run: node scripts/ci/lint-changed.mjs
+        run: node scripts/ci/lint-changed.cjs
       - name: Unit tests (vitest)
         run: bun run test
       - name: Unit tests (node:test runtime suites)

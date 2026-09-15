@@ -7,12 +7,14 @@ exclude_patterns = [
   "resources/bin/**",
   "runtime/jcode/**",
   "src/main/lib/codex-app-server/src/_generated/**",
-  # Every file in scripts/ci is an ES module. The analyzer's parser reads .mjs
-  # as a script regardless of module_system below and reports JS-0833 on the
-  # first import, which was measured on 2026-09-15 at 8e3cdf9 after the
-  # module_system key had already been set. Biome lints those files in the
-  # quality job, the wrapper itself with `biome ci` on every change, so the
-  # analyzer is told to skip what it cannot parse.
+  # The remaining files in scripts/ci are ES modules, and the analyzer's parser
+  # reads .mjs as a script regardless of module_system below, reporting JS-0833
+  # on the first import. That was measured on 2026-09-15 at 8e3cdf9, after the
+  # module_system key had already been set, and again at ad93a44, where this
+  # same entry was already present, so this exclusion only takes effect once it
+  # reaches the default branch, which is the branch the analyzer reads its
+  # configuration from. lint-changed is .cjs rather than excluded, because it is
+  # the file a pull request touches. Biome gates all of them in the quality job.
   "scripts/ci/**",
 ]
 

@@ -146,7 +146,7 @@ npm run typecheck                                 # tsc --noEmit, zero errors
 npm run test                                      # vitest
 npm run test:node                                 # node:test runtime suites
 npm run test:contracts                            # vendored contract tests
-node scripts/ci/lint-changed.mjs                  # the exact CI lint gate
+node scripts/ci/lint-changed.cjs                  # the exact CI lint gate
 node scripts/ci/typecheck-ratchet.mjs             # the exact CI typecheck gate
 npm --prefix packages/runtime-client run typecheck
 ```

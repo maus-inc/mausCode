@@ -27,7 +27,7 @@
 ## Evidence
 
 - [ ] Gates run, with results: `bun x biome check .` (0 findings), `npm run typecheck` (0 errors), `npm run test`, `npm run test:node`, `npm run test:contracts`
-- [ ] `node scripts/ci/lint-changed.mjs` and `node scripts/ci/typecheck-ratchet.mjs` pass, which is what CI actually runs
+- [ ] `node scripts/ci/lint-changed.cjs` and `node scripts/ci/typecheck-ratchet.mjs` pass, which is what CI actually runs
 - [ ] Behaviour covered by a test that fails on the base commit. Say which one
 - [ ] Performance-sensitive path touched, so `.dump/<domain>/benchmarks/YYYY-MM-DD-<slug>.md` records baseline, after value, command and environment
 - [ ] Every path, line, count and claim in this description was opened or run by the author, at the level stated

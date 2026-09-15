@@ -15,14 +15,24 @@
  * argument list.
  *
  * Usage:
- *   node scripts/ci/lint-changed.mjs [sha]   # default: merge-base of origin/main
- *   LINT_BASE=<sha> node scripts/ci/lint-changed.mjs
+ *   node scripts/ci/lint-changed.cjs [sha]   # default: merge-base of origin/main
+ *   LINT_BASE=<sha> node scripts/ci/lint-changed.cjs
+ *
+ * This file is CommonJS while its siblings in this directory are ES modules,
+ * and the extension is the reason. DeepSource's JavaScript analyzer parses the
+ * files a pull request touches in script mode, whatever `module_system` says,
+ * and a static `import` in that mode is a syntax error, which it reports as
+ * JS-0833 and treats as blocking. `.deepsource.toml` excludes this directory
+ * from that analyzer for the same reason, but the analyzer reads its
+ * configuration from the default branch, which does not carry that file yet,
+ * so inside a pull request the only lever left is the format of the file the
+ * analyzer reads. Measured 2026-09-15: JS red while `lint-changed.mjs` was in
+ * the pull request's scope, green at `d042966` where no `.mjs` file was.
  */
-import { execFileSync } from "node:child_process"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+const { execFileSync } = require("node:child_process")
+const { join } = require("node:path")
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
+const ROOT = join(__dirname, "..", "..")
 
 const LINTABLE = /\.(js|jsx|ts|tsx|mjs|mts|cjs|cts|json|jsonc|css|graphql)$/i
 
