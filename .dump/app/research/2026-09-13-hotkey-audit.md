@@ -75,6 +75,8 @@ Deleted (2): `undo-archive`, `create-pr`. Users with saved localStorage bindings
 19. The search-history popover tooltip hard-coded a `/` hint; it now renders `useResolvedHotkeyDisplay("search-chats")` passed down as a prop, so the hint follows rebindings like the other tooltips.
 20. CodeRabbit's docstring-coverage warning (46% against an 80% default) is declined: the repo's written rule is no comments on new code except non-obvious constraints, so comment padding to satisfy a bot threshold would violate the tree's own standard.
 
+21. SonarCloud S6767 "searchHotkey PropType is defined but prop is never used" on sub-chat-selector.tsx is a false positive, disputed without a code change. The prop is destructured and rendered in the same file. The analyzer cannot bind destructured parameters of an inner function through `memo(forwardRef(...))`: the same rule has been open since 2026-01 on all seven sibling props of this component, each demonstrably used. The PR comment carries the line references.
+
 ## Gates run for this record (E4, 2026-09-15)
 
 `bun x biome check .` via npx (0 findings), `npm run typecheck` (0 errors), `npm run test` (654 passed), `npm run test:node` (27 passed), `npm run test:contracts` (382 passed), `node scripts/ci/lint-changed.mjs` (pass), `node scripts/ci/typecheck-ratchet.mjs` (0 <= 0), `npm --prefix packages/runtime-client run typecheck` (pass), `npm run build:runtime-client` (pass). `bun run build` and `bun run package:mac` not run: no behaviour ships without a release build, and CI runs the three-platform build on the PR.
