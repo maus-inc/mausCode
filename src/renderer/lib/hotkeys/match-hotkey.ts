@@ -32,7 +32,7 @@ const KEY_ALIASES: Record<string, { keys?: string[]; codes?: string[] }> = {
  */
 export function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
   const parts = hotkey.toLowerCase().split("+")
-  const key = parts.at(-1)
+  const key = parts.at(-1) ?? ""
   const modifiers = parts.slice(0, -1)
 
   const needsMeta = modifiers.includes("cmd") || modifiers.includes("meta")
@@ -49,7 +49,6 @@ export function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
   if (needsAlt !== e.altKey) return false
   if (needsCtrl !== e.ctrlKey) return false
   if (needsShift !== e.shiftKey) return false
-  if (!key) return false
 
   const eventKey = e.key.toLowerCase()
   const eventCode = e.code.toLowerCase()
