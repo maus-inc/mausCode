@@ -143,7 +143,14 @@ jobs:
             if [ -s /tmp/gitleaks-report.json ]; then
               # Annotations, not just the step summary: the summary shows on the job
               # page, while annotations are readable through the check-run API, which
-              # is the only route available when job logs are unreachable.
+              # is the only route available when job logs are unreachable. The index
+              # annotation comes first and carries every finding, because GitHub
+              # displays at most ten annotations per step, so per-finding annotations
+              # alone would silently drop the tail.
+              count=$(jq 'length' /tmp/gitleaks-report.json)
+              index=$(jq -r '.[]? | "\(.RuleID) \(.File):\(.StartLine)"' /tmp/gitleaks-report.json |
+                awk 'NR>1{printf "%%0A"} {printf "%s", $0}')
+              echo "::error title=gitleaks: ${count} finding(s), values redacted::${index}"
               jq -r '.[]? | "::error file=\(.File),line=\(.StartLine),title=gitleaks \(.RuleID)::\(.RuleID) at \(.File):\(.StartLine), value redacted"' \
                 /tmp/gitleaks-report.json > /tmp/gitleaks-annotations.txt || true
               cat /tmp/gitleaks-annotations.txt
