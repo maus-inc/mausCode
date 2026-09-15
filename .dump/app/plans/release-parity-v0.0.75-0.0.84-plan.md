@@ -78,9 +78,11 @@ Measured anchors on this branch: `chats.get` is `src/main/lib/trpc/routers/chats
 
 `sub_chats.sortOrder` + a `reorderSubChats` procedure (**absent today**: `chats.ts` defines no `reorder*` procedure), drag-to-split including pinned panes, `queue` reordering, tooltip cleanup — and, newly measured, the real reason several shortcuts feel broken:
 
+> **Shortcut half done 2026-09-15** (issue #8): most "inert" ids actually fired through component-local handlers; the reconciliation, the corrected verdict per id, and the findings live in `.dump/app/research/2026-09-13-hotkey-audit.md`. The text below is the original measurement, kept for the pane and ordering half.
+
 > `src/renderer/features/agents/lib/agents-hotkeys-manager.ts` maps **29** shortcut ids onto action ids, while `src/renderer/features/agents/lib/agents-actions.ts` registers **11** actions (`:225-235`). **19 of the 29 point at an action that does not exist**, and dispatch ends in `if (!action) return` (`agents-hotkeys-manager.ts`, `handleHotkeysAction`), so the key does nothing and says nothing.
 
-The inert ids: `toggle-details, undo-archive, search-workspaces, archive-workspace, quick-switch-workspaces, new-agent-split → create-new-agent-split, search-chats, archive-agent, quick-switch-agents, prev-agent, next-agent, focus-input, toggle-focus, stop-generation, switch-model, toggle-terminal, open-diff, create-pr, voice-input`. The public `SHORTCUTS` table in `src/renderer/lib/utils/platform.ts:73-100` advertises `cmd+t`, `cmd+[`, `cmd+]`, `cmd+e`, `⌥⌃Tab` for several of them — which is exactly the "⌘⇧T and ⌘[ / ⌘] are inert" report, now explained: they are bound, mapped, and dropped. `create-pr` and `open-diff` being in that list also means P6's PR work has a keyboard entry point waiting for it.
+The inert ids: `toggle-details, undo-archive, search-workspaces, archive-workspace, quick-switch-workspaces, new-agent-split → create-new-agent-split, search-chats, archive-agent, quick-switch-agents, prev-agent, next-agent, focus-input, toggle-focus, stop-generation, switch-model, toggle-terminal, open-diff, create-pr, voice-input`. The public `SHORTCUTS` table in `src/renderer/lib/utils/platform.ts:73-100` advertises `cmd+t`, `cmd+[`, `cmd+]`, `cmd+e`, `⌥⌃Tab` for several of them — which is exactly the "⌘⇧T and ⌘[ / ⌘] are inert" report, now explained: they are bound, mapped, and dropped. `create-pr` and `open-diff` being in that list also means P6's PR work has a keyboard entry point waiting for it. (Superseded verdicts: see the audit; the platform.ts table was dead code and is deleted.)
 
 Split panes are capped at 4: `src/renderer/features/agents/stores/sub-chat-store.ts:10` `MAX_SPLIT_PANES = 4`, `addToSplit` at `:324` with the cap enforced at `:336` and normalisation at `:188`/`:397`.
 
@@ -151,7 +153,7 @@ longer needs it. Three consequences for the rest of this program:
 Order of work, taking the union of this program and the port plan (`.dump/app/plans/2026-09-12-jules-port-plan.md` §11):
 
 1. **P0-4 + P1-6 + P1-5** — one commit each, no install needed to write them, all three are already verified as broken here.
-2. **P4's inert-shortcut cleanup** — either implement or unregister; leaving 19 mapped ids that `return` silently is the kind of thing users read as "the app ignores me".
+2. ~~**P4's inert-shortcut cleanup**~~ — done 2026-09-15 for the shortcut half (issue #8, `.dump/app/research/2026-09-13-hotkey-audit.md`); the pane and ordering half stays with P4/P5.
 3. **P1-1/2/3 + P2** together, behind a mock-peer pass, because the SDK bump and the tool registry are one story.
 4. **P3, P5** (sub-chat/pane correctness) — the part users hit hourly.
 5. **P6** with the t3code spike applied, then **P7**.
