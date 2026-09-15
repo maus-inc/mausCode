@@ -1,7 +1,11 @@
+import { useAtomValue } from "jotai"
 import { type RefObject, useEffect } from "react"
+import { customHotkeysAtom } from "../../../lib/atoms"
+import { matchesShortcutAction } from "../../../lib/hotkeys"
 
 /**
- * Hook to toggle focus when Cmd+Esc (or Ctrl+Esc) is pressed.
+ * Hook to toggle focus when the toggle-focus shortcut is pressed
+ * (Cmd+Esc by default, custom bindings respected).
  * - If focused → blur
  * - If not focused → focus
  * Does not interfere with stop generation (Esc without modifiers).
@@ -12,12 +16,13 @@ export function useToggleFocusOnCmdEsc(
   editorRef: RefObject<{ focus: () => void; blur: () => void } | null>,
   enabled = true,
 ) {
+  const customHotkeys = useAtomValue(customHotkeysAtom)
+
   useEffect(() => {
     if (!enabled) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle Cmd+Esc (or Ctrl+Esc on Windows/Linux)
-      if (e.key !== "Escape" || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) {
+      if (!matchesShortcutAction(e, "toggle-focus", customHotkeys)) {
         return
       }
 
@@ -47,5 +52,5 @@ export function useToggleFocusOnCmdEsc(
 
     window.addEventListener("keydown", handleKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", handleKeyDown, { capture: true })
-  }, [editorRef, enabled])
+  }, [editorRef, enabled, customHotkeys])
 }

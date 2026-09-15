@@ -1,104 +1,37 @@
 /**
  * Hotkeys manager for Agents
  * Centralized keyboard shortcut handling
+ *
+ * Dispatch is driven by SHORTCUT_TO_ACTION_MAP in agents-actions.ts: every
+ * mapped registry id resolves to a registered action, with per-id rules for
+ * dedicated listeners and input focus. agents-actions.test.ts keeps the map
+ * honest against the shortcut registry.
  */
 
 import * as React from "react"
-import { useCallback, useMemo } from "react"
+import { useCallback } from "react"
 import type { CustomHotkeysConfig, SettingsTab } from "../../../lib/atoms"
-import { getResolvedHotkey, type ShortcutActionId } from "../../../lib/hotkeys"
 import {
-  AGENT_ACTIONS,
+  getResolvedHotkey,
+  getShortcutAction,
+  isCustomHotkey,
+  keysToHotkeyString,
+  matchesHotkey,
+  matchesShortcutAction,
+  type ShortcutActionId,
+} from "../../../lib/hotkeys"
+import { appStore } from "../../../lib/jotai-store"
+import { terminalSidebarOpenAtomFamily } from "../../terminal"
+import { diffSidebarOpenAtomFamily } from "../atoms"
+import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import {
   type AgentActionContext,
   executeAgentAction,
   getAvailableAgentActions,
+  SHORTCUT_DEDICATED_HANDLERS,
+  SHORTCUT_INPUT_SAFE,
+  SHORTCUT_TO_ACTION_MAP,
 } from "./agents-actions"
-
-// ============================================================================
-// ACTION ID MAPPING
-// ============================================================================
-
-/**
- * Maps shortcut registry IDs to agent action IDs
- * This allows the shortcut system to work with the existing action system
- */
-const SHORTCUT_TO_ACTION_MAP: Record<ShortcutActionId, string> = {
-  "show-shortcuts": "open-shortcuts",
-  "open-settings": "open-settings",
-  "toggle-sidebar": "toggle-sidebar",
-  "toggle-details": "toggle-details",
-  "undo-archive": "undo-archive",
-  "new-workspace": "create-new-agent",
-  "search-workspaces": "search-workspaces",
-  "archive-workspace": "archive-workspace",
-  "quick-switch-workspaces": "quick-switch-workspaces",
-  "open-kanban": "open-kanban",
-  "new-agent": "create-new-agent",
-  "new-agent-split": "create-new-agent-split",
-  "search-chats": "search-chats",
-  "search-in-chat": "toggle-chat-search",
-  "archive-agent": "archive-agent",
-  "quick-switch-agents": "quick-switch-agents",
-  "prev-agent": "prev-agent",
-  "next-agent": "next-agent",
-  "focus-input": "focus-input",
-  "toggle-focus": "toggle-focus",
-  "stop-generation": "stop-generation",
-  "switch-model": "switch-model",
-  "toggle-terminal": "toggle-terminal",
-  "open-diff": "open-diff",
-  "create-pr": "create-pr",
-  "file-search": "file-search",
-  "voice-input": "voice-input", // Handled directly in chat-input-area.tsx
-  "open-in-editor": "open-in-editor",
-  "open-file-in-editor": "open-file-in-editor",
-}
-
-// Reverse mapping: action ID -> shortcut ID
-const _ACTION_TO_SHORTCUT_MAP: Record<string, ShortcutActionId> = Object.fromEntries(
-  Object.entries(SHORTCUT_TO_ACTION_MAP).map(([k, v]) => [v, k as ShortcutActionId]),
-) as Record<string, ShortcutActionId>
-
-// ============================================================================
-// HOTKEY MATCHING
-// ============================================================================
-
-/**
- * Parse a hotkey string and match against a keyboard event
- * Supports: "?", "shift+?", "cmd+k", "cmd+shift+i"
- */
-function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
-  const parts = hotkey.toLowerCase().split("+")
-  const key = parts[parts.length - 1]
-  const modifiers = parts.slice(0, -1)
-
-  const needsMeta = modifiers.includes("cmd") || modifiers.includes("meta")
-  const needsAlt = modifiers.includes("opt") || modifiers.includes("alt")
-  const needsCtrl = modifiers.includes("ctrl")
-  let needsShift = modifiers.includes("shift")
-
-  // "?" requires shift implicitly
-  if (key === "?" && !modifiers.includes("shift")) {
-    needsShift = true
-  }
-
-  if (needsMeta !== e.metaKey) return false
-  if (needsAlt !== e.altKey) return false
-  if (needsCtrl !== e.ctrlKey) return false
-  if (needsShift !== e.shiftKey) return false
-
-  const eventKey = e.key.toLowerCase()
-  const eventCode = e.code.toLowerCase()
-
-  if (eventKey === key) return true
-  if (key === "?" && eventKey === "?") return true
-  if (key === "/" && (eventKey === "/" || eventCode === "slash")) return true
-  if (key === "\\" && (eventKey === "\\" || eventCode === "backslash")) return true
-  if (key === "," && (eventKey === "," || eventCode === "comma")) return true
-  if (key.length === 1 && eventCode === `key${key}`) return true
-
-  return false
-}
 
 // ============================================================================
 // TYPES
@@ -125,12 +58,11 @@ export interface UseAgentsHotkeysOptions {
   preventDefault?: boolean
 }
 
-// Hotkeys that work even in inputs
-const GLOBAL_HOTKEYS = new Set(["open-shortcuts"])
-
 // ============================================================================
 // HOTKEYS MANAGER HOOK
 // ============================================================================
+
+const DEFAULT_HOTKEYS_CONFIG: CustomHotkeysConfig = { version: 1, bindings: {} }
 
 export function useAgentsHotkeys(
   config: AgentsHotkeysManagerConfig,
@@ -150,6 +82,23 @@ export function useAgentsHotkeys(
       setFileSearchDialogOpen: config.setFileSearchDialogOpen,
       toggleChatSearch: config.toggleChatSearch,
       selectedChatId: config.selectedChatId,
+      getSubChatTabs: () => {
+        const store = useAgentSubChatStore.getState()
+        return {
+          chatId: store.chatId,
+          activeSubChatId: store.activeSubChatId,
+          openSubChatIds: store.openSubChatIds,
+          setActiveSubChat: store.setActiveSubChat,
+        }
+      },
+      toggleDiffSidebar: (chatId) => {
+        const sidebarAtom = diffSidebarOpenAtomFamily(chatId)
+        appStore.set(sidebarAtom, !appStore.get(sidebarAtom))
+      },
+      toggleTerminalSidebar: (chatId) => {
+        const terminalAtom = terminalSidebarOpenAtomFamily(chatId)
+        appStore.set(terminalAtom, !appStore.get(terminalAtom))
+      },
     }),
     [
       config.setSelectedChatId,
@@ -205,15 +154,27 @@ export function useAgentsHotkeys(
   // Get the resolved hotkey for a shortcut, respecting custom bindings
   const getHotkeyForAction = useCallback(
     (shortcutId: ShortcutActionId): string | null => {
-      const customConfig = config.customHotkeysConfig || { version: 1, bindings: {} }
+      const customConfig = config.customHotkeysConfig || DEFAULT_HOTKEYS_CONFIG
       return getResolvedHotkey(shortcutId, customConfig)
     },
     [config.customHotkeysConfig],
   )
 
-  // Unified hotkey listener that respects custom configurations
+  // Dedicated hotkey listener for ids whose key handling has extra rules:
+  // input-focus exceptions, the file-viewer find exception, the Kanban flag,
+  // and the "C" alt key whose primary key belongs to the main-process menu.
   React.useEffect(() => {
     if (!enabled) return
+
+    const customConfig = config.customHotkeysConfig || DEFAULT_HOTKEYS_CONFIG
+
+    const dispatchShortcut = (shortcutId: ShortcutActionId, e: KeyboardEvent) => {
+      const actionId = SHORTCUT_TO_ACTION_MAP[shortcutId]
+      if (!actionId) return
+      e.preventDefault()
+      e.stopPropagation()
+      handleHotkeyAction(actionId)
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeElement = document.activeElement
@@ -226,9 +187,7 @@ export function useAgentsHotkeys(
       // Check toggle-sidebar hotkey
       const toggleSidebarHotkey = getHotkeyForAction("toggle-sidebar")
       if (toggleSidebarHotkey && matchesHotkey(e, toggleSidebarHotkey)) {
-        e.preventDefault()
-        e.stopPropagation()
-        handleHotkeyAction("toggle-sidebar")
+        dispatchShortcut("toggle-sidebar", e)
         return
       }
 
@@ -236,9 +195,7 @@ export function useAgentsHotkeys(
       if (!isInputFocused) {
         const showShortcutsHotkey = getHotkeyForAction("show-shortcuts")
         if (showShortcutsHotkey && matchesHotkey(e, showShortcutsHotkey)) {
-          e.preventDefault()
-          e.stopPropagation()
-          handleHotkeyAction("open-shortcuts")
+          dispatchShortcut("show-shortcuts", e)
           return
         }
       }
@@ -246,9 +203,7 @@ export function useAgentsHotkeys(
       // Check open-settings hotkey
       const openSettingsHotkey = getHotkeyForAction("open-settings")
       if (openSettingsHotkey && matchesHotkey(e, openSettingsHotkey)) {
-        e.preventDefault()
-        e.stopPropagation()
-        handleHotkeyAction("open-settings")
+        dispatchShortcut("open-settings", e)
         return
       }
 
@@ -259,9 +214,7 @@ export function useAgentsHotkeys(
         const active = document.activeElement
         const isInFileViewer = active?.closest?.("[data-file-viewer-path]")
         if (!isInFileViewer) {
-          e.preventDefault()
-          e.stopPropagation()
-          handleHotkeyAction("toggle-chat-search")
+          dispatchShortcut("search-in-chat", e)
           return
         }
       }
@@ -269,9 +222,7 @@ export function useAgentsHotkeys(
       // Check file-search hotkey (Cmd+P)
       const fileSearchHotkey = getHotkeyForAction("file-search")
       if (fileSearchHotkey && matchesHotkey(e, fileSearchHotkey)) {
-        e.preventDefault()
-        e.stopPropagation()
-        handleHotkeyAction("file-search")
+        dispatchShortcut("file-search", e)
         return
       }
 
@@ -279,62 +230,41 @@ export function useAgentsHotkeys(
       if (config.betaKanbanEnabled) {
         const openKanbanHotkey = getHotkeyForAction("open-kanban")
         if (openKanbanHotkey && matchesHotkey(e, openKanbanHotkey)) {
-          e.preventDefault()
-          e.stopPropagation()
-          handleHotkeyAction("open-kanban")
+          dispatchShortcut("open-kanban", e)
           return
         }
       }
 
-      // Check new-workspace alt hotkey ("C") — only when not in input
-      if (!isInputFocused && matchesHotkey(e, "c")) {
-        e.preventDefault()
-        e.stopPropagation()
-        handleHotkeyAction("create-new-agent")
-        return
+      // Check new-workspace alt key ("C") — only when not in input. The
+      // primary Cmd+N belongs to the main-process menu accelerator and is not
+      // rebindable here.
+      const newWorkspaceAction = getShortcutAction("new-workspace")
+      if (
+        !isInputFocused &&
+        !isCustomHotkey("new-workspace", customConfig) &&
+        newWorkspaceAction?.altKeys?.length
+      ) {
+        const altHotkey = keysToHotkeyString(newWorkspaceAction.altKeys)
+        if (matchesHotkey(e, altHotkey)) {
+          dispatchShortcut("new-workspace", e)
+          return
+        }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [enabled, handleHotkeyAction, getHotkeyForAction, config.betaKanbanEnabled])
+  }, [
+    enabled,
+    handleHotkeyAction,
+    getHotkeyForAction,
+    config.betaKanbanEnabled,
+    config.customHotkeysConfig,
+  ])
 
-  // General hotkey handler for remaining actions
-  const actionsWithHotkeys = useMemo(
-    () =>
-      Object.values(AGENT_ACTIONS).filter(
-        (action) =>
-          action.hotkey !== undefined &&
-          action.id !== "create-new-agent" &&
-          action.id !== "toggle-sidebar" &&
-          action.id !== "open-shortcuts" &&
-          action.id !== "open-settings" &&
-          action.id !== "toggle-chat-search",
-      ),
-    [],
-  )
-
-  const hotkeyMappings = useMemo(() => {
-    const mappings: Array<{
-      actionId: string
-      hotkeys: string[]
-      isGlobal: boolean
-    }> = []
-
-    for (const action of actionsWithHotkeys) {
-      if (!action.hotkey) continue
-      const hotkeys = Array.isArray(action.hotkey) ? action.hotkey : [action.hotkey]
-      const isGlobal = GLOBAL_HOTKEYS.has(action.id)
-      mappings.push({
-        actionId: action.id,
-        hotkeys: hotkeys.filter(Boolean) as string[],
-        isGlobal,
-      })
-    }
-
-    return mappings
-  }, [actionsWithHotkeys])
-
+  // Generic shortcut loop for every other mapped id, resolved against custom
+  // bindings. Ids with dedicated rules above are skipped to avoid double
+  // dispatch.
   React.useEffect(() => {
     if (!enabled) return
 
@@ -343,25 +273,29 @@ export function useAgentsHotkeys(
       const isInInput =
         target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
 
-      for (const mapping of hotkeyMappings) {
-        if (isInInput && !mapping.isGlobal) continue
+      const customConfig = config.customHotkeysConfig || DEFAULT_HOTKEYS_CONFIG
 
-        for (const hotkey of mapping.hotkeys) {
-          if (matchesHotkey(e, hotkey)) {
-            if (preventDefault) {
-              e.preventDefault()
-              e.stopPropagation()
-            }
-            handleHotkeyAction(mapping.actionId)
-            return
+      for (const shortcutId of Object.keys(SHORTCUT_TO_ACTION_MAP) as ShortcutActionId[]) {
+        if (SHORTCUT_DEDICATED_HANDLERS[shortcutId]) continue
+        if (isInInput && !SHORTCUT_INPUT_SAFE[shortcutId]) continue
+
+        const actionId = SHORTCUT_TO_ACTION_MAP[shortcutId]
+        if (!actionId) continue
+
+        if (matchesShortcutAction(e, shortcutId, customConfig)) {
+          if (preventDefault) {
+            e.preventDefault()
+            e.stopPropagation()
           }
+          handleHotkeyAction(actionId)
+          return
         }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [enabled, preventDefault, hotkeyMappings, handleHotkeyAction])
+  }, [enabled, preventDefault, handleHotkeyAction, config.customHotkeysConfig])
 
   return {
     executeAction: handleHotkeyAction,

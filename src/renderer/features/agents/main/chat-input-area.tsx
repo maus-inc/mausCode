@@ -1156,23 +1156,20 @@ export const ChatInputArea = memo(function ChatInputArea({
   currentSubChatIdRef.current = subChatId
   currentChatIdRef.current = parentChatId
 
-  // Keyboard shortcut: Cmd+/ to open model selector
+  // Consume the switch-model action (Cmd+/ by default, resolved by the
+  // hotkeys manager) by opening the model selector for the active chat.
   useEffect(() => {
     if (!isActive) return
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === "/") {
-        e.preventDefault()
-        e.stopPropagation()
-        const shouldBlockForCustomClaude = provider === "claude-code" && hasCustomClaudeConfig
-        if (!shouldBlockForCustomClaude) {
-          setIsModelDropdownOpen(true)
-        }
+    const openModelSelector = () => {
+      const shouldBlockForCustomClaude = provider === "claude-code" && hasCustomClaudeConfig
+      if (!shouldBlockForCustomClaude) {
+        setIsModelDropdownOpen(true)
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown, true)
-    return () => window.removeEventListener("keydown", handleKeyDown, true)
+    window.addEventListener("switch-model", openModelSelector)
+    return () => window.removeEventListener("switch-model", openModelSelector)
   }, [hasCustomClaudeConfig, provider, isActive])
 
   // Voice input handlers

@@ -29,8 +29,8 @@ import { Kbd } from "../../../components/ui/kbd"
 import { PopoverTrigger } from "../../../components/ui/popover"
 import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
-import { chatSourceModeAtom } from "../../../lib/atoms"
-import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
+import { chatSourceModeAtom, customHotkeysAtom } from "../../../lib/atoms"
+import { matchesShortcutAction, useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
@@ -242,6 +242,7 @@ export function SubChatSelector({
   const showTerminalButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("terminal")
 
   // Resolved hotkeys for tooltips
+  const customHotkeys = useAtomValue(customHotkeysAtom)
   const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
   const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
   const archiveAgentHotkey = useResolvedHotkeyDisplay("archive-agent")
@@ -461,10 +462,10 @@ export function SubChatSelector({
     [onSwitchFromHistory],
   )
 
-  // Hotkey: / to open history popover
+  // Hotkey: / (or the user's custom search-chats binding) to open history popover
   useEffect(() => {
     const handleHistoryHotkey = (e: KeyboardEvent) => {
-      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      if (matchesShortcutAction(e, "search-chats", customHotkeys)) {
         // Don't trigger if already focused on an input/textarea
         const activeEl = document.activeElement
         if (
@@ -483,7 +484,7 @@ export function SubChatSelector({
 
     window.addEventListener("keydown", handleHistoryHotkey, true)
     return () => window.removeEventListener("keydown", handleHistoryHotkey, true)
-  }, [])
+  }, [customHotkeys])
 
   // Keyboard shortcut: Cmd+Shift+T / Ctrl+Shift+T for new sub-chat
   // Scroll to active tab when it changes

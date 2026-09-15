@@ -7,7 +7,6 @@ export type ShortcutActionId =
   | "open-settings"
   | "toggle-sidebar"
   | "toggle-details"
-  | "undo-archive"
   // Workspaces
   | "new-workspace"
   | "search-workspaces"
@@ -29,7 +28,6 @@ export type ShortcutActionId =
   | "switch-model"
   | "toggle-terminal"
   | "open-diff"
-  | "create-pr"
   | "file-search"
   | "voice-input"
   | "open-in-editor"

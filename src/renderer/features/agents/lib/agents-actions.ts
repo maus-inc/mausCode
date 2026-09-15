@@ -1,14 +1,30 @@
 /**
  * Centralized action system for Agents
  * Actions can be triggered via hotkeys or UI buttons
+ *
+ * This module also owns the bridge between the shortcut registry
+ * (src/renderer/lib/hotkeys/shortcut-registry.ts) and the actions registered
+ * here. `SHORTCUT_TO_ACTION_MAP` lists every registry id this module's
+ * consumers dispatch, `COMPONENT_OWNED_SHORTCUTS` lists every registry id whose
+ * dispatcher lives in a component or hook. Both tables are enforced by
+ * agents-actions.test.ts so a registry id cannot exist without a dispatcher.
  */
 
 import type { SettingsTab } from "../../../lib/atoms"
+import type { ShortcutActionId } from "../../../lib/hotkeys"
 import type { DesktopView } from "../atoms"
 
 // ============================================================================
 // TYPES
 // ============================================================================
+
+/** Minimal sub-chat store slice the tab navigation and sidebar actions need. */
+export interface SubChatTabsSlice {
+  chatId: string | null
+  activeSubChatId: string | null
+  openSubChatIds: string[]
+  setActiveSubChat: (subChatId: string) => void
+}
 
 export type AgentActionSource = "hotkey" | "ui_button" | "context-menu"
 
@@ -23,6 +39,13 @@ export interface AgentActionContext {
   // Forces NewChatForm to remount so the in-progress draft is preserved
   // (markDraftVisible runs on unmount) and a fresh blank form is shown.
   requestNewChatFormReset?: () => void
+
+  // Sub-chat tab access for the tab navigation and sidebar actions. Injected
+  // by the hotkeys manager so this module stays importable outside the
+  // renderer and tests can pass a fake.
+  getSubChatTabs?: () => SubChatTabsSlice | null
+  toggleDiffSidebar?: (chatId: string) => void
+  toggleTerminalSidebar?: (chatId: string) => void
 
   // UI states
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
@@ -49,9 +72,84 @@ export interface AgentActionDefinition {
   label: string
   description?: string
   category: AgentActionCategory
-  hotkey?: string | string[]
   handler: AgentActionHandler
   isAvailable?: (context: AgentActionContext) => boolean
+}
+
+// ============================================================================
+// SHORTCUT REGISTRY BRIDGE
+// ============================================================================
+
+/**
+ * Maps shortcut registry ids to agent action ids for every id the hotkeys
+ * manager dispatches. Ids absent here and absent from
+ * COMPONENT_OWNED_SHORTCUTS are registered nowhere and fail the test suite.
+ */
+export const SHORTCUT_TO_ACTION_MAP: Partial<Record<ShortcutActionId, string>> = {
+  "show-shortcuts": "open-shortcuts",
+  "open-settings": "open-settings",
+  "toggle-sidebar": "toggle-sidebar",
+  "new-workspace": "create-new-agent",
+  "open-kanban": "open-kanban",
+  "new-agent": "create-new-agent",
+  "search-in-chat": "toggle-chat-search",
+  "prev-agent": "prev-agent",
+  "next-agent": "next-agent",
+  "open-diff": "open-diff",
+  "toggle-terminal": "toggle-terminal",
+  "switch-model": "switch-model",
+  "file-search": "file-search",
+  "open-in-editor": "open-in-editor",
+  "open-file-in-editor": "open-file-in-editor",
+}
+
+/**
+ * Mapped ids whose key handling sits in the manager's dedicated listener
+ * because of input-focus rules, the Kanban feature flag, or the main-process
+ * menu accelerator that owns the primary key. The generic shortcut loop skips
+ * them to avoid double dispatch.
+ */
+export const SHORTCUT_DEDICATED_HANDLERS: Partial<Record<ShortcutActionId, true>> = {
+  "show-shortcuts": true,
+  "open-settings": true,
+  "toggle-sidebar": true,
+  "new-workspace": true,
+  "open-kanban": true,
+  "search-in-chat": true,
+  "file-search": true,
+}
+
+/**
+ * Mapped ids that must keep firing while the focus sits in an input, matching
+ * the component handlers they replace (e.g. Cmd+[ switched tabs mid-typing).
+ */
+export const SHORTCUT_INPUT_SAFE: Partial<Record<ShortcutActionId, true>> = {
+  "new-agent": true,
+  "prev-agent": true,
+  "next-agent": true,
+  "open-diff": true,
+  "toggle-terminal": true,
+  "switch-model": true,
+}
+
+/**
+ * Registry ids whose dispatcher is a component or hook, with the owning module.
+ * These ids stay in the settings table because the keys work; a rebinding only
+ * takes effect where the owner resolves it through the hotkeys registry.
+ */
+export const COMPONENT_OWNED_SHORTCUTS: Partial<Record<ShortcutActionId, string>> = {
+  "search-workspaces": "src/renderer/features/sidebar/agents-sidebar.tsx",
+  "archive-workspace": "src/renderer/features/sidebar/agents-sidebar.tsx",
+  "quick-switch-workspaces": "src/renderer/features/agents/ui/agents-content.tsx",
+  "quick-switch-agents": "src/renderer/features/agents/ui/agents-content.tsx",
+  "new-agent-split": "src/renderer/features/agents/main/active-chat.tsx",
+  "archive-agent": "src/renderer/features/agents/main/active-chat.tsx",
+  "search-chats": "src/renderer/features/agents/ui/sub-chat-selector.tsx",
+  "focus-input": "src/renderer/features/agents/hooks/use-focus-input-on-enter.ts",
+  "toggle-focus": "src/renderer/features/agents/hooks/use-toggle-focus-on-cmd-esc.ts",
+  "stop-generation": "src/renderer/features/agents/main/active-chat.tsx",
+  "voice-input": "src/renderer/features/agents/main/chat-input-area.tsx",
+  "toggle-details": "src/renderer/features/details-sidebar/details-sidebar.tsx",
 }
 
 // ============================================================================
@@ -63,7 +161,6 @@ const openShortcutsAction: AgentActionDefinition = {
   label: "Keyboard shortcuts",
   description: "Show all keyboard shortcuts",
   category: "general",
-  hotkey: "?",
   handler: async (context) => {
     // Open settings page on Keyboard tab
     context.setSettingsActiveTab?.("keyboard")
@@ -78,7 +175,6 @@ const createNewAgentAction: AgentActionDefinition = {
   label: "New workspace",
   description: "Create a new workspace",
   category: "general",
-  hotkey: "cmd+n",
   handler: async (context) => {
     // Bump the reset counter first so any in-progress draft in the current
     // NewChatForm gets preserved (markDraftVisible runs on unmount) and a
@@ -102,7 +198,6 @@ const openSettingsAction: AgentActionDefinition = {
   label: "Settings",
   description: "Open settings page",
   category: "general",
-  hotkey: ["cmd+,", "ctrl+,"],
   handler: async (context) => {
     context.setSettingsActiveTab?.("preferences")
     context.setDesktopView?.("settings")
@@ -116,7 +211,6 @@ const toggleSidebarAction: AgentActionDefinition = {
   label: "Toggle sidebar",
   description: "Show/hide left sidebar",
   category: "view",
-  hotkey: ["cmd+\\", "ctrl+\\"],
   handler: async (context) => {
     context.setSidebarOpen?.((prev) => !prev)
     return { success: true }
@@ -128,7 +222,6 @@ const toggleChatSearchAction: AgentActionDefinition = {
   label: "Search messages",
   description: "Search through chat history",
   category: "view",
-  hotkey: ["cmd+f", "ctrl+f"],
   handler: async (context) => {
     context.toggleChatSearch?.()
     return { success: true }
@@ -140,7 +233,6 @@ const openKanbanAction: AgentActionDefinition = {
   label: "Open Kanban board",
   description: "Open the Kanban board view",
   category: "view",
-  hotkey: "cmd+shift+k",
   handler: async (context) => {
     // Clear selected chat, draft, and new form state to show Kanban view
     context.setSelectedChatId?.(null)
@@ -171,7 +263,6 @@ const openInEditorAction: AgentActionDefinition = {
   label: "Open in editor",
   description: "Open worktree in preferred editor",
   category: "general",
-  hotkey: "cmd+o",
   handler: async () => {
     // Handled by the info-section component via event dispatch
     window.dispatchEvent(new CustomEvent("open-in-editor"))
@@ -198,7 +289,6 @@ const openFileInEditorAction: AgentActionDefinition = {
   label: "Open file in editor",
   description: "Open currently previewed file in preferred editor",
   category: "general",
-  hotkey: "cmd+shift+o",
   handler: async () => {
     window.dispatchEvent(new CustomEvent("open-file-in-editor"))
     return { success: true }
@@ -210,9 +300,93 @@ const fileSearchAction: AgentActionDefinition = {
   label: "Go to file",
   description: "Search and open a file in the workspace",
   category: "navigation",
-  hotkey: "cmd+p",
   handler: async (context) => {
     context.setFileSearchDialogOpen?.(true)
+    return { success: true }
+  },
+}
+
+function switchTab(tabs: SubChatTabsSlice, offset: 1 | -1): AgentActionResult {
+  const openIds = tabs.openSubChatIds
+  if (openIds.length <= 1) return { success: false, error: "No other tab open" }
+
+  if (!tabs.activeSubChatId) {
+    tabs.setActiveSubChat(openIds[0])
+    return { success: true }
+  }
+
+  const currentIndex = openIds.indexOf(tabs.activeSubChatId)
+  if (currentIndex === -1) {
+    tabs.setActiveSubChat(openIds[0])
+    return { success: true }
+  }
+
+  const nextIndex = (currentIndex + offset + openIds.length) % openIds.length
+  const nextId = openIds[nextIndex]
+  if (nextId) tabs.setActiveSubChat(nextId)
+  return { success: true }
+}
+
+const prevAgentAction: AgentActionDefinition = {
+  id: "prev-agent",
+  label: "Previous tab",
+  description: "Switch to the previous open chat tab",
+  category: "navigation",
+  handler: async (context) => {
+    const tabs = context.getSubChatTabs?.()
+    if (!tabs) return { success: false, error: "No chat open" }
+    return switchTab(tabs, -1)
+  },
+}
+
+const nextAgentAction: AgentActionDefinition = {
+  id: "next-agent",
+  label: "Next tab",
+  description: "Switch to the next open chat tab",
+  category: "navigation",
+  handler: async (context) => {
+    const tabs = context.getSubChatTabs?.()
+    if (!tabs) return { success: false, error: "No chat open" }
+    return switchTab(tabs, 1)
+  },
+}
+
+const openDiffAction: AgentActionDefinition = {
+  id: "open-diff",
+  label: "Open diff",
+  description: "Toggle the diff view for the current chat",
+  category: "view",
+  handler: async (context) => {
+    const chatId = context.getSubChatTabs?.()?.chatId
+    if (!chatId) return { success: false, error: "No chat open" }
+
+    context.toggleDiffSidebar?.(chatId)
+    return { success: true }
+  },
+}
+
+const toggleTerminalAction: AgentActionDefinition = {
+  id: "toggle-terminal",
+  label: "Toggle terminal",
+  description: "Toggle the terminal sidebar for the current chat",
+  category: "view",
+  handler: async (context) => {
+    const chatId = context.getSubChatTabs?.()?.chatId
+    if (!chatId) return { success: false, error: "No chat open" }
+
+    context.toggleTerminalSidebar?.(chatId)
+    return { success: true }
+  },
+}
+
+const switchModelAction: AgentActionDefinition = {
+  id: "switch-model",
+  label: "Switch model",
+  description: "Open the model selector for the current chat",
+  category: "chat",
+  handler: async () => {
+    // Handled by the active chat input area via event dispatch
+    window.dispatchEvent(new CustomEvent("switch-model"))
     return { success: true }
   },
 }
@@ -233,6 +407,11 @@ export const AGENT_ACTIONS: Record<string, AgentActionDefinition> = {
   "open-in-editor": openInEditorAction,
   "open-file-in-editor": openFileInEditorAction,
   "file-search": fileSearchAction,
+  "prev-agent": prevAgentAction,
+  "next-agent": nextAgentAction,
+  "open-diff": openDiffAction,
+  "toggle-terminal": toggleTerminalAction,
+  "switch-model": switchModelAction,
 }
 
 export function getAgentAction(id: string): AgentActionDefinition | undefined {

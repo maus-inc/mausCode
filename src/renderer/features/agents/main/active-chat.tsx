@@ -46,6 +46,7 @@ import { trackMessageSent } from "../../../lib/analytics"
 import {
   chatSourceModeAtom,
   customClaudeConfigAtom,
+  customHotkeysAtom,
   defaultAgentModeAtom,
   isDesktopAtom,
   isFullscreenAtom,
@@ -56,7 +57,11 @@ import {
 } from "../../../lib/atoms"
 import { useFileChangeListener, useGitWatcher } from "../../../lib/hooks/use-file-change-listener"
 import { useRemoteChat } from "../../../lib/hooks/use-remote-chats"
-import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
+import {
+  isCustomHotkey,
+  matchesShortcutAction,
+  useResolvedHotkeyDisplay,
+} from "../../../lib/hotkeys"
 import { appStore } from "../../../lib/jotai-store"
 import { api } from "../../../lib/mock-api"
 import { trpc, trpcClient } from "../../../lib/trpc"
@@ -97,7 +102,6 @@ import {
   clearLoading,
   compactingSubChatsAtom,
   currentPlanPathAtomFamily,
-  desktopViewAtom,
   diffActiveTabAtom,
   diffSidebarOpenAtomFamily,
   diffViewDisplayModeAtom,
@@ -129,14 +133,11 @@ import {
   planSidebarOpenAtomFamily,
   pushedChatIdsAtom,
   QUESTIONS_SKIPPED_MESSAGE,
-  requestNewChatFormResetAtom,
   type SelectedCommit,
   selectedAgentChatIdAtom,
   selectedCommitAtom,
   selectedDiffFilePathAtom,
-  selectedDraftIdAtom,
   setLoading,
-  showNewChatFormAtom,
   subChatClineModelIdAtomFamily,
   subChatCodexModelIdAtomFamily,
   subChatCodexThinkingAtomFamily,
@@ -3281,6 +3282,9 @@ const ChatViewInner = memo(function ChatViewInner({
   }, [isRollingBack, setIsRollingBackAtom])
 
   // ESC, Ctrl+C and Cmd+Shift+Backspace handler for stopping stream
+  // Esc (or the user's custom stop-generation binding) interrupts and skips
+  // pending questions; Ctrl+C is the alt interrupt and keeps copy behaviour.
+  const customHotkeys = useAtomValue(customHotkeysAtom)
   useEffect(() => {
     // Skip keyboard handlers for inactive tabs (keep-alive)
     if (!isActive) return
@@ -3289,16 +3293,10 @@ const ChatViewInner = memo(function ChatViewInner({
       let shouldStop = false
       let shouldSkipQuestions = false
 
-      // Check for Escape key without modifiers (works even from input fields, like terminal Ctrl+C)
-      // Ignore if Cmd/Ctrl is pressed (reserved for Cmd+Esc to focus input)
-      if (
-        e.key === "Escape" &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.shiftKey &&
-        !e.altKey &&
-        isStreaming
-      ) {
+      // Primary interrupt key (default Esc without modifiers, works even from
+      // input fields, like terminal Ctrl+C). Cmd/Ctrl combos never match the
+      // default binding, leaving Cmd+Esc to the toggle-focus hook.
+      if (isStreaming && matchesShortcutAction(e, "stop-generation", customHotkeys)) {
         const target = e.target as HTMLElement
 
         // Allow ESC to propagate if it originated from a modal/dialog/dropdown
@@ -3322,8 +3320,14 @@ const ChatViewInner = memo(function ChatViewInner({
         }
       }
 
-      // Check for Ctrl+C (only Ctrl, not Cmd on Mac)
-      if (e.ctrlKey && !e.metaKey && e.code === "KeyC") {
+      // Check for Ctrl+C (only Ctrl, not Cmd on Mac). Retired once the user
+      // binds their own stop-generation key, which replaces Esc and this alt.
+      if (
+        !isCustomHotkey("stop-generation", customHotkeys) &&
+        e.ctrlKey &&
+        !e.metaKey &&
+        e.code === "KeyC"
+      ) {
         if (!isStreaming) return
 
         const selection = window.getSelection()
@@ -3353,7 +3357,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isActive, isStreaming, stop, subChatId, displayQuestions, handleQuestionsSkip])
+  }, [isActive, isStreaming, stop, subChatId, displayQuestions, handleQuestionsSkip, customHotkeys])
 
   // Keyboard shortcut: Enter to focus input when not already focused
   useFocusInputOnEnter(editorRef, isActive)
@@ -4740,23 +4744,10 @@ export function ChatView({
   }, [setPendingBuildPlanSubChatId])
 
   // Per-chat terminal sidebar state - each chat remembers its own open/close state
+  // Cmd+J toggling is owned by the hotkeys manager's toggle-terminal action.
   const terminalSidebarAtom = useMemo(() => terminalSidebarOpenAtomFamily(chatId), [chatId])
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(terminalSidebarAtom)
   const terminalDisplayMode = useAtomValue(terminalDisplayModeAtom)
-
-  // Keyboard shortcut: Cmd+J to toggle terminal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && !e.altKey && !e.shiftKey && !e.ctrlKey && e.code === "KeyJ") {
-        e.preventDefault()
-        e.stopPropagation()
-        setIsTerminalSidebarOpen(!isTerminalSidebarOpen)
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown, true)
-    return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [isTerminalSidebarOpen, setIsTerminalSidebarOpen])
 
   // Mutual exclusion: Details sidebar vs Plan/Terminal/Diff(side-peek) sidebars
   // When one opens, close the conflicting ones and remember for restoration
@@ -7325,58 +7316,20 @@ Make sure to preserve all functionality from both branches when resolving confli
     setChatsAwaitingAnswer,
   ])
 
-  // Keyboard shortcut: New chat (mirrors sidebar "+" / Cmd+N new-workspace flow)
-  // Web: Opt+Cmd+T (browser uses Cmd+T for new tab)
-  // Desktop: Cmd+T
-  // Cmd+Shift+T creates a new sub-chat tab inside the current workspace.
-  const setShowNewChatFormForHotkey = useSetAtom(showNewChatFormAtom)
-  const setSelectedDraftIdForHotkey = useSetAtom(selectedDraftIdAtom)
-  const setDesktopViewForHotkey = useSetAtom(desktopViewAtom)
-  const requestNewChatFormResetForHotkey = useSetAtom(requestNewChatFormResetAtom)
-  const setSelectedChatIdForHotkey = useSetAtom(selectedAgentChatIdAtom)
-
-  const triggerNewChatForm = useCallback(() => {
-    requestNewChatFormResetForHotkey()
-    setSelectedChatIdForHotkey(null)
-    setSelectedDraftIdForHotkey(null)
-    setShowNewChatFormForHotkey(true)
-    setDesktopViewForHotkey(null)
-  }, [
-    requestNewChatFormResetForHotkey,
-    setSelectedChatIdForHotkey,
-    setSelectedDraftIdForHotkey,
-    setShowNewChatFormForHotkey,
-    setDesktopViewForHotkey,
-  ])
-
+  // Keyboard shortcut: Cmd+Shift+T creates a new sub-chat tab inside the
+  // current workspace. New chat (Cmd+T) and tab navigation (Cmd+[ / Cmd+])
+  // are owned by the hotkeys manager.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isDesktop = isDesktopApp()
-
-      // Cmd+Shift+T → create new sub-chat tab (existing split/new-tab behavior)
       if (e.metaKey && e.shiftKey && e.code === "KeyT" && !e.altKey) {
         e.preventDefault()
         handleCreateNewSubChat()
-        return
-      }
-
-      // Desktop: Cmd+T → open the new chat form (same as sidebar "new" button)
-      if (isDesktop && e.metaKey && e.code === "KeyT" && !e.altKey && !e.shiftKey) {
-        e.preventDefault()
-        triggerNewChatForm()
-        return
-      }
-
-      // Web: Opt+Cmd+T → open the new chat form
-      if (e.altKey && e.metaKey && e.code === "KeyT" && !e.shiftKey) {
-        e.preventDefault()
-        triggerNewChatForm()
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleCreateNewSubChat, triggerNewChatForm])
+  }, [handleCreateNewSubChat])
 
   // NOTE: Desktop notifications for pending questions are now triggered directly
   // in ipc-chat-transport.ts when the ask-user-question chunk arrives.
@@ -7459,121 +7412,6 @@ Make sure to preserve all functionality from both branches when resolving confli
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isSubChatMultiSelectMode, selectedSubChatIds, clearSubChatSelection, addSubChatToUndoStack])
-
-  // Keyboard shortcut: Navigate between sub-chats
-  // Web: Opt+Cmd+[ and Opt+Cmd+] (browser uses Cmd+[ for back)
-  // Desktop: Cmd+[ and Cmd+]
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isDesktop = isDesktopApp()
-
-      // Check for previous sub-chat shortcut ([ key)
-      const isPrevDesktop =
-        isDesktop && e.metaKey && e.code === "BracketLeft" && !e.altKey && !e.shiftKey && !e.ctrlKey
-      const isPrevWeb = e.altKey && e.metaKey && e.code === "BracketLeft"
-
-      if (isPrevDesktop || isPrevWeb) {
-        e.preventDefault()
-
-        const store = useAgentSubChatStore.getState()
-        const activeId = store.activeSubChatId
-        const openIds = store.openSubChatIds
-
-        // Only navigate if we have multiple tabs
-        if (openIds.length <= 1) return
-
-        // If no active tab, select first one
-        if (!activeId) {
-          store.setActiveSubChat(openIds[0])
-          return
-        }
-
-        // Find current index
-        const currentIndex = openIds.indexOf(activeId)
-
-        if (currentIndex === -1) {
-          // Current tab not found, select first
-          store.setActiveSubChat(openIds[0])
-          return
-        }
-
-        // Navigate to previous tab (cycle to end if at start)
-        const nextIndex = currentIndex - 1 < 0 ? openIds.length - 1 : currentIndex - 1
-        const nextId = openIds[nextIndex]
-
-        if (nextId) {
-          store.setActiveSubChat(nextId)
-        }
-      }
-
-      // Check for next sub-chat shortcut (] key)
-      const isNextDesktop =
-        isDesktop &&
-        e.metaKey &&
-        e.code === "BracketRight" &&
-        !e.altKey &&
-        !e.shiftKey &&
-        !e.ctrlKey
-      const isNextWeb = e.altKey && e.metaKey && e.code === "BracketRight"
-
-      if (isNextDesktop || isNextWeb) {
-        e.preventDefault()
-
-        const store = useAgentSubChatStore.getState()
-        const activeId = store.activeSubChatId
-        const openIds = store.openSubChatIds
-
-        // Only navigate if we have multiple tabs
-        if (openIds.length <= 1) return
-
-        // If no active tab, select first one
-        if (!activeId) {
-          store.setActiveSubChat(openIds[0])
-          return
-        }
-
-        // Find current index
-        const currentIndex = openIds.indexOf(activeId)
-
-        if (currentIndex === -1) {
-          // Current tab not found, select first
-          store.setActiveSubChat(openIds[0])
-          return
-        }
-
-        // Navigate to next tab (cycle to start if at end)
-        const nextIndex = (currentIndex + 1) % openIds.length
-        const nextId = openIds[nextIndex]
-
-        if (nextId) {
-          store.setActiveSubChat(nextId)
-        }
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [])
-
-  // Keyboard shortcut: Cmd + D to toggle diff sidebar
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Cmd (Meta) + D (without Alt/Shift)
-      if (e.metaKey && !e.altKey && !e.shiftKey && !e.ctrlKey && e.code === "KeyD") {
-        e.preventDefault()
-        e.stopPropagation()
-
-        // Toggle diff sidebar
-        setIsDiffSidebarOpen(!isDiffSidebarOpen)
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown, true)
-    return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [
-    isDiffSidebarOpen, // Toggle diff sidebar
-    setIsDiffSidebarOpen,
-  ])
 
   // Keyboard shortcut: Cmd + Shift + E to restore archived workspace
   useEffect(() => {
