@@ -20,6 +20,7 @@ import { app } from "electron"
 import { z } from "zod"
 import {
   CODEX_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
   DEFAULT_CODEX_UI_MODEL,
   isCodexReasoningEffort,
 } from "../../../../shared/codex-model-id"
@@ -1168,9 +1169,18 @@ function buildCodexProviderArgs(reasoningEffort?: string): string[] {
   return args
 }
 
-/** The static list the CLI's catalog is validated against before use. */
-function codexKnownModels(): KnownCodexModel[] {
-  return CODEX_MODELS.map((model) => ({ id: model.id, efforts: [...model.thinkings] }))
+/**
+ * The static list the CLI's catalog is validated against before use. An
+ * API-key chat drops the ChatGPT-only ids, so the probe cannot hand back a
+ * default the caller's credential cannot run. This mirrors the filter the
+ * picker applies over the same list.
+ */
+function codexKnownModels(authConfig?: { apiKey: string }): KnownCodexModel[] {
+  const apiKeyAuth = Boolean(authConfig?.apiKey?.trim())
+  const subscriptionOnly = new Set<string>(CODEX_SUBSCRIPTION_ONLY_MODEL_IDS)
+  return CODEX_MODELS.filter((model) => !apiKeyAuth || !subscriptionOnly.has(model.id)).map(
+    (model) => ({ id: model.id, efforts: [...model.thinkings] }),
+  )
 }
 
 /**
@@ -1179,13 +1189,19 @@ function codexKnownModels(): KnownCodexModel[] {
  * values behind it, so this router and the renderer transport cannot drift
  * onto two different defaults again.
  */
-function resolveCodexDefault(cwd: string): Promise<ResolvedCodexDefault> {
+function resolveCodexDefault(
+  cwd: string,
+  authConfig?: { apiKey: string },
+): Promise<ResolvedCodexDefault> {
   return resolveCodexDefaultModel({
     binaryPath: resolveBundledCodexCliPath(),
     argv: ["app-server"],
     cwd,
-    env: buildCodexProviderEnv(),
-    knownModels: codexKnownModels(),
+    env: buildCodexProviderEnv(authConfig),
+    knownModels: codexKnownModels(authConfig),
+    // A different key can be shown a different catalog, so it must not be
+    // served the answer another key produced.
+    cacheKey: getAuthFingerprint(authConfig) ?? undefined,
   })
 }
 
@@ -1316,8 +1332,15 @@ export const codexRouter = router({
    * renderer can show a stale default instead of passing it off as current.
    */
   getDefaultModel: publicProcedure
-    .input(z.object({ cwd: z.string().optional() }).optional())
-    .query(({ input }) => resolveCodexDefault(input?.cwd ?? process.cwd())),
+    .input(
+      z
+        .object({
+          cwd: z.string().optional(),
+          authConfig: z.object({ apiKey: z.string().min(1) }).optional(),
+        })
+        .optional(),
+    )
+    .query(({ input }) => resolveCodexDefault(input?.cwd ?? process.cwd(), input?.authConfig)),
 
   logout: publicProcedure.mutation(async () => {
     clearCodexDefaultModelCache()

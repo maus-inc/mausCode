@@ -221,4 +221,50 @@ describe("resolveCodexDefaultModel", () => {
     expect(retried.source).toBe("cli")
     expect(retried.modelId).toBe("gpt-mock")
   })
+  it("serves one read to concurrent callers instead of racing two", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {})
+
+    const [first, second] = await Promise.all([
+      resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks }),
+      resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks }),
+    ])
+
+    // Both callers share one read, so neither can overwrite the other's
+    // answer with an older one.
+    expect(info.mock.calls).toHaveLength(1)
+    expect(second).toEqual(first)
+    expect(peekCodexDefaultModel()).toEqual(first)
+  })
+
+  it("keeps one credential's catalog away from another", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {})
+
+    await resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks, cacheKey: "key-a" })
+    await resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks, cacheKey: "key-a" })
+    await resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks, cacheKey: "key-b" })
+
+    // key-a is read once and served from cache, and key-b is not handed that
+    // answer.
+    expect(info.mock.calls).toHaveLength(2)
+  })
+
+  it("will not offer a ChatGPT-only model to an API-key chat", () => {
+    const catalog = [
+      entry({ id: "gpt-5.3-codex-spark", isDefault: true }),
+      entry({ id: "gpt-mock" }),
+    ]
+
+    expect(selectCodexDefault(catalog, known(["gpt-5.3-codex-spark", "gpt-mock"]))).toEqual({
+      modelId: "gpt-5.3-codex-spark",
+      reasoningEffort: "medium",
+    })
+
+    // codexKnownModels drops the subscription-only ids for API-key auth, which
+    // is the list the resolver is handed, so the marked default is not a
+    // candidate.
+    expect(selectCodexDefault(catalog, known(["gpt-mock"]))).toEqual({
+      modelId: "gpt-mock",
+      reasoningEffort: "medium",
+    })
+  })
 })

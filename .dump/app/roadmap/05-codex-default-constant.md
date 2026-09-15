@@ -98,6 +98,26 @@ it treats as changed, so fixing the 18 exposed lines it had not examined before.
 | `typescript:S5906` MINOR | 6 | `src/main/lib/providers/codex-models.test.ts` | Real, and introduced by the round 1 rewrite. `.length` comparisons and `.toBe(undefined)` read better as `toHaveLength` and `toBeUndefined` | Fixed all 8 sites, not just the 6 flagged, so the file is consistent. The four message arguments vitest does not accept on `toHaveLength` became comments above the assertion |
 | `typescript:S6564` MAJOR | 1 | `src/shared/codex-model-id.ts:29` | Real but refused. `CodexThinkingLevel` has 32 use sites in `agent-model-selector.tsx`, `acp-chat-transport.ts`, `chat-input-area.tsx` and `new-chat-form.tsx` | Not fixed. The type moved here verbatim and the picker owns that name: it says `thinkings`, `selectedThinking`, `onSelectThinking` throughout, so the alias is the picker's own vocabulary, not a redundant second name for one concept. Deleting it renames 32 sites in the picker, which the step's scope forbids. A maintainer with SonarCloud write access should mark it won't-fix |
 
+## 12b. Human-pasted review comments
+
+Four review comments arrived on PR #55 naming file and line. Each was read
+against the code before it was accepted or refused.
+
+| Comment | Verdict | Outcome |
+| --- | --- | --- |
+| `codex.ts:1186` Security, the catalog probe omits the request's API key and accepts subscription-only models | Correct. `resolveCodexDefault` called `buildCodexProviderEnv()` with no `authConfig`, so `CODEX_API_KEY` was never set on the probe, and `codexKnownModels()` returned every id in `CODEX_MODELS` including `gpt-5.3-codex-spark`. The picker already hides subscription-only ids from an API-key user at `chat-input-area.tsx:591` and `new-chat-form.tsx:408`, so the probe and the picker disagreed | Fixed. `codexKnownModels(authConfig)` drops `CODEX_SUBSCRIPTION_ONLY_MODEL_IDS` for API-key auth, `resolveCodexDefault` passes the request's `authConfig` into `buildCodexProviderEnv`, and `getDefaultModel` accepts the same `authConfig` shape the chat subscription already sends |
+| `codex.ts:1663` API mismatch, the renderer always sends a slash-joined model so the catalog default never reaches a normal chat | Correct as a statement about reachability. `getSelectedCodexModel` in `acp-chat-transport.ts:85` always returns `id/effort`, falling back to `CODEX_MODELS[0]` when the atom holds nothing, so `parsedModelSelection.modelId` is always set and the `peekCodexDefaultModel()` branch cannot be reached from the app | Not fixed, deliberately. Making the branch live means the renderer stops sending a model until the user picks one, which is picker re-plumbing and this step forbids it. No behaviour is wrong today: the renderer's fallback is `CODEX_MODELS[0]` and `DEFAULT_CODEX_UI_MODEL` is `CODEX_MODELS[0].id`, so both sides agree. Carried as the same follow-up already in section 15 |
+| `session.ts:204` Missing cleanup, init errors leave the spawned child running | Correct. `connectCodexAppServer` spawns the child, then five unguarded awaits follow before the session carrying `dispose` is returned at line 383. A rejection anywhere in that window orphaned the Codex process. The bug predates this PR, the old inline spawn had it too, but this PR rewrote those lines | Fixed. `threadId` and `sessionId` are declared before the connect, and everything up to the session object sits in a `try` whose `catch` awaits `dispose()` and rethrows |
+| `codex-models.ts:211` Race condition, concurrent misses finish out of order and repopulate a cleared cache | Correct. Nothing joined concurrent misses, so two callers each spawned a child and the last write won regardless of which read started later, and an in-flight read could refill the cache after `clearCodexDefaultModelCache()` | Fixed. An `inFlightReads` map keyed by binary version and credential hands the second caller the first caller's promise, so there is one read and one write per version. Added a `cacheKey` so one key is not served another key's catalog |
+
+Three new tests cover the last two. Both were checked by reverting the fix and
+confirming the test fails: removing the in-flight map fails "serves one read to
+concurrent callers instead of racing two", and dropping the `cacheKey` check
+from the cache hit fails "keeps one credential's catalog away from another".
+The `session.ts` cleanup has no automated test, because making the handshake
+fail needs a new mock-peer switch in the fixture; it is verified by typecheck
+and by reading the control flow.
+
 ## 13. Rollback
 
 One module plus two import swaps. Revert the commit.

@@ -201,173 +201,181 @@ export async function createCodexAppServerSession(opts: {
     }
   }
 
+  // Every step between spawning the child and the return below can fail. The
+  // child is already running by then and the session that would own it never
+  // got built, so reap it here or it outlives this call.
+  let threadId: string
+  let sessionId: string
   const { client, run, dispose } = await connectCodexAppServer({
     binaryPath: opts.binaryPath,
     argv: opts.argv,
     cwd: opts.cwd,
     env: opts.env,
   })
-
-  // Server requests: answer unattended (ACP parity).
-  await run(
-    Effect.gen(function* () {
-      const approveSession = (_payload: unknown) =>
-        Effect.succeed({ decision: "approved_for_session" as const })
-      // NOTE: v2 item approvals use accept/acceptForSession, while the legacy
-      // exec/applyPatch approvals use approved/approved_for_session.
-      yield* client.handleServerRequest("item/commandExecution/requestApproval", () =>
-        Effect.succeed({ decision: "acceptForSession" as const }),
-      )
-      yield* client.handleServerRequest("item/permissions/requestApproval", (payload) =>
-        Effect.succeed({
-          permissions: payload.permissions,
-          scope: "session" as const,
-        }),
-      )
-      yield* client.handleServerRequest("item/fileChange/requestApproval", () =>
-        Effect.succeed({ decision: "acceptForSession" as const }),
-      )
-      yield* client.handleServerRequest("applyPatchApproval", approveSession)
-      yield* client.handleServerRequest("execCommandApproval", approveSession)
-      yield* client.handleServerRequest("item/tool/requestUserInput", (payload) =>
-        Effect.succeed(firstOptionAnswers(payload)),
-      )
-      yield* client.handleServerRequest("mcpServer/elicitation/request", () =>
-        Effect.succeed({ action: "decline" as const }),
-      )
-      yield* client.handleServerRequest("item/tool/call", () =>
-        Effect.succeed({ contentItems: [], success: false }),
-      )
-      yield* client.handleServerRequest("account/chatgptAuthTokens/refresh", () =>
-        Effect.fail({
-          _tag: "CodexAppServerRequestError",
-          message: "mausCode does not hold ChatGPT tokens",
-        } as never),
-      )
-      yield* client.handleServerRequest("attestation/generate", () =>
-        Effect.fail({
-          _tag: "CodexAppServerRequestError",
-          message: "mausCode cannot mint attestations",
-        } as never),
-      )
-      yield* client.handleUnknownServerRequest((method, _params) => {
-        console.warn(`[codex-app-server] Unknown server request: ${method}`)
-        return Effect.fail({
-          _tag: "CodexAppServerRequestError",
-          message: `Unsupported server request: ${method}`,
-        } as never)
-      })
-    }),
-  )
-
-  // Notifications -> chunks.
-  await run(
-    Effect.gen(function* () {
-      yield* client.handleServerNotification("item/agentMessage/delta", (payload) =>
-        Effect.sync(() => {
-          if (!textStarted.has(payload.itemId)) {
-            textStarted.add(payload.itemId)
-            emit({ type: "text-start", id: payload.itemId })
-          }
-          emit({
-            type: "text-delta",
-            id: payload.itemId,
-            delta: payload.delta,
-          })
-        }),
-      )
-      yield* client.handleServerNotification("item/completed", (payload) =>
-        Effect.sync(() => handleCompletedItem(payload.item)),
-      )
-      yield* client.handleServerNotification("turn/completed", (payload) =>
-        Effect.sync(() => {
-          const turn = payload.turn as { error?: unknown } | undefined
-          if (turn?.error != null) {
-            const message = typeof turn.error === "string" ? turn.error : JSON.stringify(turn.error)
-            emit({ type: "error", errorText: message })
-            settleTurn({ status: "error", errorMessage: message })
-          } else {
-            settleTurn({ status: "completed" })
-          }
-        }),
-      )
-      yield* client.handleServerNotification("error", (payload) =>
-        Effect.sync(() => {
-          const message =
-            typeof payload.error === "string" ? payload.error : JSON.stringify(payload.error)
-          // willRetry errors are transient (codex retries the turn itself):
-          // log and wait for the terminal outcome instead of failing the UI.
-          if (payload.willRetry) {
-            console.warn(`[codex-app-server] Transient turn error: ${message}`)
-            return
-          }
-          emit({ type: "error", errorText: message })
-          settleTurn({ status: "error", errorMessage: message })
-        }),
-      )
-    }),
-  )
-
-  await run(initializeHandshake)
-
-  const startFreshThread = async (): Promise<{
-    threadId: string
-    sessionId: string
-  }> => {
-    const started = await run(
-      client.request("thread/start", {
-        cwd: opts.cwd,
-        model: opts.model ?? null,
-        approvalPolicy: "never",
+  try {
+    // Server requests: answer unattended (ACP parity).
+    await run(
+      Effect.gen(function* () {
+        const approveSession = (_payload: unknown) =>
+          Effect.succeed({ decision: "approved_for_session" as const })
+        // NOTE: v2 item approvals use accept/acceptForSession, while the legacy
+        // exec/applyPatch approvals use approved/approved_for_session.
+        yield* client.handleServerRequest("item/commandExecution/requestApproval", () =>
+          Effect.succeed({ decision: "acceptForSession" as const }),
+        )
+        yield* client.handleServerRequest("item/permissions/requestApproval", (payload) =>
+          Effect.succeed({
+            permissions: payload.permissions,
+            scope: "session" as const,
+          }),
+        )
+        yield* client.handleServerRequest("item/fileChange/requestApproval", () =>
+          Effect.succeed({ decision: "acceptForSession" as const }),
+        )
+        yield* client.handleServerRequest("applyPatchApproval", approveSession)
+        yield* client.handleServerRequest("execCommandApproval", approveSession)
+        yield* client.handleServerRequest("item/tool/requestUserInput", (payload) =>
+          Effect.succeed(firstOptionAnswers(payload)),
+        )
+        yield* client.handleServerRequest("mcpServer/elicitation/request", () =>
+          Effect.succeed({ action: "decline" as const }),
+        )
+        yield* client.handleServerRequest("item/tool/call", () =>
+          Effect.succeed({ contentItems: [], success: false }),
+        )
+        yield* client.handleServerRequest("account/chatgptAuthTokens/refresh", () =>
+          Effect.fail({
+            _tag: "CodexAppServerRequestError",
+            message: "mausCode does not hold ChatGPT tokens",
+          } as never),
+        )
+        yield* client.handleServerRequest("attestation/generate", () =>
+          Effect.fail({
+            _tag: "CodexAppServerRequestError",
+            message: "mausCode cannot mint attestations",
+          } as never),
+        )
+        yield* client.handleUnknownServerRequest((method, _params) => {
+          console.warn(`[codex-app-server] Unknown server request: ${method}`)
+          return Effect.fail({
+            _tag: "CodexAppServerRequestError",
+            message: `Unsupported server request: ${method}`,
+          } as never)
+        })
       }),
     )
-    return { threadId: started.thread.id, sessionId: started.thread.sessionId }
-  }
 
-  let threadId: string
-  let sessionId: string
-  if (opts.existingThreadId) {
-    try {
-      const resumed = await run(
-        client.request("thread/resume", {
-          threadId: opts.existingThreadId,
+    // Notifications -> chunks.
+    await run(
+      Effect.gen(function* () {
+        yield* client.handleServerNotification("item/agentMessage/delta", (payload) =>
+          Effect.sync(() => {
+            if (!textStarted.has(payload.itemId)) {
+              textStarted.add(payload.itemId)
+              emit({ type: "text-start", id: payload.itemId })
+            }
+            emit({
+              type: "text-delta",
+              id: payload.itemId,
+              delta: payload.delta,
+            })
+          }),
+        )
+        yield* client.handleServerNotification("item/completed", (payload) =>
+          Effect.sync(() => handleCompletedItem(payload.item)),
+        )
+        yield* client.handleServerNotification("turn/completed", (payload) =>
+          Effect.sync(() => {
+            const turn = payload.turn as { error?: unknown } | undefined
+            if (turn?.error != null) {
+              const message =
+                typeof turn.error === "string" ? turn.error : JSON.stringify(turn.error)
+              emit({ type: "error", errorText: message })
+              settleTurn({ status: "error", errorMessage: message })
+            } else {
+              settleTurn({ status: "completed" })
+            }
+          }),
+        )
+        yield* client.handleServerNotification("error", (payload) =>
+          Effect.sync(() => {
+            const message =
+              typeof payload.error === "string" ? payload.error : JSON.stringify(payload.error)
+            // willRetry errors are transient (codex retries the turn itself):
+            // log and wait for the terminal outcome instead of failing the UI.
+            if (payload.willRetry) {
+              console.warn(`[codex-app-server] Transient turn error: ${message}`)
+              return
+            }
+            emit({ type: "error", errorText: message })
+            settleTurn({ status: "error", errorMessage: message })
+          }),
+        )
+      }),
+    )
+
+    await run(initializeHandshake)
+
+    const startFreshThread = async (): Promise<{
+      threadId: string
+      sessionId: string
+    }> => {
+      const started = await run(
+        client.request("thread/start", {
+          cwd: opts.cwd,
+          model: opts.model ?? null,
+          approvalPolicy: "never",
         }),
       )
-      threadId = resumed.thread.id
-      sessionId = resumed.thread.sessionId
-    } catch (error) {
-      console.warn(
-        `[codex-app-server] thread/resume failed for ${opts.existingThreadId}, starting fresh:`,
-        error,
-      )
-      ;({ threadId, sessionId } = await startFreshThread())
+      return { threadId: started.thread.id, sessionId: started.thread.sessionId }
     }
-  } else if (opts.legacySessionId) {
-    let resumedThreadId: string | null = null
-    try {
-      const listed = await run(client.request("thread/list", { useStateDbOnly: false }))
-      resumedThreadId =
-        listed.data.find((thread) => thread.sessionId === opts.legacySessionId)?.id ?? null
-    } catch (error) {
-      console.warn("[codex-app-server] thread/list failed:", error)
-    }
-    if (resumedThreadId) {
+
+    if (opts.existingThreadId) {
       try {
-        const resumed = await run(client.request("thread/resume", { threadId: resumedThreadId }))
+        const resumed = await run(
+          client.request("thread/resume", {
+            threadId: opts.existingThreadId,
+          }),
+        )
         threadId = resumed.thread.id
         sessionId = resumed.thread.sessionId
       } catch (error) {
         console.warn(
-          `[codex-app-server] thread/resume failed for ${resumedThreadId}, starting fresh:`,
+          `[codex-app-server] thread/resume failed for ${opts.existingThreadId}, starting fresh:`,
           error,
         )
+        ;({ threadId, sessionId } = await startFreshThread())
+      }
+    } else if (opts.legacySessionId) {
+      let resumedThreadId: string | null = null
+      try {
+        const listed = await run(client.request("thread/list", { useStateDbOnly: false }))
+        resumedThreadId =
+          listed.data.find((thread) => thread.sessionId === opts.legacySessionId)?.id ?? null
+      } catch (error) {
+        console.warn("[codex-app-server] thread/list failed:", error)
+      }
+      if (resumedThreadId) {
+        try {
+          const resumed = await run(client.request("thread/resume", { threadId: resumedThreadId }))
+          threadId = resumed.thread.id
+          sessionId = resumed.thread.sessionId
+        } catch (error) {
+          console.warn(
+            `[codex-app-server] thread/resume failed for ${resumedThreadId}, starting fresh:`,
+            error,
+          )
+          ;({ threadId, sessionId } = await startFreshThread())
+        }
+      } else {
         ;({ threadId, sessionId } = await startFreshThread())
       }
     } else {
       ;({ threadId, sessionId } = await startFreshThread())
     }
-  } else {
-    ;({ threadId, sessionId } = await startFreshThread())
+  } catch (error) {
+    await dispose()
+    throw error
   }
 
   let disposed = false

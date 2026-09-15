@@ -163,9 +163,22 @@ function codexVersion(
   })
 }
 
-type CacheEntry = { at: number; version: string; value: ResolvedCodexDefault }
+type CacheEntry = {
+  at: number
+  version: string
+  cacheKey: string | undefined
+  value: ResolvedCodexDefault
+}
 
 let cache: CacheEntry | null = null
+
+/**
+ * One read per binary version and credential. A second caller that arrives
+ * while a read is in flight joins it instead of spawning another child, so
+ * concurrent misses cannot finish out of order and leave the older answer in
+ * the cache.
+ */
+const inFlightReads = new Map<string, Promise<ResolvedCodexDefault>>()
 
 function staticFallback(reason: string): ResolvedCodexDefault {
   return {
@@ -204,6 +217,12 @@ export async function resolveCodexDefaultModel(opts: {
   knownModels: ReadonlyArray<KnownCodexModel>
   /** Arguments that print the binary version. Injectable for tests. */
   versionArgs?: ReadonlyArray<string>
+  /**
+   * Identifies the credential the read ran under, so a different key cannot
+   * be served another key's catalog. Omit when there is no per-request
+   * credential.
+   */
+  cacheKey?: string
   /** Injectable for tests. */
   now?: () => number
 }): Promise<ResolvedCodexDefault> {
@@ -211,10 +230,34 @@ export async function resolveCodexDefaultModel(opts: {
   const timestamp = now()
   const version = await codexVersion(opts.binaryPath, opts.versionArgs ?? ["--version"], opts.env)
 
-  if (cache?.version === version && timestamp - cache.at < ttlFor(cache.value)) {
+  if (
+    cache?.version === version &&
+    cache.cacheKey === opts.cacheKey &&
+    timestamp - cache.at < ttlFor(cache.value)
+  ) {
     return cache.value
   }
 
+  const key = `${version}\u0000${opts.cacheKey ?? ""}`
+  const pending = inFlightReads.get(key)
+  if (pending) return pending
+
+  const read = resolveFromCli(opts, version)
+    .then((value) => {
+      cache = { at: timestamp, version, cacheKey: opts.cacheKey, value }
+      return value
+    })
+    .finally(() => {
+      inFlightReads.delete(key)
+    })
+  inFlightReads.set(key, read)
+  return read
+}
+
+async function resolveFromCli(
+  opts: Parameters<typeof resolveCodexDefaultModel>[0],
+  version: string,
+): Promise<ResolvedCodexDefault> {
   let value: ResolvedCodexDefault
   try {
     const catalog = await readCodexModelCatalog(opts)
@@ -240,7 +283,6 @@ export async function resolveCodexDefaultModel(opts: {
     )
   }
 
-  cache = { at: timestamp, version, value }
   return value
 }
 
