@@ -18,6 +18,12 @@ import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { app } from "electron"
 import { z } from "zod"
+import {
+  CODEX_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
+  DEFAULT_CODEX_UI_MODEL,
+  isCodexReasoningEffort,
+} from "../../../../shared/codex-model-id"
 import { normalizeCodexAssistantMessage } from "../../../../shared/codex-tool-normalizer"
 import { createChunkCoalescer } from "../../claude"
 import { getClaudeShellEnvironment } from "../../claude/env"
@@ -32,6 +38,13 @@ import {
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
 import { writeImageTempFiles } from "../../image-staging"
 import { fetchMcpTools, fetchMcpToolsStdio, type McpToolInfo } from "../../mcp-auth"
+import {
+  clearCodexDefaultModelCache,
+  type KnownCodexModel,
+  peekCodexDefaultModel,
+  type ResolvedCodexDefault,
+  resolveCodexDefaultModel,
+} from "../../providers/codex-models"
 import { publicProcedure, router } from "../index"
 
 const imageAttachmentSchema = z.object({
@@ -143,8 +156,6 @@ const AUTH_HINTS = [
   "401",
   "403",
 ]
-const DEFAULT_CODEX_MODEL = "gpt-5.5"
-const CODEX_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh"])
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 const CODEX_USAGE_POLL_ATTEMPTS = 3
 const CODEX_USAGE_POLL_INTERVAL_MS = 200
@@ -1091,7 +1102,7 @@ function parseCodexModelSelection(rawModel: unknown): {
     modelId &&
     reasoningEffort &&
     extraParts.length === 0 &&
-    CODEX_REASONING_EFFORTS.has(reasoningEffort)
+    isCodexReasoningEffort(reasoningEffort)
   ) {
     return { modelId, reasoningEffort }
   }
@@ -1151,11 +1162,47 @@ function buildCodexProviderEnv(authConfig?: { apiKey: string }): Record<string, 
 function buildCodexProviderArgs(reasoningEffort?: string): string[] {
   const args: string[] = []
 
-  if (reasoningEffort && CODEX_REASONING_EFFORTS.has(reasoningEffort)) {
+  if (reasoningEffort && isCodexReasoningEffort(reasoningEffort)) {
     args.push("-c", `model_reasoning_effort="${reasoningEffort}"`)
   }
 
   return args
+}
+
+/**
+ * The static list the CLI's catalog is validated against before use. An
+ * API-key chat drops the ChatGPT-only ids, so the probe cannot hand back a
+ * default the caller's credential cannot run. This mirrors the filter the
+ * picker applies over the same list.
+ */
+function codexKnownModels(authConfig?: { apiKey: string }): KnownCodexModel[] {
+  const apiKeyAuth = Boolean(authConfig?.apiKey?.trim())
+  const subscriptionOnly = new Set<string>(CODEX_SUBSCRIPTION_ONLY_MODEL_IDS)
+  return CODEX_MODELS.filter((model) => !apiKeyAuth || !subscriptionOnly.has(model.id)).map(
+    (model) => ({ id: model.id, efforts: [...model.thinkings] }),
+  )
+}
+
+/**
+ * The default for a chat that names no model. The pinned CLI's catalog is the
+ * answer, validated against the static picker list, with the shared static
+ * values behind it, so this router and the renderer transport cannot drift
+ * onto two different defaults again.
+ */
+function resolveCodexDefault(
+  cwd: string,
+  authConfig?: { apiKey: string },
+): Promise<ResolvedCodexDefault> {
+  return resolveCodexDefaultModel({
+    binaryPath: resolveBundledCodexCliPath(),
+    argv: ["app-server"],
+    cwd,
+    env: buildCodexProviderEnv(authConfig),
+    knownModels: codexKnownModels(authConfig),
+    // A different key can be shown a different catalog, so it must not be
+    // served the answer another key produced.
+    cacheKey: getAuthFingerprint(authConfig) ?? undefined,
+  })
 }
 
 export function buildUserParts(
@@ -1279,7 +1326,24 @@ export const codexRouter = router({
     }
   }),
 
+  /**
+   * The default a chat with no model chosen will run. `source` says whether
+   * the pinned CLI answered or the shared static fallback did, so the
+   * renderer can show a stale default instead of passing it off as current.
+   */
+  getDefaultModel: publicProcedure
+    .input(
+      z
+        .object({
+          cwd: z.string().optional(),
+          authConfig: z.object({ apiKey: z.string().min(1) }).optional(),
+        })
+        .optional(),
+    )
+    .query(({ input }) => resolveCodexDefault(input?.cwd ?? process.cwd(), input?.authConfig)),
+
   logout: publicProcedure.mutation(async () => {
+    clearCodexDefaultModelCache()
     const logoutResult = await runCodexCli(["logout"])
     const statusResult = await runCodexCli(["login", "status"])
 
@@ -1311,6 +1375,7 @@ export const codexRouter = router({
   }),
 
   startLogin: publicProcedure.mutation(() => {
+    clearCodexDefaultModelCache()
     const existingSession = getActiveLoginSession()
     if (existingSession) {
       return toLoginSessionResponse(existingSession)
@@ -1616,12 +1681,32 @@ export const codexRouter = router({
 
             const existingMessages = parseStoredMessages(existingSubChat.messages)
             const parsedModelSelection = parseCodexModelSelection(input.model)
-            const requestedModelId = parsedModelSelection.modelId || DEFAULT_CODEX_MODEL
+            // A turn never waits on a catalog read; it takes the resolved
+            // default the app already holds, or the shared static one.
+            //
+            // Open follow-up. Nothing reaches this branch from the app today.
+            // `getSelectedCodexModel` in
+            // `src/renderer/features/agents/lib/acp-chat-transport.ts` always
+            // returns `id/effort`, falling back to `CODEX_MODELS[0]` when the
+            // atom holds nothing, so `parsedModelSelection.modelId` is always
+            // set. To let the CLI-resolved default actually reach a chat, the
+            // transport must omit `model` until the user picks one and the
+            // picker must show `codex.getDefaultModel`, which no caller uses
+            // yet. Step 05 forbade re-plumbing the picker, so it stopped here.
+            const resolvedDefault = parsedModelSelection.modelId ? null : peekCodexDefaultModel()
+            const requestedModelId =
+              parsedModelSelection.modelId || resolvedDefault?.modelId || DEFAULT_CODEX_UI_MODEL
             const selectedModelId = preprocessCodexModelName({
               modelId: requestedModelId,
               authConfig: input.authConfig,
             })
-            const selectedReasoningEffort = parsedModelSelection.reasoningEffort
+            const selectedReasoningEffort =
+              parsedModelSelection.reasoningEffort ?? resolvedDefault?.reasoningEffort
+            console.info(
+              `[codex] model selection: subChatId=${input.subChatId} model=${selectedModelId} effort=${selectedReasoningEffort ?? "provider default"} source=${
+                parsedModelSelection.modelId ? "chat selection" : resolvedDefault?.source
+              }`,
+            )
             const metadataModel = selectedReasoningEffort
               ? `${selectedModelId}/${selectedReasoningEffort}`
               : selectedModelId

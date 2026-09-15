@@ -1,43 +1,22 @@
+/**
+ * The Codex list, its effort type, the subscription-only ids and the effort
+ * label moved to `src/shared/codex-model-id.ts` on 2026-09-15, because the
+ * main process validates the CLI's catalog against that list. They are
+ * re-exported here so the picker's import path does not move.
+ */
+export {
+  CODEX_MODELS,
+  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
+  type CodexThinkingLevel,
+  formatCodexThinkingLabel,
+} from "../../../../shared/codex-model-id"
+
 export const CLAUDE_MODELS = [
   { id: "opus", name: "Opus", version: "4.8" },
   { id: "opus[1m]", name: "Opus", version: "4.8 1M" },
   { id: "sonnet", name: "Sonnet", version: "4.6" },
   { id: "haiku", name: "Haiku", version: "4.5" },
 ]
-
-export type CodexThinkingLevel = "low" | "medium" | "high" | "xhigh"
-
-/** Codex models that require ChatGPT sign-in (not available with API key auth).
- * Transplanted from SamSammane/1code-ui (Apache-2.0). */
-export const CODEX_SUBSCRIPTION_ONLY_MODEL_IDS = ["gpt-5.3-codex-spark"] as const
-
-export const CODEX_MODELS = [
-  {
-    id: "gpt-5.5",
-    name: "GPT-5.5",
-    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
-  },
-  {
-    id: "gpt-5.4",
-    name: "GPT-5.4",
-    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
-  },
-  {
-    id: "gpt-5.4-mini",
-    name: "GPT-5.4 Mini",
-    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
-  },
-  {
-    id: "gpt-5.3-codex-spark",
-    name: "Codex 5.3 Spark",
-    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
-  },
-] as const
-
-export function formatCodexThinkingLabel(thinking: CodexThinkingLevel): string {
-  if (thinking === "xhigh") return "Extra High"
-  return thinking.charAt(0).toUpperCase() + thinking.slice(1)
-}
 
 /** Cursor CLI provider models (UI picker ids; see shared/cursor-model-id.ts).
  * Transplanted from SamSammane/1code-ui (Apache-2.0). */
