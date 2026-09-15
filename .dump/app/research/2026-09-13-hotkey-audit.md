@@ -77,6 +77,14 @@ Deleted (2): `undo-archive`, `create-pr`. Users with saved localStorage bindings
 
 21. SonarCloud S6767 "searchHotkey PropType is defined but prop is never used" on sub-chat-selector.tsx is a false positive, disputed without a code change. The prop is destructured and rendered in the same file. The analyzer cannot bind destructured parameters of an inner function through `memo(forwardRef(...))`: the same rule has been open since 2026-01 on all seven sibling props of this component, each demonstrably used. The PR comment carries the line references.
 
+## CodeAnt round 2 on PR #56 (commit 2607658 re-review)
+
+22. Valid: the chat-history hotkey effect ran per mounted keep-alive chat, so the binding opened the popover in every mounted chat. The unguarded per-instance listener predates the step, but fixed in 6bf16af: the handler is gated to the chat matching `selectedAgentChatIdAtom`.
+23. Valid: removing the menu's Close Window accelerator left Windows and Linux with no close-tab key, because the renderer only matched metaKey. Fixed in 6bf16af: Ctrl+W closes the tab on those platforms, skipped while the terminal has focus where Ctrl+W is the shell's WERASE key.
+24. Skipped as a documented limitation: after rebinding new-workspace, the menu's Cmd+N still works through IPC while the new key works renderer-side. Both fire the same action; releasing the old key needs dynamic main-process menu accelerators, a separate roadmap item (finding 12).
+25. Rejected: prev/next do not follow a stale order. The tab strip renders `openSubChats.map(...)` in store order, which is exactly what the actions walk; the updated_at sort feeds only the history popover.
+26. Skipped as pre-existing parity: switch-model firing with no mounted chat input is a silent no-op, identical to the pre-PR Cmd+/ handler and the open-in-editor pattern. A global model-dropdown atom is a chat-input-area refactor outside this step.
+
 ## Gates run for this record (E4, 2026-09-15)
 
 `bun x biome check .` via npx (0 findings), `npm run typecheck` (0 errors), `npm run test` (654 passed), `npm run test:node` (27 passed), `npm run test:contracts` (382 passed), `node scripts/ci/lint-changed.mjs` (pass), `node scripts/ci/typecheck-ratchet.mjs` (0 <= 0), `npm --prefix packages/runtime-client run typecheck` (pass), `npm run build:runtime-client` (pass). `bun run build` and `bun run package:mac` not run: no behaviour ships without a release build, and CI runs the three-platform build on the PR.
