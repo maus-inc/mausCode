@@ -137,8 +137,8 @@ jobs:
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           rm -f /tmp/gitleaks-report.json
           status=0
-          /tmp/gitleaks dir --verbose --redact --report-format json \
-            --report-path /tmp/gitleaks-report.json . || status=$?
+          /tmp/gitleaks dir --config .gitleaks.toml --verbose --redact \
+            --report-format json --report-path /tmp/gitleaks-report.json . || status=$?
           if [ "$status" -ne 0 ]; then
             if [ -s /tmp/gitleaks-report.json ]; then
               # Annotations, not just the step summary: the summary shows on the job

@@ -66,3 +66,48 @@ Behaviour verified with a stub `gitleaks` on this host, three cases: one finding
 (exit 1, table written), no findings (exit 0, no summary), and a scanner error
 (exit 126, table says no report was written). The step's exit status is still
 the scan's status, so the gate itself is unchanged.
+
+## The findings, measured 2026-09-15 (E4: the job's own annotations)
+
+Seventeen findings at `8e3cdf9`, not four. Every one is a fake fixture, and the
+list below replaces the grep-based inventory above: that inventory missed every
+`generic-api-key` hit and every file outside `runtime/jcode`, which is the gap
+between "matches gitleaks' default patterns" and "gitleaks' defaults match it".
+
+| Rule | File | Line | Remedy |
+| --- | --- | --- | --- |
+| `generic-api-key` | `runtime/jcode/crates/jcode-base/src/auth/cursor_tests.rs` | 305 | allowlist the fixture value |
+| `generic-api-key` | `runtime/jcode/crates/jcode-base/src/gateway_tests.rs` | 90, 91, 113, 114 | allowlist the two hex runs |
+| `generic-api-key` | `runtime/jcode/crates/jcode-base/src/secret_input_pty_tests.rs` | 119 | allowlist the fixture value |
+| `generic-api-key` | `runtime/jcode/crates/jcode-fuzzy/src/lib.rs` | 758, 761 | allowlist the two model-name strings |
+| `jwt` | `runtime/jcode/crates/jcode-base/src/auth/tests.rs` | 731 | allowlist the unsigned JWT fixture |
+| `generic-api-key` | `runtime/jcode/crates/jcode-base/src/auth/copilot_auth_tests.rs` | 550 | allowlist the host key |
+| `generic-api-key` | `runtime/jcode/crates/jcode-provider-anthropic-runtime/src/lib.rs` | 44 | allowlist the re-export name |
+| `aws-access-token` | `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 324, 330 | allowlist the `AKIA` fixture |
+| `generic-api-key` | `runtime/jcode/scripts/repro/tls-bad-record-mac/src/main.rs` | 191 | allowlist the repro header |
+| `generic-api-key` | `runtime/jcode/tests/e2e/test_support/mod.rs` | 673 | allowlist the hex run |
+| `generic-api-key` | `src/main/lib/codex-app-server/src/protocol.test.ts` | 122, 126 | **fixed**, fixture UUID replaced |
+
+## The fix, and what it deliberately does not excuse
+
+`.gitleaks.toml` at the repository root, `[extend] useDefault = true`, and one
+`[[allowlists]]` entry whose `regexes` list the fifteen placeholder values with
+`regexTarget = "line"`. There is no `paths` key anywhere in the file, so no file
+is exempt: a real credential committed to one of these ten vendored files, or to
+any other file, still fails the gate. That is why this is value-scoped rather
+than the `runtime/jcode` path entry the earlier section proposed, and the cost
+of the choice is a config that grows by one line per fixture.
+
+The two findings in `src/main/lib/codex-app-server/src/protocol.test.ts` are this
+repository's own test code, so the fixture UUID became `"fixture"` rather than a
+config entry, and the literals `.dump` prose used to quote were rewritten the
+same way. The vendored files are untouched, because `runtime/jcode` is pinned
+upstream code and its fixtures are the tests for the engine's redaction.
+
+The CI step passes `--config .gitleaks.toml` explicitly even though `dir .`
+would load the file by convention: an explicit path fails loudly if the file is
+renamed or moved, while the convention would fail closed into a red gate with
+no explanation of what changed. Local checks before pushing: the TOML parses,
+every one of the eleven regexes matches the line gitleaks reported for at least
+one of the seventeen findings, and every finding is covered by exactly one
+remedy.
