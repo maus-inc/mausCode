@@ -25,7 +25,25 @@ export const CODEX_REASONING_EFFORTS = ["low", "medium", "high", "xhigh"] as con
 
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number]
 
-/** Picker label for an effort. The renderer shows this, nothing else does. */
+/**
+ * The picker's own name for an effort. It is a pure alias of
+ * `CodexReasoningEffort`, so SonarCloud rule typescript:S6564 flags it as
+ * redundant and it is the one open finding on PR #55.
+ *
+ * Left in place deliberately. 25 of its 31 occurrences sit in
+ * `src/renderer/features/agents`, in `agent-model-selector.tsx`,
+ * `acp-chat-transport.ts`, `chat-input-area.tsx` and `new-chat-form.tsx`,
+ * which name the concept `thinkings`, `selectedThinking` and
+ * `onSelectThinking` throughout. Roadmap step 05 moved this module to
+ * `src/shared` on the promise that the picker's imports would not move, and
+ * deleting the alias breaks that promise for no behaviour change.
+ *
+ * Whoever retires it should rename all 25 at once, drop this alias and the
+ * `CodexThinkingLevel` line from the re-export in
+ * `src/renderer/features/agents/lib/models.ts`, and confirm
+ * `npm run typecheck` still reports 0 errors. The effort label itself is
+ * `formatCodexThinkingLabel` below, which stays.
+ */
 export type CodexThinkingLevel = CodexReasoningEffort
 
 /** Codex models that require ChatGPT sign-in, not available with API key auth. */

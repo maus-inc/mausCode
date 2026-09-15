@@ -1683,6 +1683,16 @@ export const codexRouter = router({
             const parsedModelSelection = parseCodexModelSelection(input.model)
             // A turn never waits on a catalog read; it takes the resolved
             // default the app already holds, or the shared static one.
+            //
+            // Open follow-up. Nothing reaches this branch from the app today.
+            // `getSelectedCodexModel` in
+            // `src/renderer/features/agents/lib/acp-chat-transport.ts` always
+            // returns `id/effort`, falling back to `CODEX_MODELS[0]` when the
+            // atom holds nothing, so `parsedModelSelection.modelId` is always
+            // set. To let the CLI-resolved default actually reach a chat, the
+            // transport must omit `model` until the user picks one and the
+            // picker must show `codex.getDefaultModel`, which no caller uses
+            // yet. Step 05 forbade re-plumbing the picker, so it stopped here.
             const resolvedDefault = parsedModelSelection.modelId ? null : peekCodexDefaultModel()
             const requestedModelId =
               parsedModelSelection.modelId || resolvedDefault?.modelId || DEFAULT_CODEX_UI_MODEL

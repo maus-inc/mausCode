@@ -204,6 +204,11 @@ export async function createCodexAppServerSession(opts: {
   // Every step between spawning the child and the return below can fail. The
   // child is already running by then and the session that would own it never
   // got built, so reap it here or it outlives this call.
+  //
+  // The catch below has no automated test. `session.test.ts` drives the happy
+  // path, and failing the handshake needs a new switch in
+  // `test/fixtures/codex-app-server-turn-mock-peer.ts` that rejects
+  // `initialize`, the way `MOCK_MODEL_LIST_FAIL` already rejects `model/list`.
   let threadId: string
   let sessionId: string
   const { client, run, dispose } = await connectCodexAppServer({

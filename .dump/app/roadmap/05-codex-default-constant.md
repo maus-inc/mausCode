@@ -135,4 +135,22 @@ Done 2026-09-15. The decision row in `.dump/global/decisions.md` carries the ame
 1. The shared module is `src/shared/codex-model-id.ts`, not `codex-defaults.ts`. Six sibling modules already hold a provider default under `src/shared/<provider>-model-id.ts`, and `AGENTS.md` says follow the conventions that exist.
 2. The resolver is `src/main/lib/providers/codex-models.ts` as the plan names it, and it takes the static list as a parameter instead of importing the renderer's picker list into the main process.
 
-Still open, filed as a follow-up rather than widened here: nothing in the renderer calls `codex.getDefaultModel`, so the picker still shows its own static default and never shows that the CLI answer fell back. The step forbids re-plumbing the picker.
+### Open follow-ups
+
+Each one also carries a comment at the code site, so it is found by whoever
+reads the file and not only by whoever reads this record.
+
+1. **The picker never calls `codex.getDefaultModel`.** Nothing in the renderer
+   uses that query, so the picker shows its own static default and never shows
+   that the CLI answer fell back. The related `resolvedDefault` branch in
+   `src/main/lib/trpc/routers/codex.ts` is unreachable from the app, because
+   the transport always sends `id/effort`. Comment sits above that branch. The
+   step forbade re-plumbing the picker.
+2. **`CodexThinkingLevel` is still a pure alias.** SonarCloud typescript:S6564,
+   the one open finding on PR #55. Comment on the alias in
+   `src/shared/codex-model-id.ts` names the 25 picker sites a rename would
+   touch and the re-export line to drop.
+3. **The `session.ts` child-reaping catch has no automated test.** Comment above
+   the `try` names the missing mock-peer switch, following the
+   `MOCK_MODEL_LIST_FAIL` pattern already in
+   `src/main/lib/codex-app-server/test/fixtures/codex-app-server-turn-mock-peer.ts`.
