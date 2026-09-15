@@ -752,8 +752,10 @@ if (gotTheLock) {
             },
             { type: "separator" },
             {
+              // No accelerator: Cmd+W belongs to the renderer's close-tab
+              // shortcut, which the settings keyboard table advertises. The
+              // menu item stays clickable and Cmd+Q still quits.
               label: "Close Window",
-              accelerator: "CmdOrCtrl+W",
               click: () => {
                 const win = getWindow()
                 if (win) {
