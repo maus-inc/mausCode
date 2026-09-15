@@ -39,6 +39,7 @@ import {
   agentsSubChatUnseenChangesAtom,
   loadingSubChatsAtom,
   pendingUserQuestionsAtom,
+  selectedAgentChatIdAtom,
 } from "../atoms"
 import { type SubChatMeta, useAgentSubChatStore } from "../stores/sub-chat-store"
 import { formatTimeAgo } from "../utils/format-time-ago"
@@ -465,10 +466,13 @@ export function SubChatSelector({
     [onSwitchFromHistory],
   )
 
-  // Hotkey: / (or the user's custom search-chats binding) to open history popover
+  // Hotkey: / (or the user's custom search-chats binding) to open history
+  // popover. Gated to the selected chat: keep-alive tabs keep this selector
+  // mounted, and only the visible chat's popover should open.
+  const isSelectedChat = useAtomValue(selectedAgentChatIdAtom) === chatId
   useEffect(() => {
     const handleHistoryHotkey = (e: KeyboardEvent) => {
-      if (matchesShortcutAction(e, "search-chats", customHotkeys)) {
+      if (isSelectedChat && matchesShortcutAction(e, "search-chats", customHotkeys)) {
         // Don't trigger if already focused on an input/textarea
         const activeEl = document.activeElement
         if (
@@ -487,7 +491,7 @@ export function SubChatSelector({
 
     window.addEventListener("keydown", handleHistoryHotkey, true)
     return () => window.removeEventListener("keydown", handleHistoryHotkey, true)
-  }, [customHotkeys])
+  }, [customHotkeys, isSelectedChat])
 
   // Keyboard shortcut: Cmd+Shift+T / Ctrl+Shift+T for new sub-chat
   // Scroll to active tab when it changes
