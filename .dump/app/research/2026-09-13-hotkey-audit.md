@@ -85,6 +85,11 @@ Deleted (2): `undo-archive`, `create-pr`. Users with saved localStorage bindings
 25. Rejected: prev/next do not follow a stale order. The tab strip renders `openSubChats.map(...)` in store order, which is exactly what the actions walk; the updated_at sort feeds only the history popover.
 26. Skipped as pre-existing parity: switch-model firing with no mounted chat input is a silent no-op, identical to the pre-PR Cmd+/ handler and the open-in-editor pattern. A global model-dropdown atom is a chat-input-area refactor outside this step.
 
-## Gates run for this record (E4, 2026-09-15)
+## Kilo and CodeRabbit round 3 on PR #56 (commit bf0ccc6 re-review)
 
-`bun x biome check .` via npx (0 findings), `npm run typecheck` (0 errors), `npm run test` (654 passed), `npm run test:node` (27 passed), `npm run test:contracts` (382 passed), `node scripts/ci/lint-changed.mjs` (pass), `node scripts/ci/typecheck-ratchet.mjs` (0 <= 0), `npm --prefix packages/runtime-client run typecheck` (pass), `npm run build:runtime-client` (pass). `bun run build` and `bun run package:mac` not run: no behaviour ships without a release build, and CI runs the three-platform build on the PR.
+27. Valid: the new Windows/Linux Ctrl+W close-tab branch had no macOS gate, so desktop macOS lost Ctrl+W delete-word inside text fields. Fixed in 946305f with `!isMacOS()`; the terminal WERASE guard is unchanged.
+28. Valid: the close-tab effect hardcoded Cmd+W, Ctrl+W and Opt+Cmd+W, so a custom Close tab (`archive-agent`) binding never took effect and the retired keys kept closing tabs — the same dead-key class this step set out to remove, sitting in its own dispatcher. Fixed in 012839a: the primary desktop key resolves through the registry (`matchesShortcutAction` on `archive-agent`), the Ctrl+W and Opt+Cmd+W fallbacks stay armed only while the binding is uncustomized, every Ctrl-keyed match keeps the terminal guard, and a matcher test pins default resolution plus custom retirement.
+
+## Gates run for this record (E4, 2026-09-15, head 012839a)
+
+`npx @biomejs/biome@2.5.13 check .` (0 findings / 869 files), `npm run typecheck` (0 errors), `npm run test` (665 passed), `npm run test:node` (27 passed), `npm run test:contracts` (382 passed), `npm run lint` (964 files clean), `npm run ratchet:typecheck` (0 <= 0), lint-ratchet equivalent `biome check --reporter=json` (0 errors 0 warnings <= 0), `npm --prefix packages/runtime-client run typecheck` + `test` (pass), `npm run build:runtime-client` (pass), `npm run ratchet:audit` not run locally (needs bun; CI supply-chain job green). CI on 012839a: 18 checks pass, 1 skipping (DeepSource external), Sourcery approved.
