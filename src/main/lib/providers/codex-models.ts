@@ -211,7 +211,7 @@ export async function resolveCodexDefaultModel(opts: {
   const timestamp = now()
   const version = await codexVersion(opts.binaryPath, opts.versionArgs ?? ["--version"], opts.env)
 
-  if (cache && cache.version === version && timestamp - cache.at < ttlFor(cache.value)) {
+  if (cache?.version === version && timestamp - cache.at < ttlFor(cache.value)) {
     return cache.value
   }
 

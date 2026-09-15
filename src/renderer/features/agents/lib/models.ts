@@ -1,10 +1,3 @@
-import {
-  CODEX_MODELS,
-  CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
-  type CodexThinkingLevel,
-  formatCodexThinkingLabel,
-} from "../../../../shared/codex-model-id"
-
 /**
  * The Codex list, its effort type, the subscription-only ids and the effort
  * label moved to `src/shared/codex-model-id.ts` on 2026-09-15, because the
@@ -16,7 +9,7 @@ export {
   CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
   type CodexThinkingLevel,
   formatCodexThinkingLabel,
-}
+} from "../../../../shared/codex-model-id"
 
 export const CLAUDE_MODELS = [
   { id: "opus", name: "Opus", version: "4.8" },

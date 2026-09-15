@@ -71,7 +71,22 @@ Ran 2026-09-15 on `arena/01a0a5b6-mauscode`, bun absent so the npm equivalents f
 | Node suites | `npm run test:node` | 27 pass, 0 fail |
 | Contracts | `npm run test:contracts` | 382 tests, 0 failed |
 | runtime-client | `npm --prefix packages/runtime-client run typecheck` | exit 0 |
-| Build | `npm run build` | main and preload built. The renderer bundle was killed at 137 and again at 134 in a 3.9 GB sandbox, so it is reported not run |
+| Build | `npm run build` | main and preload built. The renderer bundle was killed at 137 and again at 134 in a 3.9 GB sandbox. CI built it on macos-14, ubuntu-24.04 and windows-2022 for PR #55, so the target is covered |
+
+## 12. Review bot findings
+
+`AGENTS.md` says treat bot output as evidence to verify and fix what is real, even when the
+bot calls it a non-blocker. SonarCloud posted on PR #55 after `8f8d460`: 18 new issues, gate
+still passing. Read through `https://sonarcloud.io/api/issues/search?componentKeys=maus-inc_mauscode&pullRequest=55`,
+which the GitHub comment does not enumerate.
+
+| Rule | Count | File | Verified | Fix |
+| --- | --- | --- | --- | --- |
+| `typescript:S2699` BLOCKER | 14 | `src/main/lib/providers/codex-models.test.ts` | Real. The rule does not know `assert` from `@effect/vitest`-style imports and reports "Add at least one assertion". Every flagged `it` did assert, but through vitest's re-exported `assert` rather than `expect`, and the rest of this repo asserts with `expect`. The main branch has 0 open S2699, so this was new debt in this diff and not a repo-wide tooling gap | Rewrote all 33 assertions to `expect(...).toBe` / `.toEqual` / `.toBeNull`, dropping the `assert` import. `assert.equal` and `toBe` are both `Object.is`, `assert.deepEqual` and `toEqual` are both structural, and the three message arguments moved to vitest's first parameter. No assertion was weakened and no expectation changed |
+| `typescript:S6582` MINOR | 1 | `src/main/lib/providers/codex-models.ts:214` | Real. `cache && cache.version === version` reads better as an optional chain | `cache?.version === version`. Typecheck still narrows `cache` for the two later reads |
+| `typescript:S7763` MINOR | 3 | `src/renderer/features/agents/lib/models.ts:15-17` | Real. The re-export block imported four names and re-exported them in a separate statement | Collapsed to a single `export { ... } from "../../../../shared/codex-model-id"`. The six renderer importers resolve the same path |
+
+Nothing was marked won't-fix or false positive. Sourcery and CodeRabbit posted no findings.
 
 ## 13. Rollback
 

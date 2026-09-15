@@ -4,7 +4,7 @@
  * the JSON-RPC handshake, the `model/list` decode and the child cleanup are
  * all exercised, not stubbed.
  */
-import { assert, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_CODEX_UI_MODEL,
@@ -53,8 +53,8 @@ describe("readCodexModelCatalog", () => {
   it("reads the catalog over model/list and reaps the child", async () => {
     const catalog = await readCodexModelCatalog(peer())
 
-    assert.equal(catalog.length, 2)
-    assert.deepEqual(catalog[1], {
+    expect(catalog.length).toBe(2)
+    expect(catalog[1]).toEqual({
       id: "gpt-mock",
       hidden: false,
       isDefault: true,
@@ -78,7 +78,7 @@ describe("selectCodexDefault", () => {
       ],
       knownBoth,
     )
-    assert.deepEqual(selected, { modelId: "current", reasoningEffort: "high" })
+    expect(selected).toEqual({ modelId: "current", reasoningEffort: "high" })
   })
 
   it("falls back to the first known visible entry when nothing is marked", () => {
@@ -86,7 +86,7 @@ describe("selectCodexDefault", () => {
       [entry({ id: "first" }), entry({ id: "second" })],
       knownBoth,
     )
-    assert.deepEqual(selected, { modelId: "first", reasoningEffort: "medium" })
+    expect(selected).toEqual({ modelId: "first", reasoningEffort: "medium" })
   })
 
   it("skips hidden entries, blank ids and ids the app does not know", () => {
@@ -99,12 +99,12 @@ describe("selectCodexDefault", () => {
       ],
       knownBoth,
     )
-    assert.deepEqual(selected, { modelId: "shown", reasoningEffort: "medium" })
+    expect(selected).toEqual({ modelId: "shown", reasoningEffort: "medium" })
   })
 
   it("returns null for a catalog with nothing the app knows", () => {
-    assert.equal(selectCodexDefault([], knownBoth), null)
-    assert.equal(selectCodexDefault([entry({ id: "renamed-upstream" })], knownBoth), null)
+    expect(selectCodexDefault([], knownBoth)).toBeNull()
+    expect(selectCodexDefault([entry({ id: "renamed-upstream" })], knownBoth)).toBeNull()
   })
 
   it("substitutes the shared effort when the model does not support the catalog default", () => {
@@ -112,7 +112,7 @@ describe("selectCodexDefault", () => {
       [entry({ id: "odd", isDefault: true, defaultReasoningEffort: "extreme" })],
       knownBoth,
     )
-    assert.deepEqual(selected, { modelId: "odd", reasoningEffort: DEFAULT_CODEX_REASONING_EFFORT })
+    expect(selected).toEqual({ modelId: "odd", reasoningEffort: DEFAULT_CODEX_REASONING_EFFORT })
   })
 })
 
@@ -122,14 +122,14 @@ describe("resolveCodexDefaultModel", () => {
   it("resolves from the pinned CLI when it answers", async () => {
     const resolved = await resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks })
 
-    assert.equal(resolved.source, "cli")
-    assert.equal(resolved.modelId, "gpt-mock")
-    assert.equal(resolved.reasoningEffort, "high")
-    assert.equal(resolved.fallbackReason, undefined)
+    expect(resolved.source).toBe("cli")
+    expect(resolved.modelId).toBe("gpt-mock")
+    expect(resolved.reasoningEffort).toBe("high")
+    expect(resolved.fallbackReason).toBe(undefined)
   })
 
   it("exposes the resolved default to a caller that must not spawn", () => {
-    assert.equal(peekCodexDefaultModel().source, "static-fallback")
+    expect(peekCodexDefaultModel().source).toBe("static-fallback")
   })
 
   it("degrades to the shared static default on an empty catalog and says why", async () => {
@@ -139,11 +139,10 @@ describe("resolveCodexDefaultModel", () => {
       knownModels: knownMocks,
     })
 
-    assert.equal(resolved.source, "static-fallback")
-    assert.equal(resolved.modelId, DEFAULT_CODEX_UI_MODEL)
-    assert.equal(resolved.reasoningEffort, DEFAULT_CODEX_REASONING_EFFORT)
-    assert.equal(
-      resolved.fallbackReason,
+    expect(resolved.source).toBe("static-fallback")
+    expect(resolved.modelId).toBe(DEFAULT_CODEX_UI_MODEL)
+    expect(resolved.reasoningEffort).toBe(DEFAULT_CODEX_REASONING_EFFORT)
+    expect(resolved.fallbackReason).toBe(
       "catalog listed 0 models and none matched the 2 the app knows",
     )
   })
@@ -155,8 +154,8 @@ describe("resolveCodexDefaultModel", () => {
       knownModels: knownMocks,
     })
 
-    assert.equal(resolved.source, "static-fallback")
-    assert.equal(resolved.modelId, DEFAULT_CODEX_UI_MODEL)
+    expect(resolved.source).toBe("static-fallback")
+    expect(resolved.modelId).toBe(DEFAULT_CODEX_UI_MODEL)
     expect(resolved.fallbackReason?.length).toBeGreaterThan(0)
   })
 
@@ -164,20 +163,20 @@ describe("resolveCodexDefaultModel", () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {})
 
     const first = await resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks })
-    assert.equal(first.source, "cli")
-    assert.equal(info.mock.calls.length, 1)
+    expect(first.source).toBe("cli")
+    expect(info.mock.calls.length).toBe(1)
 
     const second = await resolveCodexDefaultModel({
       ...peer({ MOCK_MODEL_LIST_FAIL: "1" }),
       knownModels: knownMocks,
     })
-    assert.equal(second.source, "cli")
-    assert.equal(info.mock.calls.length, 1, "a cache hit must not read the CLI again")
+    expect(second.source).toBe("cli")
+    expect(info.mock.calls.length, "a cache hit must not read the CLI again").toBe(1)
 
     clearCodexDefaultModelCache()
     const third = await resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks })
-    assert.equal(third.source, "cli")
-    assert.equal(info.mock.calls.length, 2, "clearing the cache must read the CLI again")
+    expect(third.source).toBe("cli")
+    expect(info.mock.calls.length, "clearing the cache must read the CLI again").toBe(2)
   })
 
   it("re-reads when the binary version changes", async () => {
@@ -187,13 +186,13 @@ describe("resolveCodexDefaultModel", () => {
       ...peer({ MOCK_CODEX_VERSION: "codex-mock 1.0.0" }),
       knownModels: knownMocks,
     })
-    assert.equal(info.mock.calls.length, 1)
+    expect(info.mock.calls.length).toBe(1)
 
     await resolveCodexDefaultModel({
       ...peer({ MOCK_CODEX_VERSION: "codex-mock 2.0.0" }),
       knownModels: knownMocks,
     })
-    assert.equal(info.mock.calls.length, 2, "a new binary version must invalidate the cache")
+    expect(info.mock.calls.length, "a new binary version must invalidate the cache").toBe(2)
   })
 
   it("retries a failed read once its short cache window passes", async () => {
@@ -206,16 +205,16 @@ describe("resolveCodexDefaultModel", () => {
     })
 
     const failed = await resolveCodexDefaultModel(at({ MOCK_MODEL_LIST_FAIL: "1" }))
-    assert.equal(failed.source, "static-fallback")
-    assert.equal(warn.mock.calls.length, 1)
+    expect(failed.source).toBe("static-fallback")
+    expect(warn.mock.calls.length).toBe(1)
 
     const cached = await resolveCodexDefaultModel(at({}))
-    assert.equal(cached.source, "static-fallback", "the fallback is cached so a turn is not slow")
-    assert.equal(warn.mock.calls.length, 1)
+    expect(cached.source, "the fallback is cached so a turn is not slow").toBe("static-fallback")
+    expect(warn.mock.calls.length).toBe(1)
 
     now += 61_000
     const retried = await resolveCodexDefaultModel(at({}))
-    assert.equal(retried.source, "cli")
-    assert.equal(retried.modelId, "gpt-mock")
+    expect(retried.source).toBe("cli")
+    expect(retried.modelId).toBe("gpt-mock")
   })
 })
