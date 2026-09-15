@@ -2,6 +2,7 @@
 
 Owner: CI agent (branch arena/01a08de3-mauscode). Updated: 2026-09-11, run 34551940631 = ALL GREEN.
 Amended 2026-09-14 by step 02 (branch arena/01a09f6e-mauscode): typecheck baseline facts corrected, tsgo wired as the second typecheck gate.
+Amended 2026-09-15 by step 04 (branch arena/01a0a08a-mauscode): the lint gate's base resolution fixed after a force push crashed it, fact and repro added below.
 
 ## Current state
 
