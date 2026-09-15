@@ -86,23 +86,31 @@ between "matches gitleaks' default patterns" and "gitleaks' defaults match it".
 | `aws-access-token` | `runtime/jcode/crates/jcode-base/src/message/tests.rs` | 324, 330 | allowlist the `AKIA` fixture |
 | `generic-api-key` | `runtime/jcode/scripts/repro/tls-bad-record-mac/src/main.rs` | 191 | allowlist the repro header |
 | `generic-api-key` | `runtime/jcode/tests/e2e/test_support/mod.rs` | 673 | allowlist the hex run |
-| `generic-api-key` | `src/main/lib/codex-app-server/src/protocol.test.ts` | 122, 126 | **fixed**, fixture UUID replaced |
+| `generic-api-key` | `src/main/lib/codex-app-server/src/protocol.test.ts` | 122, 126 | allowlist the fixture UUID, the file is a verbatim upstream port |
 
 ## The fix, and what it deliberately does not excuse
 
 `.gitleaks.toml` at the repository root, `[extend] useDefault = true`, and one
-`[[allowlists]]` entry whose `regexes` list the fifteen placeholder values with
+`[[allowlists]]` entry whose `regexes` list the sixteen placeholder values with
 `regexTarget = "line"`. There is no `paths` key anywhere in the file, so no file
 is exempt: a real credential committed to one of these ten vendored files, or to
 any other file, still fails the gate. That is why this is value-scoped rather
 than the `runtime/jcode` path entry the earlier section proposed, and the cost
 of the choice is a config that grows by one line per fixture.
 
-The two findings in `src/main/lib/codex-app-server/src/protocol.test.ts` are this
-repository's own test code, so the fixture UUID became `"fixture"` rather than a
-config entry, and the literals `.dump` prose used to quote were rewritten the
-same way. The vendored files are untouched, because `runtime/jcode` is pinned
-upstream code and its fixtures are the tests for the engine's redaction.
+The two findings in `src/main/lib/codex-app-server/src/protocol.test.ts` are
+excused by value as well, and the reason is worth keeping. The first attempt
+edited the fixture UUID to `"fixture"`, which turned out to be the wrong trade
+twice over. The file's own header says "Verbatim except this header. Upstream
+schema ref 678157ac", so the edit broke a provenance claim this repository
+makes about ported upstream code, and DeepSource, which reviews every file a
+pull request touches, then reported that file's pre-existing backlog as 36 new
+issues for this pull request. The file is now byte-identical to the base commit
+and the UUID is one more line in the config. The literals `.dump` prose used to
+quote were rewritten to shape descriptions, which is a fix and not an excuse,
+because that prose is this repository's own. The vendored files are untouched,
+because `runtime/jcode` is pinned upstream code and its fixtures are the tests
+for the engine's redaction.
 
 The CI step passes `--config .gitleaks.toml` explicitly even though `dir .`
 would load the file by convention: an explicit path fails loudly if the file is
@@ -145,13 +153,27 @@ written and needs no workflow change. Recorded here rather than quietly fixed,
 because a red security job that is really a repository setting is the same trap
 as the gitleaks red: the log said one thing and the cause was another.
 
-## The checks that are still red, and why they are not this fix's to make
+## DeepSource JavaScript, measured 2026-09-15 (E4 from the pasted report)
 
-`DeepSource: JavaScript` fails on this pull request and on `main`. Statuses at
-2026-09-15: JavaScript red on `main`, on this branch's head, and on PRs 50 and
-52, green on PRs 51 and 53. The `Shell` analyzer is red on `main` as well. The
-analyzer posts no inline review comments on PR 54, so there is nothing in the
-diff for the API to show, and its dashboard is behind authentication. The
-finding text is therefore not reachable from this environment, and the check is
-recorded here instead of being chased with blind edits to the two files this
-branch touches.
+The analyzer posts its findings to its dashboard and not to the GitHub API, and
+it posted no inline review comments on PR 54, so the first pass here recorded
+it as inherited and unreadable. The report itself, pasted by the human, shows
+37 findings and the split matters.
+
+- 36 are in `src/main/lib/codex-app-server/src/protocol.test.ts`, and they are
+  the file's pre-existing backlog, not new code. DeepSource reviews every file a
+  pull request touches, so the one-line fixture edit described above pulled all
+  36 into this pull request's scope. They are `JS-0333` on `void` type
+  arguments, `JS-W1042` on explicit `undefined` arguments and `JS-C1003` on
+  namespace imports, which are the idiomatic shapes for Effect and TypeScript
+  and read as findings only to a JavaScript-only parse. Restoring the file to
+  its upstream bytes returns them to the dashboard, where they were before.
+- 1 is `JS-0833`, a parse error, on `scripts/ci/lint-changed.mjs`. The
+  analyzer's parser reads `.mjs` as a script and reports the first `import`.
+  `module_system = "es-modules"` is already set in `.deepsource.toml`, added by
+  an earlier session for exactly this error, and it does not change the
+  outcome, which means the analyzer's per-file extension handling overrides it.
+  `scripts/ci/**` is now in that file's `exclude_patterns` with the reason and
+  the date, and those four scripts stay gated by Biome in the quality job.
+- `DeepSource: Shell` is red on `main` and green here, so it stays out of scope
+  with the same status query recorded above.

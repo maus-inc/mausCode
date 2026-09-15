@@ -51,4 +51,9 @@ regexes = [
   # crates/jcode-base/src/message/tests.rs, the engine's AWS access key
   # fixture and the assertion that quotes it
   '''AKIAABCDEFGHIJKLMNOP''',
+  # src/main/lib/codex-app-server/src/protocol.test.ts, the idempotency key of
+  # an upstream ported test, a UUID that reads as a generic API key. The file
+  # says "Verbatim except this header", so the value is excused here instead of
+  # editing the port.
+  '''8ae96ff3-3425-4f4c-8772-b6fd61502868''',
 ]

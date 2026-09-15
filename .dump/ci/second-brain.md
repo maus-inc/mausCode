@@ -2,7 +2,7 @@
 
 Owner: CI agent (branch arena/01a08de3-mauscode). Updated: 2026-09-11, run 34551940631 = ALL GREEN.
 Amended 2026-09-14 by step 02 (branch arena/01a09f6e-mauscode): typecheck baseline facts corrected, tsgo wired as the second typecheck gate.
-Amended 2026-09-15 by step 04 (branch arena/01a0a08a-mauscode): the lint gate's base resolution fixed after a force push crashed it, then hardened against SonarCloud jssecurity:S8705; the secrets job now publishes its findings to the step summary. Facts below.
+Amended 2026-09-15 by step 04 (branch arena/01a0a08a-mauscode): the lint gate's base resolution fixed after a force push crashed it, then hardened against SonarCloud jssecurity:S8705; the secrets job now publishes its findings to the step summary, and the DeepSource analyzer is configured for `.mjs`. Facts below.
 
 ## Current state
 
@@ -49,11 +49,15 @@ lint gate hardening + format sweep bec0263/66a090b (me).
   secrets job can be read through the API with
   `gh api repos/maus-inc/mausCode/check-runs/<id> --jq .output.summary`; the
   check-run annotation itself carries only the exit code.
-- DeepSource's JavaScript and Shell analyzers fail on `main` itself, not only on
-  branches. `GET /commits/{sha}/status` shows JavaScript red on `main`, on this
-  branch's head and on PRs 50 and 52, while 51 and 53 are green. The analyzer
-  posts no inline review comments here and its dashboard needs authentication,
-  so the finding text is not reachable from this sandbox. Do not chase it blind.
+- DeepSource's JavaScript analyzer reads `.mjs` as a script and reports JS-0833
+  on the first import, and `module_system = "es-modules"` does not stop it
+  (measured 2026-09-15 at `8e3cdf9`). `scripts/ci/**` is excluded in
+  `.deepsource.toml` for that reason, with Biome as the gate for those files.
+  The analyzer also reviews every file a pull request touches, so editing one
+  line of a ported file pulls that file's whole backlog in as new issues, which
+  is how 36 Effect-idiom false positives arrived from a one-line fixture change.
+  `GET /commits/{sha}/status` is how a third-party verdict is read; its own
+  findings live on its dashboard, not in the GitHub API.
 - The `security` job's third step, `actions/dependency-review-action@v4`,
   needs the repository's Dependency graph feature (Settings, Code security and
   analysis). It was disabled until 2026-09-15, so the step failed with

@@ -7,6 +7,13 @@ exclude_patterns = [
   "resources/bin/**",
   "runtime/jcode/**",
   "src/main/lib/codex-app-server/src/_generated/**",
+  # Every file in scripts/ci is an ES module. The analyzer's parser reads .mjs
+  # as a script regardless of module_system below and reports JS-0833 on the
+  # first import, which was measured on 2026-09-15 at 8e3cdf9 after the
+  # module_system key had already been set. Biome lints those files in the
+  # quality job, the wrapper itself with `biome ci` on every change, so the
+  # analyzer is told to skip what it cannot parse.
+  "scripts/ci/**",
 ]
 
 [[analyzers]]
@@ -14,7 +21,9 @@ name = "javascript"
 enabled = true
 
   [analyzers.meta]
-  # The CI scripts under scripts/ci are ES modules. Without this the analyzer
-  # parses them as scripts and reports JS-0833 on every import line.
+  # The repository is ES modules everywhere except the vendored runtime, and
+  # this key is still correct for the .js and .ts files the analyzer does
+  # parse. It does not settle the .mjs parse error, which the exclusion above
+  # handles.
   module_system = "es-modules"
   environment = ["nodejs", "browser"]
