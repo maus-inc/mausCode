@@ -50,13 +50,23 @@ lint gate hardening + format sweep bec0263/66a090b (me).
   `gh api repos/maus-inc/mausCode/check-runs/<id> --jq .output.summary`; the
   check-run annotation itself carries only the exit code.
 - DeepSource's JavaScript analyzer reads `.mjs` as a script and reports JS-0833
-  on the first import, and `module_system = "es-modules"` does not stop it
-  (measured 2026-09-15 at `8e3cdf9`). `scripts/ci/**` is excluded in
-  `.deepsource.toml` for that reason, with Biome as the gate for those files.
-  The analyzer also reviews every file a pull request touches, so editing one
-  line of a ported file pulls that file's whole backlog in as new issues, which
-  is how 36 Effect-idiom false positives arrived from a one-line fixture change.
-  `GET /commits/{sha}/status` is how a third-party verdict is read; its own
+  on the first import, whatever `module_system` says, and it reads
+  `.deepsource.toml` from the default branch, so an exclusion written inside a
+  pull request is inert for that pull request. Both are measured, 2026-09-15:
+  red at `8e3cdf9`, `f83e874` and `ad93a44`, green at `d042966` where the same
+  `.mjs` files existed but none was in the diff, and red at `ad93a44` with the
+  exclusion present at that head. The analyzer also reviews every file a pull
+  request touches, so a one-line edit to a ported file pulls that file's whole
+  backlog in as new issues.
+- Do not convert a touched `.mjs` to CommonJS to dodge JS-0833. Measured at
+  `1d75ddf`: the rename made a whole file new code, two pre-existing
+  `javascript:S4036` PATH findings entered Sonar's leak period with it, and the
+  required quality gate failed with Security Rating B. Sonar's leak period
+  follows the file, not the lines, across a rename.
+- DeepSource's analysis quota is organization-level, and when it runs out every
+  DeepSource check is `skipped` with "Analysis quota is exhausted". A skipped
+  check is not a green one, and the fix is on the account, not in the repo.
+  `GET /commits/{sha}/status` reads a third-party verdict; the analyzer's own
   findings live on its dashboard, not in the GitHub API.
 - The `security` job's third step, `actions/dependency-review-action@v4`,
   needs the repository's Dependency graph feature (Settings, Code security and

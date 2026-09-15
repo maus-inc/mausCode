@@ -473,7 +473,7 @@ bun install --frozen-lockfile --ignore-scripts
 bun run build:runtime-client
 bun x biome check .
 npm run typecheck
-node scripts/ci/lint-changed.cjs
+node scripts/ci/lint-changed.mjs
 node scripts/ci/typecheck-ratchet.mjs
 ```
 
@@ -699,7 +699,7 @@ Use a module only after Phase 0 selects it. These checks distill the architectur
 
 **Suggestions** cover performance, maintainability, and defensive gaps: strip dead variables, unused imports, and ignored parameters, prefer optional chaining and explicit narrowing over a cast, and hoist a repeated conditional into the shared module. **Nitpicks** have no runtime effect: formatting drift, a missing trailing newline, a comment that contradicts the code, or a name that no longer describes what it holds.
 
-The tooling boundary matters when you judge a comment. Biome 2.5.13 covers format, lint, and assist for the files `scripts/ci/lint-changed.cjs` selects, and every rule is at `error` with the tree at 0 findings. There is no ESLint, Prettier, oxlint, Sonar, CodeFactor, or review bot configured in this repository today. Markdown and prose are not machine checked, so structure notes on a `.md` file are readability nits, not gates. The gates are the four CI jobs and the scripts under `scripts/ci/`, which are `lint-changed.cjs`, `lint-ratchet.mjs`, `typecheck-ratchet.mjs`, and `audit-ratchet.mjs`. Verify a suggestion does not itself break a gate, for example a fix that adds a suppression comment or an unnecessary `type` import Biome then rejects.
+The tooling boundary matters when you judge a comment. Biome 2.5.13 covers format, lint, and assist for the files `scripts/ci/lint-changed.mjs` selects, and every rule is at `error` with the tree at 0 findings. There is no ESLint, Prettier, oxlint, Sonar, CodeFactor, or review bot configured in this repository today. Markdown and prose are not machine checked, so structure notes on a `.md` file are readability nits, not gates. The gates are the four CI jobs and the scripts under `scripts/ci/`, which are `lint-changed.mjs`, `lint-ratchet.mjs`, `typecheck-ratchet.mjs`, and `audit-ratchet.mjs`. Verify a suggestion does not itself break a gate, for example a fix that adds a suppression comment or an unnecessary `type` import Biome then rejects.
 
 ## 19. Anti-pattern checklist
 

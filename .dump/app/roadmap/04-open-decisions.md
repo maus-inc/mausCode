@@ -180,6 +180,31 @@ For any issue in this range: `.dump/app/roadmap/NN-<slug>.md` is the source of t
 unresolved `{{SNN}}` token resolves the same way.
 ```
 
+### Amendment, 2026-09-15: the lint runner's file format, and the analyzer that reads it
+
+Step 02 says the gate policy is where the lint runner's shape belongs, and the
+runner this step fixed kept its shape. What changed here is one fact about a
+third-party analyzer and one reversed decision, both measured on the branch, and
+both worth carrying because the next person to see the red will otherwise
+re-derive them at the cost of two required-gate failures.
+
+`DeepSource: JavaScript` reported 37 findings on this pull request. Thirty-six
+were the backlog of `src/main/lib/codex-app-server/src/protocol.test.ts`, pulled
+into scope by a one-line edit to a file that says it is a verbatim port, and they
+left scope when the file was restored to its upstream bytes. The thirty-seventh
+was `JS-0833`, a parse error on the first `import` of `lint-changed.mjs`, because
+that analyzer parses every file a pull request touches as a script and reads its
+own configuration from the default branch, which carries no `.deepsource.toml`.
+The exclusion written for it at `ad93a44` therefore changed nothing, and the
+format change that did work, `lint-changed.cjs` at `1d75ddf`, was reverted: a
+rename makes a file entirely new code for Sonar, two pre-existing
+`javascript:S4036` PATH findings came with it into the leak period, and the
+required quality gate dropped to security rating B. The required gate wins, the
+file stays an ES module with the imports the analyzer cannot read, and the
+exclusion stays in `.deepsource.toml` for the branch whose configuration the
+analyzer actually reads. Evidence and issue keys are in
+`.dump/ci/audits/2026-09-14-gitleaks-inherited-findings.md`.
+
 ### What this session deliberately did not do
 
 - It did not post any comment on an issue, because it cannot. The four comments above were attempted on 2026-09-15

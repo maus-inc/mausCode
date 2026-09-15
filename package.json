@@ -35,7 +35,7 @@
     "test:contracts": "vitest run src/shared/contracts",
     "test": "vitest run",
     "test:node": "node --test --experimental-strip-types \"src/main/lib/runtime/*.test.ts\"",
-    "lint": "node scripts/ci/lint-changed.cjs",
+    "lint": "node scripts/ci/lint-changed.mjs",
     "typecheck": "tsc --noEmit",
     "ratchet:typecheck": "node scripts/ci/typecheck-ratchet.mjs",
     "ratchet:audit": "node scripts/ci/audit-ratchet.mjs"

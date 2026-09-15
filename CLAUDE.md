@@ -61,7 +61,7 @@ bun run dev              # Electron with hot reload
 
 # Gates. These are the local forms, and two of them are not what CI runs.
 npm run typecheck        # tsc --noEmit, the plain run, not the CI job
-npm run lint             # node scripts/ci/lint-changed.cjs, the CI form
+npm run lint             # node scripts/ci/lint-changed.mjs, the CI form
 npm run test             # vitest, the CI form
 npm run test:node        # node:test suites under src/main/lib/runtime, the CI form
 npm run test:contracts   # vitest over src/shared/contracts, the CI form
@@ -136,7 +136,7 @@ Repositories outside `src/` that a step may need:
 | `runtime/jcode` | The pinned JCode engine, vendored at commit `ce4e789`, MIT. `runtime/jcode/UPSTREAM.md` records the pin, the licence and what is excluded. |
 | `src/shared` | What the main process and the renderer must agree on. |
 | `src/shared/contracts` | Ported Effect schemas, 44 source files and 23 test files, with no importer outside the directory yet. Start at `src/shared/contracts/README.md`. |
-| `scripts/ci` | The gate scripts CI runs, `scripts/ci/lint-changed.cjs`, `scripts/ci/typecheck-ratchet.mjs` and `scripts/ci/audit-ratchet.mjs`. |
+| `scripts/ci` | The gate scripts CI runs, `scripts/ci/lint-changed.mjs`, `scripts/ci/typecheck-ratchet.mjs` and `scripts/ci/audit-ratchet.mjs`. |
 | `benchmarks` | Performance records. `CONTRIBUTING.md` requires a measured delta here for any change that moves startup, memory, rendering or file weight. |
 | `drizzle` | Generated migration SQL, applied at startup. |
 | `.dump` | The engineering memory. Research, plans, decisions, audits and benchmarks per capability. |

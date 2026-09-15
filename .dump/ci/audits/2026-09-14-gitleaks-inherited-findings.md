@@ -168,12 +168,63 @@ it as inherited and unreadable. The report itself, pasted by the human, shows
   namespace imports, which are the idiomatic shapes for Effect and TypeScript
   and read as findings only to a JavaScript-only parse. Restoring the file to
   its upstream bytes returns them to the dashboard, where they were before.
-- 1 is `JS-0833`, a parse error, on `scripts/ci/lint-changed.mjs`. The
-  analyzer's parser reads `.mjs` as a script and reports the first `import`.
-  `module_system = "es-modules"` is already set in `.deepsource.toml`, added by
-  an earlier session for exactly this error, and it does not change the
-  outcome, which means the analyzer's per-file extension handling overrides it.
-  `scripts/ci/**` is now in that file's `exclude_patterns` with the reason and
-  the date, and those four scripts stay gated by Biome in the quality job.
+- 1 is `JS-0833`, a parse error, on `scripts/ci/lint-changed.mjs`, the only
+  JavaScript file this pull request puts in front of that analyzer. Its parser
+  reads `.mjs` as a script and reports the first `import`.
+  `module_system = "es-modules"` was already set in `.deepsource.toml`, added by
+  an earlier session for exactly this error, and it does not change the outcome.
 - `DeepSource: Shell` is red on `main` and green here, so it stays out of scope
   with the same status query recorded above.
+
+### What the exclusion attempt measured about the analyzer's configuration
+
+`scripts/ci/**` was added to `exclude_patterns` in `.deepsource.toml` and
+pushed at `ad93a44`. The JavaScript check stayed red, which turns the earlier
+prose claim into a measurement: **the analyzer reads its configuration from the
+default branch.** `main` is that branch, and it carries neither
+`.deepsource.toml` nor `scripts/ci`, so the file this pull request writes is
+never consulted and an exclusion written inside a pull request is inert for that
+pull request. The same comparison says the check is diff-scoped rather than
+snapshot-wide: `d042966` was green while all four `.mjs` files sat in the tree,
+and red at `79b63bc`, `f83e874` and `ad93a44`, the three commits that put one of
+them in the diff. The entry stays in the file because it is the durable fix once
+the configuration reaches the default branch, and because it now carries this
+measurement next to it.
+
+### The format fix, implemented and reverted, with the reason
+
+The one lever that works inside a pull request is the format of the file the
+analyzer reads, so `lint-changed.mjs` became `lint-changed.cjs` at `1d75ddf`:
+`require` instead of `import`, `__dirname` instead of `import.meta.url`, no
+`export`. It was verified locally rather than assumed, `node --check` parsing it
+under the script goal, Biome 2.5.13 reporting it clean, the four base-resolution
+paths unchanged, and the injection control still showing no supplied string in
+any logged git argv.
+
+It was then reverted, because it failed a required gate. A renamed file is new
+code in Sonar, all of it, and two `javascript:S4036` findings that had been
+sitting on those two `execFileSync` lines since 2026-09-12 as old code entered
+the leak period with it: `AaClg8tpNQMeXjMSkZEr` on line 40 and
+`AaClg8tpNQMeXjMSkZEs` on line 138, "Make sure the "PATH" variable only
+contains fixed, unwriteable directories", one MINOR vulnerability each, which is
+security rating B on new code against a required A. Repository-wide that rule
+has exactly one other open instance, `scripts/download-codex-binary.mjs:199`,
+open since 2026-02-15 in old code, so the established position is that these
+findings are tolerated where they are and not dragged into a diff.
+
+The trade is therefore measured in both directions and the required gate wins: a
+non-required analyzer's false positive stays, a required gate's security rating
+does not fall. Whoever wants the format fix can have it, in the order that does
+not cost the gate: first make the PATH handling of these wrappers Sonar-clean,
+then change the format.
+
+### Where DeepSource stands at this head
+
+Every DeepSource check at `1d75ddf` is `skipped`, with this output: "Analysis
+quota is exhausted. Your current Analysis quota has been exhausted. Upgrade your
+subscription plan to increase your Analysis quota." The organization runs out of
+analysis minutes, so no verdict exists for that commit, and the earlier red is
+absent for that reason rather than because anything fixed it. Three ways out,
+all of them the human's: raise the quota and let the analyzer run, add the
+exclusion to the default branch so it stops parsing `.mjs` at all, or change the
+path-handling of the wrappers and take the CommonJS conversion afterwards.
