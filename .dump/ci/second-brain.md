@@ -32,6 +32,12 @@ lint gate hardening + format sweep bec0263/66a090b (me).
 - `bun audit --json` exits 1 when advisories exist; output still parses.
 - Both `main` and `arena/*`/`init` are independent git roots — any merge-base
   logic needs a fallback.
+- A force push orphans the previous head, and a push event passes that head as
+  `LINT_BASE`, so the gate must tolerate a base ref the clone cannot resolve.
+  It did not until 2026-09-15, when quality died at the lint step on run
+  34865816781 while the same commit's PR run passed; `scripts/ci/lint-changed.mjs`
+  now falls back to `origin/main` and then to the whole tree. Repro without CI:
+  `LINT_BASE=<orphaned-sha> node scripts/ci/lint-changed.mjs`.
 - gitleaks-action v2 = paid license for org-owned repos; use CLI pinned w/
   sha256 (v8.30.1, verified in the security job).
 - api.github.com anonymous limit 60/hr/IP is hit on shared macOS runners →

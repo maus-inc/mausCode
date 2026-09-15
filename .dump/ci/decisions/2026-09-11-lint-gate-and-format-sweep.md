@@ -46,3 +46,36 @@ Quality gate passes on the merged rebrand+CI tree (lint exit 0 with 325
 visible warnings), and fails when a changed file introduces formatter/import
 errors or any warn→error-class rule violation. Re-evaluate rule promotions
 when `.github/ci-baselines/typecheck.txt` drops to 0 (app domain owns those).
+
+## Amendment, 2026-09-15: decision 2 was not robust, and it is fixed
+
+Decision 2 claimed the wrapper "resolves base robustly". That held for the two
+cases it was written for, the PR base and the independent-root fallback, and
+not for a third: a base ref the clone cannot see at all. A force push orphans
+the previous head, and the push event's `LINT_BASE` is exactly that head, so
+the workflow hands the wrapper a commit that `actions/checkout` did not fetch.
+The commit then fails, because both diffs throw an unhandled git error.
+
+Measured on run 34865816781, the push run for `d042966` on
+`arena/01a0a08a-mauscode`: the quality job died at step 7, `Lint + format
+(changed files only)`, and every later step was skipped. The same commit's
+`pull_request` run 34865822930 passed, because `github.event.pull_request.base.sha`
+resolves, which is what made the failure look like a flaky gate rather than a
+missing ref.
+
+Reproduce it without CI:
+
+```sh
+git cat-file -e <the-previous-head> || echo absent   # the clone's view
+LINT_BASE=<the-previous-head> node scripts/ci/lint-changed.mjs
+# fatal: ambiguous argument '<sha>...HEAD': unknown revision
+```
+
+Fixed in `scripts/ci/lint-changed.mjs`: the explicit base is used only when
+`git rev-parse --verify --quiet <ref>^{commit}` resolves it, an unresolvable
+base falls through to the `origin/main` chain with the reason printed, and when
+no base resolves at all the wrapper checks the whole tree instead of dying. The
+three behaviours this record already fixed are unchanged, and six scenarios are
+verified in the PR that landed the fix, including the force-push case and the
+`no base at all` case. What this record got wrong is worth keeping: robustness
+claims need the failing case named, not only the cases the author had in mind.
