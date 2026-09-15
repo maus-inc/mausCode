@@ -50,11 +50,17 @@ and in `.dump/app/decisions/2026-09-13-instruction-truth.md` are redacted: this
 repository's own prose should not quote a credential-shaped value, so those are
 fixed rather than excused. Second, the CI step now reports its findings: it runs
 `gitleaks dir --verbose --redact --report-format json`, and on a non-zero exit
-writes a rule/file/line table to `$GITHUB_STEP_SUMMARY`. That is not decoration,
-it is the only way to read a red security job from this sandbox, where job logs
-are unreachable and the check-run annotation carries nothing but
+it emits one `::error file=...,line=...` annotation per finding and writes the
+same rule/file/line table to `$GITHUB_STEP_SUMMARY`. Both channels are needed,
+and that is a measured correction rather than a preference: a step summary
+appears on the job page but is **not** exposed through the check-run API
+(`output.summary` stayed null on run 34976766972 for a step that wrote one),
+while annotations are, and that API is the only route available here, where job
+logs are unreachable and the default annotation says nothing but
 `Process completed with exit code 1`. The JSON report stays on the runner, no
-secret value is printed, and a missing report is itself reported in the table.
+secret value is printed, and a missing report is itself reported. An `ERR` trap
+annotates an unexpected failure with its line, so a broken download is
+distinguishable from a real leak.
 
 Behaviour verified with a stub `gitleaks` on this host, three cases: one finding
 (exit 1, table written), no findings (exit 0, no summary), and a scanner error
