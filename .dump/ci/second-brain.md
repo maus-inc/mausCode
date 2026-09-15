@@ -49,6 +49,11 @@ lint gate hardening + format sweep bec0263/66a090b (me).
   secrets job can be read through the API with
   `gh api repos/maus-inc/mausCode/check-runs/<id> --jq .output.summary`; the
   check-run annotation itself carries only the exit code.
+- The `security` job's third step, `actions/dependency-review-action@v4`,
+  needs the repository's Dependency graph feature (Settings, Code security and
+  analysis). It was disabled until 2026-09-15, so the step failed with
+  "Dependency review is not supported on this repository"; it is enabled now.
+  A green secrets step is what let that failure surface at all.
 - SonarCloud `jssecurity:S8705` (issue `AaClMoDr11SIv2-9SZIh`) flagged
   `lint-changed.mjs` for passing `LINT_BASE` into git's argument list. Git is
   now called with constant args: a supplied base is matched against

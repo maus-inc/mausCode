@@ -90,6 +90,10 @@ The second is the same file again. SonarCloud failed the pull-request gate at `5
 
 The third is the secrets gate itself, and it answers the ownership question this step was asked to ask. `grep -rln "gitleaks" .dump/app/roadmap` returns nothing: no step owns the gitleaks step, the audit in `.dump/ci/audits/2026-09-14-gitleaks-inherited-findings.md` records that the failure predates this branch, and step 02's own note points the fix at "the step that adds the unowned finding". The red is triggered by upstream fixtures, so it cannot be paid off by rotating a credential, and with no owner named it would stay red. The fix is one config file plus a redaction of this repository's own prose, and a security gate that fails on every branch for a reason nobody owns is worse than one with a written, narrow allowlist.
 
+A fourth item surfaced only because the third one worked: with gitleaks green, the same job's next step, `Dependency review (PR-affecting changes)`, failed because the repository's Dependency graph feature was disabled. No roadmap step owns that gate either. The setting is a repository one, this session has no admin rights to change it, and the repository owner enabled it on 2026-09-15, so the step runs as written. Recorded because a security gate that is red for a setting looks exactly like a gate that is red for a leak, and that confusion is what made this step's first two fixes necessary.
+
+The negative control for the new config is commit `234a8bf`, a temporary file with two unexcused fake values; the security job failed on it and the annotations named the file and both rules, which is what proves the value-scoped allowlist did not blind the scanner. The file is deleted in the commit after it. Push run 34977510721 for `8cd66af` is the first green secrets step.
+
 | Gate | Result |
 | --- | --- |
 | `npx --yes @biomejs/biome@2.5.13 check .` | Passed. 861 files checked, exit 0, 0 findings, the same count the step 03 record holds. Biome ignores `.md`, so this proves the tree is unchanged rather than that the new prose is formatted |

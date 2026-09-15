@@ -111,3 +111,36 @@ no explanation of what changed. Local checks before pushing: the TOML parses,
 every one of the eleven regexes matches the line gitleaks reported for at least
 one of the seventeen findings, and every finding is covered by exactly one
 remedy.
+
+## Verified on CI, 2026-09-15 (E4)
+
+- Push run 34977510721 for `8cd66af`: `Security gates` success, and step 6,
+  `Secrets scan (gitleaks, pinned + checksum-verified)`, success with the config
+  in place. First green secrets step on this branch, and the first time the rest
+  of the job could even run.
+- `234a8bf` is the negative control. It adds `gitleaks-detection-probe.txt`, a
+  temporary file holding a JWT-shaped value and a generic-api-key-shaped value,
+  neither of them in the allowlist. The job fails, and its annotations name
+  `gitleaks-detection-probe.txt:7` (`jwt`) and `:8` (`generic-api-key`). The
+  probe file is deleted in the next commit; the two fake values survive only as
+  history, and if a scanner alerts on commit `234a8bf`, it is this probe.
+- Both facts were read through `gh api .../check-runs/<id>/annotations`, which is
+  also the only way to read the finding list itself.
+
+## The third gate in that job, and the setting it needed
+
+Fixing gitleaks unblocked the rest of the `security` job, and the next step
+failed: `Dependency review (PR-affecting changes)` reported "Dependency review
+is not supported on this repository. Please ensure that Dependency graph is
+enabled". The repository is public, so this is a setting rather than a licence:
+Settings, Code security and analysis, Dependency graph. This session cannot
+change it (`PATCH /repos/maus-inc/mausCode` returns 403, Resource not accessible
+by integration, and `security_and_analysis` is not returned to the token at
+all), and neither can a roadmap step, because none mentions the gate:
+`grep -rln "dependency.review\|dependency graph\|dependency-graph"
+.dump/app/roadmap` returns nothing.
+
+The repository owner enabled the feature on 2026-09-15, so the step runs as
+written and needs no workflow change. Recorded here rather than quietly fixed,
+because a red security job that is really a repository setting is the same trap
+as the gitleaks red: the log said one thing and the cause was another.
