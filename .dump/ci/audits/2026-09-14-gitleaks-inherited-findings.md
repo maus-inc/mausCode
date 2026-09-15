@@ -12,10 +12,10 @@ gate-semantics change and belongs to its own step, not to step 02.
 
 | File | Pattern | Why it is there |
 | --- | --- | --- |
-| `runtime/jcode/crates/jcode-base/src/message/tests.rs:264-330` | `sk-ant-oat01-...`, `sk-or-v1-...`, `ghp_...`, `AKIA...`, `-----BEGIN PRIVATE KEY-----` | Inputs and assertions for the engine's secret-redaction tests |
-| `runtime/jcode/crates/jcode-base/src/session_tests/cases.rs:804-1232` | `ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123` | Same, at session-test scope |
+| `runtime/jcode/crates/jcode-base/src/message/tests.rs:264-330` | `sk-ant-oat01-...`, `sk-or-v1-...`, `ghp_...`, `AKIA...`, a PEM `BEGIN PRIVATE KEY` marker pair | Inputs and assertions for the engine's secret-redaction tests |
+| `runtime/jcode/crates/jcode-base/src/session_tests/cases.rs:804-1232` | `ghp_` plus 30 alphabet characters | Same, at session-test scope |
 | `runtime/jcode/crates/jcode-app-core/src/tool/discover.rs:2466-2468` | JWT shape, private-key header | Same, for the discover tool |
-| `.dump/app/decisions/2026-09-13-instruction-truth.md:190-198` | `AKIAABCDEFGHIJKLMNOP` | Step 01's decision record quoting the fixture above |
+| `.dump/app/decisions/2026-09-13-instruction-truth.md:190-198` | `AKIA` plus 16 uppercase | Step 01's decision record quoting the fixture above |
 
 All literals are alphabet placeholders. `runtime/jcode` is the pinned engine,
 vendored under its provenance rules, and its test fixtures are upstream code.
@@ -35,3 +35,28 @@ config, decided by a human because it changes what the security gate sees.
 This step's own rule applies: an exemption names what it excuses and links
 the issue that tracks it. `lock-regen-temp.yml` failing on every push with a
 workflow file issue is a second inherited red item; roadmap step 31 owns it.
+
+## Update, 2026-09-15: ownership answer, and the scan becomes triageable
+
+Step 04 was asked whether any roadmap step owns this gate. `grep -rln
+"gitleaks\|security gate\|secrets scan" .dump/app/roadmap` returns no owner:
+step 02 governs the audit gate's policy sentence, step 29 is the audit's
+critical-to-high promotion, and step 39 is the security *test suite*. So the
+fix lands in the step 04 pull request, and the config it adds is owned by
+`.dump/ci` from here.
+
+Two things changed ahead of the config itself. First, the literals in this file
+and in `.dump/app/decisions/2026-09-13-instruction-truth.md` are redacted: this
+repository's own prose should not quote a credential-shaped value, so those are
+fixed rather than excused. Second, the CI step now reports its findings: it runs
+`gitleaks dir --verbose --redact --report-format json`, and on a non-zero exit
+writes a rule/file/line table to `$GITHUB_STEP_SUMMARY`. That is not decoration,
+it is the only way to read a red security job from this sandbox, where job logs
+are unreachable and the check-run annotation carries nothing but
+`Process completed with exit code 1`. The JSON report stays on the runner, no
+secret value is printed, and a missing report is itself reported in the table.
+
+Behaviour verified with a stub `gitleaks` on this host, three cases: one finding
+(exit 1, table written), no findings (exit 0, no summary), and a scanner error
+(exit 126, table says no report was written). The step's exit status is still
+the scan's status, so the gate itself is unchanged.
