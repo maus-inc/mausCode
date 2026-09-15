@@ -1,0 +1,8 @@
+Temporary probe for the secrets gate. Removed in the next commit.
+Nothing here is a credential. Both values are shaped to be detected by
+gitleaks' default rules, and neither appears in .gitleaks.toml, so the gate
+must fail on this file. If this commit's Security gates job is green, the
+allowlist has blinded the scanner and the config is wrong.
+
+jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwcm9iZSI6InNlY3JldHMtZ2F0ZSJ9.dGhpcy1pcy1ub3QtYS1zZWNyZXQ
+api_key = "kR7xQ2mZ9pT4vL8wB3nJ5sY6"
