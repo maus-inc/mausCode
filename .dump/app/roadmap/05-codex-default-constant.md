@@ -88,6 +88,16 @@ which the GitHub comment does not enumerate.
 
 Nothing was marked won't-fix or false positive. Sourcery and CodeRabbit posted no findings.
 
+### Round 2, after `2d45669`
+
+The re-analysis dropped the 18 and reported 7 new ones. Sonar only raises a finding on a line
+it treats as changed, so fixing the 18 exposed lines it had not examined before.
+
+| Rule | Count | File | Verified | Outcome |
+| --- | --- | --- | --- | --- |
+| `typescript:S5906` MINOR | 6 | `src/main/lib/providers/codex-models.test.ts` | Real, and introduced by the round 1 rewrite. `.length` comparisons and `.toBe(undefined)` read better as `toHaveLength` and `toBeUndefined` | Fixed all 8 sites, not just the 6 flagged, so the file is consistent. The four message arguments vitest does not accept on `toHaveLength` became comments above the assertion |
+| `typescript:S6564` MAJOR | 1 | `src/shared/codex-model-id.ts:29` | Real but refused. `CodexThinkingLevel` has 32 use sites in `agent-model-selector.tsx`, `acp-chat-transport.ts`, `chat-input-area.tsx` and `new-chat-form.tsx` | Not fixed. The type moved here verbatim and the picker owns that name: it says `thinkings`, `selectedThinking`, `onSelectThinking` throughout, so the alias is the picker's own vocabulary, not a redundant second name for one concept. Deleting it renames 32 sites in the picker, which the step's scope forbids. A maintainer with SonarCloud write access should mark it won't-fix |
+
 ## 13. Rollback
 
 One module plus two import swaps. Revert the commit.

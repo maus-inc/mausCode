@@ -53,7 +53,7 @@ describe("readCodexModelCatalog", () => {
   it("reads the catalog over model/list and reaps the child", async () => {
     const catalog = await readCodexModelCatalog(peer())
 
-    expect(catalog.length).toBe(2)
+    expect(catalog).toHaveLength(2)
     expect(catalog[1]).toEqual({
       id: "gpt-mock",
       hidden: false,
@@ -125,7 +125,7 @@ describe("resolveCodexDefaultModel", () => {
     expect(resolved.source).toBe("cli")
     expect(resolved.modelId).toBe("gpt-mock")
     expect(resolved.reasoningEffort).toBe("high")
-    expect(resolved.fallbackReason).toBe(undefined)
+    expect(resolved.fallbackReason).toBeUndefined()
   })
 
   it("exposes the resolved default to a caller that must not spawn", () => {
@@ -164,19 +164,21 @@ describe("resolveCodexDefaultModel", () => {
 
     const first = await resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks })
     expect(first.source).toBe("cli")
-    expect(info.mock.calls.length).toBe(1)
+    expect(info.mock.calls).toHaveLength(1)
 
     const second = await resolveCodexDefaultModel({
       ...peer({ MOCK_MODEL_LIST_FAIL: "1" }),
       knownModels: knownMocks,
     })
     expect(second.source).toBe("cli")
-    expect(info.mock.calls.length, "a cache hit must not read the CLI again").toBe(1)
+    // A cache hit must not read the CLI again.
+    expect(info.mock.calls).toHaveLength(1)
 
     clearCodexDefaultModelCache()
     const third = await resolveCodexDefaultModel({ ...peer(), knownModels: knownMocks })
     expect(third.source).toBe("cli")
-    expect(info.mock.calls.length, "clearing the cache must read the CLI again").toBe(2)
+    // Clearing the cache must read the CLI again.
+    expect(info.mock.calls).toHaveLength(2)
   })
 
   it("re-reads when the binary version changes", async () => {
@@ -186,13 +188,14 @@ describe("resolveCodexDefaultModel", () => {
       ...peer({ MOCK_CODEX_VERSION: "codex-mock 1.0.0" }),
       knownModels: knownMocks,
     })
-    expect(info.mock.calls.length).toBe(1)
+    expect(info.mock.calls).toHaveLength(1)
 
     await resolveCodexDefaultModel({
       ...peer({ MOCK_CODEX_VERSION: "codex-mock 2.0.0" }),
       knownModels: knownMocks,
     })
-    expect(info.mock.calls.length, "a new binary version must invalidate the cache").toBe(2)
+    // A new binary version must invalidate the cache.
+    expect(info.mock.calls).toHaveLength(2)
   })
 
   it("retries a failed read once its short cache window passes", async () => {
@@ -206,11 +209,12 @@ describe("resolveCodexDefaultModel", () => {
 
     const failed = await resolveCodexDefaultModel(at({ MOCK_MODEL_LIST_FAIL: "1" }))
     expect(failed.source).toBe("static-fallback")
-    expect(warn.mock.calls.length).toBe(1)
+    expect(warn.mock.calls).toHaveLength(1)
 
     const cached = await resolveCodexDefaultModel(at({}))
-    expect(cached.source, "the fallback is cached so a turn is not slow").toBe("static-fallback")
-    expect(warn.mock.calls.length).toBe(1)
+    // The fallback is cached so a turn is not slow.
+    expect(cached.source).toBe("static-fallback")
+    expect(warn.mock.calls).toHaveLength(1)
 
     now += 61_000
     const retried = await resolveCodexDefaultModel(at({}))
