@@ -14,6 +14,13 @@ which is how the 46 issues were created in the first place. Reads on the same en
 `POST /labels` still works, which is why this pack exists as a file rather than as thirteen comments. Posting is
 therefore a human action: run §1 from a clone with your own `gh`.
 
+**Update, 2026-09-15: the wall is issue-scoped, not global.** Probed on branch `arena/01a0a08a-mauscode`,
+`POST /repos/maus-inc/mausCode/issues/54/comments` and `PATCH /repos/maus-inc/mausCode/pulls/54` both succeed,
+while `gh issue comment 20`, `POST /repos/maus-inc/mausCode/issues/20/comments` and `PATCH` on that issue still
+return 403. So the installation carries pull-request write and issue read-only, which is a narrower and more
+useful statement than the 2026-09-14 note above. PR review replies and body edits can be written from an agent
+session; the thirteen notices below still cannot, and §1 still needs a human, or an `Issues: write` grant.
+
 ## 0a. Why this is now urgent rather than cosmetic
 
 `gh api repos/maus-inc/mausCode/issues/N/comments` on #3 through #14 shows an automatic reviewer already acting on
@@ -60,6 +67,10 @@ The fourth, #20, is not here and should not be turned into a drift notice: its b
 `| Depends on | {{S04}} decision 2, {{S17}} |`, so nothing about it is stale. Its comment text lives in
 `.dump/app/roadmap/04-open-decisions.md` §15 with its own one-line command. Posting that plus this file's loop is
 everything step 04 owes, and no separate comment pack is needed.
+
+All four were re-attempted on 2026-09-15 and all four returned 403, so the state is unchanged from the date above.
+The extractor's block numbers are positional: `005`, `006` and `007` are the notices for #14, #19 and #26, which
+§15 puts in one loop for whoever runs the four commands.
 
 ## 1. Posting them
 
