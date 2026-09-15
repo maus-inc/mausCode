@@ -7,12 +7,32 @@ import {
 import type { CustomHotkeysConfig, ShortcutActionId } from "./types"
 
 /**
+ * Event keys and event codes that satisfy a registry key beyond direct
+ * comparison with e.key. Codes are layout-independent, so they are listed
+ * wherever a physical key position matters.
+ */
+const KEY_ALIASES: Record<string, { keys?: string[]; codes?: string[] }> = {
+  esc: { keys: ["escape"] },
+  escape: { keys: ["escape"] },
+  space: { keys: [" "], codes: ["space"] },
+  "↑": { keys: ["arrowup"], codes: ["arrowup"] },
+  "↓": { keys: ["arrowdown"], codes: ["arrowdown"] },
+  "←": { keys: ["arrowleft"], codes: ["arrowleft"] },
+  "→": { keys: ["arrowright"], codes: ["arrowright"] },
+  "/": { keys: ["/"], codes: ["slash"] },
+  "\\": { keys: ["\\"], codes: ["backslash"] },
+  ",": { keys: [","], codes: ["comma"] },
+  "[": { keys: ["["], codes: ["bracketleft"] },
+  "]": { keys: ["]"], codes: ["bracketright"] },
+}
+
+/**
  * Parse a hotkey string and match against a keyboard event
  * Supports: "?", "shift+?", "cmd+k", "cmd+shift+i"
  */
 export function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
   const parts = hotkey.toLowerCase().split("+")
-  const key = parts[parts.length - 1]
+  const key = parts.at(-1)
   const modifiers = parts.slice(0, -1)
 
   const needsMeta = modifiers.includes("cmd") || modifiers.includes("meta")
@@ -29,23 +49,18 @@ export function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
   if (needsAlt !== e.altKey) return false
   if (needsCtrl !== e.ctrlKey) return false
   if (needsShift !== e.shiftKey) return false
+  if (!key) return false
 
   const eventKey = e.key.toLowerCase()
   const eventCode = e.code.toLowerCase()
 
   if (eventKey === key) return true
-  if (key === "?" && eventKey === "?") return true
-  if ((key === "esc" || key === "escape") && eventKey === "escape") return true
-  if (key === "space" && (eventKey === " " || eventCode === "space")) return true
-  if (key === "↑" && eventKey === "arrowup") return true
-  if (key === "↓" && eventKey === "arrowdown") return true
-  if (key === "←" && eventKey === "arrowleft") return true
-  if (key === "→" && eventKey === "arrowright") return true
-  if (key === "/" && (eventKey === "/" || eventCode === "slash")) return true
-  if (key === "\\" && (eventKey === "\\" || eventCode === "backslash")) return true
-  if (key === "," && (eventKey === "," || eventCode === "comma")) return true
-  if (key === "[" && (eventKey === "[" || eventCode === "bracketleft")) return true
-  if (key === "]" && (eventKey === "]" || eventCode === "bracketright")) return true
+
+  const alias = KEY_ALIASES[key]
+  if (alias && (alias.keys?.includes(eventKey) || alias.codes?.includes(eventCode))) {
+    return true
+  }
+
   if (key.length === 1 && eventCode === `key${key}`) return true
 
   return false

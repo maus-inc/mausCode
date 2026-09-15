@@ -66,6 +66,7 @@ Deleted (2): `undo-archive`, `create-pr`. Users with saved localStorage bindings
 13. CodeAnt flagged that recorded Space and arrow bindings never matched. Valid: the recorder stores `"Space"` and `"↑"`-style symbols (`use-hotkey-recorder.ts` KEY_MAP), which the matcher never compared. Fixed with space and arrow aliases in `match-hotkey.ts`, locked by `match-hotkey.test.ts`.
 14. CodeAnt flagged that `dispatchShortcut` always preventDefaulted, ignoring the manager's `preventDefault: false` option. Fixed for consistency; no caller passes false today, so no behaviour change.
 15. CodeAnt flagged that the `cmd` modifier only matches `metaKey`, so renderer-side Cmd defaults never respond to Ctrl on Windows and Linux. Recorded, not fixed: this is the matcher's original semantics (extracted verbatim), and redefining `cmd` on non-mac platforms would change every binding's meaning. Electron menu accelerators (`CmdOrCtrl`) carry the primary keys on Windows and Linux.
+16. SonarCloud S3776 flagged `matchesHotkey` at cognitive complexity 33 against the 15 cap, and S7755 asked for `.at(-1)`. Both valid, both fixed: the per-key alias `if` chain became the `KEY_ALIASES` lookup table, so adding an alias is a table row, and the complexity dropped below the cap. The matcher tests lock every alias, so the refactor is semantically identical.
 
 ## Gates run for this record (E4, 2026-09-15)
 
