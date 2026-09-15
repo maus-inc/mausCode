@@ -1,5 +1,9 @@
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import {
+  DEFAULT_CODEX_REASONING_EFFORT,
+  DEFAULT_CODEX_UI_MODEL,
+} from "../../../../shared/codex-model-id"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import {
   codexApiKeyAtom,
@@ -38,7 +42,7 @@ type ImageAttachment = {
 
 // When a sub-chat hits auth-error, force one fresh Codex ACP session on next send.
 const forceFreshSessionSubChats = new Set<string>()
-const DEFAULT_CODEX_MODEL = "gpt-5.5/high"
+
 function getStoredCodexCredentials(): {
   hasApiKey: boolean
   hasSubscription: boolean
@@ -85,7 +89,7 @@ function getSelectedCodexModel(subChatId: string): string {
     CODEX_MODELS.find((model) => model.id === selectedModelId) || CODEX_MODELS[0]
 
   if (!selectedModel) {
-    return DEFAULT_CODEX_MODEL
+    return `${DEFAULT_CODEX_UI_MODEL}/${DEFAULT_CODEX_REASONING_EFFORT}`
   }
 
   const normalizedThinking = selectedModel.thinkings.includes(
@@ -97,7 +101,7 @@ function getSelectedCodexModel(subChatId: string): string {
       : selectedModel.thinkings[0]
 
   if (!normalizedThinking) {
-    return DEFAULT_CODEX_MODEL
+    return `${selectedModel.id}/${DEFAULT_CODEX_REASONING_EFFORT}`
   }
 
   return `${selectedModel.id}/${normalizedThinking}`

@@ -13,15 +13,9 @@
  * token-refresh/attestation fail (codex owns that auth, not us).
  */
 
-import * as NodeServices from "@effect/platform-node/NodeServices"
-import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
-import * as Exit from "effect/Exit"
-import * as Layer from "effect/Layer"
-import * as Scope from "effect/Scope"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
+import { connectCodexAppServer, initializeHandshake } from "./connection.ts"
 import type { V2ItemCompletedNotification__ThreadItem } from "./src/_generated/schema.gen.ts"
-import * as CodexClient from "./src/client.ts"
 
 /** Completed app-server thread item (discriminated by `type`). */
 type CompletedThreadItem = V2ItemCompletedNotification__ThreadItem
@@ -64,8 +58,6 @@ export type CodexAppServerSession = {
   dispose(): Promise<void>
 }
 
-type Client = typeof CodexClient.CodexAppServerClient.Service
-
 function firstOptionAnswers(payload: {
   questions: ReadonlyArray<{
     id: string
@@ -101,18 +93,6 @@ export async function createCodexAppServerSession(opts: {
   model?: string
   onChunk: (chunk: CodexSessionChunk) => void
 }): Promise<CodexAppServerSession> {
-  const scope = await Effect.runPromise(Scope.make())
-  const nodeContext = await Effect.runPromise(
-    Layer.buildWithScope(NodeServices.layer, scope) as Effect.Effect<
-      Context.Context<never>,
-      never,
-      never
-    >,
-  )
-  const runContext = Context.add(nodeContext, Scope.Scope, scope)
-  const run = <A, E>(eff: Effect.Effect<A, E, unknown>): Promise<A> =>
-    Effect.runPromise(Effect.provide(eff, runContext) as Effect.Effect<A, E, never>)
-
   let emit = opts.onChunk
 
   // Per-turn mutable state (single in-flight turn per session).
@@ -221,24 +201,12 @@ export async function createCodexAppServerSession(opts: {
     }
   }
 
-  const handle = await run(
-    Effect.gen(function* () {
-      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-      return yield* spawner.spawn(
-        ChildProcess.make(opts.binaryPath, opts.argv, {
-          cwd: opts.cwd,
-          env: opts.env,
-        }),
-      )
-    }),
-  )
-
-  const client: Client = await run(
-    Effect.gen(function* () {
-      const ctx = yield* Layer.buildWithScope(CodexClient.layerChildProcess(handle), scope)
-      return Context.get(ctx, CodexClient.CodexAppServerClient)
-    }),
-  )
+  const { client, run, dispose } = await connectCodexAppServer({
+    binaryPath: opts.binaryPath,
+    argv: opts.argv,
+    cwd: opts.cwd,
+    env: opts.env,
+  })
 
   // Server requests: answer unattended (ACP parity).
   await run(
@@ -337,27 +305,10 @@ export async function createCodexAppServerSession(opts: {
           settleTurn({ status: "error", errorMessage: message })
         }),
       )
-      yield* client.handleUnknownServerNotification((method) =>
-        Effect.sync(() => {
-          console.debug(`[codex-app-server] Unknown notification: ${method}`)
-        }),
-      )
     }),
   )
 
-  await run(
-    Effect.gen(function* () {
-      yield* client.request("initialize", {
-        clientInfo: {
-          name: "mauscode-codex-app-server",
-          title: "mausCode Codex adapter",
-          version: "0.0.0",
-        },
-        capabilities: { experimentalApi: true, optOutNotificationMethods: null },
-      })
-      yield* client.notify("initialized", undefined)
-    }),
-  )
+  await run(initializeHandshake)
 
   const startFreshThread = async (): Promise<{
     threadId: string
@@ -464,16 +415,7 @@ export async function createCodexAppServerSession(opts: {
       if (disposed) return
       disposed = true
       settleTurn({ status: "interrupted" })
-      try {
-        await Effect.runPromise(handle.kill())
-      } catch {
-        // Best effort: process may already be gone.
-      }
-      try {
-        await Effect.runPromise(Scope.close(scope, Exit.void))
-      } catch {
-        // Best effort.
-      }
+      await dispose()
     },
   }
 }

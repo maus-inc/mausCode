@@ -1,5 +1,9 @@
 import { atom } from "jotai"
 import { atomFamily, atomWithStorage } from "jotai/utils"
+import {
+  DEFAULT_CODEX_REASONING_EFFORT,
+  DEFAULT_CODEX_UI_MODEL,
+} from "../../../../shared/codex-model-id"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { FileMentionOption } from "../mentions/agents-mentions-editor"
 
@@ -280,7 +284,7 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
 
 export const lastSelectedCodexModelIdAtom = atomWithStorage<string>(
   "agents:lastSelectedCodexModelId",
-  "gpt-5.5",
+  DEFAULT_CODEX_UI_MODEL,
   undefined,
   { getOnInit: true },
 )
@@ -289,7 +293,7 @@ export type CodexThinkingPreference = "low" | "medium" | "high" | "xhigh"
 
 export const lastSelectedCodexThinkingAtom = atomWithStorage<CodexThinkingPreference>(
   "agents:lastSelectedCodexThinking",
-  "high",
+  DEFAULT_CODEX_REASONING_EFFORT,
   undefined,
   { getOnInit: true },
 )

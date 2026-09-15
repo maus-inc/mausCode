@@ -1,10 +1,17 @@
 /**
- * mausCode-authored mock peer for session.test.ts (NOT a T3 port).
+ * mausCode-authored mock peer for session.test.ts and
+ * codex-models.test.ts (NOT a T3 port).
  * Implements just enough of `codex app-server` to drive a full turn:
  * initialize -> thread/start -> turn/start (+delta/completed/completed
- * notifications), plus thread/resume, thread/list, and turn/interrupt.
- * Newline-delimited JSON-RPC like the ported mock peer.
+ * notifications), plus thread/resume, thread/list, turn/interrupt, and
+ * model/list. Newline-delimited JSON-RPC like the ported mock peer.
  */
+// `codex --version` is how the default-model cache keys itself.
+if (process.argv.includes("--version")) {
+  process.stdout.write(`${process.env.MOCK_CODEX_VERSION ?? "codex-mock 0.0.0"}\n`)
+  process.exit(0)
+}
+
 const writeMessage = (message: unknown) => {
   process.stdout.write(`${JSON.stringify(message)}\n`)
 }
@@ -44,6 +51,32 @@ const mockThreadStartResult = () => ({
   modelProvider: "openai",
   sandbox: { type: "readOnly" },
   thread: mockThread(),
+})
+
+const mockCatalogModel = (over: {
+  id: string
+  isDefault?: boolean
+  defaultReasoningEffort?: string
+}) => ({
+  description: `mock ${over.id}`,
+  displayName: over.id,
+  hidden: false,
+  id: over.id,
+  isDefault: over.isDefault ?? false,
+  model: over.id,
+  defaultReasoningEffort: over.defaultReasoningEffort ?? "medium",
+  supportedReasoningEfforts: [
+    { description: "mock low", reasoningEffort: "low" },
+    { description: "mock high", reasoningEffort: "high" },
+  ],
+})
+
+const mockModelList = () => ({
+  data: [
+    mockCatalogModel({ id: "gpt-mock-older" }),
+    mockCatalogModel({ id: "gpt-mock", isDefault: true, defaultReasoningEffort: "high" }),
+  ],
+  nextCursor: null,
 })
 
 let turnCounter = 0
@@ -111,6 +144,21 @@ const handleMethod = (message: Record<string, unknown>) => {
     }
     case "turn/interrupt": {
       respond(id, {})
+      return
+    }
+    case "model/list": {
+      if (process.env.MOCK_MODEL_LIST_FAIL === "1") {
+        writeMessage({
+          id,
+          error: { code: -32000, message: "mock catalog unavailable" },
+        })
+        return
+      }
+      if (process.env.MOCK_MODEL_LIST_EMPTY === "1") {
+        respond(id, { data: [], nextCursor: null })
+        return
+      }
+      respond(id, mockModelList())
       return
     }
     default: {
