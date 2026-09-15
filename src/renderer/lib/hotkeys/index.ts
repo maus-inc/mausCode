@@ -2,6 +2,10 @@
 
 // Registry
 export {
+  matchesHotkey,
+  matchesShortcutAction,
+} from "./match-hotkey"
+export {
   ALL_SHORTCUT_ACTIONS,
   CATEGORY_LABELS,
   detectConflicts,

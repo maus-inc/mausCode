@@ -32,13 +32,6 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
     category: "general",
     defaultKeys: ["cmd", "\\"],
   },
-  {
-    id: "undo-archive",
-    label: "Undo archive",
-    category: "general",
-    defaultKeys: ["cmd", "Z"],
-  },
-
   // ============================================
   // WORKSPACES
   // ============================================
@@ -111,7 +104,7 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
   },
   {
     id: "archive-agent",
-    label: "Archive current agent",
+    label: "Close tab",
     category: "agents",
     defaultKeys: ["cmd", "W"],
   },
@@ -125,13 +118,13 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
   },
   {
     id: "prev-agent",
-    label: "Previous agent",
+    label: "Previous tab",
     category: "agents",
     defaultKeys: ["cmd", "["],
   },
   {
     id: "next-agent",
-    label: "Next agent",
+    label: "Next tab",
     category: "agents",
     defaultKeys: ["cmd", "]"],
   },
@@ -146,6 +139,7 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
     label: "Toggle focus",
     category: "agents",
     defaultKeys: ["cmd", "Esc"],
+    altKeys: ["ctrl", "Esc"],
   },
   {
     id: "stop-generation",
@@ -171,12 +165,6 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
     label: "Open diff",
     category: "agents",
     defaultKeys: ["cmd", "D"],
-  },
-  {
-    id: "create-pr",
-    label: "Create PR",
-    category: "agents",
-    defaultKeys: [],
   },
   {
     id: "file-search",
@@ -258,8 +246,9 @@ export function getResolvedHotkey(
 ): string | null {
   const customHotkey = config.bindings[actionId]
 
-  // If explicitly set (including to a custom value), use it
-  if (customHotkey !== undefined) {
+  // If explicitly set to a hotkey, use it. An explicit null reset means
+  // default, same as an unset binding, per the CustomHotkeysConfig contract.
+  if (customHotkey) {
     return customHotkey
   }
 
@@ -286,7 +275,8 @@ export function getResolvedKeys(
  * Check if an action has a custom (non-default) hotkey
  */
 export function isCustomHotkey(actionId: ShortcutActionId, config: CustomHotkeysConfig): boolean {
-  return config.bindings[actionId] !== undefined
+  // Null is a reset to default, not a custom binding
+  return config.bindings[actionId] != null
 }
 
 /**

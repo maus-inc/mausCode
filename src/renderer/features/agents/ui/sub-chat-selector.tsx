@@ -29,8 +29,8 @@ import { Kbd } from "../../../components/ui/kbd"
 import { PopoverTrigger } from "../../../components/ui/popover"
 import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
-import { chatSourceModeAtom } from "../../../lib/atoms"
-import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
+import { chatSourceModeAtom, customHotkeysAtom } from "../../../lib/atoms"
+import { matchesShortcutAction, useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { api } from "../../../lib/mock-api"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
@@ -39,6 +39,7 @@ import {
   agentsSubChatUnseenChangesAtom,
   loadingSubChatsAtom,
   pendingUserQuestionsAtom,
+  selectedAgentChatIdAtom,
 } from "../atoms"
 import { type SubChatMeta, useAgentSubChatStore } from "../stores/sub-chat-store"
 import { formatTimeAgo } from "../utils/format-time-ago"
@@ -62,6 +63,7 @@ interface SearchHistoryPopoverProps {
   pendingPlanApprovals: Set<string>
   allSubChatsLength: number
   onSelect: (subChat: SubChatMeta) => void
+  searchHotkey?: string | null
 }
 
 export interface SearchHistoryPopoverRef {
@@ -78,6 +80,7 @@ const SearchHistoryPopover = memo(
       pendingPlanApprovals,
       allSubChatsLength,
       onSelect,
+      searchHotkey,
     },
     ref,
   ) {
@@ -158,7 +161,7 @@ const SearchHistoryPopover = memo(
             </TooltipTrigger>
             <TooltipContent side="bottom">
               Search chats
-              <Kbd>/</Kbd>
+              {searchHotkey && <Kbd>{searchHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
         }
@@ -242,10 +245,12 @@ export function SubChatSelector({
   const showTerminalButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("terminal")
 
   // Resolved hotkeys for tooltips
+  const customHotkeys = useAtomValue(customHotkeysAtom)
   const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
   const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
   const archiveAgentHotkey = useResolvedHotkeyDisplay("archive-agent")
   const newAgentHotkey = useResolvedHotkeyDisplay("new-agent")
+  const searchChatsHotkey = useResolvedHotkeyDisplay("search-chats")
 
   // Pending plan approvals from DB - only for open sub-chats
   const { data: pendingPlanApprovalsData } = trpc.chats.getPendingPlanApprovals.useQuery(
@@ -461,10 +466,13 @@ export function SubChatSelector({
     [onSwitchFromHistory],
   )
 
-  // Hotkey: / to open history popover
+  // Hotkey: / (or the user's custom search-chats binding) to open history
+  // popover. Gated to the selected chat: keep-alive tabs keep this selector
+  // mounted, and only the visible chat's popover should open.
+  const isSelectedChat = useAtomValue(selectedAgentChatIdAtom) === chatId
   useEffect(() => {
     const handleHistoryHotkey = (e: KeyboardEvent) => {
-      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      if (isSelectedChat && matchesShortcutAction(e, "search-chats", customHotkeys)) {
         // Don't trigger if already focused on an input/textarea
         const activeEl = document.activeElement
         if (
@@ -483,7 +491,7 @@ export function SubChatSelector({
 
     window.addEventListener("keydown", handleHistoryHotkey, true)
     return () => window.removeEventListener("keydown", handleHistoryHotkey, true)
-  }, [])
+  }, [customHotkeys, isSelectedChat])
 
   // Keyboard shortcut: Cmd+Shift+T / Ctrl+Shift+T for new sub-chat
   // Scroll to active tab when it changes
@@ -932,6 +940,7 @@ export function SubChatSelector({
             pendingPlanApprovals={pendingPlanApprovals}
             allSubChatsLength={allSubChats.length}
             onSelect={handleSelectFromHistory}
+            searchHotkey={searchChatsHotkey}
           />
         </div>
       }

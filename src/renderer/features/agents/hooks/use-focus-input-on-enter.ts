@@ -1,8 +1,12 @@
+import { useAtomValue } from "jotai"
 import { type RefObject, useEffect } from "react"
+import { customHotkeysAtom } from "../../../lib/atoms"
+import { matchesShortcutAction } from "../../../lib/hotkeys"
 
 /**
- * Hook to focus an input element when Enter key is pressed (without modifiers)
- * and no other input is currently focused.
+ * Hook to focus an input element when the focus-input shortcut is pressed
+ * (Enter by default, custom bindings respected) and no other input is
+ * currently focused.
  *
  * @param editorRef - Ref to the editor/input element that should be focused
  */
@@ -10,12 +14,13 @@ export function useFocusInputOnEnter(
   editorRef: RefObject<{ focus: () => void } | null>,
   enabled = true,
 ) {
+  const customHotkeys = useAtomValue(customHotkeysAtom)
+
   useEffect(() => {
     if (!enabled) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle Enter without modifiers
-      if (e.key !== "Enter" || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) {
+      if (!matchesShortcutAction(e, "focus-input", customHotkeys)) {
         return
       }
 
@@ -47,5 +52,5 @@ export function useFocusInputOnEnter(
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [editorRef, enabled])
+  }, [editorRef, enabled, customHotkeys])
 }
