@@ -20,7 +20,7 @@ Manager-dispatched (15), custom bindings apply:
 | show-shortcuts | open-shortcuts | pre-existing, dedicated listener |
 | open-settings | open-settings | pre-existing, dedicated listener |
 | toggle-sidebar | toggle-sidebar | pre-existing, dedicated listener |
-| new-workspace | create-new-agent | pre-existing; Cmd+N stays menu-owned, "C" alt now read from the registry |
+| new-workspace | create-new-agent | pre-existing; default Cmd+N stays menu-owned, a rebound key fires renderer-side, "C" alt read from the registry and retired on rebind |
 | open-kanban | open-kanban | pre-existing; beta-gated dedicated listener now the only path |
 | new-agent | create-new-agent | new dispatch path; Cmd+T moved out of active-chat |
 | search-in-chat | toggle-chat-search | pre-existing, dedicated listener |
@@ -59,6 +59,13 @@ Deleted (2): `undo-archive`, `create-pr`. Users with saved localStorage bindings
 9. active-chat's deleted Cmd+[ / Cmd+] effect attached one listener per mounted ChatView with no `isActive` guard, so keep-alive tabs dispatched the navigation more than once per press (idempotent, but wrong). The manager dispatches once per window.
 10. Web-only key variants (`Opt+Cmd+T`, `Opt+Cmd+[`, `Opt+Cmd+]`) died with the deleted component handlers; the manager matches the registry defaults. The product is the Electron app; `MAIN_VITE_API_URL` unset stays fully local, and the old web variants were only documented in the now-deleted platform.ts table.
 11. `matchesHotkey` gained an `esc`/`escape` alias plus `[` / `]` code matching; without them registry strings like `esc` and `cmd+[` never matched real events (E1, traced).
+
+## Review round on PR #56 (bot findings, disposition)
+
+12. Kilo Code Review warned that a rebound `new-workspace` was silently ignored: the dedicated block only matched the "C" alt key and the primary key stayed with the menu accelerator. Fixed: the renderer now honours a rebound `new-workspace` key; the default Cmd+N stays menu-owned so the renderer never double-fires it against the menu IPC.
+13. CodeAnt flagged that recorded Space and arrow bindings never matched. Valid: the recorder stores `"Space"` and `"↑"`-style symbols (`use-hotkey-recorder.ts` KEY_MAP), which the matcher never compared. Fixed with space and arrow aliases in `match-hotkey.ts`, locked by `match-hotkey.test.ts`.
+14. CodeAnt flagged that `dispatchShortcut` always preventDefaulted, ignoring the manager's `preventDefault: false` option. Fixed for consistency; no caller passes false today, so no behaviour change.
+15. CodeAnt flagged that the `cmd` modifier only matches `metaKey`, so renderer-side Cmd defaults never respond to Ctrl on Windows and Linux. Recorded, not fixed: this is the matcher's original semantics (extracted verbatim), and redefining `cmd` on non-mac platforms would change every binding's meaning. Electron menu accelerators (`CmdOrCtrl`) carry the primary keys on Windows and Linux.
 
 ## Gates run for this record (E4, 2026-09-15)
 

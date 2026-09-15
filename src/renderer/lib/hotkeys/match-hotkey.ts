@@ -36,6 +36,11 @@ export function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
   if (eventKey === key) return true
   if (key === "?" && eventKey === "?") return true
   if ((key === "esc" || key === "escape") && eventKey === "escape") return true
+  if (key === "space" && (eventKey === " " || eventCode === "space")) return true
+  if (key === "↑" && eventKey === "arrowup") return true
+  if (key === "↓" && eventKey === "arrowdown") return true
+  if (key === "←" && eventKey === "arrowleft") return true
+  if (key === "→" && eventKey === "arrowright") return true
   if (key === "/" && (eventKey === "/" || eventCode === "slash")) return true
   if (key === "\\" && (eventKey === "\\" || eventCode === "backslash")) return true
   if (key === "," && (eventKey === "," || eventCode === "comma")) return true

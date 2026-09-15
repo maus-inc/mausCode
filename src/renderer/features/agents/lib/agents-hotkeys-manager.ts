@@ -171,8 +171,10 @@ export function useAgentsHotkeys(
     const dispatchShortcut = (shortcutId: ShortcutActionId, e: KeyboardEvent) => {
       const actionId = SHORTCUT_TO_ACTION_MAP[shortcutId]
       if (!actionId) return
-      e.preventDefault()
-      e.stopPropagation()
+      if (preventDefault) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
       handleHotkeyAction(actionId)
     }
 
@@ -235,19 +237,24 @@ export function useAgentsHotkeys(
         }
       }
 
-      // Check new-workspace alt key ("C") — only when not in input. The
-      // primary Cmd+N belongs to the main-process menu accelerator and is not
-      // rebindable here.
+      // Check new-workspace. The default primary Cmd+N belongs to the
+      // main-process menu accelerator, so the renderer only listens for a
+      // rebound key, which keeps the default from firing twice. The "C" alt
+      // key yields to a custom binding.
       const newWorkspaceAction = getShortcutAction("new-workspace")
-      if (
-        !isInputFocused &&
-        !isCustomHotkey("new-workspace", customConfig) &&
-        newWorkspaceAction?.altKeys?.length
-      ) {
-        const altHotkey = keysToHotkeyString(newWorkspaceAction.altKeys)
-        if (matchesHotkey(e, altHotkey)) {
-          dispatchShortcut("new-workspace", e)
-          return
+      if (!isInputFocused && newWorkspaceAction) {
+        if (isCustomHotkey("new-workspace", customConfig)) {
+          const customHotkey = getResolvedHotkey("new-workspace", customConfig)
+          if (customHotkey && matchesHotkey(e, customHotkey)) {
+            dispatchShortcut("new-workspace", e)
+            return
+          }
+        } else if (newWorkspaceAction.altKeys?.length) {
+          const altHotkey = keysToHotkeyString(newWorkspaceAction.altKeys)
+          if (matchesHotkey(e, altHotkey)) {
+            dispatchShortcut("new-workspace", e)
+            return
+          }
         }
       }
     }
@@ -260,6 +267,7 @@ export function useAgentsHotkeys(
     getHotkeyForAction,
     config.betaKanbanEnabled,
     config.customHotkeysConfig,
+    preventDefault,
   ])
 
   // Generic shortcut loop for every other mapped id, resolved against custom
