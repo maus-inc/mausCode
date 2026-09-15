@@ -121,3 +121,36 @@ describe("explicit null bindings", () => {
     ).toBe(true)
   })
 })
+
+describe("close-tab binding retirement", () => {
+  it("resolves the Cmd+W default for archive-agent and retires it once customized", () => {
+    // The close-tab effect's primary desktop path relies on the default
+    // binding resolving through the registry.
+    expect(
+      matchesShortcutAction(
+        keyEvent({ key: "w", code: "KeyW", metaKey: true }),
+        "archive-agent",
+        DEFAULT_CONFIG,
+      ),
+    ).toBe(true)
+
+    // A custom binding replaces the hardcoded Cmd+W / Ctrl+W / Opt+Cmd+W
+    // fallbacks: the default key no longer matches.
+    const config: CustomHotkeysConfig = { version: 1, bindings: { "archive-agent": "ctrl+alt+w" } }
+    expect(isCustomHotkey("archive-agent", config)).toBe(true)
+    expect(
+      matchesShortcutAction(
+        keyEvent({ key: "w", code: "KeyW", metaKey: true }),
+        "archive-agent",
+        config,
+      ),
+    ).toBe(false)
+    expect(
+      matchesShortcutAction(
+        keyEvent({ key: "w", code: "KeyW", ctrlKey: true, altKey: true }),
+        "archive-agent",
+        config,
+      ),
+    ).toBe(true)
+  })
+})

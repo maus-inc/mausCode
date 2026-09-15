@@ -7354,6 +7354,11 @@ Make sure to preserve all functionality from both branches when resolving confli
   const isSubChatMultiSelectMode = useAtomValue(isSubChatMultiSelectModeAtom)
   const clearSubChatSelection = useSetAtom(clearSubChatSelectionAtom)
 
+  // Close-tab bindings: the archive-agent registry id resolves the user's
+  // custom key, and the hardcoded fallbacks in the effect below retire once
+  // that binding is customized.
+  const customHotkeys = useAtomValue(customHotkeysAtom)
+
   // Helper to add sub-chat to undo stack
   const addSubChatToUndoStack = useCallback(
     (subChatId: string) => {
@@ -7377,20 +7382,26 @@ Make sure to preserve all functionality from both branches when resolving confli
   )
 
   // Keyboard shortcut: Close active sub-chat (or bulk close if multi-select mode)
-  // Web: Opt+Cmd+W (browser uses Cmd+W to close tab)
-  // Desktop: Cmd+W
+  // Primary desktop key: the user's close-tab binding (archive-agent registry
+  // id, default Cmd+W). Web keeps Opt+Cmd+W since the browser owns Cmd+W.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isDesktop = isDesktopApp()
+      const isUncustomizedClose = !isCustomHotkey("archive-agent", customHotkeys)
 
-      // Desktop: Cmd+W (without Alt)
-      const isDesktopShortcut =
-        isDesktop && e.metaKey && e.code === "KeyW" && !e.altKey && !e.shiftKey && !e.ctrlKey
+      // Desktop: the registered binding — default Cmd+W, or the user's custom
+      // key. A Ctrl-keyed custom binding keeps the terminal guard so it never
+      // fights the shell's delete-word key.
+      const isBoundShortcut =
+        isDesktop &&
+        matchesShortcutAction(e, "archive-agent", customHotkeys) &&
+        !(e.ctrlKey && document.activeElement?.closest(".xterm"))
       // Desktop Windows and Linux: Ctrl+W, since the menu no longer claims it.
-      // Skipped on macOS, where Ctrl+W stays a text-editing combo, and while
-      // the terminal has focus, where Ctrl+W is the shell's delete-word key
-      // (WERASE).
+      // Uncustomized fallback: a custom binding retires it. Skipped on macOS,
+      // where Ctrl+W stays a text-editing combo, and while the terminal has
+      // focus, where Ctrl+W is the shell's delete-word key (WERASE).
       const isDesktopCtrlShortcut =
+        isUncustomizedClose &&
         isDesktop &&
         !isMacOS() &&
         e.ctrlKey &&
@@ -7399,10 +7410,10 @@ Make sure to preserve all functionality from both branches when resolving confli
         !e.altKey &&
         !e.shiftKey &&
         !document.activeElement?.closest(".xterm")
-      // Web: Opt+Cmd+W (with Alt)
-      const isWebShortcut = e.altKey && e.metaKey && e.code === "KeyW"
+      // Web: Opt+Cmd+W (with Alt), retired by a custom binding.
+      const isWebShortcut = isUncustomizedClose && e.altKey && e.metaKey && e.code === "KeyW"
 
-      if (isDesktopShortcut || isDesktopCtrlShortcut || isWebShortcut) {
+      if (isBoundShortcut || isDesktopCtrlShortcut || isWebShortcut) {
         e.preventDefault()
 
         const store = useAgentSubChatStore.getState()
@@ -7438,7 +7449,13 @@ Make sure to preserve all functionality from both branches when resolving confli
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isSubChatMultiSelectMode, selectedSubChatIds, clearSubChatSelection, addSubChatToUndoStack])
+  }, [
+    customHotkeys,
+    isSubChatMultiSelectMode,
+    selectedSubChatIds,
+    clearSubChatSelection,
+    addSubChatToUndoStack,
+  ])
 
   // Keyboard shortcut: Cmd + Shift + E to restore archived workspace
   useEffect(() => {
