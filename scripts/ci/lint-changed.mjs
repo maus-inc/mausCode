@@ -7,12 +7,15 @@
  * wrapper computes the file list explicitly (committed range plus working
  * tree) and skips the run when nothing lintable changed.
  *
- * A base-ref that this clone cannot resolve falls back to origin/main, and then
- * to the whole tree, so a rewritten branch fails on a real finding instead of
- * on a missing commit.
+ * A base that this clone cannot resolve falls back to origin/main, and then to
+ * the whole tree, so a rewritten branch fails on a real finding instead of on a
+ * missing commit. The base is taken as the sha (full or unique prefix) of a
+ * commit this clone already has, and the sha that reaches the diffs comes from
+ * git's own commit list, so an externally supplied string never reaches a git
+ * argument list.
  *
  * Usage:
- *   node scripts/ci/lint-changed.mjs [base-ref]   # default: merge-base of origin/main
+ *   node scripts/ci/lint-changed.mjs [sha]   # default: merge-base of origin/main
  *   LINT_BASE=<sha> node scripts/ci/lint-changed.mjs
  */
 import { execFileSync } from "node:child_process"
@@ -27,24 +30,54 @@ function git(args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim()
 }
 
+const OBJECT_ID = /^[0-9a-f]{4,40}$/
+
+let commitIds = null
+
+function localCommitIds() {
+  try {
+    return git(["rev-list", "--all"]).split("\n").filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+// Resolves a caller-supplied base without ever passing it to git as an
+// argument: the string is matched against the ids git printed for the local
+// commits, and the match, not the caller's text, is what the diffs below use.
+// Handing an externally supplied string to a CLI argument list is what
+// jssecurity:S8705 reports, and a git argument here can be a file write
+// (`diff --output=`). A prefix is accepted when it is unique, matching the
+// behaviour of an abbreviated sha, and anything unresolvable is null, which
+// widens the diff rather than crashing the gate.
+function knownCommit(value) {
+  const candidate = value.trim()
+  if (!OBJECT_ID.test(candidate)) return null
+  commitIds ??= localCommitIds()
+  const matches = commitIds.filter((id) => id.startsWith(candidate))
+  return matches.length === 1 ? matches[0] : null
+}
+
 function resolves(ref) {
   try {
-    git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])
+    git(["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`])
     return true
   } catch {
     return false
   }
 }
 
-// A force push leaves the previous head unreachable, so the ref the workflow
+// A force push leaves the previous head unreachable, so the commit the workflow
 // passes as LINT_BASE is often absent from the clone.
 function resolveBase() {
-  const explicit = process.argv[2] ?? process.env.LINT_BASE
-  if (explicit && resolves(explicit)) return explicit
-  if (explicit) {
-    console.log(
-      `lint-changed: base ${explicit} is not in this clone, usually a rewritten branch; falling back`,
-    )
+  const supplied = (process.argv[2] ?? process.env.LINT_BASE ?? "").trim()
+  if (supplied !== "") {
+    const commit = knownCommit(supplied)
+    if (commit !== null) return commit
+    const reason = OBJECT_ID.test(supplied)
+      ? "is not a commit in this clone, usually a rewritten branch"
+      : "is not a sha, and only sha bases are accepted"
+    console.log(`lint-changed: base ${supplied} ${reason}; falling back`)
   }
   if (!resolves("origin/main")) return null
   try {
@@ -58,14 +91,14 @@ function resolveBase() {
 
 const base = resolveBase()
 
-// This repo's branches do not all share history (e.g. `init` and `main` are
-// independent roots), so a three-dot diff can have no merge base. Fall back to
-// an endpoint (two-dot) diff, which works for unrelated trees.
+// A shallow clone, or a branch whose history does not reach origin/main's
+// tip, can have no merge base, so a three-dot diff is not always available.
+// Fall back to an endpoint (two-dot) diff, which works regardless.
 function changedSinceBase(base) {
   try {
-    return git(["diff", "--name-only", "--diff-filter=ACMR", `${base}...HEAD`])
+    return git(["diff", "--name-only", "--diff-filter=ACMR", "--end-of-options", `${base}...HEAD`])
   } catch {
-    return git(["diff", "--name-only", "--diff-filter=ACMR", `${base}..HEAD`])
+    return git(["diff", "--name-only", "--diff-filter=ACMR", "--end-of-options", `${base}..HEAD`])
   }
 }
 
