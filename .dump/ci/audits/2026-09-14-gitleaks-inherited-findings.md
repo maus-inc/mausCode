@@ -144,3 +144,14 @@ The repository owner enabled the feature on 2026-09-15, so the step runs as
 written and needs no workflow change. Recorded here rather than quietly fixed,
 because a red security job that is really a repository setting is the same trap
 as the gitleaks red: the log said one thing and the cause was another.
+
+## The checks that are still red, and why they are not this fix's to make
+
+`DeepSource: JavaScript` fails on this pull request and on `main`. Statuses at
+2026-09-15: JavaScript red on `main`, on this branch's head, and on PRs 50 and
+52, green on PRs 51 and 53. The `Shell` analyzer is red on `main` as well. The
+analyzer posts no inline review comments on PR 54, so there is nothing in the
+diff for the API to show, and its dashboard is behind authentication. The
+finding text is therefore not reachable from this environment, and the check is
+recorded here instead of being chased with blind edits to the two files this
+branch touches.

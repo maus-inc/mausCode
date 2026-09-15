@@ -49,6 +49,11 @@ lint gate hardening + format sweep bec0263/66a090b (me).
   secrets job can be read through the API with
   `gh api repos/maus-inc/mausCode/check-runs/<id> --jq .output.summary`; the
   check-run annotation itself carries only the exit code.
+- DeepSource's JavaScript and Shell analyzers fail on `main` itself, not only on
+  branches. `GET /commits/{sha}/status` shows JavaScript red on `main`, on this
+  branch's head and on PRs 50 and 52, while 51 and 53 are green. The analyzer
+  posts no inline review comments here and its dashboard needs authentication,
+  so the finding text is not reachable from this sandbox. Do not chase it blind.
 - The `security` job's third step, `actions/dependency-review-action@v4`,
   needs the repository's Dependency graph feature (Settings, Code security and
   analysis). It was disabled until 2026-09-15, so the step failed with
