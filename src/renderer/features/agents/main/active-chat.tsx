@@ -66,7 +66,7 @@ import { appStore } from "../../../lib/jotai-store"
 import { api } from "../../../lib/mock-api"
 import { trpc, trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { isDesktopApp } from "../../../lib/utils/platform"
+import { isDesktopApp, isMacOS } from "../../../lib/utils/platform"
 import { ChangesPanel } from "../../changes"
 import { useCommitActions } from "../../changes/components/commit-input"
 import { DiffCenterPeekDialog } from "../../changes/components/diff-center-peek-dialog"
@@ -7387,10 +7387,12 @@ Make sure to preserve all functionality from both branches when resolving confli
       const isDesktopShortcut =
         isDesktop && e.metaKey && e.code === "KeyW" && !e.altKey && !e.shiftKey && !e.ctrlKey
       // Desktop Windows and Linux: Ctrl+W, since the menu no longer claims it.
-      // Skipped while the terminal has focus, where Ctrl+W is the shell's
-      // delete-word key (WERASE).
+      // Skipped on macOS, where Ctrl+W stays a text-editing combo, and while
+      // the terminal has focus, where Ctrl+W is the shell's delete-word key
+      // (WERASE).
       const isDesktopCtrlShortcut =
         isDesktop &&
+        !isMacOS() &&
         e.ctrlKey &&
         !e.metaKey &&
         e.code === "KeyW" &&
