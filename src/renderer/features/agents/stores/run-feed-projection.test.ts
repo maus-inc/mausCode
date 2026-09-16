@@ -355,6 +355,27 @@ describe("run feed projection", () => {
     stop()
   })
 
+  it("does not write after stop even when a lookup resolves late", async () => {
+    // A lookup pending at stop time must never land its write, even when it
+    // resolves afterwards.
+    const pending: {
+      resolve: ((rows: Array<{ subChatId: string; status: string }>) => void) | null
+    } = { resolve: null }
+    const fake = fakeClient(outageScript([run("r1", "sub-a", "running", 1)]))
+    fake.client.runs.list.query = () =>
+      new Promise((resolve) => {
+        pending.resolve = resolve
+      })
+
+    const stop = startRunFeedSync(fake.client, 10)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    stop()
+
+    pending.resolve?.([{ subChatId: "sub-a", status: "completed" }])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("streaming")
+  })
+
   it("records the run-owned errors it writes during reconciliation", async () => {
     // The repair applies a settled error row; a later refresh whose newest
     // run completed must then clear it, which needs the bookkeeping.

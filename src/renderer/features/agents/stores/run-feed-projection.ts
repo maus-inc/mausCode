@@ -149,7 +149,10 @@ export function hydrateErrorStatusesFromLatestRuns(
  * the subscription stays healthy: a rejected lookup must not strand a busy
  * status forever just because no further reconnect happens.
  */
-async function reconcileStaleStreaming(client: RunsFeedClient): Promise<boolean> {
+async function reconcileStaleStreaming(
+  client: RunsFeedClient,
+  isStopped: () => boolean,
+): Promise<boolean> {
   let anyLookupFailed = false
   const busyIds = Object.entries(useStreamingStatusStore.getState().statuses)
     .filter(([, status]) => status === "streaming" || status === "submitted")
@@ -160,9 +163,13 @@ async function reconcileStaleStreaming(client: RunsFeedClient): Promise<boolean>
       if (statusBeforeLookup !== "streaming" && statusBeforeLookup !== "submitted") continue
       const revisionBeforeLookup = feedRevisionBySubChat.get(subChatId) ?? 0
       const [latest] = await client.runs.list.query({ subChatId, limit: 1 })
+      // A lookup can resolve after stop(); the projection is dead from that
+      // point and must not write anything.
+      if (isStopped()) break
       if (!latest) continue
       if (useStreamingStatusStore.getState().statuses[subChatId] !== statusBeforeLookup) continue
       if ((feedRevisionBySubChat.get(subChatId) ?? 0) !== revisionBeforeLookup) continue
+      if (isStopped()) continue
       writeProjectedStatus(subChatId, runStatusToStreamingStatus(latest.status))
     } catch {
       anyLookupFailed = true
@@ -189,7 +196,7 @@ export function startRunFeedSync(
   // replacement subscription stays healthy and no further reconnect happens,
   // so failed passes retry until the repair lands or the projection stops.
   const runReconciliation = async (): Promise<void> => {
-    const anyLookupFailed = await reconcileStaleStreaming(client)
+    const anyLookupFailed = await reconcileStaleStreaming(client, () => stopped)
     if (stopped || !anyLookupFailed || reconcileRetryTimer) return
     reconcileRetryTimer = setTimeout(() => {
       reconcileRetryTimer = null
