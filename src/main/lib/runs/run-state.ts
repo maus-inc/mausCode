@@ -177,6 +177,27 @@ function applyApprovalResolvedTx(tx: RunStoreTx, run: Run, approved: boolean): R
   return event
 }
 
+function settleOutstandingForSubChatTx(
+  tx: RunStoreTx,
+  subChatId: string,
+  stopReason: string,
+): Run[] {
+  const outstanding = tx
+    .select()
+    .from(schema.runs)
+    .where(
+      and(
+        eq(schema.runs.subChatId, subChatId),
+        inArray(schema.runs.status, [...ACTIVE_RUN_STATUSES]),
+      ),
+    )
+    .all()
+  for (const run of outstanding) {
+    settleRunTx(tx, run, "cancelled", stopReason)
+  }
+  return outstanding
+}
+
 export function createRunStore(db: RunStoreDb): RunStore {
   const listeners = new Set<Listener>()
 
@@ -190,27 +211,6 @@ export function createRunStore(db: RunStoreDb): RunStore {
         console.error(`[runs] listener failed for run ${run.id}:`, error)
       }
     }
-  }
-
-  function settleOutstandingForSubChatTx(
-    tx: RunStoreTx,
-    subChatId: string,
-    stopReason: string,
-  ): Run[] {
-    const outstanding = tx
-      .select()
-      .from(schema.runs)
-      .where(
-        and(
-          eq(schema.runs.subChatId, subChatId),
-          inArray(schema.runs.status, [...ACTIVE_RUN_STATUSES]),
-        ),
-      )
-      .all()
-    for (const run of outstanding) {
-      settleRunTx(tx, run, "cancelled", stopReason)
-    }
-    return outstanding
   }
 
   function startRun(input: StartRunInput): RunHandle {
