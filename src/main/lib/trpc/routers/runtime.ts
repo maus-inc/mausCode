@@ -305,8 +305,6 @@ export const runtimeRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      // The user answered, so the run leaves waiting_approval either way.
-      getRunStore().resolveApprovalForSubChat(input.subChatId, input.approved)
       const sessionId = getMappedNativeSession(input.subChatId)
       if (!sessionId) return { ok: false, reason: "no-session" as const }
       let client: JcodeClient
@@ -321,6 +319,9 @@ export const runtimeRouter = router({
           input.requestId,
           input.approved ? "allow" : "deny",
         )
+        // The engine accepted the answer, so the run leaves waiting_approval.
+        // A failed or stale answer must not clear the pending state.
+        getRunStore().resolveApprovalForSubChat(input.subChatId, input.approved)
         return { ok: true }
       } catch {
         // Stock bridge has no permissions capability yet; the call path is

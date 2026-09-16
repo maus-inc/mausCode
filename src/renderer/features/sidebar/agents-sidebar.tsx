@@ -110,6 +110,7 @@ import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-su
 import { TrafficLightSpacer } from "../agents/components/traffic-light-spacer"
 import { deleteNewChatDraft, type NewChatDraft, useNewChatDrafts } from "../agents/lib/drafts"
 import { copyChat, exportChat } from "../agents/lib/export-chat"
+import { hydrateErrorStatusesFromLatestRuns } from "../agents/stores/run-feed-projection"
 import {
   OPEN_SUB_CHATS_CHANGE_EVENT,
   type SubChatMeta,
@@ -496,6 +497,13 @@ const WorkspaceSubChats = React.memo(function WorkspaceSubChats({
 }) {
   // Fetch sub-chats from tRPC for this workspace
   const { data: chatData, isLoading: isLoadingChatData } = trpc.chats.get.useQuery({ id: chatId })
+
+  // The run feed only replays active runs, so a reload would lose a persisted
+  // terminal error. chats.get attaches the newest run per sub-chat; seed the
+  // store from it before any feed item can arrive for this workspace.
+  useEffect(() => {
+    if (chatData?.subChats) hydrateErrorStatusesFromLatestRuns(chatData.subChats)
+  }, [chatData?.subChats])
 
   const utils = trpc.useUtils()
   const loadingSubChats = useAtomValue(loadingSubChatsAtom)

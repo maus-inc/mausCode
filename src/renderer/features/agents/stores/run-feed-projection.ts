@@ -50,6 +50,26 @@ export function applyRunFeedItem(item: RunsFeedItem, lastAppliedSeq: Map<string,
 }
 
 /**
+ * Seeds the store with terminal error statuses that survived a reload. The
+ * live feed only replays active runs, so a sub-chat whose latest run settled
+ * in error would otherwise show ready. Sub-chats with a live status already
+ * belong to the feed, and ready is the default, so error is the only status
+ * worth writing here.
+ */
+export function hydrateErrorStatusesFromLatestRuns(
+  subChats: Array<{ id: string; latestRun: { status: string } | null }>,
+): void {
+  const { statuses, setStatus } = useStreamingStatusStore.getState()
+  for (const subChat of subChats) {
+    if (!subChat.latestRun) continue
+    if (statuses[subChat.id] !== undefined) continue
+    if (runStatusToStreamingStatus(subChat.latestRun.status) === "error") {
+      setStatus(subChat.id, "error")
+    }
+  }
+}
+
+/**
  * Start the projection. Returns a stop function that unsubscribes and
  * cancels any pending retry.
  */

@@ -5,6 +5,7 @@ import { getAuthManager } from "../../../index"
 import { chats, getDatabase, projects, subChats } from "../../db"
 import { clearChatTree, clearAllData as wipeAllData } from "../../db/wipe"
 import { clearNetworkCache } from "../../ollama/network-detector"
+import { getRunStore } from "../../runs"
 import { publicProcedure, router } from "../index"
 
 // Global flag for simulating offline mode (for testing)
@@ -65,6 +66,9 @@ export const debugRouter = router({
    * registered here automatically.
    */
   clearChats: publicProcedure.mutation(() => {
+    // Settle any active runs first so subscribed windows see them cancelled
+    // instead of keeping a streaming state for rows that no longer exist.
+    getRunStore().cancelActiveRuns("wiped")
     clearChatTree(getDatabase())
     console.log("[Debug] Cleared all chats and sub-chats")
     return { success: true }
@@ -74,6 +78,7 @@ export const debugRouter = router({
    * Clear all data (projects, chats, sub-chats)
    */
   clearAllData: publicProcedure.mutation(() => {
+    getRunStore().cancelActiveRuns("wiped")
     wipeAllData(getDatabase())
     console.log("[Debug] Cleared all database data")
     return { success: true }

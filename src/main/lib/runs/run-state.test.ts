@@ -376,13 +376,41 @@ describe("run store", () => {
     })
 
     it("latestRunBySubChat picks the newest run per sub-chat", () => {
-      const first = store.startRun({ subChatId, engine: "legacy" })
-      first.noteFinished()
-      first.settle()
-      const second = store.startRun({ subChatId, engine: "legacy" })
+      // Enough settled runs that a query returning the whole history would be
+      // visibly wasteful; the result must still be exactly the newest one.
+      for (let i = 0; i < 10; i++) {
+        const done = store.startRun({ subChatId, engine: "legacy" })
+        done.noteFinished()
+        done.settle()
+      }
+      const newest = store.startRun({ subChatId, engine: "legacy" })
 
       const map = store.latestRunBySubChat([subChatId])
-      expect(map.get(subChatId)?.id).toBe(second.runId)
+      expect(map.size).toBe(1)
+      expect(map.get(subChatId)?.id).toBe(newest.runId)
+    })
+
+    it("cancelActiveRuns settles every active run and emits each one", () => {
+      // One active run per sub-chat: a second send on the same sub-chat
+      // supersedes the first, so distinct sub-chats exercise the sweep.
+      const secondSubChat = seedSubChat(opened.db).subChatId
+      const thirdSubChat = seedSubChat(opened.db).subChatId
+      store.startRun({ subChatId, engine: "legacy" })
+      store.startRun({ subChatId: secondSubChat, engine: "native" })
+      store.startRun({ subChatId: thirdSubChat, engine: "legacy" })
+      const done = store.startRun({ subChatId: seedSubChat(opened.db).subChatId, engine: "legacy" })
+      done.noteFinished()
+      done.settle()
+
+      const seen: RunFeedItem[] = []
+      const unsubscribe = store.subscribe((item) => seen.push(item))
+      const count = store.cancelActiveRuns("wiped")
+      unsubscribe()
+
+      expect(count).toBe(3)
+      expect(seen.map((item) => item.run.status)).toEqual(["cancelled", "cancelled", "cancelled"])
+      expect(store.activeRuns()).toHaveLength(0)
+      expect(store.getRun(done.runId)?.run.status).toBe("completed")
     })
 
     it("listRuns honors activeOnly and limit", () => {

@@ -10,8 +10,9 @@
  * `src/main/lib/db/test-sqlite.ts`. The main-process singleton lives in
  * `./index.ts` so this module stays free of Electron imports.
  */
-import { and, desc, eq, gt, inArray } from "drizzle-orm"
+import { and, desc, eq, exists, gt, inArray, not, or, sql } from "drizzle-orm"
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
+import { alias } from "drizzle-orm/sqlite-core"
 import {
   ACTIVE_RUN_STATUSES,
   isActiveRunStatus,
@@ -113,6 +114,7 @@ export interface RunStore {
   latestRunBySubChat(subChatIds: string[]): Map<string, Run>
   resolveApprovalForSubChat(subChatId: string, approved: boolean): void
   cancelActiveForSubChat(subChatId: string, stopReason?: string): boolean
+  cancelActiveRuns(stopReason: string): number
   recoverInterrupted(): Run[]
   subscribe(onItem: (item: RunFeedItem) => void, filter?: { subChatId?: string }): () => void
 }
@@ -138,6 +140,43 @@ function appendEventTx(
   return event
 }
 
+function settleRunTx(
+  tx: RunStoreTx,
+  run: Run,
+  status: RunStatus,
+  stopReason: string,
+  extraPayload: Record<string, unknown> = {},
+): RunEvent {
+  const endedAt = new Date()
+  const event = appendEventTx(tx, run, "settled", { status, stopReason, ...extraPayload }, endedAt)
+  tx.update(schema.runs)
+    .set({
+      status,
+      endedAt,
+      stopReason,
+      approvalPending: false,
+      lastSeq: run.lastSeq,
+    })
+    .where(eq(schema.runs.id, run.id))
+    .run()
+  run.status = status
+  run.endedAt = endedAt
+  run.stopReason = stopReason
+  run.approvalPending = false
+  return event
+}
+
+function applyApprovalResolvedTx(tx: RunStoreTx, run: Run, approved: boolean): RunEvent {
+  const event = appendEventTx(tx, run, "approval_resolved", { approved })
+  tx.update(schema.runs)
+    .set({ status: "running", approvalPending: false, lastSeq: run.lastSeq })
+    .where(eq(schema.runs.id, run.id))
+    .run()
+  run.status = "running"
+  run.approvalPending = false
+  return event
+}
+
 export function createRunStore(db: RunStoreDb): RunStore {
   const listeners = new Set<Listener>()
 
@@ -151,49 +190,6 @@ export function createRunStore(db: RunStoreDb): RunStore {
         console.error(`[runs] listener failed for run ${run.id}:`, error)
       }
     }
-  }
-
-  function settleRunTx(
-    tx: RunStoreTx,
-    run: Run,
-    status: RunStatus,
-    stopReason: string,
-    extraPayload: Record<string, unknown> = {},
-  ): RunEvent {
-    const endedAt = new Date()
-    const event = appendEventTx(
-      tx,
-      run,
-      "settled",
-      { status, stopReason, ...extraPayload },
-      endedAt,
-    )
-    tx.update(schema.runs)
-      .set({
-        status,
-        endedAt,
-        stopReason,
-        approvalPending: false,
-        lastSeq: run.lastSeq,
-      })
-      .where(eq(schema.runs.id, run.id))
-      .run()
-    run.status = status
-    run.endedAt = endedAt
-    run.stopReason = stopReason
-    run.approvalPending = false
-    return event
-  }
-
-  function applyApprovalResolvedTx(tx: RunStoreTx, run: Run, approved: boolean): RunEvent {
-    const event = appendEventTx(tx, run, "approval_resolved", { approved })
-    tx.update(schema.runs)
-      .set({ status: "running", approvalPending: false, lastSeq: run.lastSeq })
-      .where(eq(schema.runs.id, run.id))
-      .run()
-    run.status = "running"
-    run.approvalPending = false
-    return event
   }
 
   function settleOutstandingForSubChatTx(
@@ -453,6 +449,25 @@ export function createRunStore(db: RunStoreDb): RunStore {
     return true
   }
 
+  function cancelActiveRuns(stopReason: string): number {
+    const active = db
+      .select()
+      .from(schema.runs)
+      .where(inArray(schema.runs.status, [...ACTIVE_RUN_STATUSES]))
+      .all()
+    if (active.length === 0) return 0
+    const events: RunEvent[] = []
+    db.transaction((tx) => {
+      for (const run of active) {
+        events.push(settleRunTx(tx, run, "cancelled", stopReason))
+      }
+    })
+    active.forEach((run, index) => {
+      emit(run, events[index])
+    })
+    return active.length
+  }
+
   function recoverInterrupted(): Run[] {
     const active = db
       .select()
@@ -558,14 +573,29 @@ export function createRunStore(db: RunStoreDb): RunStore {
   function latestRunBySubChat(subChatIds: string[]): Map<string, Run> {
     const map = new Map<string, Run>()
     if (subChatIds.length === 0) return map
+    // chats.get runs on every workspace open, so the query returns at most one
+    // row per sub-chat instead of the whole run history. The NOT EXISTS guard
+    // keeps exactly the row the (startedAt, id) ordering would pick first.
+    const newerRun = alias(schema.runs, "newer_run")
+    const hasNewerRun = db
+      .select({ one: sql<number>`1` })
+      .from(newerRun)
+      .where(
+        and(
+          eq(newerRun.subChatId, schema.runs.subChatId),
+          or(
+            gt(newerRun.startedAt, schema.runs.startedAt),
+            and(eq(newerRun.startedAt, schema.runs.startedAt), gt(newerRun.id, schema.runs.id)),
+          ),
+        ),
+      )
     const rows = db
       .select()
       .from(schema.runs)
-      .where(inArray(schema.runs.subChatId, subChatIds))
-      .orderBy(desc(schema.runs.startedAt), desc(schema.runs.id))
+      .where(and(inArray(schema.runs.subChatId, subChatIds), not(exists(hasNewerRun))))
       .all()
     for (const row of rows) {
-      if (!map.has(row.subChatId)) map.set(row.subChatId, row)
+      map.set(row.subChatId, row)
     }
     return map
   }
@@ -591,6 +621,7 @@ export function createRunStore(db: RunStoreDb): RunStore {
     latestRunBySubChat,
     resolveApprovalForSubChat,
     cancelActiveForSubChat,
+    cancelActiveRuns,
     recoverInterrupted,
     subscribe,
   }

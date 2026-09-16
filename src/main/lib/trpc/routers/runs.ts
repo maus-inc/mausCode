@@ -18,15 +18,19 @@ export interface RunsFeedItem {
 /**
  * Emits the replay snapshot and returns the highest replayed seq per run, so
  * the live stream can drop items the replay already covered. With
- * `subChatId` and `afterSeq` it replays that sub-chat's newest run events
- * past the cursor; with `subChatId` alone it emits a snapshot item for the
- * newest run; with neither it emits a snapshot item per active run.
+ * `subChatId`, `afterSeq` and the `cursorRunId` that produced the cursor, it
+ * replays that run's events past the cursor; a cursor that belongs to an
+ * older run falls back to a snapshot of the newest run, because seq is
+ * per-run and an old cursor would swallow the new run's early events. With
+ * `subChatId` alone it emits a snapshot item for the newest run; with
+ * neither it emits a snapshot item per active run.
  */
 function replaySnapshot(
   store: RunStore,
   emit: Observer<RunsFeedItem, unknown>,
   subChatId?: string,
   afterSeq?: number,
+  cursorRunId?: string,
 ): Map<string, number> {
   const replayedSeqByRun = new Map<string, number>()
   if (!subChatId) {
@@ -39,7 +43,7 @@ function replaySnapshot(
 
   const latest = store.listRuns({ subChatId, limit: 1 })[0]
   if (!latest) return replayedSeqByRun
-  if (typeof afterSeq !== "number") {
+  if (typeof afterSeq !== "number" || cursorRunId !== latest.id) {
     emit.next({ run: latest, event: null })
     replayedSeqByRun.set(latest.id, latest.lastSeq)
     return replayedSeqByRun
@@ -87,6 +91,7 @@ export const runsRouter = router({
         .object({
           subChatId: z.string().optional(),
           afterSeq: z.number().int().min(0).optional(),
+          runId: z.string().optional(),
         })
         .optional(),
     )
@@ -108,7 +113,13 @@ export const runsRouter = router({
           subChatId ? { subChatId } : undefined,
         )
 
-        const replayedSeqByRun = replaySnapshot(store, emit, subChatId, input?.afterSeq)
+        const replayedSeqByRun = replaySnapshot(
+          store,
+          emit,
+          subChatId,
+          input?.afterSeq,
+          input?.runId,
+        )
 
         replayDone = true
         for (const item of buffered) {

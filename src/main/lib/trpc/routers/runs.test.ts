@@ -107,7 +107,11 @@ describe("runs router", () => {
     handle.noteApprovalRequested("Bash")
 
     const items: RunsFeedItem[] = []
-    const observable = (await caller.subscribe({ subChatId, afterSeq: 1 })) as unknown as {
+    const observable = (await caller.subscribe({
+      subChatId,
+      afterSeq: 1,
+      runId: handle.runId,
+    })) as unknown as {
       subscribe: (observer: { next: (value: RunsFeedItem) => void }) => { unsubscribe: () => void }
     }
     const subscription = observable.subscribe({ next: (item) => items.push(item) })
@@ -120,12 +124,44 @@ describe("runs router", () => {
     subscription.unsubscribe()
     handle.noteApprovalResolved(true)
     const resumed: RunsFeedItem[] = []
-    const second = (await caller.subscribe({ subChatId, afterSeq: 3 })) as unknown as {
+    const second = (await caller.subscribe({
+      subChatId,
+      afterSeq: 3,
+      runId: handle.runId,
+    })) as unknown as {
       subscribe: (observer: { next: (value: RunsFeedItem) => void }) => { unsubscribe: () => void }
     }
     const secondSubscription = second.subscribe({ next: (item) => resumed.push(item) })
     secondSubscription.unsubscribe()
     expect(resumed.map((item) => item.event?.kind)).toEqual(["approval_resolved"])
+  })
+
+  it("a cursor from an older run replays a snapshot of the newest run", async () => {
+    const store = holder.store as RunStore
+    const subChatId = seedSubChat(opened.db)
+    const older = store.startRun({ subChatId, engine: "legacy" })
+    older.noteStarted()
+    older.noteFinished()
+    older.settle()
+    const newer = store.startRun({ subChatId, engine: "legacy" })
+    newer.noteStarted()
+
+    const items: RunsFeedItem[] = []
+    const observable = (await caller.subscribe({
+      subChatId,
+      afterSeq: 2,
+      runId: older.runId,
+    })) as unknown as {
+      subscribe: (observer: { next: (value: RunsFeedItem) => void }) => { unsubscribe: () => void }
+    }
+    const subscription = observable.subscribe({ next: (item) => items.push(item) })
+
+    // The old cursor cannot suppress the new run's events; the consumer gets
+    // the newest run as a snapshot instead.
+    expect(items).toHaveLength(1)
+    expect(items[0].run.id).toBe(newer.runId)
+    expect(items[0].event).toBeNull()
+    subscription.unsubscribe()
   })
 
   it("two subscribers both receive the same live event", async () => {

@@ -2870,9 +2870,11 @@ ${prompt}
       activeSessions.delete(input.subChatId)
       clearPendingApprovals("Session cancelled.", input.subChatId)
     }
-    getRunStore().cancelActiveForSubChat(input.subChatId, "user_cancel")
+    // Settling the persisted run counts as a cancel too, so a caller after a
+    // reload or recovery still hears that something was cancelled.
+    const settledRun = getRunStore().cancelActiveForSubChat(input.subChatId, "user_cancel")
 
-    return { cancelled: !!controller }
+    return { cancelled: !!controller || settledRun }
   }),
 
   /**

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest"
 import type { RunsFeedItem } from "../../../../main/lib/trpc/routers/runs"
 import {
   applyRunFeedItem,
+  hydrateErrorStatusesFromLatestRuns,
   type RunsFeedClient,
   runStatusToStreamingStatus,
   startRunFeedSync,
@@ -136,6 +137,25 @@ describe("run feed projection", () => {
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("streaming")
     stopA()
     stopB()
+  })
+
+  it("hydrates persisted error statuses without touching live ones", () => {
+    useStreamingStatusStore.getState().setStatus("sub-live", "streaming")
+
+    hydrateErrorStatusesFromLatestRuns([
+      { id: "sub-error", latestRun: { status: "error" } },
+      { id: "sub-done", latestRun: { status: "completed" } },
+      { id: "sub-live", latestRun: { status: "error" } },
+      { id: "sub-none", latestRun: null },
+    ])
+
+    const statuses = useStreamingStatusStore.getState().statuses
+    expect(statuses["sub-error"]).toBe("error")
+    // ready is the default, so settled runs write nothing
+    expect(statuses["sub-done"]).toBeUndefined()
+    // a live status belongs to the feed and is never overwritten
+    expect(statuses["sub-live"]).toBe("streaming")
+    expect(statuses["sub-none"]).toBeUndefined()
   })
 
   it("reconnects after a feed error", async () => {
