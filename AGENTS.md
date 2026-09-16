@@ -206,7 +206,7 @@ Keep this file under 400 lines. If you add guidance, compress something else or 
 
 ## Skill routing
 
-Load a skill only when the task matches its trigger, and never invent a skill name. Project skills live in `.agents/skills/<name>/SKILL.md`, global skills in `~/.agents/skills/`. This repository ships 39 project skills,listed with their triggers and their execution limits in `docs/design-skills.md`; `unslop`, which applies to all prose, and `find-skills`, which applies before every roadmap step together with the mandatory deep web research pass defined below. If no skill matches a task, say so and work directly, keeping the change small.
+Load a skill only when the task matches its trigger, and never invent a skill name. Project skills live in `.agents/skills/<name>/SKILL.md`, global skills in `~/.agents/skills/`. This repository ships 39 project skills, listed with their triggers and their execution limits in `docs/design-skills.md`; `unslop`, which applies to all prose, and `find-skills`, which applies before every roadmap step together with the mandatory deep web research pass defined below. If no skill matches a task, say so and work directly, keeping the change small.
 
 Running `find-skills` is mandatory, not a courtesy, and the deep web research pass in this section is equally mandatory. Before writing code for a step, search the open skills ecosystem for the task at hand and report what you found, including the empty result if that is the honest answer:
 
