@@ -575,7 +575,9 @@ export function createRunStore(db: RunStoreDb): RunStore {
     if (subChatIds.length === 0) return map
     // chats.get runs on every workspace open, so the query returns at most one
     // row per sub-chat instead of the whole run history. The NOT EXISTS guard
-    // keeps exactly the row the (startedAt, id) ordering would pick first.
+    // keeps exactly the row the (startedAt, rowid) ordering would pick first;
+    // rowid grows with insertion, so same-timestamp runs resolve to the one
+    // created last instead of whichever id sorts highest.
     const newerRun = alias(schema.runs, "newer_run")
     const hasNewerRun = db
       .select({ one: sql<number>`1` })
@@ -585,7 +587,10 @@ export function createRunStore(db: RunStoreDb): RunStore {
           eq(newerRun.subChatId, schema.runs.subChatId),
           or(
             gt(newerRun.startedAt, schema.runs.startedAt),
-            and(eq(newerRun.startedAt, schema.runs.startedAt), gt(newerRun.id, schema.runs.id)),
+            and(
+              eq(newerRun.startedAt, schema.runs.startedAt),
+              sql`"newer_run"."rowid" > "runs"."rowid"`,
+            ),
           ),
         ),
       )

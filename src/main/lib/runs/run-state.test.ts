@@ -378,6 +378,8 @@ describe("run store", () => {
     it("latestRunBySubChat picks the newest run per sub-chat", () => {
       // Enough settled runs that a query returning the whole history would be
       // visibly wasteful; the result must still be exactly the newest one.
+      // These all start within one timestamp tick, which is the case the
+      // insertion-order tie-break exists for.
       for (let i = 0; i < 10; i++) {
         const done = store.startRun({ subChatId, engine: "legacy" })
         done.noteFinished()
