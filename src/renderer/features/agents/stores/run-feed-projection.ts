@@ -81,17 +81,24 @@ export function hydrateErrorStatusesFromLatestRuns(
  * runs, so a run that settled while the feed was down would stay streaming
  * here forever. Every sub-chat this window still considers busy is checked
  * against its newest run; if the engine has no active run for it, the newest
- * run is the settled one and its status is the truth.
+ * run is the settled one and its status is the truth. Any store write during
+ * the lookup means a live event landed, so the repair backs off instead of
+ * risking an overwrite of a fresh run's status.
  */
 async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
-  const { statuses, setStatus } = useStreamingStatusStore.getState()
-  const busy = Object.entries(statuses)
+  const before = useStreamingStatusStore.getState()
+  const busy = Object.entries(before.statuses)
     .filter(([, status]) => status === "streaming" || status === "submitted")
     .map(([subChatId]) => subChatId)
   for (const subChatId of busy) {
     try {
       const [latest] = await client.runs.list.query({ subChatId, limit: 1 })
-      if (latest) setStatus(subChatId, runStatusToStreamingStatus(latest.status))
+      // A changed statuses object means a live event landed during the
+      // lookup; the feed owns the truth from here.
+      if (!latest || useStreamingStatusStore.getState().statuses !== before.statuses) continue
+      useStreamingStatusStore
+        .getState()
+        .setStatus(subChatId, runStatusToStreamingStatus(latest.status))
     } catch {
       // The next reconnect retries the reconciliation.
     }
