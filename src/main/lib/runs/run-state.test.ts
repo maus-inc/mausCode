@@ -161,6 +161,20 @@ describe("run store", () => {
       expect(payload.errorText?.length).toBeLessThanOrEqual(RUN_ERROR_TEXT_CAP + 1)
     })
 
+    it("settles error even when the error text is empty", () => {
+      const handle = store.startRun({ subChatId, engine: "legacy" })
+      handle.noteError("")
+      handle.settle()
+
+      const run = store.getRun(handle.runId)?.run
+      expect(run?.status).toBe("error")
+      const settledEvent = store
+        .getRun(handle.runId)
+        ?.events.find((event) => event.kind === "settled")
+      const payload = JSON.parse(settledEvent?.payload ?? "{}") as { errorText?: string }
+      expect(payload.errorText).toBe("unknown error")
+    })
+
     it("settles cancelled on hint", () => {
       const handle = store.startRun({ subChatId, engine: "legacy" })
       handle.settle("cancelled", "user_cancel")
@@ -392,6 +406,32 @@ describe("run store", () => {
       expect(() => handle.noteStarted()).not.toThrow()
       expect(() => handle.settle()).not.toThrow()
       opened = openTestDb() // keep afterEach close() valid
+    })
+
+    it("settle can retry after its transaction fails", () => {
+      let failNextTransaction = false
+      const proxied = new Proxy(opened.db, {
+        get(target, prop, receiver) {
+          const value = Reflect.get(target, prop, receiver)
+          if (prop === "transaction" && failNextTransaction) {
+            failNextTransaction = false
+            return () => {
+              throw new Error("disk full")
+            }
+          }
+          return value
+        },
+      })
+      const proxyStore = createRunStore(proxied)
+      const handle = proxyStore.startRun({ subChatId, engine: "legacy" })
+
+      failNextTransaction = true
+      handle.settle()
+      expect(proxyStore.activeRunForSubChat(subChatId)?.id).toBe(handle.runId)
+
+      handle.settle()
+      expect(proxyStore.getRun(handle.runId)?.run.status).toBe("interrupted")
+      expect(proxyStore.activeRunForSubChat(subChatId)).toBeNull()
     })
   })
 

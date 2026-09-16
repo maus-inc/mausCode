@@ -309,7 +309,6 @@ export function createRunStore(db: RunStoreDb): RunStore {
         guard(() => {
           const current = activeRun()
           if (!current) return
-          startedNoted = true
           let event: RunEvent | null = null
           db.transaction((tx) => {
             event = appendEventTx(tx, current, "started", {})
@@ -318,6 +317,7 @@ export function createRunStore(db: RunStoreDb): RunStore {
               .where(eq(schema.runs.id, current.id))
               .run()
           })
+          startedNoted = true
           if (event) emit(current, event)
         }, "noteStarted")
       },
@@ -358,7 +358,11 @@ export function createRunStore(db: RunStoreDb): RunStore {
       },
 
       noteError(errorText: string): void {
-        if (!pendingError) pendingError = capText(errorText, RUN_ERROR_TEXT_CAP)
+        // Empty text must still record an error, because settle() reads this
+        // field by truthiness to pick the error state.
+        if (!pendingError) {
+          pendingError = capText(errorText.trim() || "unknown error", RUN_ERROR_TEXT_CAP)
+        }
       },
 
       noteFinished(): void {
@@ -368,9 +372,11 @@ export function createRunStore(db: RunStoreDb): RunStore {
       settle(hint?: RunStatus, stopReason?: string): void {
         if (settledDone) return
         guard(() => {
-          settledDone = true
           const current = db.select().from(schema.runs).where(eq(schema.runs.id, run.id)).get()
-          if (!current || !isActiveRunStatus(current.status)) return
+          if (!current || !isActiveRunStatus(current.status)) {
+            settledDone = true
+            return
+          }
 
           let status: RunStatus
           let reason: string
@@ -401,6 +407,9 @@ export function createRunStore(db: RunStoreDb): RunStore {
               pendingError ? { errorText: pendingError } : {},
             )
           })
+          // Only after the terminal state is committed: if the transaction
+          // threw, a later settle call must still be able to retry.
+          settledDone = true
           console.log(`[runs] settle ${run.id.slice(-8)} status=${status} reason=${reason}`)
           if (event) emit(current, event)
         }, "settle")

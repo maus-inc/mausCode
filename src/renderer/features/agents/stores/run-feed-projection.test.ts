@@ -52,8 +52,10 @@ function liveEvent(item: Item, kind: string, seq: number): Item {
 function fakeClient(script: (emit: (item: Item) => void, fail: (error: Error) => void) => void): {
   client: RunsFeedClient
   connections: number
+  unsubscribes: number
 } {
   let connections = 0
+  let unsubscribes = 0
   const client: RunsFeedClient = {
     runs: {
       subscribe: {
@@ -63,7 +65,11 @@ function fakeClient(script: (emit: (item: Item) => void, fail: (error: Error) =>
             (item) => handlers.onData(item),
             (error) => handlers.onError?.(error),
           )
-          return { unsubscribe: () => {} }
+          return {
+            unsubscribe: () => {
+              unsubscribes += 1
+            },
+          }
         },
       },
     },
@@ -72,6 +78,9 @@ function fakeClient(script: (emit: (item: Item) => void, fail: (error: Error) =>
     client,
     get connections() {
       return connections
+    },
+    get unsubscribes() {
+      return unsubscribes
     },
   }
 }
@@ -143,7 +152,11 @@ describe("run feed projection", () => {
     const stop = startRunFeedSync(fake.client, 10)
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(fake.connections).toBe(2)
+    // The dead first subscription must be torn down before the retry opens
+    // the second one.
+    expect(fake.unsubscribes).toBe(1)
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("streaming")
     stop()
+    expect(fake.unsubscribes).toBe(2)
   })
 })

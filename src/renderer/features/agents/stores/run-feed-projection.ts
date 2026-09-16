@@ -64,6 +64,9 @@ export function startRunFeedSync(
 
   const connect = () => {
     if (stopped) return
+    // The previous subscription is dead after an error, but its transport
+    // resources still exist; release them before opening the replacement.
+    subscription?.unsubscribe()
     subscription = client.runs.subscribe.subscribe(undefined, {
       onData: (item) => {
         applyRunFeedItem(item, lastAppliedSeq)
