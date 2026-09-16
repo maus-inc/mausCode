@@ -101,6 +101,13 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   prefix) live in `src/shared/runtime-protocol.ts`.
 - tRPC 20 routers shrink to adapters; `chats` keeps product workflows; `changes`
   (git) kept whole; terminal manager kept for local.
+- Run state is a database record (roadmap step 07). `runs` + `run_events`
+  tables, machine in `src/main/lib/runs/run-state.ts`, statuses
+  `running | waiting_approval | completed | error | cancelled | interrupted`,
+  feed over `runs.subscribe`, renderer projects it into the streaming status
+  store. Startup moves active runs to `interrupted` with the last event as
+  evidence. Wired for `claude.chat` and `runtime.chat`; other provider routers
+  are declared absent until wired. Contract: `.dump/app/plans/2026-09-13-run-state.md`.
 
 ## Performance principles
 
