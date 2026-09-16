@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm"
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { createId } from "../utils"
 
 // ============ PROJECTS ============
@@ -151,6 +151,73 @@ export const rooCredentials = sqliteTable("roo_credentials", {
   connectedAt: integer("connected_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 })
 
+// ============ RUNS ============
+// One row per agent turn, owned by the main process. Status vocabulary and
+// legal transitions live in src/shared/run-state.ts and
+// src/main/lib/runs/run-state.ts (roadmap step 07).
+export const runs = sqliteTable(
+  "runs",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    subChatId: text("sub_chat_id")
+      .notNull()
+      .references(() => subChats.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("running"),
+    startedAt: integer("started_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+    endedAt: integer("ended_at", { mode: "timestamp" }),
+    stopReason: text("stop_reason"),
+    approvalPending: integer("approval_pending", { mode: "boolean" }).notNull().default(false),
+    engine: text("engine"), // "legacy" | "native"
+    provider: text("provider"),
+    model: text("model"),
+    // Newest run_events.seq for this run. Lets a consumer compare cursors
+    // without reading the event table.
+    lastSeq: integer("last_seq").notNull().default(0),
+  },
+  (table) => [
+    index("runs_sub_chat_id_idx").on(table.subChatId),
+    index("runs_status_idx").on(table.status),
+  ],
+)
+
+export const runsRelations = relations(runs, ({ one, many }) => ({
+  subChat: one(subChats, {
+    fields: [runs.subChatId],
+    references: [subChats.id],
+  }),
+  events: many(runEvents),
+}))
+
+// ============ RUN EVENTS ============
+// Append-only transition log per run. (run_id, seq) is unique and seq is
+// monotonically increasing per run, which is what makes cursor replay
+// possible. Payload is JSON text and carries state facts, not transcripts.
+export const runEvents = sqliteTable(
+  "run_events",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    runId: text("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    kind: text("kind").notNull(),
+    payload: text("payload").notNull().default("{}"),
+    at: integer("at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  },
+  (table) => [uniqueIndex("run_events_run_id_seq_uq").on(table.runId, table.seq)],
+)
+
+export const runEventsRelations = relations(runEvents, ({ one }) => ({
+  run: one(runs, {
+    fields: [runEvents.runId],
+    references: [runs.id],
+  }),
+}))
+
 // ============ ANTHROPIC ACCOUNTS (Multi-account support) ============
 // Stores multiple Anthropic OAuth accounts for quick switching
 export const anthropicAccounts = sqliteTable("anthropic_accounts", {
@@ -194,3 +261,7 @@ export type AnthropicAccount = typeof anthropicAccounts.$inferSelect
 export type NewAnthropicAccount = typeof anthropicAccounts.$inferInsert
 export type AnthropicSettings = typeof anthropicSettings.$inferSelect
 export type NativeEndpointSettings = typeof nativeEndpointSettings.$inferSelect
+export type Run = typeof runs.$inferSelect
+export type NewRun = typeof runs.$inferInsert
+export type RunEvent = typeof runEvents.$inferSelect
+export type NewRunEvent = typeof runEvents.$inferInsert

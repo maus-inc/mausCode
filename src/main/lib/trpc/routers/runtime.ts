@@ -13,6 +13,8 @@ import { eq } from "drizzle-orm"
 import { z } from "zod"
 import type { UIMessageChunk } from "../../claude/types"
 import { getDatabase, subChats } from "../../db"
+import { getRunStore } from "../../runs"
+import { observeRunChunk, type RunHandle } from "../../runs/run-state"
 import {
   applyNativeCredentials,
   ensureNativeSession,
@@ -76,9 +78,13 @@ export const runtimeRouter = router({
         const translator = new NativeTranslator()
         const subId = input.subChatId.slice(-8)
         let isActive = true
+        // Run record for this turn (roadmap step 07). Created once the turn
+        // is accepted, observed on every emitted chunk, settled in the finally.
+        let runHandle: RunHandle | null = null
 
         const safeEmit = (chunk: UIMessageChunk) => {
           if (!isActive || turn.cancelled) return
+          if (runHandle) observeRunChunk(runHandle, chunk)
           try {
             emit.next(chunk)
           } catch {
@@ -111,6 +117,13 @@ export const runtimeRouter = router({
               )
               return
             }
+
+            runHandle = getRunStore().startRun({
+              subChatId: input.subChatId,
+              engine: "native",
+              mode: input.mode,
+              model: input.model,
+            })
 
             for (const chunk of translator.beginTurn()) safeEmit(chunk)
             db.update(subChats).set({ streamId }).where(eq(subChats.id, input.subChatId)).run()
@@ -235,6 +248,9 @@ export const runtimeRouter = router({
               safeComplete()
             }
           } finally {
+            // Settle the run record. Idempotent: cancel and supersede paths
+            // already settled it through the run store.
+            runHandle?.settle(turn.cancelled ? "cancelled" : undefined)
             if (activeTurns.get(input.subChatId) === turn) {
               activeTurns.delete(input.subChatId)
             }
@@ -272,6 +288,7 @@ export const runtimeRouter = router({
       }
       activeTurns.delete(input.subChatId)
     }
+    getRunStore().cancelActiveForSubChat(input.subChatId, "user_cancel")
     return { cancelled: !!turn }
   }),
 
@@ -288,6 +305,8 @@ export const runtimeRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
+      // The user answered, so the run leaves waiting_approval either way.
+      getRunStore().resolveApprovalForSubChat(input.subChatId, input.approved)
       const sessionId = getMappedNativeSession(input.subChatId)
       if (!sessionId) return { ok: false, reason: "no-session" as const }
       let client: JcodeClient

@@ -58,6 +58,8 @@ import {
 } from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { discoverPluginMcpServers } from "../../plugins"
+import { getRunStore } from "../../runs"
+import { observeRunChunk, type RunHandle } from "../../runs/run-state"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 import { getApprovedPluginMcpServers, getEnabledPlugins } from "./claude-settings"
@@ -948,9 +950,15 @@ export const claudeRouter = router({
         // Track if observable is still active (not unsubscribed)
         let isObservableActive = true
 
+        // Run record for this turn (roadmap step 07). Created when the turn
+        // starts below, observed on every emitted chunk, settled in the
+        // finally block so every exit path lands on a terminal status.
+        let runHandle: RunHandle | null = null
+
         // Helper to safely emit (no-op if already unsubscribed)
         const safeEmit = (chunk: UIMessageChunk) => {
           if (!isObservableActive) return false
+          if (runHandle) observeRunChunk(runHandle, chunk)
           try {
             emit.next(chunk)
             return true
@@ -996,6 +1004,13 @@ export const claudeRouter = router({
         ;(async () => {
           try {
             const db = getDatabase()
+
+            runHandle = getRunStore().startRun({
+              subChatId: input.subChatId,
+              engine: "legacy",
+              mode: input.mode,
+              model: input.model,
+            })
 
             // 1. Get existing messages from DB
             const existing = db
@@ -2730,6 +2745,10 @@ ${prompt}
             safeEmit({ type: "finish" } as UIMessageChunk)
             safeComplete()
           } finally {
+            // Settle the run record. An aborted controller means the user or
+            // a superseding send stopped the turn; chunk observation already
+            // recorded error or finish evidence for the other exits.
+            runHandle?.settle(abortController.signal.aborted ? "cancelled" : undefined)
             activeSessions.delete(input.subChatId)
           }
         })()
@@ -2851,6 +2870,7 @@ ${prompt}
       activeSessions.delete(input.subChatId)
       clearPendingApprovals("Session cancelled.", input.subChatId)
     }
+    getRunStore().cancelActiveForSubChat(input.subChatId, "user_cancel")
 
     return { cancelled: !!controller }
   }),
@@ -2875,6 +2895,8 @@ ${prompt}
       if (!pending) {
         return { ok: false }
       }
+      // The user answered, so the run leaves waiting_approval either way.
+      getRunStore().resolveApprovalForSubChat(pending.subChatId, input.approved)
       pending.resolve({
         approved: input.approved,
         message: input.message,

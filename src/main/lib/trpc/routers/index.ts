@@ -30,6 +30,7 @@ import { projectsRouter } from "./projects"
 import { providersRouter } from "./providers"
 import { qwenRouter } from "./qwen"
 import { rooRouter } from "./roo"
+import { runsRouter } from "./runs"
 import { runtimeRouter } from "./runtime"
 import { sandboxImportRouter } from "./sandbox-import"
 import { skillsRouter } from "./skills"
@@ -74,6 +75,7 @@ export function createAppRouter(_getWindow: () => BrowserWindow | null) {
     commands: commandsRouter,
     voice: voiceRouter,
     plugins: pluginsRouter,
+    runs: runsRouter,
     runtime: runtimeRouter,
     usage: usageRouter,
     providers: providersRouter,

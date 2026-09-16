@@ -35,6 +35,7 @@ import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
 import type { WorktreeSetupResult } from "../../git/worktree-config"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
+import { getRunStore } from "../../runs"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
 import type { StoredChatMessage } from "./codex"
@@ -364,11 +365,17 @@ export const chatsRouter = router({
       })
     }
 
+    // The run record is the authoritative in-progress signal (roadmap step
+    // 07). stream_id stays in the OR because providers not yet wired to the
+    // run store still set it.
+    const chatsWithActiveRuns = getRunStore().activeRunChatIds(chatIds)
+
     return rows.map((c) => {
       const status = perChat.get(c.id) ?? {
         hasStream: false,
         latestActivityMs: 0,
       }
+      const inProgress = status.hasStream || chatsWithActiveRuns.has(c.id)
       const chatActivityMs = Math.max(
         status.latestActivityMs,
         c.updatedAt ? c.updatedAt.getTime() : 0,
@@ -376,8 +383,8 @@ export const chatsRouter = router({
       const lastViewedMs = c.lastViewedAt ? c.lastViewedAt.getTime() : 0
       return {
         ...c,
-        inProgress: status.hasStream,
-        isUnseen: !status.hasStream && chatActivityMs > lastViewedMs,
+        inProgress,
+        isUnseen: !inProgress && chatActivityMs > lastViewedMs,
       }
     })
   }),
@@ -418,7 +425,15 @@ export const chatsRouter = router({
 
     const project = db.select().from(projects).where(eq(projects.id, chat.projectId)).get()
 
-    return { ...chat, subChats: chatSubChats, project }
+    // Attach the newest run per sub-chat so a fresh window hydrates run
+    // status from the database instead of renderer memory (roadmap step 07).
+    const latestRuns = getRunStore().latestRunBySubChat(chatSubChats.map((sc) => sc.id))
+    const subChatsWithRuns = chatSubChats.map((subChat) => ({
+      ...subChat,
+      latestRun: latestRuns.get(subChat.id) ?? null,
+    }))
+
+    return { ...chat, subChats: subChatsWithRuns, project }
   }),
 
   /**

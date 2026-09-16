@@ -3,6 +3,7 @@ import { z } from "zod"
 import { IS_DEV, PROTOCOL } from "../../../constants"
 import { getAuthManager } from "../../../index"
 import { chats, getDatabase, projects, subChats } from "../../db"
+import { clearChatTree, clearAllData as wipeAllData } from "../../db/wipe"
 import { clearNetworkCache } from "../../ollama/network-detector"
 import { publicProcedure, router } from "../index"
 
@@ -59,13 +60,12 @@ export const debugRouter = router({
   }),
 
   /**
-   * Clear all chats and sub-chats (keeps projects)
+   * Clear all chats and sub-chats (keeps projects). Deletion order and the
+   * full table list live in the shared wipe module, so the run tables stay
+   * registered here automatically.
    */
   clearChats: publicProcedure.mutation(() => {
-    const db = getDatabase()
-    // Delete sub_chats first (foreign key constraint)
-    db.delete(subChats).run()
-    db.delete(chats).run()
+    clearChatTree(getDatabase())
     console.log("[Debug] Cleared all chats and sub-chats")
     return { success: true }
   }),
@@ -74,11 +74,7 @@ export const debugRouter = router({
    * Clear all data (projects, chats, sub-chats)
    */
   clearAllData: publicProcedure.mutation(() => {
-    const db = getDatabase()
-    // Delete in order due to foreign key constraints
-    db.delete(subChats).run()
-    db.delete(chats).run()
-    db.delete(projects).run()
+    wipeAllData(getDatabase())
     console.log("[Debug] Cleared all database data")
     return { success: true }
   }),
