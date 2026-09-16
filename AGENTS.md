@@ -20,7 +20,7 @@ You are MausAgent while you work in this repository. Keep the default git user a
 - Nothing leaves the machine that the user did not ask for, and anything that can leave is visible where the user can see it. This is the test every network path passes: attributable to a request, a recorded URL, a byte cap, a redaction rule. It forbids telemetry, silent update pings, remote fetches on a load path, and any stored profile or behavioural model of the user, local storage included. Ratified 2026-09-14.
 - Write clear, self documenting code. Do not add comments to new code except where they explain a non-obvious constraint, a provenance rule, or a workaround.
 - Follow the patterns already in the repo for dialogs, state management, tRPC calls, keyboard handling and provider adapters. `src/renderer/lib/react-keys.ts`, `src/renderer/lib/command-rows.ts` and `src/main/lib/print-test-helpers.ts` are the model: one small module, several call sites, no duplication.
-- Before pushing, run every gate in the verification gate section. Then rereview your own diff up to three times, fixing critical, major, nitpick and UI concerns each pass. Do this without prompting the user. If a permission wall blocks a file, for example a workflow file, leave the exact patch you intended in a PR comment with a detailed handoff prompt, then tell the user you handed it off.
+- Before pushing, run every gate in the verification gate section, and run the code research gate when the diff touches code. Then rereview your own diff up to three times, fixing critical, major, nitpick and UI concerns each pass. Do this without prompting the user. If a permission wall blocks a file, for example a workflow file, leave the exact patch you intended in a PR comment with a detailed handoff prompt, then tell the user you handed it off.
 - Before any commit, check that your co-author line uses the real git name and email of the human in the loop. Never invent a co-author.
 - If your sandbox reset and you recovered from the remote, do not bother the user with that. Say nothing and continue.
 - Watch for code smells in your own diff, including dead state, unused exports, needless casts and duplicated conditionals.
@@ -67,7 +67,7 @@ Every step is a GitHub issue labelled `roadmap`, generated from `.dump/app/roadm
 12. Make it observable inside the app. The durable record is what matters when a user reports a bug with a log folder: emit a structured line at each state change with the run or session id, never a token, never file contents. Anything long-running gets progress, a phase, a byte or record count and a failure cause. Metrics and alerting are out of scope for a local-first app, so the benchmark record in `.dump` is the before and after, and a step without one has not proven it is safe for the performance promise.
 13. Document in the same change. Correct the doc that described the old behaviour, write the decision or research record into `.dump`, and put in the PR what a reviewer needs to check. A new pattern gets a rule line where the rules live, or the next agent reverse-engineers it.
 
-Per step, in order: outcome restated, questions asked and answered, research and prototype done, flag or setting named, code, tests, gates run, `.dump` record written, PR opened, follow-up for flag cleanup filed.
+Per step, in order: outcome restated, questions asked and answered, research and prototype done, flag or setting named, code, tests, gates run, code research gate run on the full diff, `.dump` record written, PR opened, follow-up for flag cleanup filed.
 
 ## Effort and honesty floor
 
@@ -154,9 +154,22 @@ npm --prefix packages/runtime-client run typecheck
 
 For anything that ships, also run `bun run build` and `bun run package:mac`. Do not call a gate green when you did not run it.
 
+## The code research gate
+
+The verification gate proves the tree is clean. This gate proves the change is correct, and it applies whenever the diff writes or edits code, meaning anything the app, its tests or its tooling run. A change that only touches markdown is exempt. Run the gate before you push new changes, before you open a PR and before you consider the work complete, and report it like any other gate: passed, failed or not run.
+
+- Plan against what exists, before each step. Read the code you will touch, its consumers and its tests, and run the deep research pass from Skill routing for the context you have not thought of yet. The plan cites what you read.
+- Research the full diff before the final pass. Search the web for the behaviours, edge cases and platform details the diff depends on, and list the edge cases: empty and maximal inputs, boundaries, failure and cancellation paths, ordering and races, platform differences, and every consumer of a changed contract.
+- Try to disprove what you believe is correctly implemented. Assume the implementation is wrong and research to prove that, then verify every change against at least three independent sources, for example the official documentation of each API the change relies on, the upstream source or type definitions, and an issue thread, specification or changelog that states the behaviour. A command or test that shows the behaviour counts as one source at the E3 level in `FULL-REVIEW.md`, and a run in the real app is E4, the strongest. A source that disagrees with your code is a finding, and you fix it before the push.
+- Read every line of the diff. The final pass reads the full diff line by line with attention to quality, behaviour and implementation, and says what each changed line does when the app runs. The rereview passes in Values and rules still run on top.
+
+The bar is a change that runs correctly: no runtime bug, no behavioural bug, nothing unexpected, broken or incomplete. A green verification gate does not meet this bar, because clean is not the same as correct.
+
+Write the queries, the sources, the edge cases and what the attempts to break the change caught into the step's `.dump` research record, and name the gate in the PR. Research in this gate runs through your own web tools in the session, under the egress boundary the deep research pass states. No app code and no skill file gains a remote fetch from it.
+
 ## Filing a pull request
 
-Write the description for a person who has never seen this codebase. The first paragraph must say what the change does, what it fixes and what it touches, in plain sentences. Put every detail, measurement and file list in collapsible blocks after it, so the reader is not buried. Do not smuggle a whole session's context into a description. Add the footer:
+Write the description for a person who has never seen this codebase. The first paragraph must say what the change does, what it fixes and what it touches, in plain sentences. Put every detail, measurement and file list in collapsible blocks after it, so the reader is not buried. Do not smuggle a whole session's context into a description. A PR that carries code is filed only after the code research gate ran on the final diff, and the description names what the gate verified and what it caught. Add the footer:
 
 ```
 MausAgent | Filed by `<your actual model slug>`, with `@<the human's git username>`, on `<date>`
@@ -220,7 +233,7 @@ The skills search covers the ecosystem. The task itself needs the open web, and 
 
 The pass runs through your own web tools in the session, and the human ratified it on 2026-09-16, so it is attributable to a request under the egress rule. It never licenses code you add to the app to fetch a remote host, and it never licenses a skill file to contact a host we do not control. Those refusals stand. If your environment has no web access, say so plainly, name the questions the research would have answered, and continue with the project skills and your own knowledge.
 
-Skipping the pass, or running one shallow query and calling it research, is a defect in the step.
+Skipping the pass, or running one shallow query and calling it research, is a defect in the step. The pass covers the task. A diff that writes code carries a second gate on the diff itself, the code research gate after the verification gate section.
 
 | rule | apply when | one line |
 | --- | --- | --- |
