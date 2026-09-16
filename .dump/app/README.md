@@ -43,6 +43,7 @@ Every file here must satisfy all of these, or it does not belong:
 - `research/2026-09-13-find-skills-run.md` — the discovery record for the skills ecosystem: what was run, what works, what was installed and what was refused with the reason. Re-run `find-skills` if it is more than a month old.
 - `roadmap/` — the 45 step bodies as filed on GitHub, one file per issue. The issue is the
   working copy; these are the durable originals, so a closed issue can be re-derived.
+- `decisions/2026-09-16-design-skill-set-vendoring.md` records the 33 design and UI skills vendored on 2026-09-16, the refusals with reasons, the `metadata.json` drift `npm run skills:verify` found, and the two defects in the design source it recorded instead of fixing.
 - `decisions/` — dated decision records and provisional assumptions.
 - `benchmarks/` — benchmark methods and results (CI-owned numbers).
 - `audits/` — security and architecture audit findings.
