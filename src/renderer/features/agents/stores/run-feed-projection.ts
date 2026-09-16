@@ -63,10 +63,37 @@ const errorFromRunRow = new Set<string>()
  */
 const feedRevisionBySubChat = new Map<string, number>()
 
+/**
+ * True while the projection itself is writing a status. The store
+ * subscription below uses it to tell projection writes from external ones:
+ * any external write ends the projection's knowledge of that sub-chat, so
+ * the run-ownership marker is dropped. That keeps a local error, like the
+ * queue processor marking a failed send after a retry, safe from hydration,
+ * and prevents a stale marker left by an older projected error from
+ * clearing it.
+ */
+let projectionWriting = false
+
+useStreamingStatusStore.subscribe((state, prev) => {
+  if (projectionWriting) return
+  const changed = (subChatId: string) => state.statuses[subChatId] !== prev.statuses[subChatId]
+  for (const subChatId of Object.keys(state.statuses)) {
+    if (changed(subChatId)) errorFromRunRow.delete(subChatId)
+  }
+  for (const subChatId of Object.keys(prev.statuses)) {
+    if (changed(subChatId)) errorFromRunRow.delete(subChatId)
+  }
+})
+
 function writeProjectedStatus(subChatId: string, status: StreamingStatus): void {
   if (status === "error") errorFromRunRow.add(subChatId)
   else errorFromRunRow.delete(subChatId)
-  useStreamingStatusStore.getState().setStatus(subChatId, status)
+  projectionWriting = true
+  try {
+    useStreamingStatusStore.getState().setStatus(subChatId, status)
+  } finally {
+    projectionWriting = false
+  }
 }
 
 export function applyRunFeedItem(item: RunsFeedItem, lastAppliedSeq: Map<string, number>): void {
@@ -118,9 +145,12 @@ export function hydrateErrorStatusesFromLatestRuns(
  * item landed for it, even one that mapped to the same status; the revision
  * counter is what catches that same-value case. The comparison is per
  * sub-chat, so writes for other sub-chats cannot stall the remaining
- * repairs.
+ * repairs. Returns whether any lookup failed, so the caller can retry while
+ * the subscription stays healthy: a rejected lookup must not strand a busy
+ * status forever just because no further reconnect happens.
  */
-async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
+async function reconcileStaleStreaming(client: RunsFeedClient): Promise<boolean> {
+  let anyLookupFailed = false
   const busyIds = Object.entries(useStreamingStatusStore.getState().statuses)
     .filter(([, status]) => status === "streaming" || status === "submitted")
     .map(([subChatId]) => subChatId)
@@ -135,9 +165,10 @@ async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
       if ((feedRevisionBySubChat.get(subChatId) ?? 0) !== revisionBeforeLookup) continue
       writeProjectedStatus(subChatId, runStatusToStreamingStatus(latest.status))
     } catch {
-      // The next reconnect retries the reconciliation.
+      anyLookupFailed = true
     }
   }
+  return anyLookupFailed
 }
 
 /**
@@ -151,7 +182,20 @@ export function startRunFeedSync(
   const lastAppliedSeq = new Map<string, number>()
   let stopped = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let reconcileRetryTimer: ReturnType<typeof setTimeout> | null = null
   let subscription: { unsubscribe: () => void } | null = null
+
+  // A rejected lookup must not strand a busy status forever just because the
+  // replacement subscription stays healthy and no further reconnect happens,
+  // so failed passes retry until the repair lands or the projection stops.
+  const runReconciliation = async (): Promise<void> => {
+    const anyLookupFailed = await reconcileStaleStreaming(client)
+    if (stopped || !anyLookupFailed || reconcileRetryTimer) return
+    reconcileRetryTimer = setTimeout(() => {
+      reconcileRetryTimer = null
+      if (!stopped) void runReconciliation()
+    }, retryDelayMs)
+  }
 
   const connect = () => {
     if (stopped) return
@@ -171,7 +215,7 @@ export function startRunFeedSync(
         }, retryDelayMs)
       },
     })
-    void reconcileStaleStreaming(client)
+    void runReconciliation()
   }
 
   connect()
@@ -181,6 +225,10 @@ export function startRunFeedSync(
     if (retryTimer) {
       clearTimeout(retryTimer)
       retryTimer = null
+    }
+    if (reconcileRetryTimer) {
+      clearTimeout(reconcileRetryTimer)
+      reconcileRetryTimer = null
     }
     subscription?.unsubscribe()
     subscription = null

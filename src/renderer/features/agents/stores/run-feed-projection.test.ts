@@ -207,6 +207,19 @@ describe("run feed projection", () => {
     expect(useStreamingStatusStore.getState().statuses["sub-send-failed"]).toBe("error")
   })
 
+  it("keeps a local error safe after an older projected error", () => {
+    const seq = new Map<string, number>()
+    // An older run errored and the projection recorded it.
+    applyRunFeedItem(run("r1", "sub-retry", "error", 3), seq)
+    // The retry path writes submitted, then marks the failed send locally.
+    useStreamingStatusStore.getState().setStatus("sub-retry", "submitted")
+    useStreamingStatusStore.getState().setStatus("sub-retry", "error")
+
+    hydrateErrorStatusesFromLatestRuns([{ id: "sub-retry", latestRun: { status: "completed" } }])
+
+    expect(useStreamingStatusStore.getState().statuses["sub-retry"]).toBe("error")
+  })
+
   it("reconnects after a feed error", async () => {
     let attempt = 0
     const fake = fakeClient((emit, fail) => {
@@ -315,6 +328,24 @@ describe("run feed projection", () => {
     const stop = startRunFeedSync(fake.client)
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("streaming")
+    stop()
+  })
+
+  it("retries a failed reconciliation lookup", async () => {
+    // The first lookup fails while the replacement subscription stays
+    // healthy; the retry must still land the repair.
+    let lookups = 0
+    const fake = fakeClient(outageScript([run("r1", "sub-a", "running", 1)]), (subChatId) => {
+      if (subChatId !== "sub-a") return []
+      lookups += 1
+      if (lookups === 1) throw new Error("ipc not back yet")
+      return [{ subChatId: "sub-a", status: "completed" }]
+    })
+
+    const stop = startRunFeedSync(fake.client, 10)
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    expect(lookups).toBeGreaterThan(1)
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("ready")
     stop()
   })
 
