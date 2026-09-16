@@ -156,7 +156,7 @@ For anything that ships, also run `bun run build` and `bun run package:mac`. Do 
 
 ## The code research gate
 
-The verification gate proves the tree is clean. This gate proves the change is correct, and it applies whenever the diff writes or edits code, meaning anything the app, its tests or its tooling run. A change that only touches markdown is exempt. Run the gate before you push new changes, before you open a PR and before you consider the work complete, and report it like any other gate: passed, failed or not run.
+The verification gate proves the tree is clean. This gate proves the change is correct, and it applies whenever the diff writes or edits code, meaning anything that the app, its tests or its tooling run. A change that only touches markdown is exempt. Run the gate before you push new changes, before you open a PR and before you consider the work complete, and report it like any other gate: passed, failed or not run.
 
 - Plan against what exists, before each step. Read the code you will touch, its consumers and its tests, and run the deep research pass from Skill routing for the context you have not thought of yet. The plan cites what you read.
 - Research the full diff before the final pass. Search the web for the behaviours, edge cases and platform details the diff depends on, and list the edge cases: empty and maximal inputs, boundaries, failure and cancellation paths, ordering and races, platform differences, and every consumer of a changed contract.
@@ -165,7 +165,7 @@ The verification gate proves the tree is clean. This gate proves the change is c
 
 The bar is a change that runs correctly: no runtime bug, no behavioural bug, nothing unexpected, broken or incomplete. A green verification gate does not meet this bar, because clean is not the same as correct.
 
-Write the queries, the sources, the edge cases and what the attempts to break the change caught into the step's `.dump` research record, and name the gate in the PR. Research in this gate runs through your own web tools in the session, under the egress boundary the deep research pass states. No app code and no skill file gains a remote fetch from it.
+Write the queries, the sources, the edge cases and what the attempts to break the change caught into the step's `.dump` research record, and name the gate in the PR. Research in this gate runs through your own web tools in the session, under the egress boundary the deep research pass states. It never licenses app code or a skill file to fetch a remote host.
 
 ## Filing a pull request
 
@@ -224,7 +224,7 @@ Then apply the skill's own quality bar before recommending anything: prefer skil
 The skills search covers the ecosystem. The task itself needs the open web, and that research is a gate, not a courtesy. Before you design a step, run this pass on the task at hand and report it next to the skills result:
 
 - Search wide before you conclude. Run several distinct queries and reword them based on what the first results taught you. One query, one results page and a glance at the snippets is not research.
-- Scale the pass to the task. The pass runs even when you expect the answer to be internal, and a step whose answers live entirely inside this repository records that verdict with the evidence behind it. Where a source type does not exist for the task, say so instead of padding the citation list.
+- Scale the pass to the task. The pass runs even when you expect the answer to be internal, because the missing context is what you did not think of, and a step whose answers live entirely inside this repository records that verdict with the evidence behind it. The pass is complete when every applicable source type is checked or recorded as not applying, and a repo-local verdict with evidence is a completed pass, not a skipped one. Where a source type does not exist for the task, say so instead of padding the citation list.
 - Fetch and read the primary sources. A search snippet is a lead, not a finding. Open the official documentation, the upstream repository, the issue threads, the changelogs and the benchmarks behind a claim, and read them before you cite them. Only the source types that exist for the task apply.
 - Cover the decision, not only the topic. Establish the known approaches, the trade-offs between them, the current best practice, how the best tools in the category solve the problem, and the failure modes others already paid for. Follow any link that can change a decision.
 - Cite everything. Each design claim in the report names its source and URL. A claim with no source is your own reasoning, and the report says so.
