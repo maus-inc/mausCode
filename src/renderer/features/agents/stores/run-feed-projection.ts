@@ -69,10 +69,15 @@ export function hydrateErrorStatusesFromLatestRuns(
   const { statuses, setStatus } = useStreamingStatusStore.getState()
   for (const subChat of subChats) {
     if (!subChat.latestRun) continue
-    if (statuses[subChat.id] !== undefined) continue
-    if (runStatusToStreamingStatus(subChat.latestRun.status) === "error") {
-      setStatus(subChat.id, "error")
+    const mapped = runStatusToStreamingStatus(subChat.latestRun.status)
+    const current = statuses[subChat.id]
+    if (current === undefined) {
+      if (mapped === "error") setStatus(subChat.id, "error")
+      continue
     }
+    // A lingering error from an older run must yield to a newer settled
+    // run; the feed owns every other live status.
+    if (current === "error" && mapped !== "error") setStatus(subChat.id, mapped)
   }
 }
 
@@ -81,21 +86,22 @@ export function hydrateErrorStatusesFromLatestRuns(
  * runs, so a run that settled while the feed was down would stay streaming
  * here forever. Every sub-chat this window still considers busy is checked
  * against its newest run; if the engine has no active run for it, the newest
- * run is the settled one and its status is the truth. Any store write during
- * the lookup means a live event landed, so the repair backs off instead of
- * risking an overwrite of a fresh run's status.
+ * run is the settled one and its status is the truth. The statuses reference
+ * is captured right before each lookup, and any write during that lookup
+ * means a live event landed, so the repair backs off instead of risking an
+ * overwrite of a fresh run's status.
  */
 async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
-  const before = useStreamingStatusStore.getState()
-  const busy = Object.entries(before.statuses)
+  const busyIds = Object.entries(useStreamingStatusStore.getState().statuses)
     .filter(([, status]) => status === "streaming" || status === "submitted")
     .map(([subChatId]) => subChatId)
-  for (const subChatId of busy) {
+  for (const subChatId of busyIds) {
     try {
+      const statusesBeforeLookup = useStreamingStatusStore.getState().statuses
+      const status = statusesBeforeLookup[subChatId]
+      if (status !== "streaming" && status !== "submitted") continue
       const [latest] = await client.runs.list.query({ subChatId, limit: 1 })
-      // A changed statuses object means a live event landed during the
-      // lookup; the feed owns the truth from here.
-      if (!latest || useStreamingStatusStore.getState().statuses !== before.statuses) continue
+      if (!latest || useStreamingStatusStore.getState().statuses !== statusesBeforeLookup) continue
       useStreamingStatusStore
         .getState()
         .setStatus(subChatId, runStatusToStreamingStatus(latest.status))

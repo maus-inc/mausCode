@@ -164,6 +164,20 @@ describe("run feed projection", () => {
     expect(statuses["sub-none"]).toBeUndefined()
   })
 
+  it("a lingering error yields to a newer settled run", () => {
+    useStreamingStatusStore.getState().setStatus("sub-old-error", "error")
+    useStreamingStatusStore.getState().setStatus("sub-still-error", "error")
+
+    hydrateErrorStatusesFromLatestRuns([
+      { id: "sub-old-error", latestRun: { status: "completed" } },
+      { id: "sub-still-error", latestRun: { status: "error" } },
+    ])
+
+    const statuses = useStreamingStatusStore.getState().statuses
+    expect(statuses["sub-old-error"]).toBe("ready")
+    expect(statuses["sub-still-error"]).toBe("error")
+  })
+
   it("reconnects after a feed error", async () => {
     let attempt = 0
     const fake = fakeClient((emit, fail) => {
@@ -207,6 +221,35 @@ describe("run feed projection", () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(fake.connections).toBe(2)
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("ready")
+    stop()
+  })
+
+  it("repairs every stale sub-chat, not just the first", async () => {
+    // Two runs settled during the same outage. The repair of the first
+    // sub-chat rewrites the statuses object, so the second lookup must
+    // compare against its own fresh snapshot instead of the original one.
+    let attempt = 0
+    const fake = fakeClient(
+      (emit, fail) => {
+        attempt += 1
+        if (attempt === 1) {
+          emit(run("r1", "sub-a", "running", 1))
+          emit(run("r2", "sub-b", "running", 1))
+          fail(new Error("ipc gone"))
+        }
+      },
+      (subChatId) =>
+        subChatId === "sub-a"
+          ? [{ subChatId: "sub-a", status: "completed" }]
+          : subChatId === "sub-b"
+            ? [{ subChatId: "sub-b", status: "completed" }]
+            : [],
+    )
+
+    const stop = startRunFeedSync(fake.client, 10)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("ready")
+    expect(useStreamingStatusStore.getState().getStatus("sub-b")).toBe("ready")
     stop()
   })
 })
