@@ -33,6 +33,8 @@ This is the one verified security defect in the roadmap. `src/main/lib/trpc/rout
 
 The native chat handler in `src/main/lib/trpc/routers/runtime.ts` is structured as named steps that each own their failure handling: `acquireNativeClient`, `openNativeSession`, `emitNativeSessionSnapshot`, `prepareNativeCredentials`, `setNativeModelWithRetry`, `consumeNativeTurnStream`, `finishNativeTurnBookkeeping`. This shape closed the Sonar cognitive-complexity finding on the handler. The plan-mode branch of that handler is where this step's read-only enforcement lands; add it as another named step and keep the flat shape so the complexity gate stays green.
 
+Known gap from PR review of the approval path: a delayed approval response resolves the newest waiting run for the sub-chat. Today supersede guarantees at most one waiting run per sub-chat and the engine validates the request id before the record resolves, but when this step rewires approvals through the policy evaluator it must re-verify that invariant rather than inherit it silently.
+
 ## 6. Implementation plan
 
 1. Write the policy design in `.dump/app/plans/2026-09-13-permission-floor.md`: the rule classes, precedence, file location, and the two-track approach the plan names, Rust engine track plus app-side read-only track.

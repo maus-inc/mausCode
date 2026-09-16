@@ -31,6 +31,8 @@ Only `prUrl` and `prNumber` are persisted, at `src/main/lib/db/schema/index.ts:5
 
 `.dump/app/research/2026-09-13-t3code-pr-state-spike.md` §1 and §6 are the design: name the columns exactly as the snapshot does so the protocol file can be reused, and stay one-to-one per chat until stacks exist. `AGENTS.md` says treat `src/shared/contracts` as available vocabulary, not a live path, and this step is the exception the record asks for: these two files become the first importers.
 
+Known gap from PR review of the wipe path this step registers into: the debug wipes settle active runs before deleting, and a delete failure after the settle leaves the chats with cancelled runs. That state is coherent only because the settle precedes the delete. Keep that ordering when registering the new columns, and treat making settle-plus-delete one transactional unit as the follow-up if this step grows a reason to.
+
 ## 6. Implementation plan
 
 1. Add to `chats`: `prSource`, `prLinkedAt`, `prSyncedAt`, `prState`, `prTitle`, `prHeadBranch`, `prBaseBranch`, `prIsDraft`, `prReviewDecision`, `prChecksState`, `prMergeability`, `prBaseComparison`, `prAdditions`, `prDeletions`, `prChangedFiles`. All nullable, one migration, generated.

@@ -32,6 +32,8 @@ Two harvest items reduced to what fits a local-first app. A run's audit trail is
 
 `AGENTS.md` on `.dump` being durable memory, since the acceptance record is that doctrine given a file format. Read the details sidebar's widget registry from step 15 before adding a panel, and `docs/design-system-baseline.md` for the export affordance.
 
+Known gap from PR review of the run record this step exposes: the run handle guards log a database transition failure and continue, so a run can reach a terminal status while a required event or approval state was never persisted. That is deliberate, because recording must never break the live turn, but an audit trail that presents `run_events` must detect or display such gaps rather than showing an incomplete log as complete.
+
 ## 6. Implementation plan
 
 1. Acceptance record convention: `.dump/app/audits/YYYY-MM-DD-step-NN-<slug>.md`, one per roadmap step, holding the acceptance criteria as written, each with the command or the manual scenario that proved it, the evidence level, what could not be verified, and the follow-up it created. Write the template into the same commit so it is not folklore.
