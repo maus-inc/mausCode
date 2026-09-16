@@ -9,7 +9,7 @@
 
 import type { JcodeClient } from "@maus-inc/runtime-client"
 import { observable } from "@trpc/server/observable"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { z } from "zod"
 import type { UIMessageChunk } from "../../claude/types"
 import { getDatabase, subChats } from "../../db"
@@ -175,6 +175,7 @@ function finishNativeTurnBookkeeping(
   runHandle: RunHandle | null,
   turn: { cancelled: boolean },
   subChatId: string,
+  streamId: string,
 ): void {
   // Settle the run record. Idempotent: cancel and supersede paths already
   // settled it through the run store.
@@ -183,10 +184,12 @@ function finishNativeTurnBookkeeping(
     activeTurns.delete(subChatId)
   }
   try {
+    // Clear the marker only when it is still this turn's: a replacement turn
+    // writes its own streamId, and this finally must not wipe that.
     getDatabase()
       .update(subChats)
       .set({ streamId: null, updatedAt: new Date() })
-      .where(eq(subChats.id, subChatId))
+      .where(and(eq(subChats.id, subChatId), eq(subChats.streamId, streamId)))
       .run()
   } catch {
     // Bookkeeping must not fail the turn.
@@ -329,7 +332,7 @@ export const runtimeRouter = router({
               safeComplete()
             }
           } finally {
-            finishNativeTurnBookkeeping(runHandle, turn, input.subChatId)
+            finishNativeTurnBookkeeping(runHandle, turn, input.subChatId, streamId)
           }
         })()
 

@@ -22,12 +22,12 @@ import { abortAllRooStreams } from "./roo"
 import { abortAllNativeTurns } from "./runtime"
 
 /**
- * Stop every live turn and stream across all providers. Wipes keep the
- * process alive, so anything still emitting would write for rows that no
- * longer exist; quit and reload hooks cover fewer providers because the
- * process is going away anyway.
+ * Stop every live turn and stream across all providers, and resolve once the
+ * asynchronous disposals are done. Wipes keep the process alive, so anything
+ * still emitting would write for rows that no longer exist; quit and reload
+ * hooks cover fewer providers because the process is going away anyway.
  */
-function abortAllProviderStreams(): void {
+async function abortAllProviderStreams(): Promise<void> {
   abortAllClaudeSessions()
   abortAllNativeTurns()
   abortAllClineStreams()
@@ -37,10 +37,10 @@ function abortAllProviderStreams(): void {
   abortAllGrokStreams()
   abortAllHermesStreams()
   abortAllOpenclawStreams()
-  abortAllOpencodeStreams()
   abortAllOpenRouterStreams()
   abortAllQwenStreams()
   abortAllRooStreams()
+  await abortAllOpencodeStreams()
 }
 
 // Global flag for simulating offline mode (for testing)
@@ -100,12 +100,12 @@ export const debugRouter = router({
    * full table list live in the shared wipe module, so the run tables stay
    * registered here automatically.
    */
-  clearChats: publicProcedure.mutation(() => {
+  clearChats: publicProcedure.mutation(async () => {
     // Stop live turns and streams first so nothing keeps emitting for rows
     // that are about to disappear, then settle any active runs so subscribed
     // windows see them cancelled instead of keeping a streaming state for
     // rows that no longer exist.
-    abortAllProviderStreams()
+    await abortAllProviderStreams()
     getRunStore().cancelActiveRuns("wiped")
     clearChatTree(getDatabase())
     console.log("[Debug] Cleared all chats and sub-chats")
@@ -115,8 +115,8 @@ export const debugRouter = router({
   /**
    * Clear all data (projects, chats, sub-chats)
    */
-  clearAllData: publicProcedure.mutation(() => {
-    abortAllProviderStreams()
+  clearAllData: publicProcedure.mutation(async () => {
+    await abortAllProviderStreams()
     getRunStore().cancelActiveRuns("wiped")
     wipeAllData(getDatabase())
     console.log("[Debug] Cleared all database data")
