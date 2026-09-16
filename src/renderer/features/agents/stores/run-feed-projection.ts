@@ -10,6 +10,8 @@ import type { RunsFeedItem } from "../../../../main/lib/trpc/routers/runs"
 import { trpcClient } from "../../../lib/trpc"
 import { type StreamingStatus, useStreamingStatusStore } from "./streaming-status-store"
 
+export type RunsFeedItemStatus = { subChatId: string; status: string }
+
 export type RunsFeedClient = {
   runs: {
     subscribe: {
@@ -20,6 +22,11 @@ export type RunsFeedClient = {
           onError?: (error: Error) => void
         },
       ) => { unsubscribe: () => void }
+    }
+    list: {
+      query: (
+        input: { subChatId?: string; limit?: number } | undefined,
+      ) => Promise<RunsFeedItemStatus[]>
     }
   }
 }
@@ -70,6 +77,28 @@ export function hydrateErrorStatusesFromLatestRuns(
 }
 
 /**
+ * Repairs statuses left stale by an outage. The replay only covers active
+ * runs, so a run that settled while the feed was down would stay streaming
+ * here forever. Every sub-chat this window still considers busy is checked
+ * against its newest run; if the engine has no active run for it, the newest
+ * run is the settled one and its status is the truth.
+ */
+async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
+  const { statuses, setStatus } = useStreamingStatusStore.getState()
+  const busy = Object.entries(statuses)
+    .filter(([, status]) => status === "streaming" || status === "submitted")
+    .map(([subChatId]) => subChatId)
+  for (const subChatId of busy) {
+    try {
+      const [latest] = await client.runs.list.query({ subChatId, limit: 1 })
+      if (latest) setStatus(subChatId, runStatusToStreamingStatus(latest.status))
+    } catch {
+      // The next reconnect retries the reconciliation.
+    }
+  }
+}
+
+/**
  * Start the projection. Returns a stop function that unsubscribes and
  * cancels any pending retry.
  */
@@ -100,6 +129,7 @@ export function startRunFeedSync(
         }, retryDelayMs)
       },
     })
+    void reconcileStaleStreaming(client)
   }
 
   connect()

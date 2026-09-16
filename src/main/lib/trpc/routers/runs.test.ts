@@ -164,6 +164,49 @@ describe("runs router", () => {
     subscription.unsubscribe()
   })
 
+  it("a failed replay releases its listener instead of leaking it", async () => {
+    const store = holder.store as RunStore
+    seedSubChat(opened.db)
+    let activeListeners = 0
+    const realSubscribe = store.subscribe.bind(store)
+    holder.store = {
+      ...store,
+      subscribe: (onItem, filter) => {
+        activeListeners += 1
+        const off = realSubscribe(onItem, filter)
+        return () => {
+          activeListeners -= 1
+          off()
+        }
+      },
+    }
+
+    // A closed database makes the replay reads throw during setup.
+    opened.client.close()
+    opened = openTestDb() // keep afterEach close() valid
+
+    const observable = (await caller.subscribe({})) as unknown as {
+      subscribe: (observer: { next: () => void; error?: (error: unknown) => void }) => {
+        unsubscribe: () => void
+      }
+    }
+    let errored = false
+    let handle: { unsubscribe: () => void } | null = null
+    try {
+      handle = observable.subscribe({
+        next: () => {},
+        error: () => {
+          errored = true
+        },
+      })
+    } catch {
+      errored = true
+    }
+    handle?.unsubscribe()
+    expect(errored).toBe(true)
+    expect(activeListeners).toBe(0)
+  })
+
   it("two subscribers both receive the same live event", async () => {
     const store = holder.store as RunStore
     const subChatId = seedSubChat(opened.db)

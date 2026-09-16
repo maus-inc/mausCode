@@ -288,8 +288,10 @@ export const runtimeRouter = router({
       }
       activeTurns.delete(input.subChatId)
     }
-    getRunStore().cancelActiveForSubChat(input.subChatId, "user_cancel")
-    return { cancelled: !!turn }
+    // Settling the persisted run counts as a cancel too, so a caller after a
+    // reload or recovery still hears that something was cancelled.
+    const settledRun = getRunStore().cancelActiveForSubChat(input.subChatId, "user_cancel")
+    return { cancelled: !!turn || settledRun }
   }),
 
   isActive: publicProcedure

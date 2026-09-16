@@ -50,7 +50,10 @@ function liveEvent(item: Item, kind: string, seq: number): Item {
   }
 }
 
-function fakeClient(script: (emit: (item: Item) => void, fail: (error: Error) => void) => void): {
+function fakeClient(
+  script: (emit: (item: Item) => void, fail: (error: Error) => void) => void,
+  listRuns: (subChatId: string) => Array<{ subChatId: string; status: string }> = () => [],
+): {
   client: RunsFeedClient
   connections: number
   unsubscribes: number
@@ -72,6 +75,9 @@ function fakeClient(script: (emit: (item: Item) => void, fail: (error: Error) =>
             },
           }
         },
+      },
+      list: {
+        query: (input) => Promise.resolve(listRuns(input?.subChatId ?? "")),
       },
     },
   }
@@ -163,6 +169,7 @@ describe("run feed projection", () => {
     const fake = fakeClient((emit, fail) => {
       attempt += 1
       if (attempt === 1) {
+        emit(run("r1", "sub-a", "running", 1))
         fail(new Error("ipc gone"))
       } else {
         emit(run("r1", "sub-a", "running", 1))
@@ -178,5 +185,28 @@ describe("run feed projection", () => {
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("streaming")
     stop()
     expect(fake.unsubscribes).toBe(2)
+  })
+
+  it("repairs a stale streaming status after a run settles during an outage", async () => {
+    let attempt = 0
+    // The replay only covers active runs, so the reconnect emits nothing for
+    // the run that settled while the feed was down. The latest-run lookup is
+    // the only path that can repair the stale streaming status.
+    const fake = fakeClient(
+      (emit, fail) => {
+        attempt += 1
+        if (attempt === 1) {
+          emit(run("r1", "sub-a", "running", 1))
+          fail(new Error("ipc gone"))
+        }
+      },
+      (subChatId) => (subChatId === "sub-a" ? [{ subChatId: "sub-a", status: "completed" }] : []),
+    )
+
+    const stop = startRunFeedSync(fake.client, 10)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(fake.connections).toBe(2)
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("ready")
+    stop()
   })
 })

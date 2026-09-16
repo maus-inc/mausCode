@@ -113,13 +113,15 @@ export const runsRouter = router({
           subChatId ? { subChatId } : undefined,
         )
 
-        const replayedSeqByRun = replaySnapshot(
-          store,
-          emit,
-          subChatId,
-          input?.afterSeq,
-          input?.runId,
-        )
+        // A replay failure must not leak the listener registered above:
+        // release it before the error leaves the setup function.
+        let replayedSeqByRun: Map<string, number>
+        try {
+          replayedSeqByRun = replaySnapshot(store, emit, subChatId, input?.afterSeq, input?.runId)
+        } catch (error) {
+          unsubscribe()
+          throw error
+        }
 
         replayDone = true
         for (const item of buffered) {
