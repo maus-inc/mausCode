@@ -117,6 +117,27 @@ export interface RunStore {
   subscribe(onItem: (item: RunFeedItem) => void, filter?: { subChatId?: string }): () => void
 }
 
+function appendEventTx(
+  tx: RunStoreTx,
+  run: Run,
+  kind: string,
+  payload: Record<string, unknown>,
+  at = new Date(),
+): RunEvent {
+  const seq = run.lastSeq + 1
+  const event: RunEvent = {
+    id: createId(),
+    runId: run.id,
+    seq,
+    kind,
+    payload: JSON.stringify(payload),
+    at,
+  }
+  tx.insert(schema.runEvents).values(event).run()
+  run.lastSeq = seq
+  return event
+}
+
 export function createRunStore(db: RunStoreDb): RunStore {
   const listeners = new Set<Listener>()
 
@@ -130,27 +151,6 @@ export function createRunStore(db: RunStoreDb): RunStore {
         console.error(`[runs] listener failed for run ${run.id}:`, error)
       }
     }
-  }
-
-  function appendEventTx(
-    tx: RunStoreTx,
-    run: Run,
-    kind: string,
-    payload: Record<string, unknown>,
-    at = new Date(),
-  ): RunEvent {
-    const seq = run.lastSeq + 1
-    const event: RunEvent = {
-      id: createId(),
-      runId: run.id,
-      seq,
-      kind,
-      payload: JSON.stringify(payload),
-      at,
-    }
-    tx.insert(schema.runEvents).values(event).run()
-    run.lastSeq = seq
-    return event
   }
 
   function settleRunTx(

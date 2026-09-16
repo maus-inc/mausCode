@@ -4,15 +4,54 @@
  * `subscribe` replays a snapshot on open, then streams live transitions.
  * Design contract: `.dump/app/plans/2026-09-13-run-state.md`.
  */
-import { observable } from "@trpc/server/observable"
+import { type Observer, observable } from "@trpc/server/observable"
 import { z } from "zod"
 import type { Run, RunEvent } from "../../db/schema"
-import { getRunStore } from "../../runs"
+import { getRunStore, type RunStore } from "../../runs"
 import { publicProcedure, router } from "../index"
 
 export interface RunsFeedItem {
   run: Run
   event: RunEvent | null
+}
+
+/**
+ * Emits the replay snapshot and returns the highest replayed seq per run, so
+ * the live stream can drop items the replay already covered. With
+ * `subChatId` and `afterSeq` it replays that sub-chat's newest run events
+ * past the cursor; with `subChatId` alone it emits a snapshot item for the
+ * newest run; with neither it emits a snapshot item per active run.
+ */
+function replaySnapshot(
+  store: RunStore,
+  emit: Observer<RunsFeedItem, unknown>,
+  subChatId?: string,
+  afterSeq?: number,
+): Map<string, number> {
+  const replayedSeqByRun = new Map<string, number>()
+  if (!subChatId) {
+    for (const run of store.activeRuns()) {
+      emit.next({ run, event: null })
+      replayedSeqByRun.set(run.id, run.lastSeq)
+    }
+    return replayedSeqByRun
+  }
+
+  const latest = store.listRuns({ subChatId, limit: 1 })[0]
+  if (!latest) return replayedSeqByRun
+  if (typeof afterSeq !== "number") {
+    emit.next({ run: latest, event: null })
+    replayedSeqByRun.set(latest.id, latest.lastSeq)
+    return replayedSeqByRun
+  }
+
+  const withEvents = store.getRun(latest.id, afterSeq)
+  if (!withEvents) return replayedSeqByRun
+  for (const event of withEvents.events) {
+    emit.next({ run: withEvents.run, event })
+    replayedSeqByRun.set(latest.id, event.seq)
+  }
+  return replayedSeqByRun
 }
 
 export const runsRouter = router({
@@ -37,12 +76,10 @@ export const runsRouter = router({
     }),
 
   /**
-   * Live run feed. On open the subscription replays, then goes live: with
-   * `subChatId` and `afterSeq` it replays that sub-chat's newest run events
-   * past the cursor; with `subChatId` alone it emits a snapshot item for the
-   * newest run; with neither it emits a snapshot item per active run. Live
-   * items whose seq the replay already covered are dropped, so a consumer
-   * never sees an event twice.
+   * Live run feed. On open the subscription replays a snapshot, then goes
+   * live. The listener is registered before the replay reads, and both run
+   * in one synchronous turn, so no event can slip between them; anything
+   * that still lands during the replay is buffered and deduped by seq.
    */
   subscribe: publicProcedure
     .input(
@@ -57,7 +94,6 @@ export const runsRouter = router({
       return observable<RunsFeedItem>((emit) => {
         const store = getRunStore()
         const subChatId = input?.subChatId
-        const afterSeq = input?.afterSeq
         const buffered: RunsFeedItem[] = []
         let replayDone = false
 
@@ -72,31 +108,7 @@ export const runsRouter = router({
           subChatId ? { subChatId } : undefined,
         )
 
-        // The listener is registered before the replay reads below, and both
-        // run in one synchronous turn, so no event can slip between them.
-        const replayedSeqByRun = new Map<string, number>()
-        if (subChatId) {
-          const latest = store.listRuns({ subChatId, limit: 1 })[0]
-          if (latest) {
-            if (typeof afterSeq === "number") {
-              const withEvents = store.getRun(latest.id, afterSeq)
-              if (withEvents) {
-                for (const event of withEvents.events) {
-                  emit.next({ run: withEvents.run, event })
-                  replayedSeqByRun.set(latest.id, event.seq)
-                }
-              }
-            } else {
-              emit.next({ run: latest, event: null })
-              replayedSeqByRun.set(latest.id, latest.lastSeq)
-            }
-          }
-        } else {
-          for (const run of store.activeRuns()) {
-            emit.next({ run, event: null })
-            replayedSeqByRun.set(run.id, run.lastSeq)
-          }
-        }
+        const replayedSeqByRun = replaySnapshot(store, emit, subChatId, input?.afterSeq)
 
         replayDone = true
         for (const item of buffered) {

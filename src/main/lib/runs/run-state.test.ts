@@ -379,9 +379,9 @@ describe("run store", () => {
       }
       store.startRun({ subChatId, engine: "legacy" })
 
-      expect(store.listRuns({ subChatId }).length).toBe(4)
-      expect(store.listRuns({ subChatId, activeOnly: true }).length).toBe(1)
-      expect(store.listRuns({ subChatId, limit: 2 }).length).toBe(2)
+      expect(store.listRuns({ subChatId })).toHaveLength(4)
+      expect(store.listRuns({ subChatId, activeOnly: true })).toHaveLength(1)
+      expect(store.listRuns({ subChatId, limit: 2 })).toHaveLength(2)
     })
   })
 

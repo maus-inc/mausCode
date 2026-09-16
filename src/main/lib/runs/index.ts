@@ -9,15 +9,25 @@ import { createRunStore, type RunStore } from "./run-state"
 let runStore: RunStore | null = null
 
 export function getRunStore(): RunStore {
-  if (!runStore) {
-    runStore = createRunStore(getDatabase())
-  }
+  runStore ??= createRunStore(getDatabase())
   return runStore
 }
 
-/** Startup recovery hook, called once after migrations run. */
+/**
+ * Startup recovery hook, called once after migrations run. A failure here
+ * must never block app startup, so it logs and continues.
+ */
 export function recoverInterruptedRuns(): number {
-  return getRunStore().recoverInterrupted().length
+  try {
+    const recovered = getRunStore().recoverInterrupted().length
+    if (recovered > 0) {
+      console.log(`[runs] recovered ${recovered} interrupted run(s) at startup`)
+    }
+    return recovered
+  } catch (error) {
+    console.error("[runs] startup recovery failed:", error)
+    return 0
+  }
 }
 
 export type { RunFeedItem, RunHandle, RunStore, StartRunInput } from "./run-state"

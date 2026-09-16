@@ -938,10 +938,7 @@ if (gotTheLock) {
       console.log("[App] Database initialized")
       // Runs left active by a crash or force-quit have no live owner at this
       // point; move them to interrupted with the last event as evidence.
-      const recovered = recoverInterruptedRuns()
-      if (recovered > 0) {
-        console.log(`[App] Recovered ${recovered} interrupted run(s)`)
-      }
+      recoverInterruptedRuns()
     } catch (error) {
       console.error("[App] Failed to initialize database:", error)
     }
