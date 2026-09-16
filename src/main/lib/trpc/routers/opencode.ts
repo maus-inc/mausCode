@@ -68,7 +68,11 @@ const activeStreams = new Map<string, ActiveStream>()
 
 /**
  * Abort every live opencode stream. Mirrors the supersede path: mark the
- * cancel, abort the controller, and dispose the provider session.
+ * cancel, abort the controller, and dispose the provider session. The map
+ * stays intact on purpose: the handler's authority check treats a missing
+ * entry as authoritative, so clearing it here would let an aborted handler
+ * keep persisting after a wipe deleted the rows. Each handler removes its
+ * own entry in its finally block.
  */
 export function abortAllOpencodeStreams(): void {
   for (const [subChatId, stream] of activeStreams) {
@@ -76,7 +80,6 @@ export function abortAllOpencodeStreams(): void {
     stream.controller.abort()
     void cleanupProvider(subChatId)
   }
-  activeStreams.clear()
 }
 
 const AUTH_HINTS = [

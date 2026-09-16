@@ -65,12 +65,18 @@ function fakeClient(
       subscribe: {
         subscribe: (_input, handlers: Handlers) => {
           connections += 1
+          let unsubscribed = false
           script(
-            (item) => handlers.onData(item),
-            (error) => handlers.onError?.(error),
+            (item) => {
+              if (!unsubscribed) handlers.onData(item)
+            },
+            (error) => {
+              if (!unsubscribed) handlers.onError?.(error)
+            },
           )
           return {
             unsubscribe: () => {
+              unsubscribed = true
               unsubscribes += 1
             },
           }
