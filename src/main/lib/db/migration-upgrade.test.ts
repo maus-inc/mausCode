@@ -44,7 +44,13 @@ describe("migration upgrade into the run tables", () => {
   it("upgrades a database one migration behind without losing rows", () => {
     const migrations = readMigrationFiles({ migrationsFolder: migrationsRoot }) as MigrationFile[]
     expect(migrations.length).toBeGreaterThanOrEqual(2)
-    const behind = migrations.slice(0, -1)
+    // Cut immediately before the migration that introduces the run tables, so
+    // later migrations do not invalidate this test.
+    const runTablesIndex = migrations.findIndex((migration) =>
+      migration.sql.some((statement) => statement.includes("CREATE TABLE `runs`")),
+    )
+    expect(runTablesIndex).toBeGreaterThan(0)
+    const behind = migrations.slice(0, runTablesIndex)
 
     // Apply everything except the newest migration, recording each one the
     // way drizzle's own migrator does.
