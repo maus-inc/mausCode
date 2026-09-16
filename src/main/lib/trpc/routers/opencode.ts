@@ -66,6 +66,19 @@ type ActiveStream = {
 
 const activeStreams = new Map<string, ActiveStream>()
 
+/**
+ * Abort every live opencode stream. Mirrors the supersede path: mark the
+ * cancel, abort the controller, and dispose the provider session.
+ */
+export function abortAllOpencodeStreams(): void {
+  for (const [subChatId, stream] of activeStreams) {
+    stream.cancelRequested = true
+    stream.controller.abort()
+    void cleanupProvider(subChatId)
+  }
+  activeStreams.clear()
+}
+
 const AUTH_HINTS = [
   "401",
   "unauthorized",

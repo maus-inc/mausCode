@@ -8,7 +8,40 @@ import { clearNetworkCache } from "../../ollama/network-detector"
 import { getRunStore } from "../../runs"
 import { publicProcedure, router } from "../index"
 import { abortAllClaudeSessions } from "./claude"
+import { abortAllClineStreams } from "./cline"
+import { abortAllCodexStreams } from "./codex"
+import { abortAllCursorStreams } from "./cursor"
+import { abortAllGeminiStreams } from "./gemini"
+import { abortAllGrokStreams } from "./grok"
+import { abortAllHermesStreams } from "./hermes"
+import { abortAllOpenclawStreams } from "./openclaw"
+import { abortAllOpencodeStreams } from "./opencode"
+import { abortAllOpenRouterStreams } from "./openrouter"
+import { abortAllQwenStreams } from "./qwen"
+import { abortAllRooStreams } from "./roo"
 import { abortAllNativeTurns } from "./runtime"
+
+/**
+ * Stop every live turn and stream across all providers. Wipes keep the
+ * process alive, so anything still emitting would write for rows that no
+ * longer exist; quit and reload hooks cover fewer providers because the
+ * process is going away anyway.
+ */
+function abortAllProviderStreams(): void {
+  abortAllClaudeSessions()
+  abortAllNativeTurns()
+  abortAllClineStreams()
+  abortAllCodexStreams()
+  abortAllCursorStreams()
+  abortAllGeminiStreams()
+  abortAllGrokStreams()
+  abortAllHermesStreams()
+  abortAllOpenclawStreams()
+  abortAllOpencodeStreams()
+  abortAllOpenRouterStreams()
+  abortAllQwenStreams()
+  abortAllRooStreams()
+}
 
 // Global flag for simulating offline mode (for testing)
 let simulateOfflineMode = false
@@ -68,12 +101,11 @@ export const debugRouter = router({
    * registered here automatically.
    */
   clearChats: publicProcedure.mutation(() => {
-    // Stop live turns first so nothing keeps emitting for rows that are
-    // about to disappear, then settle any active runs so subscribed windows
-    // see them cancelled instead of keeping a streaming state for rows that
-    // no longer exist.
-    abortAllClaudeSessions()
-    abortAllNativeTurns()
+    // Stop live turns and streams first so nothing keeps emitting for rows
+    // that are about to disappear, then settle any active runs so subscribed
+    // windows see them cancelled instead of keeping a streaming state for
+    // rows that no longer exist.
+    abortAllProviderStreams()
     getRunStore().cancelActiveRuns("wiped")
     clearChatTree(getDatabase())
     console.log("[Debug] Cleared all chats and sub-chats")
@@ -84,8 +116,7 @@ export const debugRouter = router({
    * Clear all data (projects, chats, sub-chats)
    */
   clearAllData: publicProcedure.mutation(() => {
-    abortAllClaudeSessions()
-    abortAllNativeTurns()
+    abortAllProviderStreams()
     getRunStore().cancelActiveRuns("wiped")
     wipeAllData(getDatabase())
     console.log("[Debug] Cleared all database data")
