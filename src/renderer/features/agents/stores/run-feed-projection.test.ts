@@ -293,4 +293,63 @@ describe("run feed projection", () => {
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("ready")
     stop()
   })
+
+  it("backs off when a same-value feed item lands during the lookup", async () => {
+    // A fresh run emits during the lookup but maps to the same streaming
+    // status; the revision counter is what catches it, so the stale settled
+    // row must not win.
+    const testSeq = new Map<string, number>()
+    const fake = fakeClient(
+      (emit) => {
+        // The replay covers the run that was active before the outage.
+        emit(run("r1", "sub-a", "running", 1))
+      },
+      (subChatId) => {
+        if (subChatId === "sub-a") {
+          // A fresh run emits while the lookup is in flight; the row the
+          // lookup read is still the older settled one.
+          applyRunFeedItem(liveEvent(run("r2", "sub-a", "running", 1), "chunk", 1), testSeq)
+          return [{ subChatId: "sub-a", status: "completed" }]
+        }
+        return []
+      },
+    )
+    // A real lookup is asynchronous; keep the fake honest so the feed item
+    // lands while the repair awaits instead of before it captures its
+    // snapshot.
+    const realQuery = fake.client.runs.list.query
+    fake.client.runs.list.query = (input) =>
+      new Promise((resolve) => {
+        setTimeout(() => resolve(realQuery(input)), 5)
+      })
+
+    const stop = startRunFeedSync(fake.client)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("streaming")
+    stop()
+  })
+
+  it("records the run-owned errors it writes during reconciliation", async () => {
+    // The repair applies a settled error row; a later refresh whose newest
+    // run completed must then clear it, which needs the bookkeeping.
+    let attempt = 0
+    const fake = fakeClient(
+      (emit, fail) => {
+        attempt += 1
+        if (attempt === 1) {
+          emit(run("r1", "sub-a", "running", 1))
+          fail(new Error("ipc gone"))
+        }
+      },
+      (subChatId) => (subChatId === "sub-a" ? [{ subChatId: "sub-a", status: "error" }] : []),
+    )
+
+    const stop = startRunFeedSync(fake.client, 10)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("error")
+
+    hydrateErrorStatusesFromLatestRuns([{ id: "sub-a", latestRun: { status: "completed" } }])
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("ready")
+    stop()
+  })
 })

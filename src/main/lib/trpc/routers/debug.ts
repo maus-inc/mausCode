@@ -7,6 +7,8 @@ import { clearChatTree, clearAllData as wipeAllData } from "../../db/wipe"
 import { clearNetworkCache } from "../../ollama/network-detector"
 import { getRunStore } from "../../runs"
 import { publicProcedure, router } from "../index"
+import { abortAllClaudeSessions } from "./claude"
+import { abortAllNativeTurns } from "./runtime"
 
 // Global flag for simulating offline mode (for testing)
 let simulateOfflineMode = false
@@ -66,8 +68,12 @@ export const debugRouter = router({
    * registered here automatically.
    */
   clearChats: publicProcedure.mutation(() => {
-    // Settle any active runs first so subscribed windows see them cancelled
-    // instead of keeping a streaming state for rows that no longer exist.
+    // Stop live turns first so nothing keeps emitting for rows that are
+    // about to disappear, then settle any active runs so subscribed windows
+    // see them cancelled instead of keeping a streaming state for rows that
+    // no longer exist.
+    abortAllClaudeSessions()
+    abortAllNativeTurns()
     getRunStore().cancelActiveRuns("wiped")
     clearChatTree(getDatabase())
     console.log("[Debug] Cleared all chats and sub-chats")
@@ -78,6 +84,8 @@ export const debugRouter = router({
    * Clear all data (projects, chats, sub-chats)
    */
   clearAllData: publicProcedure.mutation(() => {
+    abortAllClaudeSessions()
+    abortAllNativeTurns()
     getRunStore().cancelActiveRuns("wiped")
     wipeAllData(getDatabase())
     console.log("[Debug] Cleared all database data")

@@ -56,6 +56,143 @@ function registerTurn(subChatId: string): { cancelled: boolean; cancelRemote: ()
   return turn
 }
 
+type NativeEmit = (chunk: UIMessageChunk) => void
+type NativeFail = (errorText: string) => void
+
+// The chat handler below stays a flat sequence of these steps so its shape is
+// readable at a glance; each step owns its own failure handling.
+
+async function acquireNativeClient(fail: NativeFail): Promise<JcodeClient | null> {
+  try {
+    return await getRuntimeManager().getClient()
+  } catch (error) {
+    fail(`NATIVE_STARTUP_FAILED: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+}
+
+async function openNativeSession(
+  client: JcodeClient,
+  subChatId: string,
+  cwd: string,
+  fail: NativeFail,
+): Promise<string | null> {
+  try {
+    return await ensureNativeSession(client, subChatId, cwd)
+  } catch (error) {
+    fail(`NATIVE_SESSION_FAILED: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+}
+
+function emitNativeSessionSnapshot(cwd: string, jcodeHome: string, safeEmit: NativeEmit): void {
+  try {
+    const snapshot = resolveNativeMcpSnapshot(cwd, jcodeHome)
+    safeEmit({
+      type: "session-init",
+      tools: snapshot.servers.flatMap((s) => s.tools.map((t) => `mcp__${s.name}__${t}`)),
+      mcpServers: snapshot.servers.map((s) => ({
+        name: s.name,
+        status: s.status,
+      })),
+      plugins: [],
+      skills: [],
+      toolsUnknown: true,
+      ...(snapshot.errors.length > 0 && { mcpConfigErrors: snapshot.errors }),
+    })
+  } catch {
+    // Snapshot is best-effort observability; never fail the turn.
+  }
+}
+
+async function prepareNativeCredentials(
+  client: JcodeClient,
+  input: { customToken?: string; customBaseUrl?: string },
+  hooks: { fail: NativeFail; safeEmit: NativeEmit; safeComplete: () => void },
+): Promise<boolean> {
+  try {
+    await applyNativeCredentials(client, {
+      customToken: input.customToken,
+      customBaseUrl: input.customBaseUrl,
+    })
+    return true
+  } catch (error) {
+    if (error instanceof NativeCredentialError) {
+      // Unsupported configuration, not missing credentials: say so.
+      hooks.fail(`NATIVE_INVALID_REQUEST: ${error.message}`)
+      return false
+    }
+    hooks.safeEmit({ type: "auth-error", errorText: "NATIVE_NO_CREDENTIALS" })
+    hooks.safeComplete()
+    return false
+  }
+}
+
+async function setNativeModelWithRetry(
+  client: JcodeClient,
+  sessionId: string,
+  model: string | undefined,
+  safeEmit: NativeEmit,
+): Promise<void> {
+  if (!model) return
+  // The account model list loads async after set_api_key; a fresh daemon
+  // rejects set_model until it lands. Retry briefly before falling back to
+  // the daemon default.
+  let modelOk = false
+  for (let attempt = 0; attempt < 4 && !modelOk; attempt++) {
+    try {
+      await client.setModel(sessionId, model)
+      modelOk = true
+    } catch {
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+  }
+  if (!modelOk) {
+    safeEmit({
+      type: "retry-notification",
+      message: `Model "${model}" is unavailable on the native runtime; using the daemon default.`,
+    })
+  }
+}
+
+async function consumeNativeTurnStream(
+  stream: ReturnType<JcodeClient["events"]>,
+  translator: NativeTranslator,
+  shouldStop: () => boolean,
+  safeEmit: NativeEmit,
+): Promise<void> {
+  for await (const event of stream) {
+    if (shouldStop()) break
+    for (const chunk of translator.translate(event)) safeEmit(chunk)
+    if (event.ev === "turn_done") break
+    if (event.ev === "error") break
+  }
+}
+
+function finishNativeTurnBookkeeping(
+  runHandle: RunHandle | null,
+  turn: { cancelled: boolean },
+  subChatId: string,
+): void {
+  // Settle the run record. Idempotent: cancel and supersede paths already
+  // settled it through the run store.
+  runHandle?.settle(turn.cancelled ? "cancelled" : undefined)
+  if (activeTurns.get(subChatId) === turn) {
+    activeTurns.delete(subChatId)
+  }
+  try {
+    getDatabase()
+      .update(subChats)
+      .set({ streamId: null, updatedAt: new Date() })
+      .where(eq(subChats.id, subChatId))
+      .run()
+  } catch {
+    // Bookkeeping must not fail the turn.
+  }
+}
+
 export const runtimeRouter = router({
   chat: publicProcedure
     .input(
@@ -106,7 +243,6 @@ export const runtimeRouter = router({
         console.log(`[Native] M:START sub=${subId} mode=${input.mode}`)
 
         void (async () => {
-          const db = getDatabase()
           const streamId = crypto.randomUUID()
           try {
             if (input.mode === "plan") {
@@ -126,91 +262,36 @@ export const runtimeRouter = router({
             })
 
             for (const chunk of translator.beginTurn()) safeEmit(chunk)
-            db.update(subChats).set({ streamId }).where(eq(subChats.id, input.subChatId)).run()
+            getDatabase()
+              .update(subChats)
+              .set({ streamId })
+              .where(eq(subChats.id, input.subChatId))
+              .run()
 
             const manager = getRuntimeManager()
-            let client: JcodeClient
-            try {
-              client = await manager.getClient()
-            } catch (error) {
-              fail(
-                `NATIVE_STARTUP_FAILED: ${error instanceof Error ? error.message : String(error)}`,
-              )
-              return
-            }
 
             // Attach FIRST: the bridge rejects stateful requests (including
             // set_api_key) until the client has subscribed with a working_dir.
             // Credentials are still applied before the turn starts.
-            let sessionId: string
-            try {
-              sessionId = await ensureNativeSession(client, input.subChatId, input.cwd)
-            } catch (error) {
-              fail(
-                `NATIVE_SESSION_FAILED: ${error instanceof Error ? error.message : String(error)}`,
-              )
-              return
-            }
+            const client = await acquireNativeClient(fail)
+            if (!client) return
+
+            const sessionId = await openNativeSession(client, input.subChatId, input.cwd, fail)
+            if (!sessionId) return
 
             // Native session snapshot (MCP Phase 1 + session-init): the v1
             // harness exposes no tool list, so tools carries only cached
             // mcp__server__tool names with toolsUnknown set.
-            try {
-              const snapshot = resolveNativeMcpSnapshot(input.cwd, manager.jcodeHome)
-              safeEmit({
-                type: "session-init",
-                tools: snapshot.servers.flatMap((s) => s.tools.map((t) => `mcp__${s.name}__${t}`)),
-                mcpServers: snapshot.servers.map((s) => ({
-                  name: s.name,
-                  status: s.status,
-                })),
-                plugins: [],
-                skills: [],
-                toolsUnknown: true,
-                ...(snapshot.errors.length > 0 && { mcpConfigErrors: snapshot.errors }),
-              })
-            } catch {
-              // Snapshot is best-effort observability; never fail the turn.
-            }
+            emitNativeSessionSnapshot(input.cwd, manager.jcodeHome, safeEmit)
 
-            try {
-              await applyNativeCredentials(client, {
-                customToken: input.customToken,
-                customBaseUrl: input.customBaseUrl,
-              })
-            } catch (error) {
-              if (error instanceof NativeCredentialError) {
-                // Unsupported configuration, not missing credentials: say so.
-                fail(`NATIVE_INVALID_REQUEST: ${error.message}`)
-                return
-              }
-              safeEmit({ type: "auth-error", errorText: "NATIVE_NO_CREDENTIALS" })
-              safeComplete()
-              return
-            }
+            const credentialsReady = await prepareNativeCredentials(client, input, {
+              fail,
+              safeEmit,
+              safeComplete,
+            })
+            if (!credentialsReady) return
 
-            if (input.model) {
-              // The account model list loads async after set_api_key; a fresh
-              // daemon rejects set_model until it lands. Retry briefly before
-              // falling back to the daemon default.
-              let modelOk = false
-              for (let attempt = 0; attempt < 4 && !modelOk; attempt++) {
-                try {
-                  await client.setModel(sessionId, input.model)
-                  modelOk = true
-                } catch {
-                  if (attempt < 3) {
-                    await new Promise((resolve) => setTimeout(resolve, 1000))
-                  }
-                }
-              }
-              if (!modelOk) {
-                safeEmit({
-                  type: "retry-notification",
-                  message: `Model "${input.model}" is unavailable on the native runtime; using the daemon default.`,
-                })
-              }
-            }
+            await setNativeModelWithRetry(client, sessionId, input.model, safeEmit)
 
             // The turn may have been cancelled while the daemon was starting;
             // never send a doomed turn (it would run uncancelled server-side).
@@ -232,12 +313,12 @@ export const runtimeRouter = router({
               ),
             })
 
-            for await (const event of stream) {
-              if (!isActive || turn.cancelled) break
-              for (const chunk of translator.translate(event)) safeEmit(chunk)
-              if (event.ev === "turn_done") break
-              if (event.ev === "error") break
-            }
+            await consumeNativeTurnStream(
+              stream,
+              translator,
+              () => !isActive || turn.cancelled,
+              safeEmit,
+            )
             safeComplete()
             console.log(`[Native] M:END sub=${subId}`)
           } catch (error) {
@@ -248,20 +329,7 @@ export const runtimeRouter = router({
               safeComplete()
             }
           } finally {
-            // Settle the run record. Idempotent: cancel and supersede paths
-            // already settled it through the run store.
-            runHandle?.settle(turn.cancelled ? "cancelled" : undefined)
-            if (activeTurns.get(input.subChatId) === turn) {
-              activeTurns.delete(input.subChatId)
-            }
-            try {
-              db.update(subChats)
-                .set({ streamId: null, updatedAt: new Date() })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
-            } catch {
-              // Bookkeeping must not fail the turn.
-            }
+            finishNativeTurnBookkeeping(runHandle, turn, input.subChatId)
           }
         })()
 

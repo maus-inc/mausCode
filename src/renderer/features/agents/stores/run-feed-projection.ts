@@ -46,24 +46,40 @@ export function runStatusToStreamingStatus(status: string): StreamingStatus {
   }
 }
 
+/**
+ * Sub-chats whose current error status came from a run row, either through
+ * the live feed, the reconciliation below, or the hydration below. Errors
+ * set anywhere else, like the queue processor marking a local send failure,
+ * are absent here and therefore survive hydration, because no run row exists
+ * to clear them.
+ */
+const errorFromRunRow = new Set<string>()
+
+/**
+ * Per-sub-chat revision bumped every time a feed item lands. Reconciliation
+ * captures it before the asynchronous lookup and backs off when it moved,
+ * which catches live events that mapped to the same status and therefore
+ * left the status comparison unchanged.
+ */
+const feedRevisionBySubChat = new Map<string, number>()
+
+function writeProjectedStatus(subChatId: string, status: StreamingStatus): void {
+  if (status === "error") errorFromRunRow.add(subChatId)
+  else errorFromRunRow.delete(subChatId)
+  useStreamingStatusStore.getState().setStatus(subChatId, status)
+}
+
 export function applyRunFeedItem(item: RunsFeedItem, lastAppliedSeq: Map<string, number>): void {
   const seq = item.event ? item.event.seq : item.run.lastSeq
   const seen = lastAppliedSeq.get(item.run.id)
   if (seen !== undefined && seq <= seen) return
   lastAppliedSeq.set(item.run.id, seq)
-  const mapped = runStatusToStreamingStatus(item.run.status)
-  if (mapped === "error") errorFromRunRow.add(item.run.subChatId)
-  else errorFromRunRow.delete(item.run.subChatId)
-  useStreamingStatusStore.getState().setStatus(item.run.subChatId, mapped)
+  feedRevisionBySubChat.set(
+    item.run.subChatId,
+    (feedRevisionBySubChat.get(item.run.subChatId) ?? 0) + 1,
+  )
+  writeProjectedStatus(item.run.subChatId, runStatusToStreamingStatus(item.run.status))
 }
-
-/**
- * Sub-chats whose current error status came from a run row, either through
- * the live feed or through the hydration below. Errors set anywhere else,
- * like the queue processor marking a local send failure, are absent here and
- * therefore survive hydration, because no run row exists to clear them.
- */
-const errorFromRunRow = new Set<string>()
 
 /**
  * Seeds the store with terminal error statuses that survived a reload. The
@@ -75,23 +91,19 @@ const errorFromRunRow = new Set<string>()
 export function hydrateErrorStatusesFromLatestRuns(
   subChats: Array<{ id: string; latestRun: { status: string } | null }>,
 ): void {
-  const { statuses, setStatus } = useStreamingStatusStore.getState()
+  const { statuses } = useStreamingStatusStore.getState()
   for (const subChat of subChats) {
     if (!subChat.latestRun) continue
     const mapped = runStatusToStreamingStatus(subChat.latestRun.status)
     const current = statuses[subChat.id]
     if (current === undefined) {
-      if (mapped === "error") {
-        errorFromRunRow.add(subChat.id)
-        setStatus(subChat.id, "error")
-      }
+      if (mapped === "error") writeProjectedStatus(subChat.id, "error")
       continue
     }
     // A lingering error written by an older run row yields to a newer settled
     // run. Every other error, including a local send failure, stays put.
     if (current === "error" && mapped !== "error" && errorFromRunRow.has(subChat.id)) {
-      errorFromRunRow.delete(subChat.id)
-      setStatus(subChat.id, mapped)
+      writeProjectedStatus(subChat.id, mapped)
     }
   }
 }
@@ -101,13 +113,12 @@ export function hydrateErrorStatusesFromLatestRuns(
  * runs, so a run that settled while the feed was down would stay streaming
  * here forever. Every sub-chat this window still considers busy is checked
  * against its newest run; if the engine has no active run for it, the newest
- * run is the settled one and its status is the truth. The comparison is per
- * sub-chat, so status writes for other sub-chats during the lookup cannot
- * stall the remaining repairs. If this sub-chat's own status changes during
- * the lookup, the repair backs off. A same-value live event during the lookup
- * is indistinguishable and could let an older settled row win briefly; the
- * next live event for the fresh run restores the truth, and a permanently
- * stuck busy status was the worse failure.
+ * run is the settled one and its status is the truth. The repair backs off
+ * when the sub-chat's own status changed during the lookup, or when any feed
+ * item landed for it, even one that mapped to the same status; the revision
+ * counter is what catches that same-value case. The comparison is per
+ * sub-chat, so writes for other sub-chats cannot stall the remaining
+ * repairs.
  */
 async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
   const busyIds = Object.entries(useStreamingStatusStore.getState().statuses)
@@ -117,12 +128,12 @@ async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
     try {
       const statusBeforeLookup = useStreamingStatusStore.getState().statuses[subChatId]
       if (statusBeforeLookup !== "streaming" && statusBeforeLookup !== "submitted") continue
+      const revisionBeforeLookup = feedRevisionBySubChat.get(subChatId) ?? 0
       const [latest] = await client.runs.list.query({ subChatId, limit: 1 })
-      if (!latest || useStreamingStatusStore.getState().statuses[subChatId] !== statusBeforeLookup)
-        continue
-      useStreamingStatusStore
-        .getState()
-        .setStatus(subChatId, runStatusToStreamingStatus(latest.status))
+      if (!latest) continue
+      if (useStreamingStatusStore.getState().statuses[subChatId] !== statusBeforeLookup) continue
+      if ((feedRevisionBySubChat.get(subChatId) ?? 0) !== revisionBeforeLookup) continue
+      writeProjectedStatus(subChatId, runStatusToStreamingStatus(latest.status))
     } catch {
       // The next reconnect retries the reconciliation.
     }
