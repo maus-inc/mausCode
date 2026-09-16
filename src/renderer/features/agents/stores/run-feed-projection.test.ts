@@ -164,8 +164,10 @@ describe("run feed projection", () => {
     expect(statuses["sub-none"]).toBeUndefined()
   })
 
-  it("a lingering error yields to a newer settled run", () => {
-    useStreamingStatusStore.getState().setStatus("sub-old-error", "error")
+  it("a lingering run-row error yields to a newer settled run", () => {
+    const seq = new Map<string, number>()
+    // An older run errored and the feed recorded it.
+    applyRunFeedItem(run("r1", "sub-old-error", "error", 3), seq)
     useStreamingStatusStore.getState().setStatus("sub-still-error", "error")
 
     hydrateErrorStatusesFromLatestRuns([
@@ -176,6 +178,18 @@ describe("run feed projection", () => {
     const statuses = useStreamingStatusStore.getState().statuses
     expect(statuses["sub-old-error"]).toBe("ready")
     expect(statuses["sub-still-error"]).toBe("error")
+  })
+
+  it("a local queue error survives hydration", () => {
+    // The queue processor marks a send failure directly; no run row exists,
+    // so a chats refresh must not clear it.
+    useStreamingStatusStore.getState().setStatus("sub-send-failed", "error")
+
+    hydrateErrorStatusesFromLatestRuns([
+      { id: "sub-send-failed", latestRun: { status: "completed" } },
+    ])
+
+    expect(useStreamingStatusStore.getState().statuses["sub-send-failed"]).toBe("error")
   })
 
   it("reconnects after a feed error", async () => {
@@ -250,6 +264,33 @@ describe("run feed projection", () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("ready")
     expect(useStreamingStatusStore.getState().getStatus("sub-b")).toBe("ready")
+    stop()
+  })
+
+  it("keeps repairing when an unrelated sub-chat's status lands during a lookup", async () => {
+    // A live event for another sub-chat rewrites the statuses object during
+    // the lookup; the repair of this sub-chat must not stall because of it.
+    let attempt = 0
+    const fake = fakeClient(
+      (emit, fail) => {
+        attempt += 1
+        if (attempt === 1) {
+          emit(run("r1", "sub-a", "running", 1))
+          fail(new Error("ipc gone"))
+        }
+      },
+      (subChatId) => {
+        if (subChatId === "sub-a") {
+          useStreamingStatusStore.getState().setStatus("sub-other", "ready")
+          return [{ subChatId: "sub-a", status: "completed" }]
+        }
+        return []
+      },
+    )
+
+    const stop = startRunFeedSync(fake.client, 10)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("ready")
     stop()
   })
 })

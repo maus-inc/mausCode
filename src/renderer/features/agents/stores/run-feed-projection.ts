@@ -51,10 +51,19 @@ export function applyRunFeedItem(item: RunsFeedItem, lastAppliedSeq: Map<string,
   const seen = lastAppliedSeq.get(item.run.id)
   if (seen !== undefined && seq <= seen) return
   lastAppliedSeq.set(item.run.id, seq)
-  useStreamingStatusStore
-    .getState()
-    .setStatus(item.run.subChatId, runStatusToStreamingStatus(item.run.status))
+  const mapped = runStatusToStreamingStatus(item.run.status)
+  if (mapped === "error") errorFromRunRow.add(item.run.subChatId)
+  else errorFromRunRow.delete(item.run.subChatId)
+  useStreamingStatusStore.getState().setStatus(item.run.subChatId, mapped)
 }
+
+/**
+ * Sub-chats whose current error status came from a run row, either through
+ * the live feed or through the hydration below. Errors set anywhere else,
+ * like the queue processor marking a local send failure, are absent here and
+ * therefore survive hydration, because no run row exists to clear them.
+ */
+const errorFromRunRow = new Set<string>()
 
 /**
  * Seeds the store with terminal error statuses that survived a reload. The
@@ -72,12 +81,18 @@ export function hydrateErrorStatusesFromLatestRuns(
     const mapped = runStatusToStreamingStatus(subChat.latestRun.status)
     const current = statuses[subChat.id]
     if (current === undefined) {
-      if (mapped === "error") setStatus(subChat.id, "error")
+      if (mapped === "error") {
+        errorFromRunRow.add(subChat.id)
+        setStatus(subChat.id, "error")
+      }
       continue
     }
-    // A lingering error from an older run must yield to a newer settled
-    // run; the feed owns every other live status.
-    if (current === "error" && mapped !== "error") setStatus(subChat.id, mapped)
+    // A lingering error written by an older run row yields to a newer settled
+    // run. Every other error, including a local send failure, stays put.
+    if (current === "error" && mapped !== "error" && errorFromRunRow.has(subChat.id)) {
+      errorFromRunRow.delete(subChat.id)
+      setStatus(subChat.id, mapped)
+    }
   }
 }
 
@@ -86,10 +101,13 @@ export function hydrateErrorStatusesFromLatestRuns(
  * runs, so a run that settled while the feed was down would stay streaming
  * here forever. Every sub-chat this window still considers busy is checked
  * against its newest run; if the engine has no active run for it, the newest
- * run is the settled one and its status is the truth. The statuses reference
- * is captured right before each lookup, and any write during that lookup
- * means a live event landed, so the repair backs off instead of risking an
- * overwrite of a fresh run's status.
+ * run is the settled one and its status is the truth. The comparison is per
+ * sub-chat, so status writes for other sub-chats during the lookup cannot
+ * stall the remaining repairs. If this sub-chat's own status changes during
+ * the lookup, the repair backs off. A same-value live event during the lookup
+ * is indistinguishable and could let an older settled row win briefly; the
+ * next live event for the fresh run restores the truth, and a permanently
+ * stuck busy status was the worse failure.
  */
 async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
   const busyIds = Object.entries(useStreamingStatusStore.getState().statuses)
@@ -97,11 +115,11 @@ async function reconcileStaleStreaming(client: RunsFeedClient): Promise<void> {
     .map(([subChatId]) => subChatId)
   for (const subChatId of busyIds) {
     try {
-      const statusesBeforeLookup = useStreamingStatusStore.getState().statuses
-      const status = statusesBeforeLookup[subChatId]
-      if (status !== "streaming" && status !== "submitted") continue
+      const statusBeforeLookup = useStreamingStatusStore.getState().statuses[subChatId]
+      if (statusBeforeLookup !== "streaming" && statusBeforeLookup !== "submitted") continue
       const [latest] = await client.runs.list.query({ subChatId, limit: 1 })
-      if (!latest || useStreamingStatusStore.getState().statuses !== statusesBeforeLookup) continue
+      if (!latest || useStreamingStatusStore.getState().statuses[subChatId] !== statusBeforeLookup)
+        continue
       useStreamingStatusStore
         .getState()
         .setStatus(subChatId, runStatusToStreamingStatus(latest.status))
