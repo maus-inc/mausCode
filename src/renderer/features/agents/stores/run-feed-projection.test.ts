@@ -92,6 +92,21 @@ function fakeClient(
   }
 }
 
+/**
+ * First connection emits the given active runs and then dies; the reconnect
+ * replays nothing. That is the outage the reconciliation exists to repair.
+ */
+function outageScript(activeItems: Item[]) {
+  let attempt = 0
+  return (emit: (item: Item) => void, fail: (error: Error) => void) => {
+    attempt += 1
+    if (attempt === 1) {
+      for (const item of activeItems) emit(item)
+      fail(new Error("ipc gone"))
+    }
+  }
+}
+
 describe("run feed projection", () => {
   beforeEach(() => {
     useStreamingStatusStore.setState({ statuses: {} })
@@ -216,19 +231,11 @@ describe("run feed projection", () => {
   })
 
   it("repairs a stale streaming status after a run settles during an outage", async () => {
-    let attempt = 0
     // The replay only covers active runs, so the reconnect emits nothing for
     // the run that settled while the feed was down. The latest-run lookup is
     // the only path that can repair the stale streaming status.
-    const fake = fakeClient(
-      (emit, fail) => {
-        attempt += 1
-        if (attempt === 1) {
-          emit(run("r1", "sub-a", "running", 1))
-          fail(new Error("ipc gone"))
-        }
-      },
-      (subChatId) => (subChatId === "sub-a" ? [{ subChatId: "sub-a", status: "completed" }] : []),
+    const fake = fakeClient(outageScript([run("r1", "sub-a", "running", 1)]), (subChatId) =>
+      subChatId === "sub-a" ? [{ subChatId: "sub-a", status: "completed" }] : [],
     )
 
     const stop = startRunFeedSync(fake.client, 10)
@@ -242,16 +249,8 @@ describe("run feed projection", () => {
     // Two runs settled during the same outage. The repair of the first
     // sub-chat rewrites the statuses object, so the second lookup must
     // compare against its own fresh snapshot instead of the original one.
-    let attempt = 0
     const fake = fakeClient(
-      (emit, fail) => {
-        attempt += 1
-        if (attempt === 1) {
-          emit(run("r1", "sub-a", "running", 1))
-          emit(run("r2", "sub-b", "running", 1))
-          fail(new Error("ipc gone"))
-        }
-      },
+      outageScript([run("r1", "sub-a", "running", 1), run("r2", "sub-b", "running", 1)]),
       (subChatId) =>
         subChatId === "sub-a"
           ? [{ subChatId: "sub-a", status: "completed" }]
@@ -270,23 +269,13 @@ describe("run feed projection", () => {
   it("keeps repairing when an unrelated sub-chat's status lands during a lookup", async () => {
     // A live event for another sub-chat rewrites the statuses object during
     // the lookup; the repair of this sub-chat must not stall because of it.
-    let attempt = 0
-    const fake = fakeClient(
-      (emit, fail) => {
-        attempt += 1
-        if (attempt === 1) {
-          emit(run("r1", "sub-a", "running", 1))
-          fail(new Error("ipc gone"))
-        }
-      },
-      (subChatId) => {
-        if (subChatId === "sub-a") {
-          useStreamingStatusStore.getState().setStatus("sub-other", "ready")
-          return [{ subChatId: "sub-a", status: "completed" }]
-        }
-        return []
-      },
-    )
+    const fake = fakeClient(outageScript([run("r1", "sub-a", "running", 1)]), (subChatId) => {
+      if (subChatId === "sub-a") {
+        useStreamingStatusStore.getState().setStatus("sub-other", "ready")
+        return [{ subChatId: "sub-a", status: "completed" }]
+      }
+      return []
+    })
 
     const stop = startRunFeedSync(fake.client, 10)
     await new Promise((resolve) => setTimeout(resolve, 50))
@@ -332,16 +321,8 @@ describe("run feed projection", () => {
   it("records the run-owned errors it writes during reconciliation", async () => {
     // The repair applies a settled error row; a later refresh whose newest
     // run completed must then clear it, which needs the bookkeeping.
-    let attempt = 0
-    const fake = fakeClient(
-      (emit, fail) => {
-        attempt += 1
-        if (attempt === 1) {
-          emit(run("r1", "sub-a", "running", 1))
-          fail(new Error("ipc gone"))
-        }
-      },
-      (subChatId) => (subChatId === "sub-a" ? [{ subChatId: "sub-a", status: "error" }] : []),
+    const fake = fakeClient(outageScript([run("r1", "sub-a", "running", 1)]), (subChatId) =>
+      subChatId === "sub-a" ? [{ subChatId: "sub-a", status: "error" }] : [],
     )
 
     const stop = startRunFeedSync(fake.client, 10)
