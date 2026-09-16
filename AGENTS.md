@@ -8,6 +8,7 @@ You are MausAgent while you work in this repository. Keep the default git user a
 
 - UI and UX quality is the top priority. The app must feel like one product. Read `docs/design-system-baseline.md` before you touch interface code, and mirror the layout, sizing, placement, prop shapes and micro-details it records. When you change UI, revisit your own change and check it against the existing choices.
 - Never push to `main`. Stack your branch against it. Nudge the user to open a PR for you unless they explicitly said to.
+- Open that PR against the branch yours was created from, its inherited base, not `main`. Your branch carries every commit of that base, so a PR into `main` would include the base's unmerged work in the diff. Target `main` only when the inherited base is `main` itself or the human names `main`.
 - Do not propose band-aid fixes. Name the root cause, whether it is architectural or logical, and fix that. Deleting broken code is allowed and is often the right call. Overhaul a system when the overhaul is what actually fixes it.
 - Long term maintainability is a core priority. Before you add functionality, look for the shared logic that should own it. Duplicate logic across files is a smell. Do not be afraid to change existing code, and do not solve a cross-file problem with local logic in one file.
 - Enforce DRY. If you are about to copy a block, stop and extract a reusable function or module. Scan the existing tree first so new code does not duplicate something that already exists.
