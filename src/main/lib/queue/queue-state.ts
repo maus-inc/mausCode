@@ -247,6 +247,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
       .returning()
       .all()
     if (removed.length === 0) return false
+    console.log(`[queue] complete ${itemId.slice(-8)} sub=${subChatId.slice(-8)}`)
     emit(subChatId)
     return true
   }
@@ -291,7 +292,12 @@ export function createQueueStore(db: QueueDb): QueueStore {
       )
       .returning()
       .all()
-    if (changed.length > 0) emit(subChatId)
+    if (changed.length > 0) {
+      console.log(
+        `[queue] ${paused ? "paused" : "resumed"} sub=${subChatId.slice(-8)} rows=${changed.length}`,
+      )
+      emit(subChatId)
+    }
     return changed.length
   }
 
@@ -344,7 +350,16 @@ export function createQueueStore(db: QueueDb): QueueStore {
         .get()
       if (updated) claimed = toQueueItem(updated)
     })
-    if (claimed) emit(input.subChatId)
+    if (claimed) {
+      // One line per dispatch so a report of a missing or duplicated queued
+      // message can be answered from the log folder. Ids only, never payload.
+      console.log(
+        `[queue] claim ${claimed.id.slice(-8)} sub=${input.subChatId.slice(-8)} via=${
+          input.itemId ? "send-now" : "dispatch"
+        }`,
+      )
+      emit(input.subChatId)
+    }
     return claimed
   }
 
@@ -379,6 +394,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
       .returning()
       .all()
     if (updated.length === 0) return false
+    console.log(`[queue] requeue ${itemId.slice(-8)} sub=${subChatId.slice(-8)}`)
     emit(subChatId)
     return true
   }
