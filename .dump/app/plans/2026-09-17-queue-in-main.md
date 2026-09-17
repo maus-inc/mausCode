@@ -31,6 +31,31 @@ the indicator becomes a projection of the rows.
    a queue add, or Send now in the queue card. Stopping no longer fires the next
    queued message.
 
+### Where this departs from the step text, and why
+
+- **§6.2 asks dispatch to mark the row and create the run in one transaction.**
+  The mark is here and is one transaction; the *run row* is not created by it,
+  because the engine call belongs to the window (decision 1 above), and a run
+  row records a turn that actually started. What replaces the "one owner"
+  property the step was buying is the conditional `pending -> sending` update:
+  it is the one winner, and the run table is still consulted before a dispatch
+  (`ACTIVE_RUN_STATUSES`), so a turn that is live in main blocks the queue even
+  when a second window's status store says ready.
+- **§13 asks for the old renderer store to be kept one release behind as a dead
+  module.** It is deleted instead, and the reason is concrete rather than a
+  preference: `message-queue-store.ts` imports `AgentQueueItem` and
+  `removeQueueItem` from `queue-utils.ts`, and those exist only to feed
+  `queue-processor.tsx`, which §1 and §6.4 delete. An inert module would need
+  that whole vocabulary restored beside `src/shared/queue-item.ts` — the same
+  duplication Sonar already flagged on this PR once (`e65f71f`) — and it would
+  restore nothing on its own, because §8 forbids keeping the safety timer "just
+  in case" and the timer is what made the old drain work. The rollback path is
+  therefore a revert of this branch: migrations `0016`–`0018` only add a table,
+  two columns and an index, so a build from before this step ignores them, and
+  the rows it finds later are messages a user typed, which the newer build
+  recovers. Recorded here so the choice is explicit and reviewable rather than
+  silent.
+
 ## States
 
 `queue_items.status` is one of three values, declared once in
