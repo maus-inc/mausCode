@@ -17,6 +17,7 @@ const held = vi.hoisted(() => ({
   toastError: vi.fn(),
   clearLoading: vi.fn(),
   setLoading: vi.fn(),
+  getParentChatId: vi.fn((): string | undefined => undefined),
 }))
 
 vi.mock("sonner", () => ({ toast: { error: held.toastError } }))
@@ -29,7 +30,7 @@ vi.mock("../atoms", () => ({
   loadingSubChatsAtom: {},
 }))
 vi.mock("../stores/agent-chat-store", () => ({
-  agentChatStore: { getParentChatId: () => undefined },
+  agentChatStore: { getParentChatId: held.getParentChatId },
 }))
 vi.mock("../stores/sub-chat-store", () => ({
   useAgentSubChatStore: {
@@ -64,6 +65,8 @@ describe("queue send", () => {
     held.toastError.mockReset()
     held.clearLoading.mockReset()
     held.setLoading.mockReset()
+    held.getParentChatId.mockReset()
+    held.getParentChatId.mockReturnValue(undefined)
     held.markHanded.mockImplementation(async () => {
       held.order.push("handed")
       return true
@@ -149,6 +152,29 @@ describe("queue send", () => {
     expect(result).toBe("failed")
     expect(held.markHanded).not.toHaveBeenCalled()
     expect(held.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it("parks the outcome when the send throws after the hand-off", async () => {
+    // A transport that throws on the way in is the same situation as one that
+    // rejects: the hand-off is already recorded, so the payload may be with the
+    // engine. Answering "failed" here would put the row back and send it again.
+    held.sendMessage.mockImplementation(() => {
+      throw new Error("transport refused")
+    })
+
+    const result = await sendClaimedQueueItem(input())
+
+    expect(result).toBe("uncertain")
+    expect(held.toastError).toHaveBeenCalled()
+    expect(held.clearLoading).toHaveBeenCalledWith(expect.any(Function), "sub-a")
+  })
+
+  it("marks the sub-chat loading before the payload leaves, for the sidebar", async () => {
+    held.getParentChatId.mockReturnValue("parent-1")
+
+    await sendClaimedQueueItem(input())
+
+    expect(held.setLoading).toHaveBeenCalledWith(expect.any(Function), "sub-a", "parent-1")
   })
 
   it("parks the outcome when the send rejects after the hand-off", async () => {

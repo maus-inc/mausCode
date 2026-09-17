@@ -10,6 +10,7 @@ import type { QueueItem } from "../../../../shared/queue-item"
 const sendClaimedQueueItem = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock("../lib/queue-send", () => ({ sendClaimedQueueItem }))
+vi.mock("../../../contexts/WindowContext", () => ({ getWindowId: () => "window-7" }))
 vi.mock("sonner", () => ({ toast: { error: toastError } }))
 
 import type { QueueFeedItem } from "../../../../main/lib/trpc/routers/queue"
@@ -60,11 +61,18 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
   const calls: string[] = []
   let handOffAllowed = options.handed ?? true
   let onFeed: ((item: QueueFeedItem) => void) | null = null
+  let onFeedError: ((error: Error) => void) | null = null
+  let subscribes = 0
   const queue = {
     claimed: options.claimed ?? [],
     subscribe: {
-      subscribe: (_input: unknown, handlers: { onData?: (item: QueueFeedItem) => void }) => {
+      subscribe: (
+        _input: unknown,
+        handlers: { onData?: (item: QueueFeedItem) => void; onError?: (error: Error) => void },
+      ) => {
+        subscribes += 1
         onFeed = handlers.onData ?? null
+        onFeedError = handlers.onError ?? null
         return {
           unsubscribe: () => {
             onFeed = null
@@ -139,6 +147,11 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
     queue,
     /** Land a feed on the live subscription, the way main's emits arrive. */
     pushFeed: (payload: QueueFeedItem) => onFeed?.(payload),
+    /** Drop the live subscription, the way a closed transport does. */
+    dropFeed: () => onFeedError?.(new Error("feed down")),
+    get subscribes() {
+      return subscribes
+    },
     claims,
     completed,
     completedBy,
@@ -269,6 +282,83 @@ describe("queue projection", () => {
     expect(fake.calls).toEqual(["claim:head"])
   })
 
+  it("names this window when the client does not, which is what main keys a claim by", async () => {
+    const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
+    registerChat("sub-a")
+
+    // The real client is a plain tRPC proxy with no owner of its own, so the
+    // id comes from the window context. Main keys the claim by it — that is how
+    // it tells a live window from one that reloaded, and how a closed window's
+    // claims are released — so a wrong id here would let one window settle
+    // another window's row.
+    const client = { ...fake.client, owner: undefined } as QueueFeedClient
+    await wakeQueue("sub-a", client)
+
+    expect(fake.claims).toEqual([{ itemId: undefined, owner: "window-7" }])
+  })
+
+  it("ignores a second Send now while the first is still working", async () => {
+    const first = item("q1", "sub-a", "pending")
+    const second = item("q2", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [first, second] })
+    registerChat("sub-a")
+    // Hold the first click's send open, so the second arrives while this
+    // sub-chat is already in flight.
+    let release: () => void = () => {}
+    sendClaimedQueueItem.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve("sent")
+        }),
+    )
+
+    const sending = sendQueueItemNow("sub-a", "q1", async () => true, fake.client)
+    await vi.waitFor(() => expect(sendClaimedQueueItem).toHaveBeenCalledTimes(1))
+
+    // A second click names another row. Main would hand it over — one row per
+    // request — and both rows would then be sent for one sub-chat.
+    await expect(sendQueueItemNow("sub-a", "q2", async () => true, fake.client)).resolves.toBe(
+      false,
+    )
+    expect(fake.claims).toHaveLength(1)
+
+    release()
+    await sending
+    expect(fake.claims).toHaveLength(1)
+  })
+
+  it("drops cards main no longer has when the feed reconnects", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient()
+    const stop = startQueueSync(fake.client, 1_000)
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+    expect(useQueueProjection.getState().queues["sub-a"]).toHaveLength(1)
+
+    // The transport drops. Whatever the card held is older than main's truth,
+    // and the replay that follows the reconnect is what fills it again.
+    fake.dropFeed()
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(useQueueProjection.getState().queues["sub-a"]).toBeUndefined()
+    expect(fake.subscribes).toBe(2)
+    stop()
+  })
+
+  it("does not reopen the feed after the sync has stopped", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient()
+    const stop = startQueueSync(fake.client, 1_000)
+    expect(fake.subscribes).toBe(1)
+
+    // The transport drops and the reconnect is scheduled, and then the mount
+    // goes away: a stopped window must not reopen the feed behind its own back.
+    fake.dropFeed()
+    stop()
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(fake.subscribes).toBe(1)
+  })
+
   it("hands a claimed row straight back when the sub-chat is gone", async () => {
     const claimed = item("q1", "sub-a", "pending")
     const fake = fakeClient({ claimed: [claimed] })
@@ -391,6 +481,49 @@ describe("queue projection", () => {
     // arrived, and the row went out.
     expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(2)
     expect(fake.completed).toEqual(["q1"])
+  })
+
+  it("does not re-ask for a sub-chat with nothing queued", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
+
+    // A wake arrives before the pane is up, and this window knows of no rows
+    // for the sub-chat: there is nothing to wake for, so no retry is scheduled.
+    // A pane that mounts later reports its own status and wakes the queue then.
+    await wakeQueue("sub-a", fake.client)
+    registerChat("sub-a")
+    await vi.advanceTimersByTimeAsync(20_000)
+
+    // A timer here would be a poll, which is the thing this step deleted.
+    expect(fake.queue.claim.mutate).not.toHaveBeenCalled()
+  })
+
+  it("asks again after a later failure once main has answered a claim", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient()
+    registerChat("sub-a")
+    // Spend the whole budget on a database that never answers.
+    fake.queue.claim.mutate.mockRejectedValue(new Error("database is locked"))
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(6)
+
+    // Main answers — nothing to send — which ends that sequence.
+    fake.queue.claim.mutate.mockResolvedValue(null)
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(7)
+
+    // The next failure gets a fresh sequence, so a transient one is still
+    // re-asked instead of being charged to a sequence that ended.
+    fake.queue.claim.mutate.mockRejectedValue(new Error("database is locked"))
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(8)
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(9)
   })
 
   it("stops asking after a bounded number of failing claims, instead of polling", async () => {

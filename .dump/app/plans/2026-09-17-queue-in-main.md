@@ -362,6 +362,43 @@ Self-triage in the same commit, after the review round:
   accepted, one character past it is refused — and its remove/clear test
   asserts which row survived instead of a filler `toBeDefined()`.
 
+### Round nine
+
+The same sweep over the renderer: sixteen mutations across the projection and
+the sender. Eight survivors, all now pinned, and two verdicts that are worth
+stating because they are *not* holes:
+
+- A reconnect dropped nothing: `startQueueSync` clears the projection before it
+  re-subscribes, so a card cannot hold rows main no longer has after a feed drop
+  (`drops cards main no longer has when the feed reconnects`).
+- The owner this window claims under was never exercised through the real
+  client, which has no `owner` of its own: `ownerFor` falls back to the window
+  id, which is what main keys claims by and what a closed window's release is
+  keyed on (`names this window when the client does not, which is what main keys
+  a claim by`).
+- Two quick Send now clicks could both reach main, because nothing took the
+  sub-chat's in-flight slot (`ignores a second Send now while the first is still
+  working`).
+- A claim that main answered did not end its retry sequence, so a later
+  transient failure was charged to a sequence that was already over
+  (`asks again after a later failure once main has answered a claim`).
+- A wake for a sub-chat with nothing queued started a retry, which is a timer
+  asking a question with no work behind it (`does not re-ask for a sub-chat with
+  nothing queued`).
+- In the sender: a transport that *throws* after the hand-off was answered
+  `failed`, which puts the row back and sends it again — the same situation as a
+  rejection, so it parks (`parks the outcome when the send throws after the
+  hand-off`). And the loading mark the sidebar shows was never actually set in
+  a test, because the fake answered no parent chat id
+  (`marks the sub-chat loading before the payload leaves, for the sidebar`).
+- Two verdicts of "not a hole": the reconnect path has two independent defences
+  — the `stopped` flag in `connect` and the cleared retry timer in the stop —
+  and removing either alone changes nothing observable, because the other one
+  already covers it. The test pins the behaviour they jointly produce (`does not
+  reopen the feed after the sync has stopped`), and both were removed together
+  to prove it fails. `markHanded`'s silence on the feed is the same shape: it is
+  a deliberate no-op for cards, asserted as such in round eight's test.
+
 ### Round eight
 
 A systematic sweep: every guard and every announcement in the main store was
