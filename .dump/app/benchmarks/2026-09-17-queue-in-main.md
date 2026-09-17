@@ -33,6 +33,27 @@ and the delete. A turn takes seconds, so the queue write cost is noise beside
 it. Emits fan out one `list` per subscriber; with one window that is the
 0.295 ms above.
 
+## Re-measured after the hand-off marker (review round four)
+
+The claim now also releases an abandoned lease and records the hand-off, which
+is one more conditional update inside the claim transaction and one more update
+before the send. Measured the same way, in the same sandbox, on the tree that
+this section was added to:
+
+| Operation | Mean | p95 | Sample | Delta |
+| --- | --- | --- | --- | --- |
+| add + claim + markHanded + complete | 2.382 ms | 4.396 ms | 300 cycles | +0.548 / +0.912 |
+| list (20 rows deep) | 0.351 ms | 0.524 ms | 200 lists | +0.056 / +0.042 |
+| `recoverSending()` with no `sending` row | 0.260 ms | - | 1 | -0.002 |
+
+The claim's extra update is a lease check over the same index the claim already
+reads (`queue_items_sub_chat_id_idx`), and the marker is a single-row update by
+primary key keyed to the claiming window, so the added work is bounded by one
+indexed scan over the rows of one sub-chat. A stored queue holds a handful of
+rows per sub-chat, and the dispatching window already pays a turn of seconds
+after it, so the added half-millisecond is noise beside the operation it
+protects: a message sent twice.
+
 ## The deleted timers, priced
 
 `QUEUE_PROCESS_DELAY = 500` delayed every dispatch when the run record had

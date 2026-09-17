@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron"
 import { cleanupWindowSubscriptions } from "../lib/git/watcher/ipc-bridge"
+import { releaseQueueClaimsForWindow } from "../lib/queue"
 
 /**
  * Manages multiple application windows
@@ -45,6 +46,11 @@ class WindowManager {
       cleanupWindowSubscriptions(electronId)
       // Release any chat ownership held by this window
       this.releaseAllChats(electronId)
+      // Hand back queued messages this window claimed, so a send that died
+      // with it does not block its sub-chat's queue until the next app start.
+      // The renderer names itself with the stable ID this manager assigned.
+      const stableId = this.windowIdMap.get(electronId)
+      if (stableId) releaseQueueClaimsForWindow(stableId)
 
       this.windows.delete(electronId)
       this.windowIdMap.delete(electronId)

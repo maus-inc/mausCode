@@ -39,13 +39,47 @@ the indicator becomes a projection of the rows.
 | status | meaning |
 | --- | --- |
 | `pending` | eligible to be handed to a window |
-| `paused` | the user stopped a turn; not eligible until an explicit send |
+| `paused` | the row is not eligible until the user acts: either a turn was stopped, or the row was parked (see below) |
 | `sending` | claimed by exactly one window, which is sending it now |
+
+Two columns carry what the status alone cannot (`drizzle/0017_*`):
+
+- `claimedBy` is the window that holds the row, from the same stable id that
+  namespaces its storage. It is what makes a claim the claiming window's to
+  finish, and what lets main hand back what a closed window held.
+- `handedAt` is written once, immediately before the payload goes to the
+  engine, and only by the owner. Null therefore means "this message never
+  left", which is the fact everything below is built on.
 
 `sending` rows are hidden from the indicator, matching the old store's pop
 before send. `complete` deletes the row; `requeue` returns it to `pending` with
-`dispatchedAt` cleared. Startup recovery returns every `sending` row to
-`pending`, because no window can have claimed anything at startup.
+the claim columns cleared.
+
+The outcome vocabulary the renderer records is four-valued, and the hand-off is
+what divides it:
+
+- `sent` — the turn reported itself, or the send call resolved (the engine
+  consumed the response to a message it accepted). `complete`.
+- `failed` — the turn in flight could not be cleared, or the payload could not
+  be built, so nothing was handed over. `requeue`, as before.
+- `uncertain` — the send call rejected *after* the hand-off, so the message may
+  or may not have reached the engine. `park`: the row stays visible as
+  `paused`, out of the automatic path, and `setPaused(false)` does not put it
+  back, so only the user can resend it.
+- `cancelled` — `markHanded` refused because the claim moved on (cleared, or
+  taken over). Nothing was sent and nothing is this window's to record.
+
+**Recovery and takeover.** `recoverSending()` splits by `handedAt`: rows never
+handed over go back to `pending`, because nothing left; rows that were handed
+over are parked, because the message may already have been sent and resending
+is the only way to duplicate it. A claim abandoned while the app runs is
+settled by, in order: the window-closed hook in `window-manager.ts` (exact —
+main knows which window died), the claim lease `CLAIM_LEASE_MS = 45_000` (a
+claim older than the longest wait on the send path is nobody's), and the
+same-window rule in `claim` (a handed row of *this* window means the session
+that owned it is gone, e.g. a reload; it is parked and the queue moves on).
+A parked row does not block dispatch: only a `paused` row with a null
+`handedAt` — a pause the user asked for — stops the queue.
 
 ## Ordering
 
@@ -59,9 +93,11 @@ break on `createdAt` then `id`, so the order is total.
 
 ## The claim rule
 
-`claim({ subChatId, itemId? })` is one transaction over the queue row and the
-`runs` table:
+`claim({ subChatId, itemId?, owner })` is one transaction over the queue row
+and the `runs` table:
 
+- First it releases a claim whose lease ran out (see above), which is the only
+  way a row comes back from a renderer that died without closing its window.
 - Without `itemId` it is a dispatch: the oldest `pending` row for the sub-chat,
   refused while any `running` or `waiting_approval` run exists for that
   sub-chat, and refused while anything for that sub-chat is already `sending`.
@@ -69,9 +105,14 @@ break on `createdAt` then `id`, so the order is total.
   user asked for it and the window stops the current turn first.
 - Either way the row is claimed with a conditional update: `status IN
   ('pending')` for a dispatch, `status IN ('pending', 'paused')` for Send now,
-  `WHERE id = ?`. The caller receives the row only when that update touched it.
-  Two windows racing resolve to one winner; the loser gets null. Order is never
-  chosen by a window.
+  `WHERE id = ?`, and the owner and a null `handedAt` are written with it. The
+  caller receives the row only when that update touched it. Two windows racing
+  resolve to one winner; the loser gets null. Order is never chosen by a
+  window.
+- A window that finds a *handed* `sending` row of its own (its previous session
+  reloaded) parks that row and continues, and a window that finds any other
+  `sending` row is refused. So the one-send-at-a-time rule holds per sub-chat,
+  and a message that left is never sent again by the automatic path.
 
 This is the whole dispatch. There is no `dispatched` state waiting for a window,
 because the only actor that can send is a window.
@@ -126,15 +167,24 @@ cares about because its loop spans restarts, and (b) a turn whose event source
 never reports completion, which step 19 cares about because a supervisor reads a
 child's completion. In this design (a) costs nothing, because the row waits and
 any later wake dispatches it, and (b) is the run feed's reconciliation problem
-in `run-feed-projection.ts`, not the queue's.
+in `run-feed-projection.ts`, not the queue's. The bounded interval this step
+did adopt is `CLAIM_LEASE_MS`, and it is a staleness bound on a claim, not a
+poll: it is read only inside a `claim` that a wake asked for.
 
 ## Surfaces
 
 - `src/main/lib/queue/queue-state.ts` and `index.ts`
 - `src/main/lib/trpc/routers/queue.ts`: `add`, `remove`, `move`, `clear`,
-  `list`, `subscribe`, `claim`, `complete`, `requeue`, `setPaused`
-- `src/main/lib/db/schema/index.ts`: the `queue_items` table and its index
-- `drizzle/0016_*.sql`: generated by `npm run db:generate`
+  `list`, `subscribe`, `claim`, `markHanded`, `park`, `complete`, `requeue`,
+  `setPaused`
+- `src/main/lib/db/schema/index.ts`: the `queue_items` table, its index and the
+  two claim columns
+- `drizzle/0016_*.sql` and `drizzle/0017_*.sql`: generated by
+  `npm run db:generate`
+- `src/main/windows/window-manager.ts`: the window-closed hook that hands a
+  dead window's claims back
+- `src/main/lib/db/test-fixtures.ts`: the shared database fixtures the store
+  and router tests both use
 - `src/shared/queue-item.ts`: the status vocabulary, the payload schema and the
   row shape both processes share
 - `src/renderer/features/agents/stores/queue-projection.ts`: the feed, the wake
@@ -152,16 +202,17 @@ in `run-feed-projection.ts`, not the queue's.
 
 - A closed window means nothing sends until a window is open again. The message
   is not lost; it is a row.
-- A window that dies between claim and send leaves a `sending` row, which
-  startup recovery returns to `pending`. The window is a few milliseconds wide,
-  and it is the only path that can send a message twice.
-  - While such a row exists, dispatch for that sub-chat is refused (a claim
-    waits for the sub-chat to be idle) and Send now cannot take it either, so
-    the sub-chat's queue is stuck until the app restarts. A window that closes
-    while the app keeps running (macOS, all windows closed) is the case that
-    reaches this without a restart. Steps 16 and 19 own the fix because it
-    needs a liveness check or a staleness bound, which is the same interval
-    question §15 hands them.
+- A window that dies between claim and send leaves a `sending` row. It is
+  settled without a restart: the window-closed hook releases it exactly, the
+  lease releases it after 45 s, and startup recovery splits it. Nothing on that
+  path can send a message twice, because only a null `handedAt` returns to
+  `pending`, and a null `handedAt` means the payload never left.
+  - The remaining window is a *handed* row whose owner vanished: the message is
+    in the engine's hands, so it is parked (visible, never resent on its own)
+    rather than returned to the queue. The interval in the lease is the same
+    question §15 hands to steps 16 and 19 — how long a claim is trusted — and
+    the answer here is "longer than the longest send-path wait", not a
+    heartbeat.
 - The other eleven provider routers still write no run row, a gap step 07 filed
   as its own follow-up. Main cannot see their turn as busy; the claiming
   window's status is the guard, as it is today.

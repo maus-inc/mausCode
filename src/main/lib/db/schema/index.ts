@@ -239,6 +239,21 @@ export const queueItems = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
     dispatchedAt: integer("dispatched_at", { mode: "timestamp" }),
+    /**
+     * The window session that took this row. A claim may only be handed over
+     * by its owner, and a claim whose owner never reached the hand-off can be
+     * taken over, which is what unsticks a queue after a window dies. The
+     * value is the renderer session token, not a window id, because a reload
+     * keeps the window and replaces the session.
+     */
+    claimedBy: text("claimed_by"),
+    /**
+     * When the claiming window passed the payload to the engine. Null means
+     * the message never left, which is what lets recovery requeue a row
+     * without risking a second send, and what lets a stuck claim be taken over
+     * safely. Set once, immediately before the send.
+     */
+    handedAt: integer("handed_at", { mode: "timestamp" }),
   },
   (table) => [index("queue_items_sub_chat_id_idx").on(table.subChatId)],
 )

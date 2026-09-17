@@ -52,11 +52,17 @@ function clearQueueSendStarted(subChatId: string): void {
   )
 }
 
-export type QueueSendResult = "sent" | "failed"
+export type QueueSendResult = "sent" | "failed" | "uncertain" | "cancelled"
 
 export interface QueueSendInput {
   item: QueueItem
   chat: Chat<UIMessage>
+  /**
+   * Records the hand-off in main, immediately before the payload leaves. A
+   * `false` answer means the claim is no longer this window's (the queue was
+   * cleared, or another window took it over), so nothing may be sent under it.
+   */
+  markHanded: () => Promise<boolean>
   /**
    * Send now only: stop whatever turn is in flight for this sub-chat and
    * answer whether the send may proceed. `false` keeps the item queued, which
@@ -67,27 +73,47 @@ export interface QueueSendInput {
 }
 
 /**
- * Sends a claimed item and reports whether the message left. The item is
- * retired by the caller on `sent`, which happens as soon as the turn reports
- * that it started, so a window that dies mid-turn cannot resend a message that
- * already went out. A failure before the turn starts is reported as `failed`
- * and the caller puts the item back.
+ * Sends a claimed item and reports what is known about it.
+ *
+ * `"sent"` — the turn reported itself, or the send call resolved, which means
+ * the engine consumed the response to a message it had already accepted. The
+ * caller retires the row.
+ *
+ * `"failed"` — nothing was handed over (the turn in flight could not be
+ * cleared, or the payload could not be built), so the caller puts the item
+ * back in the queue.
+ *
+ * `"uncertain"` — the payload was handed over and the send call then rejected,
+ * so the message may or may not have reached the engine. The caller parks the
+ * row: visible, out of the automatic path, never resent on its own.
+ *
+ * `"cancelled"` — the claim was refused (the queue was cleared, or another
+ * window took the row over), so nothing was sent and no row is this caller's
+ * to record.
  */
 export async function sendClaimedQueueItem({
   item,
   chat,
+  markHanded,
   stopCurrent,
 }: QueueSendInput): Promise<QueueSendResult> {
   const subChatId = item.subChatId
+  let handed = false
   try {
     if (stopCurrent && !(await stopCurrent())) {
       // The caller could not clear the sub-chat (a turn that did not stop in
       // time, or one that belongs to another window), so the item stays queued
-      // instead of running a second turn beside it.
+      // instead of running a second turn beside it. Nothing was handed over.
       return "failed"
     }
 
     const parts = buildQueueMessageParts(item.payload)
+    handed = await markHanded()
+    if (!handed) {
+      console.warn("[queue] the claim moved on before the send; nothing was sent")
+      return "cancelled"
+    }
+
     const subChatMeta = useAgentSubChatStore
       .getState()
       .allSubChats.find((candidate) => candidate.id === subChatId)
@@ -133,15 +159,23 @@ export async function sendClaimedQueueItem({
 
     await finished
     if (sendFailure) {
-      console.error("[queue] queued send failed before the turn started:", sendFailure)
+      console.error("[queue] queued send failed after the hand-off:", sendFailure)
       clearQueueSendStarted(subChatId)
-      toast.error("Failed to send the queued message. It is still in the queue.")
-      return "failed"
+      toast.error("The queued message may not have gone out. It is paused in the queue.")
+      return "uncertain"
     }
+    // The send call resolved without our status store ever seeing a turn. The
+    // engine consumed the response for the message it accepted, so the row is
+    // retired; retrying it is the one thing that could duplicate it.
+    console.warn("[queue] send resolved without a turn start on this window")
     return "sent"
   } catch (error) {
     console.error("[queue] queued send threw:", error)
     clearQueueSendStarted(subChatId)
+    if (handed) {
+      toast.error("The queued message may not have gone out. It is paused in the queue.")
+      return "uncertain"
+    }
     toast.error("Failed to send the queued message. It is still in the queue.")
     return "failed"
   }

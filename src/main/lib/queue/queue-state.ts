@@ -14,7 +14,7 @@
  * `src/main/lib/db/test-sqlite.ts`. The main-process singleton lives in
  * `./index.ts` so this module stays free of Electron imports.
  */
-import { and, asc, eq, inArray, max } from "drizzle-orm"
+import { and, asc, eq, inArray, isNotNull, isNull, lt, max } from "drizzle-orm"
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import {
   type QueueItem,
@@ -47,6 +47,12 @@ export interface ClaimQueueItemInput {
   subChatId: string
   /** Send now: claim this exact row and skip the idle gate. */
   itemId?: string
+  /**
+   * The window session asking for the row. It owns the claim until it hands
+   * the payload over or gives it back, and another session may take over a
+   * claim that was never handed over.
+   */
+  owner: string
 }
 
 export interface QueueStore {
@@ -59,6 +65,21 @@ export interface QueueStore {
   listAll(): QueueFeedItem[]
   setPaused(subChatId: string, paused: boolean): number
   claim(input: ClaimQueueItemInput): QueueItem | null
+  /**
+   * Record that the claiming window passed this payload to the engine. Only
+   * the owner can set it, and only once: `false` means the claim moved on and
+   * the caller must not send.
+   */
+  markHanded(subChatId: string, itemId: string, owner: string): boolean
+  /**
+   * Hold a claimed row whose send outcome is unknown: the payload was handed
+   * over, and the turn never reported itself. A parked row is visible and is
+   * never put back into the automatic path by a resume, because sending it
+   * again is what could duplicate the message.
+   */
+  park(subChatId: string, itemId: string): boolean
+  /** Release what a window claimed, for a window that closed. */
+  releaseOwner(owner: string): number
   complete(subChatId: string, itemId: string): boolean
   requeue(subChatId: string, itemId: string): boolean
   recoverSending(): number
@@ -94,6 +115,69 @@ function orderedRowsTx(tx: QueueTx, subChatId: string): QueueItemRow[] {
       asc(schema.queueItems.id),
     )
     .all()
+}
+
+/**
+ * How long an un-handed claim is trusted. A window holds a claim only while it
+ * assembles the send, and the longest wait on that path is the Send now stop
+ * wait (`STREAMING_READY_TIMEOUT_MS`), so a claim this old belongs to a session
+ * that is gone: a crashed renderer, or a window that never came back from a
+ * reload. Waiting it out is the same as the claim never having been made,
+ * because `handedAt` is still null and the payload therefore never left.
+ */
+export const CLAIM_LEASE_MS = 45_000
+
+/**
+ * Put back a claim whose lease ran out. Safe by definition: `handedAt` is
+ * written immediately before the payload goes to the engine, so a null value
+ * there means nothing was sent under this claim.
+ */
+function releaseStaleClaimsTx(tx: QueueTx, subChatId: string, now: number): number {
+  const released = tx
+    .update(schema.queueItems)
+    .set({ status: "pending", dispatchedAt: null, claimedBy: null })
+    .where(
+      and(
+        eq(schema.queueItems.subChatId, subChatId),
+        eq(schema.queueItems.status, "sending"),
+        isNull(schema.queueItems.handedAt),
+        lt(schema.queueItems.dispatchedAt, new Date(now - CLAIM_LEASE_MS)),
+      ),
+    )
+    .returning()
+    .all()
+  return released.length
+}
+
+/**
+ * A pause the user asked for: nothing new dispatches until an explicit send.
+ * Parked rows are `paused` too, but they are a message whose fate is unknown,
+ * so they do not stop the queue behind them.
+ */
+function userPausedTx(tx: QueueTx, subChatId: string): QueueItemRow | undefined {
+  return tx
+    .select()
+    .from(schema.queueItems)
+    .where(
+      and(
+        eq(schema.queueItems.subChatId, subChatId),
+        eq(schema.queueItems.status, "paused"),
+        isNull(schema.queueItems.handedAt),
+      ),
+    )
+    .orderBy(asc(schema.queueItems.position), asc(schema.queueItems.createdAt))
+    .get()
+}
+
+/** Park one row: out of the automatic path, still visible, never auto-resumed. */
+function parkRowTx(tx: QueueTx, itemId: string): boolean {
+  const parked = tx
+    .update(schema.queueItems)
+    .set({ status: "paused", claimedBy: null })
+    .where(and(eq(schema.queueItems.id, itemId), eq(schema.queueItems.status, "sending")))
+    .returning()
+    .all()
+  return parked.length > 0
 }
 
 function rowByStatusTx(
@@ -242,6 +326,26 @@ export function createQueueStore(db: QueueDb): QueueStore {
     return created
   }
 
+  function markHanded(subChatId: string, itemId: string, owner: string): boolean {
+    const updated = db
+      .update(schema.queueItems)
+      .set({ handedAt: new Date() })
+      .where(
+        and(
+          eq(schema.queueItems.id, itemId),
+          eq(schema.queueItems.subChatId, subChatId),
+          eq(schema.queueItems.status, "sending"),
+          eq(schema.queueItems.claimedBy, owner),
+          isNull(schema.queueItems.handedAt),
+        ),
+      )
+      .returning()
+      .all()
+    if (updated.length === 0) return false
+    console.log(`[queue] handed ${itemId.slice(-8)} sub=${subChatId.slice(-8)}`)
+    return true
+  }
+
   function remove(subChatId: string, itemId: string): boolean {
     const removed = db
       .delete(schema.queueItems)
@@ -290,6 +394,10 @@ export function createQueueStore(db: QueueDb): QueueStore {
         and(
           eq(schema.queueItems.subChatId, subChatId),
           eq(schema.queueItems.status, paused ? "pending" : "paused"),
+          // Resuming is about the rows the user's stop held back. A parked row
+          // already left for the engine, so it stays where the user can see it
+          // instead of returning to the automatic path.
+          isNull(schema.queueItems.handedAt),
         ),
       )
       .returning()
@@ -308,7 +416,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
     // shape `add` already uses, so nothing is read from a variable a callback
     // assigned.
     const claimed = db.transaction((tx): QueueItem | null => {
-      const row = input.itemId
+      const explicit = input.itemId
         ? tx
             .select()
             .from(schema.queueItems)
@@ -319,18 +427,27 @@ export function createQueueStore(db: QueueDb): QueueStore {
               ),
             )
             .get()
-        : rowByStatusTx(tx, input.subChatId, "pending")
-      if (!row || row.status === "sending") return null
+        : undefined
+      if (input.itemId && !explicit) return null
 
-      if (input.itemId) {
-        // Send now skips the run gate below, because the caller stops the turn
-        // in flight first. It may not skip this: one send per sub-chat at a
-        // time, so a second Send now cannot start a parallel turn. A row is
-        // `sending` only while a claim is being handed over or a send is
-        // starting, since the claiming window deletes it as soon as the turn
-        // reports that it started.
-        const inFlight = rowByStatusTx(tx, input.subChatId, "sending")
-        if (inFlight && inFlight.id !== row.id) return null
+      // An abandoned claim is put back first. That is how a queue recovers
+      // from a renderer that crashed or reloaded while the app kept running,
+      // and it cannot send twice: the claim was never handed over, and the old
+      // owner's `markHanded` fails once the row is claimed again, so it must
+      // not send.
+      releaseStaleClaimsTx(tx, input.subChatId, Date.now())
+
+      const inFlight = rowByStatusTx(tx, input.subChatId, "sending")
+      if (inFlight && inFlight.id !== explicit?.id) {
+        // A handed claim of this same window belongs to a session that is gone
+        // (a reload between the hand-off and the bookkeeping): a live window
+        // does not claim while its own send is in flight, because the renderer
+        // holds that slot. Its outcome is unknown, so the row is parked for the
+        // user and the queue moves on. Everything else — another window's live
+        // send, or this window's claim that has not been handed over yet — is
+        // refused, and an abandoned claim is released by its lease above.
+        if (inFlight.claimedBy !== input.owner || inFlight.handedAt === null) return null
+        parkRowTx(tx, inFlight.id)
       }
 
       if (!input.itemId) {
@@ -348,16 +465,26 @@ export function createQueueStore(db: QueueDb): QueueStore {
           )
           .get()
         if (activeRun) return null
-        if (rowByStatusTx(tx, input.subChatId, "sending")) return null
-        // One paused row means the user stopped; nothing dispatches until an
-        // explicit send resumes the queue.
-        if (rowByStatusTx(tx, input.subChatId, "paused")) return null
+        // One user pause means the user stopped; nothing dispatches until an
+        // explicit send resumes the queue. Parked rows are not a stop.
+        if (userPausedTx(tx, input.subChatId)) return null
       }
+
+      // Dispatch takes the head of the queue; Send now takes exactly the row it
+      // was asked for. The where clause is the guard that decides a race
+      // between two windows, so nothing is assumed from the read above.
+      const row = explicit ?? rowByStatusTx(tx, input.subChatId, "pending")
+      if (!row) return null
 
       const allowedFrom: QueueItemStatus[] = input.itemId ? ["pending", "paused"] : ["pending"]
       const updated = tx
         .update(schema.queueItems)
-        .set({ status: "sending", dispatchedAt: new Date() })
+        .set({
+          status: "sending",
+          dispatchedAt: new Date(),
+          claimedBy: input.owner,
+          handedAt: null,
+        })
         .where(
           and(eq(schema.queueItems.id, row.id), inArray(schema.queueItems.status, allowedFrom)),
         )
@@ -376,6 +503,69 @@ export function createQueueStore(db: QueueDb): QueueStore {
       emit(input.subChatId)
     }
     return claimed
+  }
+
+  function park(subChatId: string, itemId: string): boolean {
+    const removed = db
+      .update(schema.queueItems)
+      .set({ status: "paused", claimedBy: null })
+      .where(
+        and(
+          eq(schema.queueItems.id, itemId),
+          eq(schema.queueItems.subChatId, subChatId),
+          eq(schema.queueItems.status, "sending"),
+        ),
+      )
+      .returning()
+      .all()
+    if (removed.length === 0) return false
+    console.warn(
+      `[queue] parked ${itemId.slice(-8)} sub=${subChatId.slice(-8)}: handed over without a turn start, not resent automatically`,
+    )
+    emit(subChatId)
+    return true
+  }
+
+  /**
+   * Hand back what a closed window held. A claim it never handed over goes to
+   * `pending`, because nothing left the machine; a claim it did hand over is
+   * parked, because the engine may have taken it and the row is no longer
+   * something to send again.
+   */
+  function releaseOwner(owner: string): number {
+    const released = db
+      .update(schema.queueItems)
+      .set({ status: "pending", dispatchedAt: null, claimedBy: null })
+      .where(
+        and(
+          eq(schema.queueItems.claimedBy, owner),
+          eq(schema.queueItems.status, "sending"),
+          isNull(schema.queueItems.handedAt),
+        ),
+      )
+      .returning()
+      .all()
+    const parked = db
+      .update(schema.queueItems)
+      .set({ status: "paused", claimedBy: null })
+      .where(
+        and(
+          eq(schema.queueItems.claimedBy, owner),
+          eq(schema.queueItems.status, "sending"),
+          isNotNull(schema.queueItems.handedAt),
+        ),
+      )
+      .returning()
+      .all()
+    if (released.length === 0 && parked.length === 0) return 0
+    console.warn(
+      `[queue] window ${owner} closed holding ${released.length} claim(s) and ${parked.length} handed send(s)`,
+    )
+    const subChatIds = new Set([...released, ...parked].map((row) => row.subChatId))
+    for (const subChatId of subChatIds) {
+      emit(subChatId)
+    }
+    return released.length + parked.length
   }
 
   function complete(subChatId: string, itemId: string): boolean {
@@ -398,7 +588,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
   function requeue(subChatId: string, itemId: string): boolean {
     const updated = db
       .update(schema.queueItems)
-      .set({ status: "pending", dispatchedAt: null })
+      .set({ status: "pending", dispatchedAt: null, claimedBy: null, handedAt: null })
       .where(
         and(
           eq(schema.queueItems.id, itemId),
@@ -414,6 +604,14 @@ export function createQueueStore(db: QueueDb): QueueStore {
     return true
   }
 
+  /**
+   * Return every row a previous run of the app left `sending`. A claim whose
+   * payload was never handed over goes back to `pending`: nothing was sent, so
+   * sending it is not a repeat. A claim that was handed over is ambiguous —
+   * the message may have reached the engine before the app died — so it is
+   * held as `paused` instead of being sent again, which puts the decision in
+   * front of the user and never in front of the engine.
+   */
   function recoverSending(): number {
     const rows = db
       .select()
@@ -421,10 +619,23 @@ export function createQueueStore(db: QueueDb): QueueStore {
       .where(eq(schema.queueItems.status, "sending"))
       .all()
     if (rows.length === 0) return 0
-    db.update(schema.queueItems)
-      .set({ status: "pending", dispatchedAt: null })
-      .where(eq(schema.queueItems.status, "sending"))
-      .run()
+    const neverHanded = rows.filter((row) => row.handedAt === null)
+    const handed = rows.filter((row) => row.handedAt !== null)
+    if (neverHanded.length > 0) {
+      db.update(schema.queueItems)
+        .set({ status: "pending", dispatchedAt: null, claimedBy: null })
+        .where(and(eq(schema.queueItems.status, "sending"), isNull(schema.queueItems.handedAt)))
+        .run()
+    }
+    if (handed.length > 0) {
+      db.update(schema.queueItems)
+        .set({ status: "paused", claimedBy: null })
+        .where(and(eq(schema.queueItems.status, "sending"), isNotNull(schema.queueItems.handedAt)))
+        .run()
+      console.warn(
+        `[queue] recovery held ${handed.length} handed-over row(s) as paused; the message may already have been sent`,
+      )
+    }
     for (const subChatId of new Set(rows.map((row) => row.subChatId))) {
       emit(subChatId)
     }
@@ -440,6 +651,9 @@ export function createQueueStore(db: QueueDb): QueueStore {
     listAll,
     setPaused,
     claim,
+    markHanded,
+    park,
+    releaseOwner,
     complete,
     requeue,
     recoverSending,

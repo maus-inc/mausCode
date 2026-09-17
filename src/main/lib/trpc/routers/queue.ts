@@ -56,10 +56,42 @@ export const queueRouter = router({
    * Exactly one caller receives a row.
    */
   claim: publicProcedure
-    .input(z.object({ subChatId: z.string().min(1), itemId: z.string().min(1).optional() }))
+    .input(
+      z.object({
+        subChatId: z.string().min(1),
+        itemId: z.string().min(1).optional(),
+        /**
+         * The window asking, so main can tell a claim that is still live from
+         * one its window abandoned, and can hand back what a closed window
+         * held. The renderer reads it from the same place its storage
+         * namespacing does.
+         */
+        owner: z.string().min(1),
+      }),
+    )
     .mutation(({ input }) => {
-      return getQueueStore().claim({ subChatId: input.subChatId, itemId: input.itemId })
+      return getQueueStore().claim({
+        subChatId: input.subChatId,
+        itemId: input.itemId,
+        owner: input.owner,
+      })
     }),
+
+  /** Records the hand-off, and it is the only writer of `handedAt`. */
+  markHanded: publicProcedure
+    .input(itemInput.extend({ owner: z.string().min(1) }))
+    .mutation(({ input }) => {
+      return getQueueStore().markHanded(input.subChatId, input.itemId, input.owner)
+    }),
+
+  /**
+   * Holds a row whose send was handed over but never reported a turn. The row
+   * stays visible and out of the automatic path, so a resume cannot send it a
+   * second time.
+   */
+  park: publicProcedure.input(itemInput).mutation(({ input }) => {
+    return getQueueStore().park(input.subChatId, input.itemId)
+  }),
 
   complete: publicProcedure.input(itemInput).mutation(({ input }) => {
     return getQueueStore().complete(input.subChatId, input.itemId)

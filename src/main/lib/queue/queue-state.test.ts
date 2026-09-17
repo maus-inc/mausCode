@@ -13,22 +13,11 @@ import { eq } from "drizzle-orm"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { QueueItem, QueuePayload } from "../../../shared/queue-item"
 import { migrationsRoot } from "../db/migrations-path"
-import { chats, projects, queueItems, runs, subChats } from "../db/schema"
+import { queueItems, runs } from "../db/schema"
+import { openMigratedTestDb, seedSubChat, type TestDb } from "../db/test-fixtures"
 import { migrateTestDb, openTestDb } from "../db/test-sqlite"
 import { createRunStore, type RunStore } from "../runs/run-state"
-import { createQueueStore, POSITION_STEP, type QueueStore } from "./queue-state"
-
-type TestDb = ReturnType<typeof openTestDb>
-
-function seedSubChat(db: TestDb["db"]): string {
-  const project = db
-    .insert(projects)
-    .values({ name: "p", path: `/p/${Math.random()}` })
-    .returning()
-    .get()
-  const chat = db.insert(chats).values({ projectId: project.id }).returning().get()
-  return db.insert(subChats).values({ chatId: chat.id }).returning().get().id
-}
+import { CLAIM_LEASE_MS, createQueueStore, POSITION_STEP, type QueueStore } from "./queue-state"
 
 function payload(message: string): QueuePayload {
   return { message }
@@ -38,6 +27,31 @@ function ids(items: QueueItem[]): string[] {
   return items.map((item) => item.id)
 }
 
+/** The two window sessions these tests act as. */
+const WINDOW_A = "session-a"
+const WINDOW_B = "session-b"
+
+function claim(
+  store: QueueStore,
+  subChatId: string,
+  itemId?: string,
+  owner: string = WINDOW_A,
+): QueueItem | null {
+  return store.claim({ subChatId, itemId, owner })
+}
+
+/**
+ * Move a claim's clock past its lease, which is what a renderer crash or a
+ * reload does from the store's point of view: nobody came back to hand the
+ * payload over.
+ */
+function ageClaim(db: TestDb["db"], itemId: string, ms = CLAIM_LEASE_MS + 1000): void {
+  db.update(queueItems)
+    .set({ dispatchedAt: new Date(Date.now() - ms) })
+    .where(eq(queueItems.id, itemId))
+    .run()
+}
+
 describe("queue store", () => {
   let opened: TestDb
   let store: QueueStore
@@ -45,8 +59,7 @@ describe("queue store", () => {
   let subChatId: string
 
   beforeEach(() => {
-    opened = openTestDb()
-    migrateTestDb(opened.db, migrationsRoot)
+    opened = openMigratedTestDb()
     store = createQueueStore(opened.db)
     runStore = createRunStore(opened.db)
     subChatId = seedSubChat(opened.db)
@@ -122,13 +135,89 @@ describe("queue store", () => {
       const windowA = createQueueStore(opened.db)
       const windowB = createQueueStore(opened.db)
 
-      const claimed = [windowA.claim({ subChatId }), windowB.claim({ subChatId })]
+      const claimed = [
+        claim(windowA, subChatId, undefined, WINDOW_A),
+        claim(windowB, subChatId, undefined, WINDOW_B),
+      ]
       const winners = claimed.filter((item): item is QueueItem => item !== null)
 
       expect(winners).toHaveLength(1)
       expect(winners[0].id).toBe(first.id)
       expect(winners[0].status).toBe("sending")
       expect(winners[0].dispatchedAt).not.toBeNull()
+    })
+
+    it("keeps a handed-over row away from a second window, and a window that hands it over cannot hand it over twice", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      const windowA = createQueueStore(opened.db)
+
+      expect(claim(windowA, subChatId, undefined, WINDOW_A)?.id).toBe(first.id)
+      expect(windowA.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+      // Same owner twice: the marker is a latch, not a counter.
+      expect(windowA.markHanded(subChatId, first.id, WINDOW_A)).toBe(false)
+      // Another window may not take a claim that reached the engine.
+      expect(claim(store, subChatId, undefined, WINDOW_B)).toBeNull()
+      // Nor may it hand it over as if it owned it.
+      expect(store.markHanded(subChatId, first.id, WINDOW_B)).toBe(false)
+      expect(store.list(subChatId)[0]?.status).toBe("sending")
+    })
+
+    it("refuses a second window while a claim is live, not handed over yet", () => {
+      // The window is between the claim and the hand-off, which is a real
+      // moment in the Send now path while it stops the turn in flight.
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, undefined, WINDOW_A)?.id).toBe(first.id)
+
+      expect(claim(store, subChatId, undefined, WINDOW_B)).toBeNull()
+    })
+
+    it("puts a claim back once its lease runs out, so a dead renderer cannot stall the queue", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      const deadWindow = createQueueStore(opened.db)
+      expect(claim(deadWindow, subChatId, undefined, WINDOW_A)?.id).toBe(first.id)
+      // The renderer died between the claim and the hand-off, so the payload
+      // was never given to the engine. The window is not closed, so nothing
+      // tells main to release it: the lease is what does.
+      ageClaim(opened.db, first.id)
+      const survivor = createQueueStore(opened.db)
+
+      const takenOver = claim(survivor, subChatId, undefined, WINDOW_B)
+
+      expect(takenOver?.id).toBe(first.id)
+      expect(takenOver?.status).toBe("sending")
+      // The dead window must not send now: it lost the row.
+      expect(deadWindow.markHanded(subChatId, first.id, WINDOW_A)).toBe(false)
+      // And the survivor can.
+      expect(survivor.markHanded(subChatId, first.id, WINDOW_B)).toBe(true)
+    })
+
+    it("parks a handed claim of the same window and moves on to the next item", () => {
+      // Same window, no live session: a reload between the hand-off and the
+      // bookkeeping. Nobody can say whether the engine took it, so it is not
+      // sent again, and the rest of the queue does not wait behind it.
+      const first = store.add({ subChatId, payload: payload("one") })
+      const second = store.add({ subChatId, payload: payload("two") })
+      const beforeReload = createQueueStore(opened.db)
+      expect(claim(beforeReload, subChatId, undefined, WINDOW_A)?.id).toBe(first.id)
+      expect(beforeReload.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+
+      const afterReload = createQueueStore(opened.db)
+      const next = claim(afterReload, subChatId, undefined, WINDOW_A)
+
+      expect(next?.id).toBe(second.id)
+      const parked = afterReload.list(subChatId).find((item) => item.id === first.id)
+      expect(parked?.status).toBe("paused")
+    })
+
+    it("does not let a handed claim of another window be parked by this one", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      store.add({ subChatId, payload: payload("two") })
+      expect(claim(store, subChatId, undefined, WINDOW_A)?.id).toBe(first.id)
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+
+      // WINDOW_B has no way to know whether WINDOW_A is still alive.
+      expect(claim(store, subChatId, undefined, WINDOW_B)).toBeNull()
+      expect(store.list(subChatId).find((item) => item.id === first.id)?.status).toBe("sending")
     })
 
     it("gives the row to one window when two store instances race on one file", () => {
@@ -147,8 +236,8 @@ describe("queue store", () => {
         firstStore.add({ subChatId: sharedSubChatId, payload: payload("one") })
 
         const claims = [
-          firstStore.claim({ subChatId: sharedSubChatId }),
-          secondStore.claim({ subChatId: sharedSubChatId }),
+          claim(firstStore, sharedSubChatId, undefined, WINDOW_A),
+          claim(secondStore, sharedSubChatId, undefined, WINDOW_B),
         ]
 
         expect(claims.filter((item) => item !== null)).toHaveLength(1)
@@ -179,13 +268,13 @@ describe("queue store", () => {
         const secondStore = createQueueStore(secondWindow.db)
         const row = firstStore.add({ subChatId: sharedSubChatId, payload: payload("one") })
 
-        expect(firstStore.claim({ subChatId: sharedSubChatId })?.id).toBe(row.id)
+        expect(claim(firstStore, sharedSubChatId)?.id).toBe(row.id)
         // Nothing has started a turn yet, so no run row exists anywhere.
         expect(
           firstWindow.db.select().from(runs).where(eq(runs.subChatId, sharedSubChatId)).all(),
         ).toEqual([])
         // The winner is still the only one that may send.
-        expect(secondStore.claim({ subChatId: sharedSubChatId })).toBeNull()
+        expect(claim(secondStore, sharedSubChatId)).toBeNull()
 
         // The winner's turn starts, its run row lands, and the row retires.
         const handle = createRunStore(firstWindow.db).startRun({
@@ -198,7 +287,7 @@ describe("queue store", () => {
 
         // Only now does the next item become claimable.
         const next = secondStore.add({ subChatId: sharedSubChatId, payload: payload("two") })
-        expect(secondStore.claim({ subChatId: sharedSubChatId })?.id).toBe(next.id)
+        expect(claim(secondStore, sharedSubChatId)?.id).toBe(next.id)
       } finally {
         firstWindow.client.close()
         secondWindow.client.close()
@@ -211,40 +300,40 @@ describe("queue store", () => {
     it("never hands out the same row twice", () => {
       store.add({ subChatId, payload: payload("one") })
 
-      expect(store.claim({ subChatId })?.payload.message).toBe("one")
-      expect(store.claim({ subChatId })).toBeNull()
+      expect(claim(store, subChatId)?.payload.message).toBe("one")
+      expect(claim(store, subChatId)).toBeNull()
     })
 
     it("refuses to dispatch while a run is active and dispatches once it settles", () => {
       store.add({ subChatId, payload: payload("one") })
       const handle = runStore.startRun({ subChatId, engine: "legacy" })
 
-      expect(store.claim({ subChatId })).toBeNull()
+      expect(claim(store, subChatId)).toBeNull()
 
       handle.noteFinished()
       handle.settle()
 
-      expect(store.claim({ subChatId })?.payload.message).toBe("one")
+      expect(claim(store, subChatId)?.payload.message).toBe("one")
     })
 
     it("refuses Send now for a second row while one is already being sent", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       const second = store.add({ subChatId, payload: payload("two") })
       // A window holds the first row while its send is starting.
-      expect(store.claim({ subChatId, itemId: first.id })?.id).toBe(first.id)
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
 
       // Send now skips the idle gate, but not the one-send-at-a-time rule:
       // two claimed rows would be two turns on one session.
-      expect(store.claim({ subChatId, itemId: second.id })).toBeNull()
+      expect(claim(store, subChatId, second.id)).toBeNull()
       expect(store.list(subChatId).filter((item) => item.status === "sending")).toHaveLength(1)
     })
 
     it("gives the same row back to Send now after the row is put back", () => {
       const first = store.add({ subChatId, payload: payload("one") })
-      expect(store.claim({ subChatId, itemId: first.id })?.id).toBe(first.id)
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
       store.requeue(subChatId, first.id)
 
-      expect(store.claim({ subChatId, itemId: first.id })?.id).toBe(first.id)
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
     })
 
     it("claims a specific item for Send now without the idle gate", () => {
@@ -252,7 +341,7 @@ describe("queue store", () => {
       const second = store.add({ subChatId, payload: payload("two") })
       runStore.startRun({ subChatId, engine: "legacy" })
 
-      const claimed = store.claim({ subChatId, itemId: second.id })
+      const claimed = claim(store, subChatId, second.id)
 
       expect(claimed?.id).toBe(second.id)
       expect(store.list(subChatId).filter((item) => item.status === "sending")).toHaveLength(1)
@@ -263,7 +352,7 @@ describe("queue store", () => {
       const second = store.add({ subChatId, payload: payload("two") })
       const third = store.add({ subChatId, payload: payload("three") })
 
-      expect(store.claim({ subChatId })?.id).toBe(first.id)
+      expect(claim(store, subChatId)?.id).toBe(first.id)
 
       const moved = store.move(subChatId, third.id, 0)
 
@@ -277,7 +366,7 @@ describe("queue store", () => {
       ])
 
       expect(store.complete(subChatId, first.id)).toBe(true)
-      expect(store.claim({ subChatId })?.id).toBe(third.id)
+      expect(claim(store, subChatId)?.id).toBe(third.id)
     })
 
     it("renumbers a sub-chat only when the gap between neighbours is gone", () => {
@@ -305,10 +394,10 @@ describe("queue store", () => {
       store.add({ subChatId, payload: payload("two") })
 
       expect(store.setPaused(subChatId, true)).toBe(2)
-      expect(store.claim({ subChatId })).toBeNull()
+      expect(claim(store, subChatId)).toBeNull()
 
       expect(store.setPaused(subChatId, false)).toBe(2)
-      expect(store.claim({ subChatId })?.payload.message).toBe("one")
+      expect(claim(store, subChatId)?.payload.message).toBe("one")
     })
 
     it("resumes on an explicit queue add", () => {
@@ -318,14 +407,14 @@ describe("queue store", () => {
       store.add({ subChatId, payload: payload("two") })
 
       expect(store.list(subChatId).map((item) => item.status)).toEqual(["pending", "pending"])
-      expect(store.claim({ subChatId })?.payload.message).toBe("one")
+      expect(claim(store, subChatId)?.payload.message).toBe("one")
     })
 
     it("claims a paused item for Send now", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       store.setPaused(subChatId, true)
 
-      expect(store.claim({ subChatId, itemId: first.id })?.id).toBe(first.id)
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
     })
   })
 
@@ -338,7 +427,7 @@ describe("queue store", () => {
       expect(runStore.cancelActiveForSubChat(subChatId, "user_cancel")).toBe(true)
 
       expect(ids(store.list(subChatId))).toEqual([first.id, second.id])
-      expect(store.claim({ subChatId })?.id).toBe(first.id)
+      expect(claim(store, subChatId)?.id).toBe(first.id)
     })
   })
 
@@ -347,19 +436,19 @@ describe("queue store", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       const second = store.add({ subChatId, payload: payload("two") })
 
-      expect(store.claim({ subChatId })?.id).toBe(first.id)
+      expect(claim(store, subChatId)?.id).toBe(first.id)
       expect(store.requeue(subChatId, first.id)).toBe(true)
       expect(ids(store.list(subChatId))).toEqual([first.id, second.id])
       expect(store.list(subChatId)[0].dispatchedAt).toBeNull()
 
-      expect(store.claim({ subChatId, itemId: first.id })?.id).toBe(first.id)
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
       expect(store.complete(subChatId, first.id)).toBe(true)
       expect(ids(store.list(subChatId))).toEqual([second.id])
     })
 
     it("returns a claimed but unsent item to pending on recovery", () => {
       const first = store.add({ subChatId, payload: payload("one") })
-      store.claim({ subChatId })
+      claim(store, subChatId)
 
       expect(store.recoverSending()).toBe(1)
 
@@ -367,6 +456,56 @@ describe("queue store", () => {
       expect(items[0].id).toBe(first.id)
       expect(items[0].status).toBe("pending")
       expect(items[0].dispatchedAt).toBeNull()
+    })
+
+    it("holds a handed-over row as paused on recovery, and lets the queue past it", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      const second = store.add({ subChatId, payload: payload("two") })
+      const interrupted = createQueueStore(opened.db)
+      expect(claim(interrupted, subChatId, undefined, WINDOW_A)?.id).toBe(first.id)
+      expect(interrupted.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+
+      // The app comes back. The message may be in the engine, so it is not
+      // sent again, and it is not a stop either: the next item dispatches.
+      expect(createQueueStore(opened.db).recoverSending()).toBe(1)
+      const items = store.list(subChatId)
+      expect(items.find((item) => item.id === first.id)?.status).toBe("paused")
+      expect(claim(store, subChatId)?.id).toBe(second.id)
+    })
+
+    it("keeps a parked row out of the automatic path when the queue resumes", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(store.park(subChatId, first.id)).toBe(true)
+
+      // Resume is about the rows a user stop held back; a parked row already
+      // left for the engine, so it stays where the user can decide about it.
+      store.setPaused(subChatId, false)
+
+      expect(store.list(subChatId)[0].status).toBe("paused")
+    })
+
+    it("hands back what a closed window held", () => {
+      const dead = createQueueStore(opened.db)
+      // One sub-chat where it never handed the payload over, one where it did.
+      const handedSubChatId = seedSubChat(opened.db)
+      const unSentSubChatId = seedSubChat(opened.db)
+      const handedRow = store.add({ subChatId: handedSubChatId, payload: payload("sent") })
+      const unSentRow = store.add({ subChatId: unSentSubChatId, payload: payload("unsent") })
+      expect(claim(dead, handedSubChatId, handedRow.id, WINDOW_A)?.id).toBe(handedRow.id)
+      expect(dead.markHanded(handedSubChatId, handedRow.id, WINDOW_A)).toBe(true)
+      expect(claim(dead, unSentSubChatId, unSentRow.id, WINDOW_A)?.id).toBe(unSentRow.id)
+      // A claim of another window, which the release must leave alone.
+      const otherSubChatId = seedSubChat(opened.db)
+      const other = store.add({ subChatId: otherSubChatId, payload: payload("other") })
+      expect(claim(dead, otherSubChatId, other.id, WINDOW_B)?.id).toBe(other.id)
+
+      expect(dead.releaseOwner(WINDOW_A)).toBe(2)
+
+      expect(store.list(handedSubChatId)[0].status).toBe("paused")
+      expect(store.list(unSentSubChatId)[0].status).toBe("pending")
+      expect(store.list(otherSubChatId)[0].status).toBe("sending")
     })
 
     it("clears every row for a sub-chat without touching another", () => {
@@ -393,7 +532,7 @@ describe("queue store", () => {
 
       const first = store.add({ subChatId, payload: payload("one") })
       const second = store.add({ subChatId, payload: payload("two") })
-      const claimed = store.claim({ subChatId })
+      const claimed = claim(store, subChatId)
       if (claimed) store.complete(subChatId, claimed.id)
 
       expect(seen[0]).toEqual([first.id])
