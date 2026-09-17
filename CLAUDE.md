@@ -19,7 +19,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 # CLAUDE.md
 
-This file is the architecture map for mausCode. The binding rules for agents live in `AGENTS.md` and the review protocol lives in `FULL-REVIEW.md`. Roadmap step 01 measured every path and count on this page against the tree at `7c89af0` on 2026-09-14. When a path here disagrees with the tree, the tree wins and your change corrects this file in the same commit.
+This file is the architecture map for mausCode. The binding rules for agents live in `AGENTS.md` and the review protocol lives in `FULL-REVIEW.md`. For any UI, UX, motion, typography or copy work, also load `DESIGN.md`, then `docs/design-system-baseline.md`, then the skill routing and execution limits in `docs/design-skills.md`; the design skills are read for their rules and none of their installers, downloads or remote generators run here. Roadmap step 01 measured every path and count on this page against the tree at `7c89af0` on 2026-09-14. When a path here disagrees with the tree, the tree wins and your change corrects this file in the same commit.
 
 ## What is this?
 

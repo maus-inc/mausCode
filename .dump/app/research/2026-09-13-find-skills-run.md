@@ -90,7 +90,25 @@ Total added to the repository is about 547 KB of documentation under `.agents/sk
 2. Adopt `skill-creator`'s validation loop as the acceptance bar for a generated skill in step 43, draft, test prompts, measure triggering, then optimise the description, which is a better rule than "the validator checks length".
 3. Re-run `find-skills` per step as usual. Steps 07, 08, 10, 13, 14, 24, 26, 27, 28, 43 and 44 currently have nothing relevant in this ecosystem, and that is a finding, recorded here so nobody spends ten minutes rediscovering a dead search endpoint.
 
-## 8. Step 07 run, 2026-09-16
+---
+
+## 8. Update, 2026-09-16
+
+The design set was vendored and mandated. 33 skills from five sources, all read for
+their rules with no installers and no remote calls, plus `DESIGN.md` at the project
+root in the Google Labs DESIGN.md format so external design skills load direction from
+one file. Full record: `../decisions/2026-09-16-design-skill-set-vendoring.md`.
+
+What changed about the findings above. `npx skills add <owner>/<repo> -s '*' -a
+universal --copy -y` works with `-s '*'`, so the comma-separated skill list in that
+command form is not needed; a repeated `-s` per skill is. The `metadata.json` case
+shows `computedHash` is a folder hash, which is why `scripts/ci/verify-skills.mjs`
+exists now and every locked entry verifies. `web-design-guidelines` is still refused
+for the same reason, and `plugin87/ux-ui-agent-skills` is still refused because it
+adds a server. `npx antislop-ai` needs a TTY, so drive its exported `installSkills`
+and `updatePointers` instead of fighting the prompts.
+
+## 9. Step 07 run, 2026-09-16
 
 Ran for roadmap step 07, run state. Queries: `sqlite migration state machine`,
 `database event sourcing`, `electron trpc` through `npx skills find` (skills CLI
@@ -101,3 +119,4 @@ every line of prose this step wrote (design record, code comments, benchmark
 record, PR body), `find-skills` itself for this run. `frontend-design` and
 `vercel-react-best-practices` were checked against the step and do not apply:
 step 07 ships no new UI, only a store projection with no visual surface.
+

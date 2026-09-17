@@ -91,7 +91,8 @@ Collect these before detailed analysis:
 - Changed files and the symbols they changed.
 - The tests nearest each changed behaviour.
 - CI jobs, their status, and the exact commands they run, from `.github/workflows/ci.yml`.
-- The repository instructions that bind the area: `AGENTS.md`, `CLAUDE.md`, `docs/backend-porting-recipe.md`, `docs/design-system-baseline.md`, `docs/ci-gotchas.md`, `docs/protocol.md`, `CONTRIBUTING.md`, `biome.json`, `electron.vite.config.ts`, `electron-builder.yml`.
+- The repository instructions that bind the area: `AGENTS.md`, `CLAUDE.md`, `docs/backend-porting-recipe.md`, `DESIGN.md`, `docs/design-system-baseline.md`, `docs/design-skills.md`, `docs/ci-gotchas.md`, `docs/protocol.md`, `CONTRIBUTING.md`, `biome.json`, `electron.vite.config.ts`, `electron-builder.yml`.
+- For any UI, design, motion, typography or copy change: the skills named in `docs/design-skills.md`, loaded before the diff is judged, and the antislop Delivery Gate report for the change.
 - For provider work: the adapter's `README.md`, its mock fixture, and the pinned binary version in `package.json`.
 
 Create the ledger before you write findings.
@@ -160,6 +161,7 @@ Risk selects review depth. Severity describes the impact of a confirmed finding.
 | Dependency or lockfile | Supply chain, consumer impact, build and CI verification |
 | Workflow or release config | Trigger, permission, secret, cache key, platform matrix review |
 | Documentation | Command accuracy, contract accuracy, operational impact |
+| Visual design, style, motion or copy on a UI surface | Baseline conformance, Delivery Gate, accessibility, focus and states, motion constants, tests |
 
 Record `Not applicable` with a reason for every module you skip. A docs-only change must not get the depth of a migration, but the record and the reason must exist.
 
@@ -683,6 +685,10 @@ Use a module only after Phase 0 selects it. These checks distill the architectur
 
 **More traps.** Dead state left behind when the UI that owned it is removed, effect dependency lists that hide a stale closure, listeners registered on `window` without cleanup, and animations that ignore `docs/design-system-baseline.md` section 5 motion constants.
 
+**Design and craft review is mandatory on UI work.** Load the set `AGENTS.md` mandates and `docs/design-skills.md` routes: `DESIGN.md`, `docs/design-system-baseline.md`, `antislop` with the task skill it names, `impeccable` with `reference/craft-floor.md`, `ui-ux-pro-max`, and `unslop` for every string a user reads. Judge the screen against those, not against your own taste. Give each of the six gates its own ledger row, and cite the rule id so the finding can be re-checked: `R-01` for a gradient nobody justified, `R-37` for UI built with no direction loaded, `R-36` for a metric or logo bar that does not exist. A deviation from `docs/design-system-baseline.md` or `DESIGN.md` is Major at minimum, because the recorded value is what keeps the app one product, and the fix is either to mirror it or to change it in the same commit.
+
+Review the vendored skills for their rules only. A diff, a log, or a PR step that runs `impeccable/scripts/impeccable`, calls a remote image API out of `design`, installs a package to satisfy a skill, or fetches anything on a load path is a Critical finding under section 6.5 and the local-first rule, not a shortcut to applaud. Flag the defaults the set exists to catch: cream with a terracotta accent, a single acid color on near-black, purple gradients, glass on every panel, emoji bullets, a three-card feature row, invented stats, and section fades that no action triggered. Those are slop even when the code is clean.
+
 ## 16. Persistence, SQLite, and Drizzle
 
 **Traps.** A generated migration edited after it shipped leaves every existing database out of sync. `NOT NULL` without a default fails on a populated table. Adding a unique index over existing duplicates fails migration and, if startup recovery deletes, loses the user's data. A test that only creates a fresh database proves nothing about upgrade. A drizzle push that regenerates unrelated SQL hides the real change.
@@ -724,6 +730,12 @@ The tooling boundary matters when you judge a comment. Biome 2.5.13 covers forma
 | Assets | An icon or font shipped far above its display size | Medium | Resize to the rendered size with headroom, and record the byte delta |
 | Branding | Another product's name in a user-visible string | High | Keep identity in `src/shared/app-identity.ts` |
 | Clean code | Dead state, unused export, or a comment that lies | Minor | Remove it in the same change |
+| Design system | A UI value that diverges from `docs/design-system-baseline.md` or `DESIGN.md` with no recorded decision | Major | Mirror the recorded value, or change it there in the same commit |
+| Design craft | An unconsidered gradient, glass, badge, glow, emoji bullet, fake metric or logo bar | Major | Run the antislop Delivery Gate and name the `R-XX` items that failed |
+| Design craft | Motion, type scale or wash invented locally instead of read from `lib/motion.ts`, `DESIGN.md` and the /5 and /10 wash scale | Medium | Use the recorded value, or add it to the recorded source first |
+| Design craft | UI copy with AI tells, an ellipsis character, or an em dash in a string | Minor | Apply `unslop` and antislop `R-13`, then re-read your own diff |
+| Vendored skills | A skill's script, installer, or remote generator run to satisfy a rule | Critical | Read the skill for rules; a dependency needs the closed-list approval |
+| Vendored skills | A body under `.agents/skills/` edited in place so `skills-lock.json` no longer matches | Major | Restore upstream, and record any override in `docs/design-skills.md` instead |
 
 ---
 

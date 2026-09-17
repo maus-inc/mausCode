@@ -38,7 +38,8 @@
     "lint": "node scripts/ci/lint-changed.mjs",
     "typecheck": "tsc --noEmit",
     "ratchet:typecheck": "node scripts/ci/typecheck-ratchet.mjs",
-    "ratchet:audit": "node scripts/ci/audit-ratchet.mjs"
+    "ratchet:audit": "node scripts/ci/audit-ratchet.mjs",
+    "skills:verify": "node scripts/ci/verify-skills.mjs"
   },
   "workspaces": [
     "packages/*"
