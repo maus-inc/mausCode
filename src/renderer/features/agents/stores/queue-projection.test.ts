@@ -20,6 +20,8 @@ import {
   clearQueueItems,
   hasQueuedMessages,
   type QueueFeedClient,
+  removeQueueItem,
+  resumeQueue,
   sendQueueItemNow,
   setQueuePaused,
   startQueueSync,
@@ -320,6 +322,24 @@ describe("queue projection", () => {
     fake.queue.setPaused.mutate.mockRejectedValueOnce(new Error("database is locked"))
 
     await expect(setQueuePaused("sub-a", true, fake.client)).resolves.toBe(false)
+  })
+
+  it("reports a refused remove, so the card's X is not a silent no-op", async () => {
+    const fake = fakeClient()
+    fake.queue.remove.mutate.mockRejectedValueOnce(new Error("database is locked"))
+
+    await removeQueueItem("sub-a", "q1", fake.client)
+
+    expect(toastError).toHaveBeenCalled()
+  })
+
+  it("reports a resume that failed, so a paused queue is not left waiting in silence", async () => {
+    const fake = fakeClient()
+    fake.queue.setPaused.mutate.mockRejectedValueOnce(new Error("database is locked"))
+
+    await resumeQueue("sub-a", fake.client)
+
+    expect(toastError).toHaveBeenCalled()
   })
 
   it("re-asks after a feed arrives before the pane registered its chat", async () => {

@@ -416,7 +416,11 @@ export async function resumeQueue(
   try {
     await client.queue.setPaused.mutate({ subChatId, paused: false })
   } catch (error) {
+    // A resume that did not land leaves the rows the user's stop held back
+    // paused in main, so a direct send would not drain the queue behind it.
+    // The send itself is not affected; the user is told the queue is waiting.
     console.error("[queue] resume failed:", error)
+    toast.error("Could not resume the queue; queued messages will wait.")
   }
 }
 
@@ -455,7 +459,11 @@ export async function removeQueueItem(
   try {
     await client.queue.remove.mutate({ subChatId, itemId })
   } catch (error) {
+    // The card is not updated optimistically: it is the feed that drops the
+    // row, so a removal that did not land leaves it in place, and the click
+    // would look like a no-op. Say so.
     console.error("[queue] remove failed:", error)
+    toast.error("Could not remove that queued message.")
   }
 }
 

@@ -310,6 +310,11 @@ Self-triage in the same commit, after the review round:
   draft; a refused pause is reported so the stop button can warn; and the card
   is the payload plus the row's identity, with the row in flight still counted
   (`queue-projection.test.ts`).
+- Every action that can fail now says so, because the card is never updated
+  optimistically: the X reports a removal that did not land instead of looking
+  like a no-op, and a send reports a resume that did not land, since the rows
+  the stop held back would otherwise stay paused in silence
+  (`queue-projection.test.ts`).
 - The router's cap test now pins the boundary — a payload at the cap is
   accepted, one character past it is refused — and its remove/clear test
   asserts which row survived instead of a filler `toBeDefined()`.
