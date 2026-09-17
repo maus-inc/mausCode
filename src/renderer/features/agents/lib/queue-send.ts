@@ -14,7 +14,7 @@ import { trackMessageSent } from "../../../lib/analytics"
 import { appStore } from "../../../lib/jotai-store"
 import { clearLoading, loadingSubChatsAtom, setLoading } from "../atoms"
 import { agentChatStore } from "../stores/agent-chat-store"
-import { waitForStreamingReady, waitForTurnStart } from "../stores/streaming-status-store"
+import { waitForTurnStart } from "../stores/streaming-status-store"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { buildQueueMessageParts } from "./queue-parts"
 
@@ -57,8 +57,13 @@ export type QueueSendResult = "sent" | "failed"
 export interface QueueSendInput {
   item: QueueItem
   chat: Chat<UIMessage>
-  /** Send now only: stop the turn in flight and wait for it to settle. */
-  stopCurrent?: () => Promise<void>
+  /**
+   * Send now only: stop whatever turn is in flight for this sub-chat and
+   * answer whether the send may proceed. `false` keeps the item queued, which
+   * is the answer when the turn in flight belongs to another window and this
+   * one must not send beside it.
+   */
+  stopCurrent?: () => Promise<boolean>
 }
 
 /**
@@ -75,13 +80,11 @@ export async function sendClaimedQueueItem({
 }: QueueSendInput): Promise<QueueSendResult> {
   const subChatId = item.subChatId
   try {
-    if (stopCurrent) {
-      await stopCurrent()
-      // If the turn in flight does not report itself done in time, keep this
-      // item in the queue instead of starting a second turn beside it.
-      if (!(await waitForStreamingReady(subChatId))) {
-        return "failed"
-      }
+    if (stopCurrent && !(await stopCurrent())) {
+      // The caller could not clear the sub-chat (a turn that did not stop in
+      // time, or one that belongs to another window), so the item stays queued
+      // instead of running a second turn beside it.
+      return "failed"
     }
 
     const parts = buildQueueMessageParts(item.payload)

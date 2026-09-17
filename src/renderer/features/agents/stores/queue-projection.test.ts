@@ -214,12 +214,29 @@ describe("queue projection", () => {
     await vi.waitFor(() => expect(fake.claims).toEqual(["head:sub-a"]))
   })
 
+  it("keeps the item queued when the caller cannot clear the sub-chat", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+    // The callback answers "not clear to send": the turn would not stop, or it
+    // belongs to another window.
+    sendClaimedQueueItem.mockResolvedValueOnce("failed")
+
+    await sendQueueItemNow("sub-a", "q1", async () => false, fake.client)
+
+    // The click still ends the pause, but this item goes back to the queue
+    // rather than out beside a turn this window could not clear.
+    expect(fake.completed).toEqual([])
+    expect(fake.requeued).toEqual(["q1"])
+    expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("error")
+  })
+
   it("Send now resumes the queue before claiming that item", async () => {
     const claimed = item("q1", "sub-a", "paused")
     const fake = fakeClient({ claimed: [claimed] })
     registerChat("sub-a")
 
-    const sent = await sendQueueItemNow("sub-a", "q1", async () => {}, fake.client)
+    const sent = await sendQueueItemNow("sub-a", "q1", async () => true, fake.client)
 
     expect(sent).toBe(true)
     expect(fake.paused).toEqual([{ subChatId: "sub-a", paused: false }])

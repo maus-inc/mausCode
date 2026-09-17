@@ -13,7 +13,9 @@ export type QueueItemStatus = (typeof QUEUE_ITEM_STATUSES)[number]
 /**
  * Caps on what one queued item may carry. The renderer is a separate process,
  * so every field it hands over is bounded here, at the boundary the main
- * process owns.
+ * process owns. The text caps count JavaScript characters (`z.string().max`),
+ * which are UTF-16 code units, so a non-ASCII message takes more bytes in the
+ * database than the number below.
  */
 export const QUEUE_TEXT_CAP = 200_000
 export const QUEUE_LONG_TEXT_CAP = 400_000

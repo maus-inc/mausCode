@@ -56,9 +56,12 @@ empty for every existing user because migration `0016` creates it.
 `CONTRIBUTING.md` asks for a measured delta for changes that move startup,
 memory, rendering or file weight. Startup gains the recovery call above, memory
 loses the renderer store and its per-window subscriptions, and no renderer asset
-weight changed. The row shape is bounded by `src/shared/queue-item.ts` (text
-200,000 bytes, long text 400,000, base64 attachments 24 MB each, at most 48 MB
-of inline base64 per item, 20 attachments per kind). The bound, not a typical size, is what the schema guarantees: 100 text
+weight changed. The row shape is bounded by `src/shared/queue-item.ts`: text
+200,000 characters, long text 400,000, base64 attachments 24,000,000 characters
+each, at most 48,000,000 characters of inline base64 per item, 20 attachments
+per kind. Those are JavaScript string lengths, which are UTF-16 code units, so a
+message of non-ASCII text persists as more bytes than the number states; the
+numbers bound the shapes, not the on-disk size of any one message. The bound, not a typical size, is what the schema guarantees: 100 text
 items can reach 20 MB, while an ordinary queue of short messages stays in the
 tens of kilobytes, because a payload carries only what the user typed plus the
 mention tokens that expand to it.

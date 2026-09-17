@@ -143,7 +143,7 @@ async function deliverClaimedItem(
   item: QueueItem,
   chat: Chat<UIMessage>,
   client: QueueFeedClient,
-  stopCurrent?: () => Promise<void>,
+  stopCurrent?: () => Promise<boolean>,
 ): Promise<void> {
   const subChatId = item.subChatId
   const result = await sendClaimedQueueItem({ item, chat, stopCurrent })
@@ -204,7 +204,7 @@ export async function wakeQueue(
 export async function sendQueueItemNow(
   subChatId: string,
   itemId: string,
-  stopCurrent: () => Promise<void>,
+  stopCurrent: () => Promise<boolean>,
   client: QueueFeedClient = trpcClient,
 ): Promise<boolean> {
   if (inFlightSends.has(subChatId)) return false

@@ -28,6 +28,12 @@ export const queueRouter = router({
     return getQueueStore().remove(input.subChatId, input.itemId)
   }),
 
+  /**
+   * Drop every row of a sub-chat. Deleting the sub-chat already cascades its
+   * rows, so this exists for the window that still shows them: it is not a
+   * "clear the queue" action while a send is in flight, because a claimed row
+   * is the claiming window's to finish.
+   */
   clear: publicProcedure.input(subChatInput).mutation(({ input }) => {
     return getQueueStore().clear(input.subChatId)
   }),

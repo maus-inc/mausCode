@@ -3883,8 +3883,13 @@ const ChatViewInner = memo(function ChatViewInner({
       await sendQueueItemNow(subChatId, itemId, async () => {
         if (isStreamingRef.current) {
           await handleStop()
-          await waitForStreamingReady(subChatId)
+          // A turn that never reports that it stopped keeps the item queued.
+          return await waitForStreamingReady(subChatId)
         }
+        // This window is not the one streaming, so a live status here is
+        // another window's turn: the run feed is main-owned and every window
+        // sees it, and sending beside it would run two turns on one session.
+        return !useStreamingStatusStore.getState().isStreaming(subChatId)
       })
     },
     [subChatId, handleStop, clearPushedMark],
