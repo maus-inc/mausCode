@@ -3,10 +3,10 @@
 import { ArrowUp, ChevronDown, X } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { memo, useCallback, useEffect, useState } from "react"
+import type { QueueItemView } from "../../../../shared/queue-item"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 import { getWindowId } from "../../../contexts/WindowContext"
 import { cn } from "../../../lib/utils"
-import type { AgentQueueItem } from "../lib/queue-utils"
 import { RenderFileMentions } from "../mentions/render-file-mentions"
 
 // Window-scoped key so each window has its own queue expanded state
@@ -18,7 +18,7 @@ const QueueItemRow = memo(function QueueItemRow({
   onRemove,
   onSendNow,
 }: {
-  item: AgentQueueItem
+  item: QueueItemView
   onRemove?: (itemId: string) => void
   onSendNow?: (itemId: string) => void
 }) {
@@ -113,7 +113,7 @@ const QueueItemRow = memo(function QueueItemRow({
 })
 
 interface AgentQueueIndicatorProps {
-  queue: AgentQueueItem[]
+  queue: QueueItemView[]
   onRemoveItem?: (itemId: string) => void
   onSendNow?: (itemId: string) => void
   isStreaming?: boolean

@@ -50,7 +50,7 @@ import {
   selectedProjectAtom,
   showNewChatFormAtom,
 } from "../agents/atoms"
-import { QueueProcessor } from "../agents/components/queue-processor"
+import { QueueSync } from "../agents/components/queue-sync"
 import { TrafficLightSpacer, TrafficLights } from "../agents/components/traffic-light-spacer"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
@@ -311,8 +311,8 @@ export function AgentsLayout() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      {/* Global queue processor - handles message queues for all sub-chats */}
-      <QueueProcessor />
+      {/* Global queue sync - main-owned queue rows for all sub-chats */}
+      <QueueSync />
       <ClaudeLoginModal
         hideCustomModelSettingsLink={claudeLoginModalConfig.hideCustomModelSettingsLink}
         autoStartAuth={claudeLoginModalConfig.autoStartAuth}

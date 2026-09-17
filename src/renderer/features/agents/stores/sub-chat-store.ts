@@ -3,7 +3,7 @@ import { getWindowId } from "../../../contexts/WindowContext"
 import { addPaneRatio, getDefaultRatios, removePaneRatio } from "../atoms"
 import { clearTaskSnapshotCache } from "../ui/agent-task-tools"
 import { agentChatStore } from "./agent-chat-store"
-import { useMessageQueueStore } from "./message-queue-store"
+import { clearQueueItems } from "./queue-projection"
 import { useStreamingStatusStore } from "./streaming-status-store"
 import { clearSubChatRuntimeCaches } from "./sub-chat-runtime-cleanup"
 
@@ -266,8 +266,9 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
     }
 
     // Cleanup queue, streaming status, Chat instance, and task snapshot cache
-    // to prevent memory leaks and race conditions (QueueProcessor sending to closed subChat)
-    useMessageQueueStore.getState().clearQueue(subChatId)
+    // to prevent memory leaks and race conditions (a sender writing to a
+    // closed sub-chat).
+    clearQueueItems(subChatId)
     useStreamingStatusStore.getState().clearStatus(subChatId)
     clearSubChatRuntimeCaches(subChatId)
     agentChatStore.delete(subChatId)

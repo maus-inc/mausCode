@@ -55,3 +55,65 @@ export const useStreamingStatusStore = create<StreamingStatusState>()(
     },
   })),
 )
+
+/** Safety timeout for a wait, so no caller can hang forever on a status that
+ *  never arrives. */
+const STREAMING_READY_TIMEOUT_MS = 30_000
+
+/**
+ * Wait until a sub-chat's status leaves streaming, by subscribing to the
+ * status store. Resolves immediately when it is already done, and after the
+ * timeout when the store never reports it, so a caller is never stuck.
+ */
+export function waitForStreamingReady(subChatId: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!useStreamingStatusStore.getState().isStreaming(subChatId)) {
+      resolve()
+      return
+    }
+
+    const timeout = setTimeout(() => {
+      console.warn(
+        `[waitForStreamingReady] Timed out after ${STREAMING_READY_TIMEOUT_MS}ms for subChat ${subChatId.slice(-8)}, proceeding anyway`,
+      )
+      unsub()
+      resolve()
+    }, STREAMING_READY_TIMEOUT_MS)
+
+    const unsub = useStreamingStatusStore.subscribe(
+      (state) => state.statuses[subChatId],
+      (status) => {
+        if (status === "ready" || status === undefined) {
+          clearTimeout(timeout)
+          unsub()
+          resolve()
+        }
+      },
+    )
+  })
+}
+
+/**
+ * Wait until a sub-chat's status reports a live turn (`streaming` or
+ * `submitted`), which is what a caller waits for after invoking a send: the
+ * engine accepted the message. Resolves immediately when a turn is already
+ * live. `error` and `ready` do not resolve it, because neither means the
+ * message went out.
+ */
+export function waitForTurnStart(subChatId: string): Promise<void> {
+  const current = useStreamingStatusStore.getState().getStatus(subChatId)
+  if (current === "streaming" || current === "submitted") {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const unsub = useStreamingStatusStore.subscribe(
+      (state) => state.statuses[subChatId],
+      (status) => {
+        if (status === "streaming" || status === "submitted") {
+          unsub()
+          resolve()
+        }
+      },
+    )
+  })
+}

@@ -23,6 +23,7 @@ import { useShallow } from "zustand/react/shallow"
 // import { clearSubChatSelectionAtom, isSubChatMultiSelectModeAtom, selectedSubChatIdsAtom } from "@/lib/atoms/agent-subchat-selection"
 import { ResizableBottomPanel } from "@/components/ui/resizable-bottom-panel"
 import type { ChangedFile, FileStatus } from "../../../../shared/changes-types"
+import type { QueuePayload } from "../../../../shared/queue-item"
 import { isSubChatProvider } from "../../../../shared/sub-chat-provider"
 import { AppLoader } from "../../../components/ui/app-loader"
 import { Button } from "../../../components/ui/button"
@@ -191,11 +192,10 @@ import {
 import { NativeChatTransport } from "../lib/native-chat-transport"
 import { OpenclawChatTransport } from "../lib/openclaw-chat-transport"
 import { OpenRouterChatTransport } from "../lib/openrouter-chat-transport"
+import { subscribeQueueSent } from "../lib/queue-send"
 import {
-  createQueueItem,
   createTextPreview,
   type DiffTextContext,
-  generateQueueId,
   type SelectedTextContext,
   toQueuedDiffTextContext,
   toQueuedFile,
@@ -209,7 +209,6 @@ import { RooChatTransport } from "../lib/roo-chat-transport"
 import { type AgentsMentionsEditorHandle, FileOpenProvider, MENTION_PREFIXES } from "../mentions"
 import { ChatSearchBar, chatSearchCurrentMatchAtom, SearchHighlightProvider } from "../search"
 import { agentChatStore } from "../stores/agent-chat-store"
-import { EMPTY_QUEUE, useMessageQueueStore } from "../stores/message-queue-store"
 import {
   type DataImagePart,
   findRollbackTargetSdkUuidForUserIndex,
@@ -219,7 +218,17 @@ import {
   type Message as StoreMessage,
   syncMessagesWithStatusAtom,
 } from "../stores/message-store"
-import { useStreamingStatusStore } from "../stores/streaming-status-store"
+import {
+  addQueueItem,
+  EMPTY_PROJECTED_QUEUE,
+  hasQueuedMessages,
+  removeQueueItem as removeQueueItemFromMain,
+  resumeQueue,
+  sendQueueItemNow,
+  setQueuePaused,
+  useQueueProjection,
+} from "../stores/queue-projection"
+import { useStreamingStatusStore, waitForStreamingReady } from "../stores/streaming-status-store"
 import { clearSubChatRuntimeCaches } from "../stores/sub-chat-runtime-cleanup"
 import { type SubChatMeta, useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { DiffViewMode } from "../ui/agent-diff-view"
@@ -308,39 +317,6 @@ type FileContentPart = { type: "file-content"; filePath: string; content: string
 
 /** Outgoing user-message parts (SDK parts plus hidden file contents). */
 type OutgoingMessagePart = UIMessage["parts"][number] | FileContentPart
-
-/** Wait for streaming to finish by subscribing to the status store.
- *  Includes a 30s safety timeout — if the store never transitions to "ready",
- *  the promise resolves anyway to prevent hanging the UI indefinitely. */
-const STREAMING_READY_TIMEOUT_MS = 30_000
-
-function waitForStreamingReady(subChatId: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (!useStreamingStatusStore.getState().isStreaming(subChatId)) {
-      resolve()
-      return
-    }
-
-    const timeout = setTimeout(() => {
-      console.warn(
-        `[waitForStreamingReady] Timed out after ${STREAMING_READY_TIMEOUT_MS}ms for subChat ${subChatId.slice(-8)}, proceeding anyway`,
-      )
-      unsub()
-      resolve()
-    }, STREAMING_READY_TIMEOUT_MS)
-
-    const unsub = useStreamingStatusStore.subscribe(
-      (state) => state.statuses[subChatId],
-      (status) => {
-        if (status === "ready" || status === undefined) {
-          clearTimeout(timeout)
-          unsub()
-          resolve()
-        }
-      },
-    )
-  })
-}
 
 // Exploring tools - these get grouped when 2+ consecutive
 
@@ -1984,7 +1960,7 @@ const ChatViewInner = memo(function ChatViewInner({
         const currentSubChatState = useAgentSubChatStore.getState()
         if (currentSubChatState.activeSubChatId === subChatId) return
         if (useStreamingStatusStore.getState().isStreaming(subChatId)) return
-        if ((useMessageQueueStore.getState().queues[subChatId]?.length ?? 0) > 0) return
+        if (hasQueuedMessages(subChatId)) return
 
         clearRuntimeCachesForSubChat(subChatId)
       }, 100)
@@ -2086,11 +2062,16 @@ const ChatViewInner = memo(function ChatViewInner({
     rect: DOMRect
   } | null>(null)
 
-  // Message queue for sending messages while streaming
-  const queue = useMessageQueueStore((s) => s.queues[subChatId] ?? EMPTY_QUEUE)
-  const addToQueue = useMessageQueueStore((s) => s.addToQueue)
-  const removeFromQueue = useMessageQueueStore((s) => s.removeFromQueue)
-  const popItemFromQueue = useMessageQueueStore((s) => s.popItem)
+  // Message queue for sending messages while streaming. The rows live in the
+  // main process (roadmap step 08); this window only projects them and sends a
+  // claimed item.
+  const queue = useQueueProjection((s) => s.queues[subChatId] ?? EMPTY_PROJECTED_QUEUE)
+  const addToQueue = useCallback((targetSubChatId: string, payload: QueuePayload) => {
+    void addQueueItem(targetSubChatId, payload)
+  }, [])
+  const removeFromQueue = useCallback((targetSubChatId: string, itemId: string) => {
+    void removeQueueItemFromMain(targetSubChatId, itemId)
+  }, [])
 
   // Plan approval pending state (for tool approval loading)
   const [_planApprovalPending, setPlanApprovalPending] = useState<Record<string, boolean>>({})
@@ -2197,6 +2178,13 @@ const ChatViewInner = memo(function ChatViewInner({
     await stopRef.current()
   }, [subChatId])
 
+  // The stop button: stopping is the user saying "not now", so the queue waits
+  // for an explicit send instead of firing the next item at the stop.
+  const handleUserStop = useCallback(async () => {
+    void setQueuePaused(subChatId, true)
+    await handleStop()
+  }, [handleStop, subChatId])
+
   // Wrapper for addTextContext that handles TextSelectionSource
   const addTextContext = useCallback(
     (text: string, source: TextSelectionSource) => {
@@ -2298,13 +2286,13 @@ const ChatViewInner = memo(function ChatViewInner({
 
       // If streaming, add to queue
       if (isStreamingRef.current) {
-        const item = createQueueItem(generateQueueId(), message)
-        addToQueue(subChatId, item)
+        addToQueue(subChatId, { message })
         toast.success("Reply queued", {
           description: "Will be sent when current response completes",
         })
       } else {
-        // Send directly
+        // Send directly, which is an explicit send: a paused queue restarts.
+        void resumeQueue(subChatId)
         sendMessageRef.current({
           role: "user",
           parts: [{ type: "text", text: message }],
@@ -3523,19 +3511,15 @@ const ChatViewInner = memo(function ChatViewInner({
     }
   }, [isVisiblePane, status])
 
-  // Scroll to bottom when QueueProcessor auto-sends a queued message.
-  // QueueProcessor runs globally and can't access scroll refs, so it
-  // signals via a store trigger that we subscribe to here.
+  // Scroll to bottom when a queued message goes out. The sender runs globally
+  // and can't reach this pane's scroll ref, so it signals on a channel here.
   useEffect(() => {
-    const unsub = useMessageQueueStore.subscribe(
-      (state) => state.queueSentTriggers[subChatId] || 0,
-      (trigger) => {
-        if (trigger === 0) return
-        if (!isVisiblePaneRef.current) return
-        shouldAutoScrollRef.current = true
-        scrollToBottom()
-      },
-    )
+    const unsub = subscribeQueueSent((sentSubChatId) => {
+      if (sentSubChatId !== subChatId) return
+      if (!isVisiblePaneRef.current) return
+      shouldAutoScrollRef.current = true
+      scrollToBottom()
+    })
     return unsub
   }, [subChatId, scrollToBottom])
 
@@ -3626,16 +3610,14 @@ const ChatViewInner = memo(function ChatViewInner({
       const queuedDiffTextContexts = currentDiffTextContexts.map(toQueuedDiffTextContext)
       const queuedPastedTexts = currentPastedTexts.map(toQueuedPastedText)
 
-      const item = createQueueItem(
-        generateQueueId(),
-        inputValue.trim(),
-        queuedImages.length > 0 ? queuedImages : undefined,
-        queuedFiles.length > 0 ? queuedFiles : undefined,
-        queuedTextContexts.length > 0 ? queuedTextContexts : undefined,
-        queuedDiffTextContexts.length > 0 ? queuedDiffTextContexts : undefined,
-        queuedPastedTexts.length > 0 ? queuedPastedTexts : undefined,
-      )
-      addToQueue(subChatId, item)
+      addToQueue(subChatId, {
+        message: inputValue.trim(),
+        images: queuedImages.length > 0 ? queuedImages : undefined,
+        files: queuedFiles.length > 0 ? queuedFiles : undefined,
+        textContexts: queuedTextContexts.length > 0 ? queuedTextContexts : undefined,
+        diffTextContexts: queuedDiffTextContexts.length > 0 ? queuedDiffTextContexts : undefined,
+        pastedTexts: queuedPastedTexts.length > 0 ? queuedPastedTexts : undefined,
+      })
 
       // Clear input and attachments
       editorRef.current?.clear()
@@ -3836,6 +3818,11 @@ const ChatViewInner = memo(function ChatViewInner({
     shouldAutoScrollRef.current = true
     scrollToBottom()
 
+    // A direct send is an explicit send, so a paused queue drains again. The
+    // call sits beside the send on purpose: the chat's status turns
+    // `submitted` inside the send call, so a wake caused by the resume cannot
+    // dispatch an item in parallel with this message.
+    void resumeQueue(subChatId)
     await sendMessageRef.current({ role: "user", parts: parts as UIMessage["parts"] })
   }, [
     sandboxSetupStatus,
@@ -3861,104 +3848,19 @@ const ChatViewInner = memo(function ChatViewInner({
     clearDiffTextContexts,
   ])
 
-  // Queue handlers for sending queued messages
+  // Send now: ask main for this item, stop the turn in flight, and send it
+  // with this window's chat. The queue card's Send now button.
   const handleSendFromQueue = useCallback(
     async (itemId: string) => {
-      const item = popItemFromQueue(subChatId, itemId)
-      if (!item) return
-
       clearPushedMark()
-
-      try {
-        // Stop current stream if streaming and wait for status to become ready.
-        // The server-side save block preserves sessionId on abort, so the next
-        // message can resume the session with full conversation context.
+      await sendQueueItemNow(subChatId, itemId, async () => {
         if (isStreamingRef.current) {
           await handleStop()
           await waitForStreamingReady(subChatId)
         }
-
-        // Build message parts from queued item
-        const parts: UIMessage["parts"] = [
-          ...(item.images || []).map((img) => ({
-            type: "data-image" as const,
-            data: {
-              url: img.url,
-              mediaType: img.mediaType,
-              filename: img.filename,
-              base64Data: img.base64Data,
-            },
-          })),
-          ...(item.files || []).map((f) => ({
-            type: "data-file" as const,
-            data: {
-              url: f.url,
-              mediaType: f.mediaType,
-              filename: f.filename,
-              size: f.size,
-            },
-          })),
-        ]
-
-        // Add text contexts as mention tokens
-        let mentionPrefix = ""
-        if (item.textContexts && item.textContexts.length > 0) {
-          const quoteMentions = item.textContexts.map((tc) => {
-            const preview = tc.text.slice(0, 50).replace(/[:[\]]/g, "") // Create and sanitize preview
-            const encodedText = utf8ToBase64(tc.text) // Base64 encode full text
-            return `@[${MENTION_PREFIXES.QUOTE}${preview}:${encodedText}]`
-          })
-          mentionPrefix = `${quoteMentions.join(" ")} `
-        }
-
-        // Add diff text contexts as mention tokens
-        if (item.diffTextContexts && item.diffTextContexts.length > 0) {
-          const diffMentions = item.diffTextContexts.map((dtc) => {
-            const preview = dtc.text.slice(0, 50).replace(/[:[\]]/g, "") // Create and sanitize preview
-            const encodedText = utf8ToBase64(dtc.text) // Base64 encode full text
-            const lineNum = dtc.lineNumber || 0
-            return `@[${MENTION_PREFIXES.DIFF}${dtc.filePath}:${lineNum}:${preview}:${encodedText}]`
-          })
-          mentionPrefix += `${diffMentions.join(" ")} `
-        }
-
-        // Add pasted text / chat history as mentions
-        if (item.pastedTexts && item.pastedTexts.length > 0) {
-          const pastedMentions = item.pastedTexts.map((pt) => {
-            const sanitizedPreview = pt.preview.replace(/[:[\]|]/g, "")
-            const prefix =
-              pt.kind === "chatHistory" ? MENTION_PREFIXES.CHAT_HISTORY : MENTION_PREFIXES.PASTED
-            return `@[${prefix}${pt.size}:${sanitizedPreview}|${pt.filePath}]`
-          })
-          mentionPrefix += `${pastedMentions.join(" ")} `
-        }
-
-        if (item.message || mentionPrefix) {
-          parts.push({ type: "text", text: mentionPrefix + (item.message || "") })
-        }
-
-        // Track message sent
-        trackMessageSent({
-          workspaceId: subChatId,
-          messageLength: item.message.length,
-          mode: subChatModeRef.current,
-        })
-
-        // Update timestamps
-        useAgentSubChatStore.getState().updateSubChatTimestamp(subChatId)
-
-        // Enable auto-scroll and immediately scroll to bottom
-        shouldAutoScrollRef.current = true
-        scrollToBottom()
-
-        await sendMessageRef.current({ role: "user", parts })
-      } catch (error) {
-        console.error("[handleSendFromQueue] Error sending queued message:", error)
-        // Requeue the item at the front so it isn't lost
-        useMessageQueueStore.getState().prependItem(subChatId, item)
-      }
+      })
     },
-    [subChatId, popItemFromQueue, handleStop, clearPushedMark, scrollToBottom],
+    [subChatId, handleStop, clearPushedMark],
   )
 
   const handleRemoveFromQueue = useCallback(
@@ -4079,6 +3981,9 @@ const ChatViewInner = memo(function ChatViewInner({
     scrollToBottom()
 
     try {
+      // A direct send is an explicit send, so a paused queue drains again; the
+      // resume sits beside the send so the wake cannot race it.
+      void resumeQueue(subChatId)
       await sendMessageRef.current({ role: "user", parts })
     } catch (error) {
       console.error("[handleForceSend] Error sending message:", error)
@@ -4562,7 +4467,7 @@ const ChatViewInner = memo(function ChatViewInner({
                   isCompacting={isCompacting}
                   changedFiles={changedFilesForSubChat}
                   worktreePath={projectPath}
-                  onStop={handleStop}
+                  onStop={handleUserStop}
                   hasQueueCardAbove={queue.length > 0}
                   onCommitAndPush={projectPath ? onCommitAndPush : undefined}
                   isCommittingAndPushing={isCommittingAndPush}
@@ -4578,7 +4483,7 @@ const ChatViewInner = memo(function ChatViewInner({
           fileInputRef={fileInputRef}
           onSend={handleSend}
           onForceSend={handleForceSend}
-          onStop={handleStop}
+          onStop={handleUserStop}
           onCompact={handleCompact}
           onCreateNewSubChat={onCreateNewSubChat}
           onModeChange={handleModeChange}
@@ -5333,7 +5238,7 @@ export function ChatView({
       for (const subChatId of agentChatStore.keys()) {
         if (agentChatStore.getParentChatId(subChatId) !== previousParentChatId) continue
         if (useStreamingStatusStore.getState().isStreaming(subChatId)) continue
-        if ((useMessageQueueStore.getState().queues[subChatId]?.length ?? 0) > 0) continue
+        if (hasQueuedMessages(subChatId)) continue
         agentChatStore.delete(subChatId)
         clearRuntimeCachesForSubChat(subChatId)
       }
@@ -5354,7 +5259,7 @@ export function ChatView({
       if (agentChatStore.getParentChatId(subChatId) !== chatId) continue
       if (keep.has(subChatId)) continue
       if (useStreamingStatusStore.getState().isStreaming(subChatId)) continue
-      if ((useMessageQueueStore.getState().queues[subChatId]?.length ?? 0) > 0) continue
+      if (hasQueuedMessages(subChatId)) continue
 
       agentChatStore.delete(subChatId)
       clearRuntimeCachesForSubChat(subChatId)
@@ -6495,7 +6400,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     const currentSelectedChatId = appStore.get(selectedAgentChatIdAtom)
     if (!currentSelectedChatId || currentSelectedChatId === parentChatId) return
     if (useStreamingStatusStore.getState().isStreaming(subChatId)) return
-    if ((useMessageQueueStore.getState().queues[subChatId]?.length ?? 0) > 0) return
+    if (hasQueuedMessages(subChatId)) return
 
     agentChatStore.delete(subChatId)
     clearRuntimeCachesForSubChat(subChatId)
