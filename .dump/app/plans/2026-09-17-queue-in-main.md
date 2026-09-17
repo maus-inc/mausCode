@@ -554,6 +554,27 @@ path calls on every send that waits — could keep its store listener on both
 success and timeout, one listener per message the user sends. All four now
 asserted, the listener releases by counting them through a `subscribe` spy.
 
+**The shared vocabulary and the main-process entry point** (two sweeps, and one
+of them is the reason both exist now). `src/shared/queue-item.ts` had no test of
+its own — the boundary was only ever exercised through callers — so the caps
+are now asserted where they are written: the attachment count, the paste `kind`
+enum, `toQueueItemView`'s identity, and the base64 total. The last one is a
+finding in itself: the item's 48 MB total was **masked** in every existing test
+by the narrower 24 MB per-image cap, because the only way the old tests pushed
+past the total was to push a single image past its own cap first. The test now
+uses three images at exactly the per-image cap, which only the item rule can
+refuse, and both `if (false)` and `>` → `>=` at that boundary die on it. The
+remaining conversions (`toQueuedPastedText`'s `kind`, the attachment caps on all
+five lists) are asserted beside it.
+
+`src/main/lib/queue/index.ts` was already well covered: the retry, the
+"never block startup" path and the reported release count all die when mutated.
+Its fourth case is the count of a *swallowed* failure — a release that throws
+must not take the closing window with it — and it needed a valid mutation to
+show that; the first attempt only broke the syntax and produced no summary,
+which is a reminder that "no summary" is an unknown, not a survivor.
+
+
 **Not holes.** The reconnect path has two independent defences — the `stopped`
 flag in `connect` and the cleared retry timer in the stop — and removing either
 alone is invisible because the other covers it; both were removed together to
