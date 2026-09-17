@@ -528,6 +528,62 @@ map keyed by sub-chat. Recorded as a named exposure, unowned, with the wiring
 option noted.
 
 
+### Round thirteen
+
+The findings that live in a bot's summary comment rather than in a thread: CodeAnt's three nitpicks and CodeRabbit's three pre-merge checks. Two of the six
+were real, and both were test-side.
+
+**The projection's tests could inherit a mark from a test that ran before
+them.** The setup reset the cards but not the module-level `unknownSubChatIds`,
+and `setState({ queues: {} })` left `hiddenCounts` standing as well. Both are
+read by the wake path: a mark that says main has none of a sub-chat's rows makes
+a later test's claim come back handed over rather than sent, and a stale hidden
+count makes `hasQueuedMessages` answer for a queue that test never built. The
+setup now calls the store's own `resetQueues()`, which is the same reset a
+reconnect performs, and that reset now clears the marks: they describe main's
+rows, not this window's cards, so the replay after a reconnect is what says what
+main has. A mark left standing after a reconnect would hold sends back for rows
+that are in main. Pinned by `forgets the mark a reconnect cannot vouch for, so a
+later wake sends`; deleting the two `clear()` calls fails it.
+
+**The two-window test did not have two windows in it.** `a window that loses the
+race sends nothing` gave each fake client its own claim list, so the second
+client had a row waiting and won its own race: the test could not fail for the
+reason it was named after. Both clients now share one claim source — one row,
+one winner — which is what main's conditional update gives them, and the test now
+fails when the lists are separated again, as it should.
+
+**Three of the four remaining items are answered rather than changed.** The
+index nitpick points at `0016_natural_reptil.sql`, a file this branch no longer
+has: the consolidated migration creates
+`queue_items_sub_chat_position_idx (sub_chat_id, position, created_at)` directly,
+which is the composite the ordering reads need. Putting `status` in front of the
+ordering columns would take that away: `list` and `orderedRowsTx` order a
+sub-chat's rows without constraining `status`, so the index would stop covering
+their sort and the planner would sort instead. The claim's status filter runs
+inside one sub-chat's rows, which is the read the benchmark measured (claim
+1.834 ms mean, list of twenty rows 0.295 ms).
+
+Docstring coverage is answered by the repository's own rule, not by this step:
+`AGENTS.md` says to write self-documenting code and not to add comments "except
+where they explain a non-obvious constraint, a provenance rule, or a
+workaround". Reaching CodeRabbit's 80 % threshold on the diff's 78 functions
+would mean restating signatures across thirty-five files, which that rule
+forbids and this step has no reason to widen.
+
+The two pre-merge checks are answered the same way. "The required atomic
+dispatch boundary remains unmet" asks for the queue-head claim, the idle-run
+transition, run creation and dispatch marking to happen in one main-process
+transaction; that is not this step's shape by decision. Main's transaction is
+the hand-off — the conditional `UPDATE` is what decides a race between windows,
+and it is pinned by two stores over one database in `queue-state.test.ts` — and
+the send happens in the claiming window because the prompt and the per-chat
+settings are assembled there and the step's rule is that main never drives the
+engine turn. "Out of scope: user pause and resume" is the one behaviour the
+human chose against the step's original scope, dated and recorded under
+"Decisions taken with the human": a manual stop pauses the queue and only an
+explicit send resumes it.
+
 ### Round twelve
 
 **An item that carried nothing at all.** Reading the payload boundary again,

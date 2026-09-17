@@ -100,6 +100,12 @@ export const useQueueProjection = create<QueueProjectionState>()(
       })
     },
     resetQueues: () => {
+      // The marks describe main's rows, not this window's cards, so they go
+      // with the cards: the replay that follows a reset is what says what main
+      // has. A mark left standing after a reconnect would hold sends back for a
+      // sub-chat whose rows are in main and whose feed never arrived.
+      unknownSubChatIds.clear()
+      clearingSubChatIds.clear()
       set((state) =>
         Object.keys(state.queues).length === 0 && Object.keys(state.hiddenCounts).length === 0
           ? state

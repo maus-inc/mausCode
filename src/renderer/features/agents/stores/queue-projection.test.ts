@@ -188,7 +188,10 @@ function cancelPendingWakeRetries(): void {
 describe("queue projection", () => {
   beforeEach(() => {
     cancelPendingWakeRetries()
-    useQueueProjection.setState({ queues: {} })
+    // A full reset, not just the cards: the marks and the hidden counts live
+    // outside the store, and a test that leaves one behind decides what a later
+    // test sends. This is the same reset a reconnect performs.
+    useQueueProjection.getState().resetQueues()
     useStreamingStatusStore.setState({ statuses: {} })
     agentChatStore.clear()
     sendClaimedQueueItem.mockReset()
@@ -619,10 +622,12 @@ describe("queue projection", () => {
   })
 
   it("a window that loses the race sends nothing", async () => {
-    // The second window asks after main already handed the item to the first,
-    // which is what the claim transaction guarantees: one winner, one send.
-    const first = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
-    const second = fakeClient({ claimed: [] })
+    // One row, one claim source for both windows: that is what main's claim
+    // transaction guarantees, and sharing the source is what makes this a race.
+    // With a row each, no window could ever lose one.
+    const claimed = [item("q1", "sub-a", "pending")]
+    const first = fakeClient({ claimed })
+    const second = fakeClient({ claimed })
     registerChat("sub-a")
 
     await wakeQueue("sub-a", first.client)
@@ -630,7 +635,24 @@ describe("queue projection", () => {
 
     expect(first.completed).toEqual(["q1"])
     expect(second.completed).toEqual([])
+    expect(second.claims).toHaveLength(1)
     expect(sendClaimedQueueItem).toHaveBeenCalledTimes(1)
+  })
+
+  it("forgets the mark a reconnect cannot vouch for, so a later wake sends", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+
+    // A clear that landed leaves the mark saying main has none of this
+    // sub-chat's rows, which is right until the window reconnects: the replay
+    // that follows is what says what main has now.
+    await clearQueueItems("sub-a", fake.client)
+    useQueueProjection.getState().resetQueues()
+    await wakeQueue("sub-a", fake.client)
+
+    expect(fake.completed).toEqual(["q1"])
+    expect(fake.requeued).toEqual([])
   })
 
   it("asks on a feed change, which is the wake a reload produces", async () => {
