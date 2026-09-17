@@ -446,6 +446,28 @@ describe("queue store", () => {
 
       expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
     })
+
+    it("holds a row that came back while the user's stop still stands", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      store.add({ subChatId, payload: payload("two") })
+      expect(store.setPaused(subChatId, true)).toBe(2)
+
+      // Send now claims a held row — an explicit ask may — and the send fails
+      // before the hand-off, so the row goes back to the queue. `pending` is
+      // the only status that means "waiting", so it comes back as one even
+      // though the stop is still the user's answer.
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
+      expect(store.requeue(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(store.list(subChatId)[0].status).toBe("pending")
+
+      // The automatic path must not take it: the pause is per sub-chat, not per
+      // row, so one row's return does not overrule the stop.
+      expect(claim(store, subChatId)).toBeNull()
+
+      // An explicit resume is what lifts it, and then the row goes.
+      expect(store.setPaused(subChatId, false)).toBe(1)
+      expect(claim(store, subChatId)?.id).toBe(first.id)
+    })
   })
 
   describe("cancel", () => {
@@ -486,6 +508,32 @@ describe("queue store", () => {
       expect(items[0].id).toBe(first.id)
       expect(items[0].status).toBe("pending")
       expect(items[0].dispatchedAt).toBeNull()
+    })
+
+    it("splits recovery by the hand-off when both kinds of row are waiting", () => {
+      // One database, two sub-chats: one row was handed to the engine, the
+      // other was claimed and never left. Recovery reads them in one pass, and
+      // each half of the split has its own where clause — a query that matched
+      // both is only visible when both are in front of it.
+      const handedSubChatId = seedSubChat(opened.db)
+      const neverHandedSubChatId = seedSubChat(opened.db)
+      const handed = store.add({ subChatId: handedSubChatId, payload: payload("handed") })
+      const neverHanded = store.add({
+        subChatId: neverHandedSubChatId,
+        payload: payload("never handed"),
+      })
+      expect(claim(store, handedSubChatId, handed.id, WINDOW_A)?.id).toBe(handed.id)
+      expect(store.markHanded(handedSubChatId, handed.id, WINDOW_A)).toBe(true)
+      expect(claim(store, neverHandedSubChatId, neverHanded.id, WINDOW_B)?.id).toBe(neverHanded.id)
+
+      expect(createQueueStore(opened.db).recoverSending()).toBe(2)
+
+      // The handed row may already be in the engine, so it is held as paused;
+      // the row that never left goes back to the queue and dispatches.
+      expect(store.list(handedSubChatId)[0].status).toBe("paused")
+      expect(claim(store, handedSubChatId)).toBeNull()
+      expect(store.list(neverHandedSubChatId)[0].status).toBe("pending")
+      expect(claim(store, neverHandedSubChatId)?.id).toBe(neverHanded.id)
     })
 
     it("holds a handed-over row as paused on recovery, and lets the queue past it", () => {
@@ -640,6 +688,86 @@ describe("queue store", () => {
       expect(seen.at(-1)).toEqual([second.id])
       stop()
       stopBroken()
+    })
+
+    it("announces every write, because a card is fed only by the feed", () => {
+      // No card is updated optimistically: the window that clicks X, drags a
+      // row or stops the queue waits for the feed to tell it what happened, and
+      // so does every other window. A write that does not reach the feed leaves
+      // every card in the app showing the queue as it was.
+      const announced = new Map<string, string[][]>()
+      const stop = store.subscribe((item) => {
+        const lists = announced.get(item.subChatId) ?? []
+        lists.push(ids(item.items))
+        announced.set(item.subChatId, lists)
+      })
+
+      /** Run one write against a sub-chat of its own and read what it said. */
+      const feedOf = (
+        write: (ctx: { subChatId: string; itemId: string }) => void,
+      ): { rowId: string; said: string[][] } => {
+        const subChatId = seedSubChat(opened.db)
+        const row = store.add({ subChatId, payload: payload("queued") })
+        announced.set(subChatId, [])
+        write({ subChatId, itemId: row.id })
+        return { rowId: row.id, said: announced.get(subChatId) ?? [] }
+      }
+
+      // The row leaves the card, and the deletion is what says so.
+      const removed = feedOf(({ subChatId, itemId }) => store.remove(subChatId, itemId))
+      expect(removed.said).toEqual([[]])
+
+      const cleared = feedOf(({ subChatId }) => store.clear(subChatId))
+      expect(cleared.said).toEqual([[]])
+
+      // A move changes the order the card renders.
+      const moved = feedOf(({ subChatId, itemId }) => store.move(subChatId, itemId, 0))
+      expect(moved.said).toEqual([[moved.rowId]])
+
+      // A pause changes the row's status, which the card shows.
+      const paused = feedOf(({ subChatId }) => store.setPaused(subChatId, true))
+      expect(paused.said).toEqual([[paused.rowId]])
+
+      // Every write after a claim announces too, and each on its own: two
+      // entries for a claim that is handed over, one more when it is parked,
+      // and a second one when it retires.
+      const claimed = feedOf(({ subChatId, itemId }) => {
+        claim(store, subChatId, itemId, WINDOW_A)
+      })
+      expect(claimed.said).toEqual([[claimed.rowId]])
+
+      // `markHanded` is the one write that says nothing, on purpose: the row is
+      // `sending` before and after, and a `sending` row is hidden from every
+      // card and counted the same either way, so there is nothing for a window
+      // to redraw. `handedAt` is read only by this store (recovery, and the
+      // claim that parks its own handed row), never by a projection.
+      const handed = feedOf(({ subChatId, itemId }) => {
+        claim(store, subChatId, itemId, WINDOW_A)
+        store.markHanded(subChatId, itemId, WINDOW_A)
+      })
+      expect(handed.said).toEqual([[handed.rowId]])
+
+      const parked = feedOf(({ subChatId, itemId }) => {
+        claim(store, subChatId, itemId, WINDOW_A)
+        store.markHanded(subChatId, itemId, WINDOW_A)
+        store.park(subChatId, itemId, WINDOW_A)
+      })
+      // The park is what a card shows: the row comes back visible, held.
+      expect(parked.said).toEqual([[parked.rowId], [parked.rowId]])
+
+      const completed = feedOf(({ subChatId, itemId }) => {
+        claim(store, subChatId, itemId, WINDOW_A)
+        store.complete(subChatId, itemId, WINDOW_A)
+      })
+      expect(completed.said).toEqual([[completed.rowId], []])
+
+      const requeued = feedOf(({ subChatId, itemId }) => {
+        claim(store, subChatId, itemId, WINDOW_A)
+        store.requeue(subChatId, itemId, WINDOW_A)
+      })
+      expect(requeued.said).toEqual([[requeued.rowId], [requeued.rowId]])
+
+      stop()
     })
   })
 })

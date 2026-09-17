@@ -362,6 +362,43 @@ Self-triage in the same commit, after the review round:
   accepted, one character past it is refused — and its remove/clear test
   asserts which row survived instead of a filler `toBeDefined()`.
 
+### Round eight
+
+A systematic sweep: every guard and every announcement in the main store was
+removed one at a time, and the suite was re-run to see which removals nothing
+noticed. Thirteen mutations, three holes, all three now closed:
+
+- **A user pause was not what stopped a dispatch.** `pause`'s first test held
+  *every* row, so the dispatch query found no `pending` row at all and the
+  `userPausedTx` guard never had to do anything; removing it changed nothing.
+  The guard's real job is the mixed state: Send now claims a held row, the send
+  fails before the hand-off, and the row comes back `pending` while its
+  siblings are still `paused`. Without the guard the automatic path takes it,
+  which is exactly what the user's stop said not to do. `holds a row that came
+  back while the user's stop still stands` fails when the guard is removed.
+- **Recovery's two halves were each masked by the other's absence.** The two
+  existing recovery tests each had only one kind of `sending` row, so a
+  never-handed query that also matched handed rows never met a handed row.
+  `splits recovery by the hand-off when both kinds of row are waiting` puts both
+  in one pass (two sub-chats, one database) and fails when the query loses
+  `isNull(handedAt)` — the case where a message that may already be in the
+  engine is sent again.
+- **The feed's whole surface was pinned for two writes out of eight.** `add`
+  and `remove` had announcement tests; `clear`, `move`, `setPaused`, `park`,
+  `complete` and `requeue` did not, and every card in every window is fed only
+  by that feed. `announces every write, because a card is fed only by the feed`
+  covers all of them and fails when any one emit is dropped. It also records the
+  one deliberate silence: `markHanded` says nothing, because the row is
+  `sending` before and after and a `sending` row is hidden by every card and
+  counted the same either way — `handedAt` is read only by this store. That
+  expectation is written into the test, because the first version of the test
+  assumed an announcement and the store was right.
+
+The verdicts for the other ten mutations: the claim's busy check, its own-handed
+park, the run-table gate, the pause gate on resume, `markHanded`'s single
+hand-off, `recoverSending`'s split, `add`'s resume, `remove`'s sub-chat scope,
+and `add`'s announcement each fail their covering test when removed.
+
 ### Round seven
 
 Review findings (CodeRabbit `5240377372` and CodeAnt's second pass), each
