@@ -543,8 +543,11 @@ setup now calls the store's own `resetQueues()`, which is the same reset a
 reconnect performs, and that reset now clears the marks: they describe main's
 rows, not this window's cards, so the replay after a reconnect is what says what
 main has. A mark left standing after a reconnect would hold sends back for rows
-that are in main. Pinned by `forgets the mark a reconnect cannot vouch for, so a
-later wake sends`; deleting the two `clear()` calls fails it.
+that are in main. Pinned by two tests — `forgets the mark a reconnect cannot vouch for, so a
+later wake sends` and `ends a clear's hold when the feed reconnects with the
+clear unanswered` — and each of the two `clear()` calls is killed by one of
+them, which the second test is what made true: the first draft of the reset
+cleared the mark and left the hold, and nothing noticed.
 
 **The two-window test did not have two windows in it.** `a window that loses the
 race sends nothing` gave each fake client its own claim list, so the second

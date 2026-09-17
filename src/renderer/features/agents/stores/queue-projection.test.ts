@@ -639,6 +639,29 @@ describe("queue projection", () => {
     expect(sendClaimedQueueItem).toHaveBeenCalledTimes(1)
   })
 
+  it("ends a clear's hold when the feed reconnects with the clear unanswered", async () => {
+    vi.useFakeTimers()
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+
+    // A clear that never answers holds this sub-chat's sends back, and the rows
+    // a feed carries while it is in flight are the ones being deleted.
+    fake.queue.clear.mutate.mockImplementation(() => new Promise(() => {}))
+    void clearQueueItems("sub-a", fake.client)
+    applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.queue.claim.mutate).not.toHaveBeenCalled()
+
+    // The connection drops, which reconnects and resets everything this window
+    // projected. A hold waiting on an answer that is no longer coming must not
+    // survive that: the queue would stay silent for the rest of the session.
+    useQueueProjection.getState().resetQueues()
+    await wakeQueue("sub-a", fake.client)
+
+    expect(fake.completed).toEqual(["q1"])
+  })
+
   it("forgets the mark a reconnect cannot vouch for, so a later wake sends", async () => {
     const claimed = item("q1", "sub-a", "pending")
     const fake = fakeClient({ claimed: [claimed] })
