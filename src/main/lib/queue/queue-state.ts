@@ -209,6 +209,22 @@ function rewritePositionsTx(tx: QueueTx, orderedIds: string[]): void {
 }
 
 /**
+ * The row a window itself holds, still `sending`, with nothing handed over yet.
+ * `markHanded` takes it from one side and `requeue` gives it back from the
+ * other, so both write through this one guard: neither can touch a row another
+ * window holds, or one whose message may already be out.
+ */
+function ownClaimWhere(itemId: string, subChatId: string, owner: string) {
+  return and(
+    eq(schema.queueItems.id, itemId),
+    eq(schema.queueItems.subChatId, subChatId),
+    eq(schema.queueItems.status, "sending"),
+    eq(schema.queueItems.claimedBy, owner),
+    isNull(schema.queueItems.handedAt),
+  )
+}
+
+/**
  * End a user pause for this sub-chat. Only the rows the stop held back come
  * back: a parked row already left for the engine, so it keeps its place where
  * the user can see it instead of returning to the automatic path.
@@ -347,15 +363,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
     const updated = db
       .update(schema.queueItems)
       .set({ handedAt: new Date() })
-      .where(
-        and(
-          eq(schema.queueItems.id, itemId),
-          eq(schema.queueItems.subChatId, subChatId),
-          eq(schema.queueItems.status, "sending"),
-          eq(schema.queueItems.claimedBy, owner),
-          isNull(schema.queueItems.handedAt),
-        ),
-      )
+      .where(ownClaimWhere(itemId, subChatId, owner))
       .returning()
       .all()
     if (updated.length === 0) return false
@@ -606,18 +614,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
     const updated = db
       .update(schema.queueItems)
       .set({ status: "pending", dispatchedAt: null, claimedBy: null, handedAt: null })
-      .where(
-        and(
-          eq(schema.queueItems.id, itemId),
-          eq(schema.queueItems.subChatId, subChatId),
-          eq(schema.queueItems.status, "sending"),
-          // Hand back what this window holds, and only what it holds: another
-          // window's claim is not its to release, and a handed row is not a row
-          // to send again.
-          eq(schema.queueItems.claimedBy, owner),
-          isNull(schema.queueItems.handedAt),
-        ),
-      )
+      .where(ownClaimWhere(itemId, subChatId, owner))
       .returning()
       .all()
     if (updated.length === 0) return false
