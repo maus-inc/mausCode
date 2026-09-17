@@ -221,6 +221,43 @@ describe("queue store", () => {
       expect(survivor.markHanded(subChatId, first.id, WINDOW_B)).toBe(true)
     })
 
+    it("announces the park even when the claim hands nothing out", () => {
+      // One row, handed over by this window, and nothing behind it: the claim
+      // only parks the row and gives nothing back. The park still changes what
+      // every card shows, so the feed has to say so.
+      const row = store.add({ subChatId, payload: payload("one") })
+      const beforeReload = createQueueStore(opened.db)
+      expect(claim(beforeReload, subChatId, undefined, WINDOW_A)?.id).toBe(row.id)
+      expect(beforeReload.markHanded(subChatId, row.id, WINDOW_A)).toBe(true)
+
+      const afterReload = createQueueStore(opened.db)
+      const said: string[][] = []
+      const stop = afterReload.subscribe((item) => said.push(item.items.map((entry) => entry.id)))
+      const handed = claim(afterReload, subChatId, undefined, WINDOW_A)
+      stop()
+
+      expect(handed).toBeNull()
+      expect(said).toEqual([[row.id]])
+      expect(afterReload.list(subChatId).find((item) => item.id === row.id)?.status).toBe("paused")
+    })
+
+    it("says nothing when a claim changes nothing", () => {
+      // The user's pause refuses the dispatch and touches no row, so there is
+      // nothing for a card to redraw.
+      const row = store.add({ subChatId, payload: payload("one") })
+      store.setPaused(subChatId, true)
+
+      const said: string[][] = []
+      const stop = store.subscribe((item) => said.push(item.items.map((entry) => entry.id)))
+      const handed = claim(store, subChatId)
+      stop()
+
+      expect(handed).toBeNull()
+      expect(said).toEqual([])
+      expect(store.list(subChatId).map((item) => item.status)).toEqual(["paused"])
+      expect(row.id).toBeDefined()
+    })
+
     it("parks a handed claim of the same window and moves on to the next item", () => {
       // Same window, no live session: a reload between the hand-off and the
       // bookkeeping. Nobody can say whether the engine took it, so it is not
@@ -303,8 +340,10 @@ describe("queue store", () => {
         expect(
           firstWindow.db.select().from(runs).where(eq(runs.subChatId, sharedSubChatId)).all(),
         ).toEqual([])
-        // The winner is still the only one that may send.
-        expect(claim(secondStore, sharedSubChatId)).toBeNull()
+        // The winner is still the only one that may send, and the second
+        // window asks as itself: with the same owner this would be refused by
+        // the un-handed clause instead, which is a different guard.
+        expect(claim(secondStore, sharedSubChatId, undefined, WINDOW_B)).toBeNull()
 
         // The winner's turn starts, its run row lands, and the row retires.
         const handle = createRunStore(firstWindow.db).startRun({
@@ -318,7 +357,7 @@ describe("queue store", () => {
 
         // Only now does the next item become claimable.
         const next = secondStore.add({ subChatId: sharedSubChatId, payload: payload("two") })
-        expect(claim(secondStore, sharedSubChatId)?.id).toBe(next.id)
+        expect(claim(secondStore, sharedSubChatId, undefined, WINDOW_B)?.id).toBe(next.id)
       } finally {
         firstWindow.client.close()
         secondWindow.client.close()

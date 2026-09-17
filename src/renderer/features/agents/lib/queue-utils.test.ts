@@ -92,11 +92,18 @@ describe("the composer's queue payload", () => {
     })
     expect(() => queuePayloadSchema.parse({ message: "", images: [atCap] })).not.toThrow()
 
-    const half = "a".repeat(Math.floor(QUEUE_ITEM_BASE64_CAP / 2) + 1)
+    // Three images the per-image cap allows whose total is past the item's. A
+    // pair at half the item total would already exceed the wider per-image cap,
+    // so it would be refused by that one and this rule would go untested.
+    const third = "a".repeat(Math.floor(QUEUE_ITEM_BASE64_CAP / 3))
     expect(() =>
       queuePayloadSchema.parse({
         message: "",
-        images: [atCap, { ...atCap, id: "i2", base64Data: half }],
+        images: [
+          { ...atCap, id: "i1", base64Data: third },
+          { ...atCap, id: "i2", base64Data: third },
+          { ...atCap, id: "i3", base64Data: `${third}a` },
+        ],
       }),
     ).toThrow()
   })

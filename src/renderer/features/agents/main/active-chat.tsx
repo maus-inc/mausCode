@@ -3882,6 +3882,15 @@ const ChatViewInner = memo(function ChatViewInner({
       // owns the turn, and the item is on its way.
       await sendQueueItemNow(subChatId, itemId, async () => {
         if (isStreamingRef.current) {
+          // Pause before stopping, the order `handleUserStop` uses: the stop
+          // ends the turn, and a `ready` status is what another window's
+          // dispatch waits for, so an unpaused queue would let that window
+          // claim a different item and start a second turn beside this send.
+          // The send resumes the queue when it starts.
+          const paused = await setQueuePaused(subChatId, true)
+          if (!paused) {
+            toast.error("Could not pause the queue; it may continue after this stop.")
+          }
           await handleStop()
           // A turn that never reports that it stopped keeps the item queued.
           return await waitForStreamingReady(subChatId)

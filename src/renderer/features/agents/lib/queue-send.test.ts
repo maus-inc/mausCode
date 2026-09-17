@@ -5,7 +5,7 @@
  * stores and the parts builder around it are mocked; the ordering and the
  * outcome vocabulary are the subject.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { QueueItem } from "../../../../shared/queue-item"
 
 const held = vi.hoisted(() => ({
@@ -18,6 +18,7 @@ const held = vi.hoisted(() => ({
   clearLoading: vi.fn(),
   setLoading: vi.fn(),
   getParentChatId: vi.fn((): string | undefined => undefined),
+  isStreaming: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({ toast: { error: held.toastError } }))
@@ -39,6 +40,7 @@ vi.mock("../stores/sub-chat-store", () => ({
 }))
 vi.mock("../stores/streaming-status-store", () => ({
   waitForTurnStart: held.waitForTurnStart,
+  useStreamingStatusStore: { getState: () => ({ isStreaming: held.isStreaming }) },
 }))
 
 import { sendClaimedQueueItem, subscribeQueueSent } from "./queue-send"
@@ -67,6 +69,10 @@ describe("queue send", () => {
     held.setLoading.mockReset()
     held.getParentChatId.mockReset()
     held.getParentChatId.mockReturnValue(undefined)
+    held.isStreaming.mockReset()
+    // Nothing live by default: the store is what the sender asks before it
+    // hands the payload over.
+    held.isStreaming.mockReturnValue(false)
     held.markHanded.mockImplementation(async () => {
       held.order.push("handed")
       return true
@@ -82,6 +88,12 @@ describe("queue send", () => {
       expired: new Promise<void>(() => {}),
       cancel: held.cancel,
     })
+  })
+
+  // The park test runs on fake timers; a failure inside it must not leave them
+  // on for every test after it.
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   function input(overrides: Record<string, unknown> = {}) {
@@ -133,7 +145,20 @@ describe("queue send", () => {
     expect(result).toBe("uncertain")
     expect(held.toastError).toHaveBeenCalled()
     expect(held.clearLoading).toHaveBeenCalledWith(expect.any(Function), "sub-a")
-    vi.useRealTimers()
+  })
+
+  it("keeps the item queued when a turn is already live for the sub-chat", async () => {
+    held.isStreaming.mockReturnValue(true)
+
+    const result = await sendClaimedQueueItem(input())
+
+    // Sending beside a live turn would run two turns on one session, and the
+    // live turn's start would stand in for this message's, so the row stays
+    // queued instead.
+    expect(result).toBe("failed")
+    expect(held.markHanded).not.toHaveBeenCalled()
+    expect(held.sendMessage).not.toHaveBeenCalled()
+    expect(held.toastError).toHaveBeenCalled()
   })
 
   it("sends nothing when the claim moved on", async () => {

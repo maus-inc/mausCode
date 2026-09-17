@@ -119,7 +119,8 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   `pending`, because it may already have reached the engine. `park` and
   `complete` refuse a row that was never handed over, so neither can hide or
   delete a message the engine never saw. The renderer projects the feed and
-  performs the send. A manual stop pauses the queue. Contract:
+  performs the send, and a window that stops syncing hands its in-flight claim
+  back instead of sending it. A manual stop pauses the queue. Contract:
   `.dump/app/plans/2026-09-17-queue-in-main.md`.
 
 ## Performance principles

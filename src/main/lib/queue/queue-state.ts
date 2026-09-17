@@ -448,7 +448,12 @@ export function createQueueStore(db: QueueDb): QueueStore {
     // The claimed row travels out through the transaction's return value, the
     // shape `add` already uses, so nothing is read from a variable a callback
     // assigned.
-    const claimed = db.transaction((tx): QueueItem | null => {
+    // A claim can change a row without handing one out: it parks an abandoned
+    // handed claim of this window, or puts a stale one back, and then finds
+    // nothing to give. The feed has to hear about that change too, or every
+    // card keeps showing the row as it was, so the transaction reports what it
+    // touched alongside what it handed over.
+    const claimed = db.transaction((tx): { item: QueueItem | null; changed: boolean } => {
       const explicit = input.itemId
         ? tx
             .select()
@@ -461,14 +466,14 @@ export function createQueueStore(db: QueueDb): QueueStore {
             )
             .get()
         : undefined
-      if (input.itemId && !explicit) return null
+      if (input.itemId && !explicit) return { item: null, changed: false }
 
       // An abandoned claim is put back first. That is how a queue recovers
       // from a renderer that crashed or reloaded while the app kept running,
       // and it cannot send twice: the claim was never handed over, and the old
       // owner's `markHanded` fails once the row is claimed again, so it must
       // not send.
-      releaseStaleClaimsTx(tx, input.subChatId, Date.now())
+      let changed = releaseStaleClaimsTx(tx, input.subChatId, Date.now()) > 0
 
       const inFlight = rowByStatusTx(tx, input.subChatId, "sending")
       if (inFlight && inFlight.id !== explicit?.id) {
@@ -479,8 +484,10 @@ export function createQueueStore(db: QueueDb): QueueStore {
         // user and the queue moves on. Everything else — another window's live
         // send, or this window's claim that has not been handed over yet — is
         // refused, and an abandoned claim is released by its lease above.
-        if (inFlight.claimedBy !== input.owner || inFlight.handedAt === null) return null
-        parkRowTx(tx, inFlight.id)
+        if (inFlight.claimedBy !== input.owner || inFlight.handedAt === null) {
+          return { item: null, changed }
+        }
+        changed = parkRowTx(tx, inFlight.id) || changed
       }
 
       if (!input.itemId) {
@@ -497,17 +504,17 @@ export function createQueueStore(db: QueueDb): QueueStore {
             ),
           )
           .get()
-        if (activeRun) return null
+        if (activeRun) return { item: null, changed }
         // One user pause means the user stopped; nothing dispatches until an
         // explicit send resumes the queue. Parked rows are not a stop.
-        if (userPausedTx(tx, input.subChatId)) return null
+        if (userPausedTx(tx, input.subChatId)) return { item: null, changed }
       }
 
       // Dispatch takes the head of the queue; Send now takes exactly the row it
       // was asked for. The where clause is the guard that decides a race
       // between two windows, so nothing is assumed from the read above.
       const row = explicit ?? rowByStatusTx(tx, input.subChatId, "pending")
-      if (!row) return null
+      if (!row) return { item: null, changed }
 
       const allowedFrom: QueueItemStatus[] = input.itemId ? ["pending", "paused"] : ["pending"]
       const updated = tx
@@ -523,19 +530,21 @@ export function createQueueStore(db: QueueDb): QueueStore {
         )
         .returning()
         .get()
-      return updated ? toQueueItem(updated) : null
+      return { item: updated ? toQueueItem(updated) : null, changed: changed || Boolean(updated) }
     })
-    if (claimed) {
+    if (claimed.item) {
       // One line per dispatch so a report of a missing or duplicated queued
       // message can be answered from the log folder. Ids only, never payload.
       console.log(
-        `[queue] claim ${claimed.id.slice(-8)} sub=${input.subChatId.slice(-8)} via=${
+        `[queue] claim ${claimed.item.id.slice(-8)} sub=${input.subChatId.slice(-8)} via=${
           input.itemId ? "send-now" : "dispatch"
         }`,
       )
-      emit(input.subChatId)
     }
-    return claimed
+    // Announced for the park and the release too: a claim that hands nothing
+    // out can still have changed what every card shows.
+    if (claimed.changed) emit(input.subChatId)
+    return claimed.item
   }
 
   function park(subChatId: string, itemId: string, owner: string): boolean {

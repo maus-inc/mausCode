@@ -14,7 +14,7 @@ import { trackMessageSent } from "../../../lib/analytics"
 import { appStore } from "../../../lib/jotai-store"
 import { clearLoading, loadingSubChatsAtom, setLoading } from "../atoms"
 import { agentChatStore } from "../stores/agent-chat-store"
-import { waitForTurnStart } from "../stores/streaming-status-store"
+import { useStreamingStatusStore, waitForTurnStart } from "../stores/streaming-status-store"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { buildQueueMessageParts } from "./queue-parts"
 
@@ -138,6 +138,16 @@ export async function sendClaimedQueueItem({
       // instead of running a second turn beside it. Nothing was handed over.
       // Say so: every other outcome here tells the user what happened, and this
       // one is reached by a click that would otherwise look like it did nothing.
+      toast.error("Could not send that queued message now. It is still in the queue.")
+      return "failed"
+    }
+
+    // A turn already live for this sub-chat is not this message's: the status
+    // store is keyed by sub-chat, so nothing here can tell one turn's start
+    // from another's, and sending beside it would both run two turns on one
+    // session and let that other turn stand in for this message. After a stop
+    // above, a live status can only be a turn that started since.
+    if (useStreamingStatusStore.getState().isStreaming(subChatId)) {
       toast.error("Could not send that queued message now. It is still in the queue.")
       return "failed"
     }

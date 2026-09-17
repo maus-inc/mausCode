@@ -207,6 +207,36 @@ function answerClear(subChatId: string): boolean {
 const claimAttempts = new Set<string>()
 
 /**
+ * Sub-chats whose claim was in flight when their sync stopped. The row is still
+ * main's to hand back, and a window that stopped syncing must not send it — the
+ * same reason the cleanup clears the pending wakes.
+ */
+const claimsForStoppedSyncs = new Set<string>()
+
+/** Snapshot the claims a stopping sync leaves in flight. */
+function noteStoppedSync(): void {
+  for (const subChatId of claimAttempts) claimsForStoppedSyncs.add(subChatId)
+}
+
+/**
+ * Answers once whether this sub-chat's claim outlived its sync, and forgets the
+ * answer: a mark left behind would swallow the next claim for the sub-chat,
+ * which belongs to a live sync.
+ */
+function claimOutlivedItsSync(subChatId: string): boolean {
+  if (!claimsForStoppedSyncs.has(subChatId)) return false
+  claimsForStoppedSyncs.delete(subChatId)
+  return true
+}
+
+/**
+ * Claims this window could not hand back. While one stands, main still has this
+ * window's un-handed claim and refuses the next one for the sub-chat, so the
+ * hand-back is repeated on the next wake rather than waiting out the lease.
+ */
+const pendingHandBacks = new Map<string, QueueItem>()
+
+/**
  * Which window is asking. Main keys a claim by this, so it can tell a live
  * window from one that reloaded or closed, and hand back what a closed window
  * held. Resolved once, like the storage namespace it matches.
@@ -356,6 +386,14 @@ export async function wakeQueue(
   // would deliver a message the user just asked to delete, and handing it back
   // would only make the feed speak again. The claim waits for the answer.
   if (isClearing(subChatId)) return
+  // A claim this window failed to hand back goes first: while it stands, main
+  // has this window's un-handed claim and refuses the next one, so nothing
+  // below could work anyway.
+  const owed = pendingHandBacks.get(subChatId)
+  if (owed) {
+    await returnClaimedItem(owed, client)
+    if (pendingHandBacks.has(subChatId)) return
+  }
   const chat = senderForSubChat(subChatId)
   if (!chat) {
     // A window mounts its panes after the feed has already replayed, so a wake
@@ -384,10 +422,21 @@ export async function wakeQueue(
   } finally {
     claimAttempts.delete(subChatId)
   }
+  // Consumed for every answer, a row or none: the mark belongs to this claim,
+  // and one left behind would hand the next live sync's row back.
+  const outlivedItsSync = claimOutlivedItsSync(subChatId)
   // Main answered, so the sequence of unanswered questions for this sub-chat is
   // over, whether it had a row for us or not.
   wakeRetries.delete(subChatId)
   if (!item) return
+  if (outlivedItsSync) {
+    // The sync that asked for this row stopped while the claim was in flight,
+    // and the cleanup drops its pending wakes for the same reason: a window
+    // that stopped syncing does not send. The row goes back so the next sync
+    // can take it.
+    await returnClaimedItem(item, client)
+    return
+  }
   // Nobody here will send this row: the sub-chat was deleted while the claim
   // was in flight, another send for it started during that await, or a turn
   // went live here in the meantime — which the question asked before the claim
@@ -417,9 +466,13 @@ async function returnClaimedItem(item: QueueItem, client: QueueFeedClient): Prom
       itemId: item.id,
       owner: ownerFor(client),
     })
+    pendingHandBacks.delete(item.subChatId)
   } catch (error) {
-    // An un-handed claim is released by the next claim for the sub-chat, so a
-    // failed hand-back is recoverable rather than lost.
+    // The row stays `sending`, and main refuses this window's next claim for
+    // the sub-chat while its own un-handed claim stands. Keep it and hand it
+    // back on the next wake, instead of waiting for the lease to run out with
+    // the row hidden from every card.
+    pendingHandBacks.set(item.subChatId, item)
     console.error("[queue] could not hand a claimed row back:", error)
   }
 }
@@ -652,6 +705,11 @@ export function startQueueSync(
   return () => {
     stopSenders()
     stopped = true
+    // Claims this sync leaves in flight are given back, not finished, and a
+    // hand-back that is still owed is retried here: the window may keep
+    // running, but nothing it stopped syncing for is sent or held.
+    noteStoppedSync()
+    for (const item of pendingHandBacks.values()) void returnClaimedItem(item, client)
     if (retryTimer) {
       clearTimeout(retryTimer)
       retryTimer = null

@@ -528,6 +528,80 @@ map keyed by sub-chat. Recorded as a named exposure, unowned, with the wiring
 option noted.
 
 
+### Round fourteen
+
+CodeRabbit's pass on `42ba10a` (four findings), CodeAnt's two on the same head,
+and two from a frontier-model read of the same diff. Six are fixed; the two
+that are not are named.
+
+**A claim that outlives its sync was still sent.** `startQueueSync`'s cleanup
+clears the pending wake timers with the comment that a retry "would wake, claim
+and send for a window that has stopped syncing" — and then a claim already in
+flight resolved anyway and sent, because nothing remembered that its sync had
+stopped. The cleanup now snapshots the in-flight claims, and `wakeQueue` hands
+such a row back instead of sending it: the window that stopped syncing is not
+the one that finishes the send, and the row goes to whichever sync takes it
+next (its requeue is itself a feed event, which is what wakes that sync). The
+mark is consumed by the *next answer* for the sub-chat, a row or none — reading
+it only on a handed row would leave a stale mark that hands a live sync's row
+back, which the `does not let a stopped sync's empty answer block the next one`
+test pins (`['q1']` vs `[]` under the wrong order).
+
+**A claim can change a row without handing one out.** `claim` announced itself
+to the feed only when it returned a row, but it can also park an abandoned
+handed claim of this window (the reload case) and then find nothing to hand
+out. The park changes what every card shows, and the feed never heard: the row
+went `sending` → `paused` invisibly, so other windows kept it hidden until
+something else emitted. The transaction now reports what it changed as well as
+what it handed over, and the emit is keyed on that (`announces the park even
+when the claim hands nothing out`); a claim that changes nothing still says
+nothing (`says nothing when a claim changes nothing`). This is the half of
+"every write emits except `markHanded`" that the earlier sweep missed.
+
+**A hand-back that failed was dropped.** `returnClaimedItem` logged and forgot
+it, on the reasoning that "an un-handed claim is released by the next claim for
+the sub-chat" — true, but only after the lease, and while the row stands `sending`
+it is hidden from every card and main refuses this window's next claim for the
+sub-chat. The item is now kept and handed back at the top of the next wake for
+that sub-chat, before anything is claimed (the same wake's claim would be
+refused anyway), and the stop cleanup retries it too. `hands back a claim it
+could not release on the next wake` counts the two tries and the send that
+follows.
+
+**A turn already live is not this message's.** `waitForTurnStart` watches the
+status of the sub-chat, so a turn this send did not start can report `started`
+and the row retires on someone else's turn. The store is keyed by sub-chat and
+cannot attribute a turn to a window, so the sender now refuses before the
+hand-off when a turn is already live there: after `stopCurrent` (which waits for
+the stop), a live status can only be a turn that started since. That converts
+the misattribution into a refusal the user is told about, with the row still
+queued. The irreducible rest is unchanged and still named: a turn that starts
+*between* this check and the engine's first event, or a provider whose turns
+main cannot see, is step 07's run-row wiring.
+
+**Send now paused nothing while it stopped the turn.** The stop ends the turn,
+and `ready` is exactly what every other window's dispatch waits for; the item
+Send now holds is claimed, but the pending rows behind it are not, so another
+window could claim one and start a second turn beside this send. It now pauses
+before the stop, the order `handleUserStop` already used, and the send resumes
+the queue when it starts.
+
+**Three smaller ones, all real.** The two-window gap test claimed as
+`WINDOW_A` from both stores, so it exercised the un-handed clause and never the
+cross-window one; the second store now asks as `WINDOW_B`. `queue-send.test.ts`
+restored real timers as the last statement of a test, so a failure above it left
+fake timers on for every test after — it has the `afterEach` hook the projection
+suite already used. And the aggregate base64 test used a second image of
+24,000,001 characters, past the per-image cap, so the item total was never the
+deciding rule: with the total disabled the old test still passed, and the new
+one (three individually valid images) fails. That is the same masking the shared
+boundary test was written to avoid, in the copy of it.
+
+**One more thing checked and left alone.** `remove` and `clear` still do not
+check the claim owner, and Send now can still re-send a parked row. Both are the
+contract's own rules — the user's delete, and the user's explicit resend of a
+message whose fate is unknown — and both were verified again this round.
+
 ### Round thirteen
 
 The findings that live in a bot's summary comment rather than in a thread: CodeAnt's three nitpicks and CodeRabbit's three pre-merge checks. Two of the six

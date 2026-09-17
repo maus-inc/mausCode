@@ -126,11 +126,12 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
       }),
     },
     requeue: {
-      mutate: async (input: { subChatId: string; itemId: string; owner: string }) => {
+      // A `vi.fn` so a test can make a hand-back fail, and can count the tries.
+      mutate: vi.fn(async (input: { subChatId: string; itemId: string; owner: string }) => {
         requeued.push(input.itemId)
         calls.push(`requeue:${input.itemId}`)
         return true
-      },
+      }),
     },
     setPaused: {
       // A `vi.fn` so a test can make the pause fail, which is the answer the
@@ -773,6 +774,84 @@ describe("queue projection", () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(fake.claims).toHaveLength(1)
+    expect(fake.completed).toEqual(["q1"])
+  })
+
+  it("hands a claim back instead of sending when its sync stopped first", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient()
+    registerChat("sub-a")
+    let resolveClaim: (value: QueueItem) => void = () => {}
+    fake.queue.claim.mutate.mockImplementationOnce(
+      () =>
+        new Promise<QueueItem>((resolve) => {
+          resolveClaim = resolve
+        }),
+    )
+    const stop = startQueueSync(fake.client)
+    const pending = wakeQueue("sub-a", fake.client)
+    expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(1)
+
+    // The sync is gone before main answers. A window that stopped syncing does
+    // not send, which is why the cleanup drops its pending wakes, so the row
+    // goes back instead.
+    stop()
+    resolveClaim(claimed)
+    await pending
+
+    expect(sendClaimedQueueItem).not.toHaveBeenCalled()
+    expect(fake.requeued).toEqual(["q1"])
+  })
+
+  it("does not let a stopped sync's empty answer block the next one", async () => {
+    const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
+    registerChat("sub-a")
+    let resolveClaim: (value: QueueItem | null) => void = () => {}
+    fake.queue.claim.mutate.mockImplementationOnce(
+      () =>
+        new Promise<QueueItem | null>((resolve) => {
+          resolveClaim = resolve
+        }),
+    )
+    const stop = startQueueSync(fake.client)
+    const pending = wakeQueue("sub-a", fake.client)
+    stop()
+    // Main had nothing for the stopped sync, which says nothing about the next
+    // sync's claim for the same sub-chat.
+    resolveClaim(null)
+    await pending
+
+    await wakeQueue("sub-a", fake.client)
+
+    expect(fake.requeued).toEqual([])
+    expect(fake.completed).toEqual(["q1"])
+  })
+
+  it("hands back a claim it could not release on the next wake", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    const chat = registerChat("sub-a")
+    // The row has to go back, and the first attempt fails: main still has this
+    // window's un-handed claim, and it refuses the next one until the row is
+    // back, so the hand-back has to be repeated rather than dropped.
+    fake.queue.requeue.mutate.mockRejectedValueOnce(new Error("transport"))
+    fake.queue.claim.mutate.mockImplementationOnce(async () => {
+      useStreamingStatusStore.getState().setStatus("sub-a", "streaming")
+      return claimed
+    })
+    await wakeQueue("sub-a", fake.client)
+
+    expect(chat.sendMessage).not.toHaveBeenCalled()
+    expect(fake.queue.requeue.mutate).toHaveBeenCalledTimes(1)
+    expect(fake.requeued).toEqual([])
+
+    // The next wake repeats it before it asks main for anything, and the row
+    // it frees is then claimed and sent.
+    useStreamingStatusStore.getState().setStatus("sub-a", "ready")
+    await wakeQueue("sub-a", fake.client)
+
+    expect(fake.queue.requeue.mutate).toHaveBeenCalledTimes(2)
+    expect(fake.requeued).toEqual(["q1"])
     expect(fake.completed).toEqual(["q1"])
   })
 
