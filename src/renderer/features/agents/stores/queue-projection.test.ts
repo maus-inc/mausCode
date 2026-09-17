@@ -80,11 +80,13 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
     remove: { mutate: vi.fn() },
     clear: { mutate: vi.fn() },
     claim: {
-      mutate: async (input: { subChatId: string; itemId?: string; owner: string }) => {
+      // A `vi.fn` so a test can make the question fail before main answers it,
+      // which is the failure the feed cannot correct on its own.
+      mutate: vi.fn(async (input: { subChatId: string; itemId?: string; owner: string }) => {
         claims.push({ itemId: input.itemId, owner: input.owner })
         calls.push(`claim:${input.itemId ?? "head"}`)
         return queue.claimed.shift() ?? null
-      },
+      }),
     },
     markHanded: {
       mutate: async (input: { subChatId: string; itemId: string; owner: string }) => {
@@ -353,6 +355,49 @@ describe("queue projection", () => {
 
     await vi.waitFor(() => expect(fake.claims).toHaveLength(1), { timeout: 5000 })
     expect(fake.completed).toEqual(["q1"])
+  })
+
+  it("asks again when the claim never reached main, and sends the row when it does", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
+    registerChat("sub-a")
+
+    // Nothing changed in main, so no later feed event is coming to re-ask, and
+    // the sub-chat is already `ready`: this retry is the only way the row goes
+    // out at all.
+    fake.queue.claim.mutate.mockRejectedValueOnce(new Error("database is locked"))
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.completed).toEqual([])
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(0)
+
+    // The rejected question left nothing in `claims`; the retry is the one that
+    // arrived, and the row went out.
+    expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(2)
+    expect(fake.completed).toEqual(["q1"])
+  })
+
+  it("stops asking after a bounded number of failing claims, instead of polling", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient()
+    registerChat("sub-a")
+    fake.queue.claim.mutate.mockRejectedValue(new Error("database is locked"))
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+
+    await vi.advanceTimersByTimeAsync(2_000 * 20)
+
+    // The first question plus the budget, and no more: the row stays on the
+    // card instead of being asked about on a loop.
+    expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(6)
+
+    // A later real event still asks main directly; the budget bounds the
+    // automatic re-asks, not the wakes.
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.queue.claim.mutate).toHaveBeenCalledTimes(7)
   })
 
   it("never asks while a turn is running", async () => {

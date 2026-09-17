@@ -259,14 +259,17 @@ const wakeRetries = new Map<string, number>()
 const wakeTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 /**
- * Re-ask for a sub-chat whose pane was not up yet. Only a sub-chat this window
- * knows has rows is retried, and only a bounded number of times. The count is
- * the sequence's, not the attempt's: it is dropped when the pane shows up or
- * the queue is gone, never as a retry starts, or every retry would restart the
- * sequence and the limit would bound nothing. An attempt is spent when a retry
- * is scheduled, and a wake that arrives while one is pending spends nothing:
- * the pending retry is already the next question, and letting a burst of feed
- * updates spend the budget would leave the pane no retry at all.
+ * Re-ask a question main has not answered. That is a wake whose pane was not up
+ * yet, or a claim call that failed on its way to main. Only a sub-chat this
+ * window knows has rows is retried, and only a bounded number of times, so a
+ * failure that persists is not asked about forever. The count is the
+ * sequence's, not the attempt's: it is
+ * dropped as soon as main answers or the queue is gone, never as a retry
+ * starts, or every retry would restart the sequence and the limit would bound
+ * nothing. An attempt is spent when a retry is scheduled, and a wake that
+ * arrives while one is pending spends nothing: the pending retry is already the
+ * next question, and letting a burst of feed updates spend the budget would
+ * leave the pane no retry at all.
  */
 function scheduleWakeRetry(subChatId: string, client: QueueFeedClient): void {
   if (wakeTimers.has(subChatId)) return
@@ -301,8 +304,6 @@ export async function wakeQueue(
   client: QueueFeedClient = trpcClient,
 ): Promise<void> {
   const chat = senderForSubChat(subChatId)
-  // The pane is here, so the retry sequence for this sub-chat is over.
-  if (chat) wakeRetries.delete(subChatId)
   if (!chat) {
     // A window mounts its panes after the feed has already replayed, so a wake
     // can arrive before anything here can send for the sub-chat, and a pane
@@ -321,10 +322,18 @@ export async function wakeQueue(
     item = await client.queue.claim.mutate({ subChatId, owner: ownerFor(client) })
   } catch (error) {
     console.error("[queue] claim failed:", error)
+    // The one failure the feed cannot heal on its own: nothing changed in main,
+    // so no later feed event is coming, and a sub-chat that is already `ready`
+    // will not turn ready again. Ask again, on the same bounded budget a wake
+    // with no pane spends.
+    scheduleWakeRetry(subChatId, client)
     return
   } finally {
     claimAttempts.delete(subChatId)
   }
+  // Main answered, so the sequence of unanswered questions for this sub-chat is
+  // over, whether it had a row for us or not.
+  wakeRetries.delete(subChatId)
   if (!item) return
   // Nobody here will send this row: the sub-chat was deleted while the claim
   // was in flight, or another send for it started during that await. A claimed

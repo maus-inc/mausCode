@@ -167,7 +167,18 @@ cares about because its loop spans restarts, and (b) a turn whose event source
 never reports completion, which step 19 cares about because a supervisor reads a
 child's completion. In this design (a) costs nothing, because the row waits and
 any later wake dispatches it, and (b) is the run feed's reconciliation problem
-in `run-feed-projection.ts`, not the queue's. The bounded interval this step
+in `run-feed-projection.ts`, not the queue's.
+
+A third class the interval covered is a wake whose question to main failed on
+its way out — a claim call that threw. Nothing changed in main then, so no feed
+event is coming to re-ask, and the interval was what eventually retried it. This
+step re-asks on a bounded budget instead (2 s, six questions), and a question
+that fails six times leaves the row visible on the card rather than asking
+forever. One case is deliberately left to a later wake: a claim that *did* reach
+main but whose answer was lost leaves a `sending` row the window owns, and it is
+only released by the lease inside a later claim — the lease is a staleness
+bound, not a poll, which is the same assumption "a wake the projection misses
+cannot lose an item" rests on. The bounded interval this step
 did adopt is `CLAIM_LEASE_MS`, and it is a staleness bound on a claim, not a
 poll: it is read only inside a `claim` that a wake asked for.
 
@@ -261,8 +272,8 @@ hold. Each one now has a test that fails without it:
   message`).
 - The wake-retry count belongs to the sequence, not to the attempt. Dropping it
   as each timer fired restarted the sequence every two seconds, so
-  `WAKE_RETRY_LIMIT` bounded nothing; it is now dropped when the pane shows up
-  or the queue is gone (`stops re-asking a pane that never showed up, instead of
+  `WAKE_RETRY_LIMIT` bounded nothing; it is now dropped when main answers or the
+  queue is gone (`stops re-asking a pane that never showed up, instead of
   polling for it`). The pending timers are tracked and go with the subscription
   (`cancels a pending retry when the sync stops`).
 - A send call that never settles does not hold its row `sending` for the life of
@@ -318,6 +329,26 @@ Self-triage in the same commit, after the review round:
 - The router's cap test now pins the boundary — a payload at the cap is
   accepted, one character past it is refused — and its remove/clear test
   asserts which row survived instead of a filler `toBeDefined()`.
+
+### Round seven
+
+Self-triage after the review round, before the commit:
+
+- Every action that can fail now says so (above): the X and the resume report
+  instead of logging only.
+- A claim call that never reached main was logged and dropped. Nothing changes
+  in main then, so no later feed event is coming to re-ask, and a sub-chat that
+  is already `ready` will not turn ready again — the row sat on the card with
+  nothing that would dispatch it until some unrelated event. It is now re-asked
+  on the same bounded budget a wake with no pane spends
+  (`asks again when the claim never reached main, and sends the row when it
+  does`), and the budget still bounds it (`stops asking after a bounded number
+  of failing claims, instead of polling`). The counter is therefore dropped when
+  main answers, not when the pane is present: a claim failure has a pane, and
+  dropping it there would restart the sequence on every retry.
+- The residual is named in the handoff below: a claim that did reach main but
+  whose answer was lost still needs a later wake, because the lease is only read
+  inside a claim a wake asked for.
 
 ## Verification
 
