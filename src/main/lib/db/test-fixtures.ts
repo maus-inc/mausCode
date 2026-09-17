@@ -18,14 +18,18 @@ export function openMigratedTestDb(path?: string): TestDb {
   return opened
 }
 
+/** Counts the projects this helper has inserted, so each gets its own path. */
+let seededProjects = 0
+
 /**
  * Insert a project, a chat and a sub-chat, and answer the sub-chat's id. The
- * random project path keeps two calls in one database from colliding.
+ * per-call project path keeps two calls in one database from colliding.
  */
 export function seedSubChat(db: TestDb["db"]): string {
+  seededProjects += 1
   const project = db
     .insert(projects)
-    .values({ name: "p", path: `/p/${Math.random()}` })
+    .values({ name: "p", path: `/p/${seededProjects}` })
     .returning()
     .get()
   const chat = db.insert(chats).values({ projectId: project.id }).returning().get()
