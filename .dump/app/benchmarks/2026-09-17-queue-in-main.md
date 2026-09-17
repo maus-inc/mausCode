@@ -47,12 +47,32 @@ this section was added to:
 | `recoverSending()` with no `sending` row | 0.260 ms | - | 1 | -0.002 |
 
 The claim's extra update is a lease check over the same index the claim already
-reads (`queue_items_sub_chat_id_idx`), and the marker is a single-row update by
+reads (`queue_items_sub_chat_id_idx`, the ordering index at the time of this
+measurement; `0018` replaces it), and the marker is a single-row update by
 primary key keyed to the claiming window, so the added work is bounded by one
 indexed scan over the rows of one sub-chat. A stored queue holds a handful of
 rows per sub-chat, and the dispatching window already pays a turn of seconds
 after it, so the added half-millisecond is noise beside the operation it
 protects: a message sent twice.
+
+## Re-measured after the composite ordering index (review round four)
+
+CodeAnt's nitpick on `drizzle/0016_natural_reptil.sql:12` was right about the
+shape: both ordering queries filter one sub-chat and sort by `position,
+created_at`, and the single-column index left SQLite a sorter for that order.
+`0018_daffy_zombie.sql` replaces it with
+`queue_items_sub_chat_position_idx (sub_chat_id, position, created_at)`, which
+carries the sort. Measured the same way, three runs:
+
+| Operation | Mean | p95 | Sample | Against the marker run |
+| --- | --- | --- | --- | --- |
+| add + claim + markHanded + complete | 2.097–2.226 ms | 3.625–3.997 ms | 300 cycles ×3 | −0.16 to −0.29 mean |
+| list (20 rows deep) | 0.283–0.312 ms | 0.346–0.450 ms | 200 lists ×3 | −0.04 to −0.07 mean |
+| `recoverSending()` with no `sending` row | 0.212 ms | - | 1 | −0.05 |
+
+The list cost comes back to the no-marker baseline (0.295 ms mean) and the
+dispatch cost keeps the marker's extra update, so the nitpick cost the queue a
+migration and nothing else.
 
 ## The deleted timers, priced
 

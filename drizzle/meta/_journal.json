@@ -127,6 +127,13 @@
       "when": 1789655719344,
       "tag": "0017_ambiguous_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1789658272366,
+      "tag": "0018_daffy_zombie",
+      "breakpoints": true
     }
   ]
 }

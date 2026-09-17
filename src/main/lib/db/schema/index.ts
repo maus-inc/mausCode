@@ -255,7 +255,11 @@ export const queueItems = sqliteTable(
      */
     handedAt: integer("handed_at", { mode: "timestamp" }),
   },
-  (table) => [index("queue_items_sub_chat_id_idx").on(table.subChatId)],
+  // Covers both ordering queries: they filter one sub-chat and sort by the
+  // position the index already holds, so SQLite reads the head without a sorter.
+  (table) => [
+    index("queue_items_sub_chat_position_idx").on(table.subChatId, table.position, table.createdAt),
+  ],
 )
 
 export const queueItemsRelations = relations(queueItems, ({ one }) => ({

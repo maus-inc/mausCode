@@ -21,7 +21,7 @@ import {
 } from "../../../../shared/queue-item"
 import { getWindowId } from "../../../contexts/WindowContext"
 import { trpcClient } from "../../../lib/trpc"
-import { sendClaimedQueueItem } from "../lib/queue-send"
+import { type QueueSendResult, sendClaimedQueueItem } from "../lib/queue-send"
 import { agentChatStore } from "./agent-chat-store"
 import { useStreamingStatusStore } from "./streaming-status-store"
 
@@ -192,14 +192,16 @@ function senderForSubChat(subChatId: string): Chat<UIMessage> | null {
 /**
  * Sends one claimed row and records what came of it. The caller owns the
  * sub-chat's in-flight slot: it must be taken before this is reached, so the
- * claim and the send are one indivisible unit for this window.
+ * claim and the send are one indivisible unit for this window. Answers the
+ * sender's outcome, so a caller that reports success can tell a row that went
+ * out from one that was handed back.
  */
 async function deliverClaimedItem(
   item: QueueItem,
   chat: Chat<UIMessage>,
   client: QueueFeedClient,
   stopCurrent?: () => Promise<boolean>,
-): Promise<void> {
+): Promise<QueueSendResult> {
   const subChatId = item.subChatId
   const owner = ownerFor(client)
   const result = await sendClaimedQueueItem({
@@ -235,6 +237,7 @@ async function deliverClaimedItem(
     // recovery in main and startup recovery both know how to settle.
     console.error("[queue] could not record the send outcome:", error)
   }
+  return result
 }
 
 /** How long a wake waits for a pane that has not registered its chat yet. */
@@ -327,7 +330,9 @@ async function returnClaimedItem(item: QueueItem, client: QueueFeedClient): Prom
 
 /**
  * Send now: an explicit send, so it both ends a pause and claims that one
- * item, stopping the turn in flight first.
+ * item, stopping the turn in flight first. Answers whether the item actually
+ * went out: `false` when the claim was lost, the callback refused, or the
+ * sender handed the row back to the queue.
  */
 export async function sendQueueItemNow(
   subChatId: string,
@@ -356,11 +361,11 @@ export async function sendQueueItemNow(
     // row main no longer has. A send that already started cannot be recalled;
     // this stops the ones that had not started yet.
     if (unknownSubChatIds.has(subChatId)) return false
-    await deliverClaimedItem(item, chat, client, stopCurrent)
+    const outcome = await deliverClaimedItem(item, chat, client, stopCurrent)
     // The user sent something, which ends the pause. Doing it after the send
     // started means the wake this causes cannot race the send itself.
     await resumeQueue(subChatId, client)
-    return true
+    return outcome === "sent"
   } finally {
     inFlightSends.delete(subChatId)
   }

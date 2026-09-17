@@ -318,10 +318,12 @@ describe("queue projection", () => {
     // belongs to another window.
     sendClaimedQueueItem.mockResolvedValueOnce("failed")
 
-    await sendQueueItemNow("sub-a", "q1", async () => false, fake.client)
+    const sent = await sendQueueItemNow("sub-a", "q1", async () => false, fake.client)
 
     // The click still ends the pause, but this item goes back to the queue
-    // rather than out beside a turn this window could not clear.
+    // rather than out beside a turn this window could not clear, and the
+    // answer says so.
+    expect(sent).toBe(false)
     expect(fake.completed).toEqual([])
     expect(fake.requeued).toEqual(["q1"])
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("error")
