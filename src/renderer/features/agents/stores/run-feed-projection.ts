@@ -159,23 +159,39 @@ async function reconcileStaleStreaming(
     .map(([subChatId]) => subChatId)
   for (const subChatId of busyIds) {
     try {
-      const statusBeforeLookup = useStreamingStatusStore.getState().statuses[subChatId]
-      if (statusBeforeLookup !== "streaming" && statusBeforeLookup !== "submitted") continue
-      const revisionBeforeLookup = feedRevisionBySubChat.get(subChatId) ?? 0
-      const [latest] = await client.runs.list.query({ subChatId, limit: 1 })
-      // A lookup can resolve after stop(); the projection is dead from that
-      // point and must not write anything.
-      if (isStopped()) break
-      if (!latest) continue
-      if (useStreamingStatusStore.getState().statuses[subChatId] !== statusBeforeLookup) continue
-      if ((feedRevisionBySubChat.get(subChatId) ?? 0) !== revisionBeforeLookup) continue
-      if (isStopped()) continue
-      writeProjectedStatus(subChatId, runStatusToStreamingStatus(latest.status))
+      const keepGoing = await repairStaleStatus(client, subChatId, isStopped)
+      if (!keepGoing) break
     } catch {
       anyLookupFailed = true
     }
   }
   return anyLookupFailed
+}
+
+/**
+ * Checks one busy sub-chat against its newest run and applies the settled
+ * status when nothing moved during the lookup. Returns false when the
+ * projection stopped while the lookup was in flight, so the caller stops the
+ * pass; a dead projection must not write anything.
+ */
+async function repairStaleStatus(
+  client: RunsFeedClient,
+  subChatId: string,
+  isStopped: () => boolean,
+): Promise<boolean> {
+  const statusBeforeLookup = useStreamingStatusStore.getState().statuses[subChatId]
+  if (statusBeforeLookup !== "streaming" && statusBeforeLookup !== "submitted") {
+    return true
+  }
+  const revisionBeforeLookup = feedRevisionBySubChat.get(subChatId) ?? 0
+  const [latest] = await client.runs.list.query({ subChatId, limit: 1 })
+  if (isStopped()) return false
+  if (!latest) return true
+  if (useStreamingStatusStore.getState().statuses[subChatId] !== statusBeforeLookup) return true
+  if ((feedRevisionBySubChat.get(subChatId) ?? 0) !== revisionBeforeLookup) return true
+  if (isStopped()) return true
+  writeProjectedStatus(subChatId, runStatusToStreamingStatus(latest.status))
+  return true
 }
 
 /**
