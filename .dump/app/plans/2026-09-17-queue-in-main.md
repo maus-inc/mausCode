@@ -126,6 +126,13 @@ timer:
 2. the sub-chat's streaming status turns `ready`,
 3. the projection starts, which is what a reload and a window open do.
 
+A question main never answered — no pane could send it, or the claim call
+failed on its way out — is re-asked on a bounded budget: 2 s later, at most
+six questions per sequence. That is a bound on the re-asks of a wake, not a
+poll: it is scheduled only when a wake went unanswered, it stops as soon as
+main answers, and six failures leave the row visible on the card instead of
+asking forever.
+
 A wake is only a question to main, and a window asks only when it could send
 that item: it needs an idle status for the sub-chat and a live `Chat` in this
 window, and it never asks while it is already sending or a claim is in flight.
