@@ -7,6 +7,7 @@ import type { UIMessage } from "ai"
 import type { QueuePayload } from "../../../../shared/queue-item"
 import { MENTION_PREFIXES } from "../mentions/mention-prefixes"
 import { utf8ToBase64 } from "../utils/base64"
+import { createTextPreview } from "./queue-utils"
 
 /** Expand the payload into user-message parts: attachments, mentions, text. */
 export function buildQueueMessageParts(item: QueuePayload): UIMessage["parts"] {
@@ -31,13 +32,16 @@ export function buildQueueMessageParts(item: QueuePayload): UIMessage["parts"] {
     })),
   ]
 
+  // `createTextPreview` is what the composer's own contexts use for `preview`,
+  // so a queued token serializes to the same string a direct send would, and
+  // the label the chip shows matches the token the engine reads.
   const mentions: string[] = []
   for (const context of item.textContexts ?? []) {
-    const preview = context.text.slice(0, 50).replace(/[:[\]]/g, "")
+    const preview = createTextPreview(context.text).replace(/[:[\]]/g, "")
     mentions.push(`@[${MENTION_PREFIXES.QUOTE}${preview}:${utf8ToBase64(context.text)}]`)
   }
   for (const context of item.diffTextContexts ?? []) {
-    const preview = context.text.slice(0, 50).replace(/[:[\]]/g, "")
+    const preview = createTextPreview(context.text).replace(/[:[\]]/g, "")
     const lineNumber = context.lineNumber || 0
     mentions.push(
       `@[${MENTION_PREFIXES.DIFF}${context.filePath}:${lineNumber}:${preview}:${utf8ToBase64(context.text)}]`,

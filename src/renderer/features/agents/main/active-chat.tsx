@@ -2180,9 +2180,15 @@ const ChatViewInner = memo(function ChatViewInner({
   }, [subChatId])
 
   // The stop button: stopping is the user saying "not now", so the queue waits
-  // for an explicit send instead of firing the next item at the stop.
+  // for an explicit send instead of firing the next item at the stop. The pause
+  // is persisted before the stop starts, because the stop settles the run and
+  // wakes the queue: a pause still in flight could lose that race and let the
+  // next item out.
   const handleUserStop = useCallback(async () => {
-    void setQueuePaused(subChatId, true)
+    const paused = await setQueuePaused(subChatId, true)
+    if (!paused) {
+      toast.error("Could not pause the queue; it may continue after this stop.")
+    }
     await handleStop()
   }, [handleStop, subChatId])
 
@@ -3358,17 +3364,23 @@ const ChatViewInner = memo(function ChatViewInner({
         e.preventDefault()
         // Mark as manually aborted to prevent completion sound
         agentChatStore.setManuallyAborted(subChatId, true)
-        // Stopping means "not now": hold the queue back, as the stop button
-        // does. Without this, the next queued item would start the moment the
-        // turn reports that it stopped.
-        void setQueuePaused(subChatId, true)
-        await stop()
+        // Same path as the stop button, so a keyboard stop pauses the queue
+        // exactly as the button does.
+        await handleUserStop()
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isActive, isStreaming, stop, subChatId, displayQuestions, handleQuestionsSkip, customHotkeys])
+  }, [
+    isActive,
+    isStreaming,
+    subChatId,
+    displayQuestions,
+    handleQuestionsSkip,
+    handleUserStop,
+    customHotkeys,
+  ])
 
   // Keyboard shortcut: Enter to focus input when not already focused
   useFocusInputOnEnter(editorRef, isActive)

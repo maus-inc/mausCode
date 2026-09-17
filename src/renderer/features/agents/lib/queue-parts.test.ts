@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest"
 import { utf8ToBase64 } from "../utils/base64"
 import { buildQueueMessageParts } from "./queue-parts"
+import { createTextPreview } from "./queue-utils"
 
 describe("buildQueueMessageParts", () => {
   it("builds a plain text part", () => {
@@ -54,6 +55,25 @@ describe("buildQueueMessageParts", () => {
     expect(text).toContain("@[pasted:1024:a long paste|/tmp/pasted.md]")
     expect(text).toContain("@[chatHistory:2048:old chat|/tmp/history.md]")
     expect(text.endsWith("explain")).toBe(true)
+  })
+
+  it("previews a context the way the composer's own preview does", () => {
+    // The composer sets `preview: createTextPreview(text)`, and a direct send
+    // serializes that preview into the token. The queued token must not
+    // truncate the raw text instead, or the same selection reads differently
+    // depending on which path sent it.
+    const filler = "x".repeat(60)
+    const text = `  first   line\nsecond line ${filler}`
+    const parts = buildQueueMessageParts({
+      message: "summarize",
+      textContexts: [{ id: "t1", text, sourceMessageId: "m1" }],
+    })
+
+    const serialized = parts[0].type === "text" ? parts[0].text : ""
+    const preview = createTextPreview(text).replace(/[:[\]]/g, "")
+    expect(preview).toContain("first line second line")
+    expect(preview.endsWith("...")).toBe(true)
+    expect(serialized).toContain(`@[quote:${preview}:${utf8ToBase64(text)}]`)
   })
 
   it("emits mention-only parts when the message text is empty", () => {

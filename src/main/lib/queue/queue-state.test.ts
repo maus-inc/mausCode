@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { QueueItem, QueuePayload } from "../../../shared/queue-item"
 import { migrationsRoot } from "../db/migrations-path"
-import { chats, projects, queueItems, subChats } from "../db/schema"
+import { chats, projects, queueItems, runs, subChats } from "../db/schema"
 import { migrateTestDb, openTestDb } from "../db/test-sqlite"
 import { createRunStore, type RunStore } from "../runs/run-state"
 import { createQueueStore, POSITION_STEP, type QueueStore } from "./queue-state"
@@ -95,6 +95,24 @@ describe("queue store", () => {
       ).toThrowError()
       expect(store.list(subChatId)).toHaveLength(0)
     })
+
+    it("rejects the attachments of one item when their total passes the cap", () => {
+      const big = "A".repeat(24_000_000)
+      expect(() =>
+        store.add({
+          subChatId,
+          payload: {
+            message: "x",
+            images: [
+              { id: "1", url: "u", mediaType: "m", base64Data: big },
+              { id: "2", url: "u", mediaType: "m", base64Data: big },
+              { id: "3", url: "u", mediaType: "m", base64Data: big },
+            ],
+          },
+        }),
+      ).toThrowError(/base64/)
+      expect(store.list(subChatId)).toHaveLength(0)
+    })
   })
 
   describe("claim", () => {
@@ -137,6 +155,50 @@ describe("queue store", () => {
         expect(claims[0]?.payload.message ?? claims[1]?.payload.message).toBe("one")
         expect(firstStore.list(sharedSubChatId)).toHaveLength(1)
         expect(firstStore.list(sharedSubChatId)[0]?.status).toBe("sending")
+      } finally {
+        firstWindow.client.close()
+        secondWindow.client.close()
+        rmSync(file, { force: true })
+        rmSync(`${file}-wal`, { force: true })
+        rmSync(`${file}-shm`, { force: true })
+      }
+    })
+
+    it("keeps the second window out in the gap before the run row exists", () => {
+      // The claim and the run row are two writes on purpose: the window that
+      // holds the claim creates the run when its turn starts. What makes that
+      // gap safe is the conditional `pending -> sending` update in this store,
+      // not an atomic pair, so the gap itself is what this test pins.
+      const file = join(tmpdir(), `mauscode-queue-gap-${randomUUID()}.db`)
+      const firstWindow = openTestDb(file)
+      const secondWindow = openTestDb(file)
+      try {
+        migrateTestDb(firstWindow.db, migrationsRoot)
+        const sharedSubChatId = seedSubChat(firstWindow.db)
+        const firstStore = createQueueStore(firstWindow.db)
+        const secondStore = createQueueStore(secondWindow.db)
+        const row = firstStore.add({ subChatId: sharedSubChatId, payload: payload("one") })
+
+        expect(firstStore.claim({ subChatId: sharedSubChatId })?.id).toBe(row.id)
+        // Nothing has started a turn yet, so no run row exists anywhere.
+        expect(
+          firstWindow.db.select().from(runs).where(eq(runs.subChatId, sharedSubChatId)).all(),
+        ).toEqual([])
+        // The winner is still the only one that may send.
+        expect(secondStore.claim({ subChatId: sharedSubChatId })).toBeNull()
+
+        // The winner's turn starts, its run row lands, and the row retires.
+        const handle = createRunStore(firstWindow.db).startRun({
+          subChatId: sharedSubChatId,
+          engine: "legacy",
+        })
+        expect(firstStore.complete(sharedSubChatId, row.id)).toBe(true)
+        handle.noteFinished()
+        handle.settle()
+
+        // Only now does the next item become claimable.
+        const next = secondStore.add({ subChatId: sharedSubChatId, payload: payload("two") })
+        expect(secondStore.claim({ subChatId: sharedSubChatId })?.id).toBe(next.id)
       } finally {
         firstWindow.client.close()
         secondWindow.client.close()

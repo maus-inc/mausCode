@@ -39,6 +39,8 @@ interface QueueProjectionState {
   queues: Record<string, QueueItemView[]>
   setQueue: (subChatId: string, items: QueueItemView[]) => void
   dropQueue: (subChatId: string) => void
+  /** Forget every card, for a reconnect that replays main's state. */
+  resetQueues: () => void
 }
 
 export const useQueueProjection = create<QueueProjectionState>()(
@@ -70,6 +72,9 @@ export const useQueueProjection = create<QueueProjectionState>()(
         delete queues[subChatId]
         return { queues }
       })
+    },
+    resetQueues: () => {
+      set((state) => (Object.keys(state.queues).length === 0 ? state : { queues: {} }))
     },
   })),
 )
@@ -215,6 +220,10 @@ export async function sendQueueItemNow(
     // a paused row through for Send now.
     const item = await client.queue.claim.mutate({ subChatId, itemId })
     if (!item) return false
+    // A click that raced this sub-chat's deletion must not start a send for a
+    // row main no longer has. A send that already started cannot be recalled;
+    // this stops the ones that had not started yet.
+    if (unknownSubChatIds.has(subChatId)) return false
     await deliverClaimedItem(item, chat, client, stopCurrent)
     // The user sent something, which ends the pause. Doing it after the send
     // started means the wake this causes cannot race the send itself.
@@ -297,11 +306,13 @@ export async function setQueuePaused(
   subChatId: string,
   paused: boolean,
   client: QueueFeedClient = trpcClient,
-): Promise<void> {
+): Promise<boolean> {
   try {
     await client.queue.setPaused.mutate({ subChatId, paused })
+    return true
   } catch (error) {
     console.error("[queue] setPaused failed:", error)
+    return false
   }
 }
 
@@ -320,6 +331,11 @@ export function startQueueSync(
   const connect = () => {
     if (stopped) return
     subscription?.unsubscribe()
+    // The replay carries a sub-chat only while it still has rows, so a
+    // projection from before the feed dropped can hold cards main no longer
+    // has (another window deleted the sub-chat, or cleared its queue). Start
+    // from empty and let the replay, which runs before anything else, fill it.
+    useQueueProjection.getState().resetQueues()
     subscription = client.queue.subscribe.subscribe(undefined, {
       onData: (item) => applyQueueFeedItem(item, client),
       onError: (error) => {

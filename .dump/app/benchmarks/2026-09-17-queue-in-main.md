@@ -11,8 +11,8 @@ window) and `queue-processor.tsx` (a component with a 500 ms debounce and a
 order and the hand-off, and a window performs the send for the sub-chat it
 already holds.
 
-Removed on the renderer side: two timers, one interval, one 112 line store and
-one 277 line component. Added: `queue.subscribe` (one per window) and one
+Removed on the renderer side: two timers, one interval, one 112-line store and
+one 277-line component. Added: `queue.subscribe` (one per window) and one
 `claim`/`complete` round trip per dispatched item.
 
 ## Operation cost
@@ -57,8 +57,8 @@ empty for every existing user because migration `0016` creates it.
 memory, rendering or file weight. Startup gains the recovery call above, memory
 loses the renderer store and its per-window subscriptions, and no renderer asset
 weight changed. The row shape is bounded by `src/shared/queue-item.ts` (text
-200,000 bytes, long text 400,000, base64 attachments 24 MB, 20 attachments per
-kind). The bound, not a typical size, is what the schema guarantees: 100 text
+200,000 bytes, long text 400,000, base64 attachments 24 MB each, at most 48 MB
+of inline base64 per item, 20 attachments per kind). The bound, not a typical size, is what the schema guarantees: 100 text
 items can reach 20 MB, while an ordinary queue of short messages stays in the
 tens of kilobytes, because a payload carries only what the user typed plus the
 mention tokens that expand to it.

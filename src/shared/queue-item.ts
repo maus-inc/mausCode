@@ -19,6 +19,13 @@ export const QUEUE_TEXT_CAP = 200_000
 export const QUEUE_LONG_TEXT_CAP = 400_000
 export const QUEUE_BASE64_CAP = 24_000_000
 export const QUEUE_ATTACHMENT_CAP = 20
+/**
+ * Inline base64 one item may carry across all of its attachments. The caps
+ * above bound each attachment and each array; without this total, twenty
+ * attachments at the per-attachment cap would put half a gigabyte into one
+ * row. Two attachments at the cap fit, a third max-size one does not.
+ */
+export const QUEUE_ITEM_BASE64_CAP = 48_000_000
 
 const queuedImageSchema = z.object({
   id: z.string().max(200),
@@ -59,14 +66,27 @@ const queuedPastedTextSchema = z.object({
   kind: z.enum(["pasted", "chatHistory"]).optional(),
 })
 
-export const queuePayloadSchema = z.object({
-  message: z.string().max(QUEUE_LONG_TEXT_CAP),
-  images: z.array(queuedImageSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
-  files: z.array(queuedFileSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
-  textContexts: z.array(queuedTextContextSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
-  diffTextContexts: z.array(queuedDiffTextContextSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
-  pastedTexts: z.array(queuedPastedTextSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
-})
+export const queuePayloadSchema = z
+  .object({
+    message: z.string().max(QUEUE_LONG_TEXT_CAP),
+    images: z.array(queuedImageSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
+    files: z.array(queuedFileSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
+    textContexts: z.array(queuedTextContextSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
+    diffTextContexts: z.array(queuedDiffTextContextSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
+    pastedTexts: z.array(queuedPastedTextSchema).max(QUEUE_ATTACHMENT_CAP).optional(),
+  })
+  .superRefine((payload, ctx) => {
+    const inline = (payload.images ?? []).reduce(
+      (total, image) => total + (image.base64Data?.length ?? 0),
+      0,
+    )
+    if (inline > QUEUE_ITEM_BASE64_CAP) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `An item may carry at most ${QUEUE_ITEM_BASE64_CAP} base64 characters across its attachments`,
+      })
+    }
+  })
 
 export type QueuePayload = z.infer<typeof queuePayloadSchema>
 export type QueuedImage = z.infer<typeof queuedImageSchema>

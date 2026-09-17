@@ -98,8 +98,8 @@ the queue, and the next explicit send or later wake picks it up.
 
 ### Line references in the step file and in the bot plan
 
-Step 08's §2 and §3 cite `queue-processor.tsx:17` as a 7 second sleep and `:23`
-as a 2 second interval. The file that was deleted held neither number. At the
+Step 08's §2 and §3 cite `queue-processor.tsx:17` as a 7-second sleep and `:23`
+as a 2-second interval. The file that was deleted held neither number. At the
 base commit it declared `QUEUE_PROCESS_DELAY = 500` and
 `QUEUE_SAFETY_CHECK_INTERVAL = 30_000`, and its comment records the earlier
 values (7000 and 2000) as history, so the step text was measuring an older
@@ -112,7 +112,7 @@ used. What was reused from it: gapped positions, one shared type module, a
 conditional-update claim, deleting the whole processor file, and leaving the
 indicator's DOM alone.
 
-### What the deleted safety interval was load bearing for
+### What the deleted safety interval was load-bearing for
 
 `QUEUE_SAFETY_CHECK_INTERVAL` (30 s, `queue-processor.tsx:23` before deletion)
 covered exactly one class of failure: a wakeup that never reached the component,
