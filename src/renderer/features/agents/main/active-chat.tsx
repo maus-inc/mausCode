@@ -4037,9 +4037,10 @@ const ChatViewInner = memo(function ChatViewInner({
     projectPath,
   ])
 
-  // NOTE: Auto-processing of queue is now handled globally by QueueProcessor
-  // component in agents-layout.tsx. This ensures queues continue processing
-  // even when user navigates to different sub-chats or workspaces.
+  // NOTE: Auto-processing of the queue is handled globally by the `QueueSync`
+  // mount in agents-layout.tsx, which asks main for work and sends it. This
+  // window's panes only project the rows; nothing here drives the queue, so a
+  // queued message still leaves while the user is on another sub-chat.
 
   // Check if there's an unapproved plan (in plan mode with completed ExitPlanMode)
   const hasUnapprovedPlan = useMemo(() => {

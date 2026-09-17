@@ -82,6 +82,13 @@ describe("queue store", () => {
       expect(items.map((item) => item.payload.message)).toEqual(["one", "two"])
       expect(items.map((item) => item.status)).toEqual(["pending", "pending"])
       expect(second.position - first.position).toBe(POSITION_STEP)
+
+      // The order the reload reads is the rows' own, not the order they were
+      // inserted in: with the two items sharing a creation millisecond, only a
+      // move makes that visible, and it has to survive the reload too.
+      store.move(subChatId, second.id, 0)
+      const moved = createQueueStore(opened.db).list(subChatId)
+      expect(ids(moved)).toEqual([second.id, first.id])
     })
 
     it("gives two windows adding concurrently distinct positions and a stable order", () => {
@@ -169,6 +176,29 @@ describe("queue store", () => {
       expect(claim(store, subChatId, undefined, WINDOW_A)?.id).toBe(first.id)
 
       expect(claim(store, subChatId, undefined, WINDOW_B)).toBeNull()
+    })
+
+    it("refuses another window that asks for a row by id while it is being sent", () => {
+      // The case the claim's where clause exists for. A row in flight is
+      // skipped by the busy check above it (the read names the same row), so
+      // nothing but the conditional update stands between a second window's
+      // Send now — a stale card, or an impatient second click — and taking a
+      // message away from the window that is already sending it.
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id, WINDOW_A)?.id).toBe(first.id)
+
+      expect(claim(store, subChatId, first.id, WINDOW_B)).toBeNull()
+      // Still window A's row, still `sending`: nothing about the loser's ask
+      // touched it.
+      const row = store.list(subChatId)[0]
+      expect(row.status).toBe("sending")
+      expect(row.id).toBe(first.id)
+
+      // The same holds after the hand-off, when the message may be in the
+      // engine: a second window may not take it over.
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(claim(store, subChatId, first.id, WINDOW_B)).toBeNull()
+      expect(store.list(subChatId)[0].status).toBe("sending")
     })
 
     it("puts a claim back once its lease runs out, so a dead renderer cannot stall the queue", () => {

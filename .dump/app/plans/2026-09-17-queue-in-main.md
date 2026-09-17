@@ -365,6 +365,23 @@ verified against the code before acting:
   stayed `sending` with nobody to settle it. Both tests now assert the window
   they name (`parkedBy` / `completedBy`), and each assertion fails when the
   owner is changed to another id.
+- **Found by mutation, then pinned**: the claim's conditional `UPDATE` — the
+  step's two-window rule — was covered by no test that fails without it. Every
+  existing race test exercises the *busy check above* the update (a dispatch
+  claim, where the read finds no row for the asker), and the one path that
+  reaches the update with a row already `sending` is a claim **by id**: the read
+  names the same row the busy check would have refused, so the branch is skipped
+  and only the `status IN (pending, paused)` guard stands between a second
+  window — a stale card, an impatient second click — and taking a message away
+  from the window that is sending it. With the guard removed, that second claim
+  returns the row. `refuses another window that asks for a row by id while it is
+  being sent` covers the pre-hand-off and post-hand-off cases, and fails when the
+  guard is removed.
+- **Found by mutation, then strengthened**: the reload test's name promised
+  "in order", but two items added in sequence have both position and
+  `createdAt` in insertion order, so dropping `order by position` left it green.
+  A move now precedes the reload, and the test fails when the order clause loses
+  `position`.
 - **Skipped, with the reason**: `remove` (the card's own X) and `clear` (the
   sub-chat deletion) stay ownerless, because they are the user's intent, as
   recorded above; and `owner` stays a value the renderer names, because it is a
