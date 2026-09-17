@@ -38,20 +38,35 @@ const imageAttachmentSchema = z.object({
   filename: z.string().optional(),
 })
 
-/** In-flight native turns, keyed by subChat, for supersede + cancel. */
-const activeTurns = new Map<string, { cancelled: boolean; cancelRemote: () => void }>()
+/**
+ * In-flight native turns, keyed by subChat, for supersede + cancel.
+ * `completed` marks that the producer already saw the daemon end the turn;
+ * a teardown after that point must not rewrite the outcome as cancelled.
+ */
+const activeTurns = new Map<
+  string,
+  { cancelled: boolean; completed: boolean; cancelRemote: () => void }
+>()
 
-function registerTurn(subChatId: string): { cancelled: boolean; cancelRemote: () => void } {
+function registerTurn(subChatId: string): {
+  cancelled: boolean
+  completed: boolean
+  cancelRemote: () => void
+} {
   const existing = activeTurns.get(subChatId)
   if (existing) {
-    existing.cancelled = true
-    try {
-      existing.cancelRemote()
-    } catch {
-      // Superseded turn already gone; the new turn proceeds.
+    // Only mark the replaced turn cancelled while it is still producing; a
+    // completed turn keeps its real outcome through the finally block.
+    if (!existing.completed) {
+      existing.cancelled = true
+      try {
+        existing.cancelRemote()
+      } catch {
+        // Superseded turn already gone; the new turn proceeds.
+      }
     }
   }
-  const turn = { cancelled: false, cancelRemote: () => {} }
+  const turn = { cancelled: false, completed: false, cancelRemote: () => {} }
   activeTurns.set(subChatId, turn)
   return turn
 }
@@ -162,24 +177,31 @@ async function consumeNativeTurnStream(
   translator: NativeTranslator,
   shouldStop: () => boolean,
   safeEmit: NativeEmit,
+  markCompleted: () => void,
 ): Promise<void> {
   for await (const event of stream) {
-    if (shouldStop()) break
+    if (shouldStop()) return
     for (const chunk of translator.translate(event)) safeEmit(chunk)
-    if (event.ev === "turn_done") break
-    if (event.ev === "error") break
+    // The daemon ended the turn: record completion before breaking so a
+    // teardown racing this point cannot downgrade the outcome to cancelled.
+    if (event.ev === "turn_done" || event.ev === "error") {
+      markCompleted()
+      return
+    }
   }
+  markCompleted()
 }
 
 function finishNativeTurnBookkeeping(
   runHandle: RunHandle | null,
-  turn: { cancelled: boolean },
+  turn: { cancelled: boolean; completed: boolean },
   subChatId: string,
   streamId: string,
 ): void {
   // Settle the run record. Idempotent: cancel and supersede paths already
-  // settled it through the run store.
-  runHandle?.settle(turn.cancelled ? "cancelled" : undefined)
+  // settled it through the run store. A completed producer keeps its real
+  // outcome: only a genuine cancel forces the cancelled status.
+  runHandle?.settle(turn.cancelled && !turn.completed ? "cancelled" : undefined)
   if (activeTurns.get(subChatId) === turn) {
     activeTurns.delete(subChatId)
   }
@@ -321,6 +343,9 @@ export const runtimeRouter = router({
               translator,
               () => !isActive || turn.cancelled,
               safeEmit,
+              () => {
+                turn.completed = true
+              },
             )
             safeComplete()
             console.log(`[Native] M:END sub=${subId}`)
@@ -338,11 +363,16 @@ export const runtimeRouter = router({
 
         return () => {
           isActive = false
-          turn.cancelled = true
-          try {
-            turn.cancelRemote()
-          } catch {
-            // Client already gone.
+          // Only a teardown before producer completion is a cancel: once the
+          // daemon has ended the turn, the finally block preserves the real
+          // outcome and there is nothing left to cancel remotely either.
+          if (!turn.completed) {
+            turn.cancelled = true
+            try {
+              turn.cancelRemote()
+            } catch {
+              // Client already gone.
+            }
           }
         }
       })
@@ -350,6 +380,11 @@ export const runtimeRouter = router({
 
   cancel: publicProcedure.input(z.object({ subChatId: z.string() })).mutation(({ input }) => {
     const turn = activeTurns.get(input.subChatId)
+    // A turn the daemon already completed keeps its real outcome: neither the
+    // in-memory flag nor the persisted run may be rewritten as cancelled.
+    if (turn?.completed) {
+      return { cancelled: false }
+    }
     if (turn) {
       turn.cancelled = true
       try {
@@ -487,11 +522,14 @@ export function hasActiveNativeTurns(): boolean {
 
 export function abortAllNativeTurns(): void {
   for (const turn of activeTurns.values()) {
-    turn.cancelled = true
-    try {
-      turn.cancelRemote()
-    } catch {
-      // Best-effort.
+    // Completed turns keep their real outcome through the finally block.
+    if (!turn.completed) {
+      turn.cancelled = true
+      try {
+        turn.cancelRemote()
+      } catch {
+        // Best-effort.
+      }
     }
   }
   activeTurns.clear()
