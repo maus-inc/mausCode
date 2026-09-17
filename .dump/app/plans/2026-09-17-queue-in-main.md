@@ -359,6 +359,12 @@ verified against the code before acting:
   clear ran, so it asserted the restore over a queue main no longer had. The
   chat is now streaming, which is the state the rule is about: a pending row and
   a clear that did not land.
+- **Guarded**: the renderer's fakes ignored the owner on `park` and `complete`,
+  so a projection that stopped naming the claiming window would not have failed
+  anything — and in main those writes match the owner, so the row would have
+  stayed `sending` with nobody to settle it. Both tests now assert the window
+  they name (`parkedBy` / `completedBy`), and each assertion fails when the
+  owner is changed to another id.
 - **Skipped, with the reason**: `remove` (the card's own X) and `clear` (the
   sub-chat deletion) stay ownerless, because they are the user's intent, as
   recorded above; and `owner` stays a value the renderer names, because it is a

@@ -51,6 +51,9 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
   const completed: string[] = []
   const requeued: string[] = []
   const parked: string[] = []
+  /** The window each park and complete named, so a dropped owner is visible. */
+  const parkedBy: string[] = []
+  const completedBy: string[] = []
   const handed: string[] = []
   const paused: Array<{ subChatId: string; paused: boolean }> = []
   /** Every claim/hand-off/complete/resume in the order they reached main. */
@@ -97,8 +100,9 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
       },
     },
     park: {
-      mutate: async (input: { subChatId: string; itemId: string }) => {
+      mutate: async (input: { subChatId: string; itemId: string; owner: string }) => {
         parked.push(input.itemId)
+        parkedBy.push(input.owner)
         calls.push(`park:${input.itemId}`)
         return true
       },
@@ -106,8 +110,9 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
     complete: {
       // A `vi.fn` so a test can make one attempt fail; the retry is otherwise
       // invisible through this fake.
-      mutate: vi.fn(async (input: { subChatId: string; itemId: string }) => {
+      mutate: vi.fn(async (input: { subChatId: string; itemId: string; owner: string }) => {
         completed.push(input.itemId)
+        completedBy.push(input.owner)
         calls.push(`complete:${input.itemId}`)
         return true
       }),
@@ -136,8 +141,10 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
     pushFeed: (payload: QueueFeedItem) => onFeed?.(payload),
     claims,
     completed,
+    completedBy,
     requeued,
     parked,
+    parkedBy,
     handed,
     paused,
     calls,
@@ -205,6 +212,9 @@ describe("queue projection", () => {
     expect(fake.claims).toEqual([{ itemId: undefined, owner: "window-test" }])
     expect(sendClaimedQueueItem).toHaveBeenCalledTimes(1)
     expect(fake.completed).toEqual(["q1"])
+    // Same reason as the park below: this delete is owner-scoped in main, so a
+    // dropped owner would leave the row `sending` with nobody to settle it.
+    expect(fake.completedBy).toEqual(["window-test"])
     expect(fake.requeued).toEqual([])
   })
 
@@ -234,6 +244,9 @@ describe("queue projection", () => {
     await wakeQueue("sub-a", fake.client)
 
     expect(fake.parked).toEqual(["q1"])
+    // The park is the claiming window's own write: main matches the owner, so a
+    // dropped owner here would leave the row `sending` with nobody to settle it.
+    expect(fake.parkedBy).toEqual(["window-test"])
     // Neither retired nor put back: nothing may send it a second time on its own.
     expect(fake.completed).toEqual([])
     expect(fake.requeued).toEqual([])
