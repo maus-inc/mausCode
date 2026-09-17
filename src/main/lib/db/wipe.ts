@@ -13,6 +13,7 @@ type WipeTx = WipeDb["transaction"] extends (fn: (tx: infer T) => unknown) => un
 function clearChatTreeTx(tx: WipeTx): void {
   tx.delete(schema.runEvents).run()
   tx.delete(schema.runs).run()
+  tx.delete(schema.queueItems).run()
   tx.delete(schema.subChats).run()
   tx.delete(schema.chats).run()
 }
