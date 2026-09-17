@@ -132,12 +132,10 @@ async function deliverClaimedItem(
 ): Promise<void> {
   const subChatId = item.subChatId
   inFlightSends.add(subChatId)
-  let result: "sent" | "failed" = "failed"
-  try {
-    result = await sendClaimedQueueItem({ item, chat, stopCurrent })
-  } finally {
+  // The in-flight marker clears when the send settles, whichever way it went.
+  const result = await sendClaimedQueueItem({ item, chat, stopCurrent }).finally(() => {
     inFlightSends.delete(subChatId)
-  }
+  })
   try {
     if (result === "sent") {
       await client.queue.complete.mutate({ subChatId, itemId: item.id })
