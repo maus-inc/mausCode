@@ -31,6 +31,8 @@ A finished run produces a parsable change set, a downloadable patch, and a real 
 
 `src/main/lib/git/` already owns worktree state, status, numstat and the lock helper `withGitLock`, so extend it rather than adding a git module. `docs/design-system-baseline.md` governs the diff and details surfaces. The change set shape, `[A]`, `[M]`, `[D]` with per-file counts and totals, is specified in triage row 15, and `chats` already caches nothing, which is why the counts must be computed once and stored.
 
+Known gap from PR review of the wipe path this step registers into: the debug wipes settle active runs before deleting, and a delete failure after the settle leaves the chats with cancelled runs. That state is coherent only because the settle precedes the delete. Keep that ordering when registering the evidence table, and treat making settle-plus-delete one transactional unit as the follow-up if this step grows a reason to.
+
 ## 6. Implementation plan
 
 1. `changeset.get(subChatId)`: per-file status, additions and deletions, totals, base commit, and the branch, computed against the recorded base rather than `HEAD`.

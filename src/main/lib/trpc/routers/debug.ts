@@ -3,8 +3,45 @@ import { z } from "zod"
 import { IS_DEV, PROTOCOL } from "../../../constants"
 import { getAuthManager } from "../../../index"
 import { chats, getDatabase, projects, subChats } from "../../db"
+import { clearChatTree, clearAllData as wipeAllData } from "../../db/wipe"
 import { clearNetworkCache } from "../../ollama/network-detector"
+import { getRunStore } from "../../runs"
 import { publicProcedure, router } from "../index"
+import { abortAllClaudeSessions } from "./claude"
+import { abortAllClineStreams } from "./cline"
+import { abortAllCodexStreams } from "./codex"
+import { abortAllCursorStreams } from "./cursor"
+import { abortAllGeminiStreams } from "./gemini"
+import { abortAllGrokStreams } from "./grok"
+import { abortAllHermesStreams } from "./hermes"
+import { abortAllOpenclawStreams } from "./openclaw"
+import { abortAllOpencodeStreams } from "./opencode"
+import { abortAllOpenRouterStreams } from "./openrouter"
+import { abortAllQwenStreams } from "./qwen"
+import { abortAllRooStreams } from "./roo"
+import { abortAllNativeTurns } from "./runtime"
+
+/**
+ * Stop every live turn and stream across all providers, and resolve once the
+ * asynchronous disposals are done. Wipes keep the process alive, so anything
+ * still emitting would write for rows that no longer exist; quit and reload
+ * hooks cover fewer providers because the process is going away anyway.
+ */
+async function abortAllProviderStreams(): Promise<void> {
+  abortAllClaudeSessions()
+  abortAllNativeTurns()
+  abortAllClineStreams()
+  abortAllCodexStreams()
+  abortAllCursorStreams()
+  abortAllGeminiStreams()
+  abortAllGrokStreams()
+  abortAllHermesStreams()
+  abortAllOpenclawStreams()
+  abortAllOpenRouterStreams()
+  abortAllQwenStreams()
+  abortAllRooStreams()
+  await abortAllOpencodeStreams()
+}
 
 // Global flag for simulating offline mode (for testing)
 let simulateOfflineMode = false
@@ -59,13 +96,18 @@ export const debugRouter = router({
   }),
 
   /**
-   * Clear all chats and sub-chats (keeps projects)
+   * Clear all chats and sub-chats (keeps projects). Deletion order and the
+   * full table list live in the shared wipe module, so the run tables stay
+   * registered here automatically.
    */
-  clearChats: publicProcedure.mutation(() => {
-    const db = getDatabase()
-    // Delete sub_chats first (foreign key constraint)
-    db.delete(subChats).run()
-    db.delete(chats).run()
+  clearChats: publicProcedure.mutation(async () => {
+    // Stop live turns and streams first so nothing keeps emitting for rows
+    // that are about to disappear, then settle any active runs so subscribed
+    // windows see them cancelled instead of keeping a streaming state for
+    // rows that no longer exist.
+    await abortAllProviderStreams()
+    getRunStore().cancelActiveRuns("wiped")
+    clearChatTree(getDatabase())
     console.log("[Debug] Cleared all chats and sub-chats")
     return { success: true }
   }),
@@ -73,12 +115,10 @@ export const debugRouter = router({
   /**
    * Clear all data (projects, chats, sub-chats)
    */
-  clearAllData: publicProcedure.mutation(() => {
-    const db = getDatabase()
-    // Delete in order due to foreign key constraints
-    db.delete(subChats).run()
-    db.delete(chats).run()
-    db.delete(projects).run()
+  clearAllData: publicProcedure.mutation(async () => {
+    await abortAllProviderStreams()
+    getRunStore().cancelActiveRuns("wiped")
+    wipeAllData(getDatabase())
     console.log("[Debug] Cleared all database data")
     return { success: true }
   }),

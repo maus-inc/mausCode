@@ -84,6 +84,8 @@ Drop the two tables in a forward migration, keep the writer dark. The renderer p
 
 Immutable activity log with a `createTime` cursor for third-party consumers, deferred in triage row 16; queue backpressure beyond the stuck-session half.
 
+Startup recovery logs a failure and continues without retrying within the session, so a crashed run stays reported active until the next launch when the first attempt fails. This was deferred during PR review on purpose: launch must never block on a database that is already failing. Any step that depends on dependable recovery must add a retry or explicitly inherit this gap.
+
 ## 15. Handoff notes
 
 The states and transitions in the design record become the contract every unattended step cites. Keep the `runs` vocabulary identical to the runtime plan's `RunState`, so the engine port does not invent a second one.

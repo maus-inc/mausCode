@@ -144,15 +144,19 @@ Repositories outside `src/` that a step may need:
 
 ## Database
 
-SQLite through better-sqlite3 and Drizzle. The schema is one file, `src/main/lib/db/schema/index.ts`, and it declares 11 tables.
+SQLite through better-sqlite3 and Drizzle. The schema is one file, `src/main/lib/db/schema/index.ts`, and it declares 13 tables.
 
-The three that carry the product:
+The five that carry the product:
 
 ```typescript
 projects    → id, name, path, git remote fields, iconPath, accentColor, rail fields
 chats       → id, name, projectId, worktree fields, baseBranch, prUrl, prNumber
 sub_chats   → id, name, chatId, sessionId, streamId, mode, provider, messages
+runs        → id, subChatId, status, startedAt, endedAt, stopReason, approvalPending, engine, provider, model, lastSeq
+run_events  → id, runId, seq, kind, payload (JSON text), at; unique (runId, seq)
 ```
+
+`runs` and `run_events` are the main-owned record of each agent turn (roadmap step 07). The state machine, transitions and the event feed live in `src/main/lib/runs/run-state.ts`; the tRPC surface is `runs.get`, `runs.list` and `runs.subscribe` in `src/main/lib/trpc/routers/runs.ts`; the renderer projection into the streaming status store is `src/renderer/features/agents/stores/run-feed-projection.ts`. The design contract is `.dump/app/plans/2026-09-13-run-state.md`.
 
 The other eight hold credentials and per-provider settings, `anthropic_accounts`, `anthropic_settings`, `native_endpoint_settings`, and one credential table each for `claude_code`, `qwen`, `cline`, `openclaw` and `roo`.
 

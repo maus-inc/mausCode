@@ -107,3 +107,16 @@ exists now and every locked entry verifies. `web-design-guidelines` is still ref
 for the same reason, and `plugin87/ux-ui-agent-skills` is still refused because it
 adds a server. `npx antislop-ai` needs a TTY, so drive its exported `installSkills`
 and `updatePointers` instead of fighting the prompts.
+
+## 9. Step 07 run, 2026-09-16
+
+Ran for roadmap step 07, run state. Queries: `sqlite migration state machine`,
+`database event sourcing`, `electron trpc` through `npx skills find` (skills CLI
+1.5.26). All three returned "No skills found", matching the broken-endpoint
+finding in section 1 rather than proving an empty ecosystem. No candidates to
+read, nothing installed, nothing refused. Project skills applied: `unslop` to
+every line of prose this step wrote (design record, code comments, benchmark
+record, PR body), `find-skills` itself for this run. `frontend-design` and
+`vercel-react-best-practices` were checked against the step and do not apply:
+step 07 ships no new UI, only a store projection with no visual surface.
+
