@@ -528,6 +528,25 @@ map keyed by sub-chat. Recorded as a named exposure, unowned, with the wiring
 option noted.
 
 
+### Round twelve
+
+**An item that carried nothing at all.** Reading the payload boundary again,
+rather than its callers, turned up one rule it did not state: `message: ""` with
+no attachments satisfies every cap, and `buildQueueMessageParts` expands exactly
+that payload into **no** message parts — so the send would leave with nothing in
+it, no turn would report a start, and the row would end up parked with an
+outcome nobody can explain. The composer refuses this itself (it requires
+trimmed text or an attachment before it queues or sends), so the UI cannot reach
+it today; a boundary that accepts it is a rule stated in one place and not the
+other. `queuePayloadSchema` now refuses an item with no text and no attachment.
+Both processes parse through that schema — the router's input and `add`'s own
+`parse` — so the rule holds for every caller, and a refused add is the outcome
+the composer already handles: a toast, with the draft and attachments kept.
+Whitespace-only text counts as empty here, which is the reading the composer's
+own `trim()` guard uses; text beside an image, or an empty message beside one,
+stays valid. Pinned in `queue-item.test.ts` (`refuses an item that would carry
+nothing at all`), and the rule dies under `if (false)`.
+
 ### Round eleven
 
 CodeAnt's pass on the new head, and one further CodeRabbit finding, each checked

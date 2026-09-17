@@ -88,6 +88,24 @@ export const queuePayloadSchema = z
         message: `An item may carry at most ${QUEUE_ITEM_BASE64_CAP} base64 characters across its attachments`,
       })
     }
+    // An item with no text and no attachment expands into no message parts at
+    // all, so the send would leave with nothing in it: the turn reports no
+    // start, and the row ends up parked with an outcome nobody can explain.
+    // The composer refuses this itself — it needs trimmed text or an
+    // attachment — and the boundary is where that rule holds for every caller.
+    const carriesText = payload.message.trim().length > 0
+    const carriesAttachment =
+      (payload.images?.length ?? 0) > 0 ||
+      (payload.files?.length ?? 0) > 0 ||
+      (payload.textContexts?.length ?? 0) > 0 ||
+      (payload.diffTextContexts?.length ?? 0) > 0 ||
+      (payload.pastedTexts?.length ?? 0) > 0
+    if (!carriesText && !carriesAttachment) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "An item must carry a message or at least one attachment",
+      })
+    }
   })
 
 export type QueuePayload = z.infer<typeof queuePayloadSchema>

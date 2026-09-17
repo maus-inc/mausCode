@@ -63,6 +63,27 @@ describe("the queue payload boundary", () => {
     ).toThrow()
   })
 
+  it("refuses an item that would carry nothing at all", () => {
+    // No text and no attachment expands into no message parts, so this send
+    // would go out empty and the row would be parked with an outcome nobody can
+    // explain. The composer refuses it too; this is where it holds for every
+    // caller.
+    expect(() => queuePayloadSchema.parse({ message: "" })).toThrow()
+    expect(() => queuePayloadSchema.parse({ message: "   " })).toThrow()
+    expect(() => queuePayloadSchema.parse({ message: "", images: [] })).toThrow()
+
+    // An empty message beside an attachment is the normal case, and text on its
+    // own is the other one.
+    expect(() => queuePayloadSchema.parse({ message: "", images: [image("i1")] })).not.toThrow()
+    expect(() => queuePayloadSchema.parse({ message: "   ", textContexts: [] })).toThrow()
+    expect(() =>
+      queuePayloadSchema.parse({
+        message: "",
+        textContexts: [{ id: "t1", text: "quoted", sourceMessageId: "m1" }],
+      }),
+    ).not.toThrow()
+  })
+
   it("keeps the pasted-text kind to the two the token builder knows", () => {
     const paste = (kind: unknown) => ({
       id: "p1",
