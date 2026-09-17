@@ -233,6 +233,43 @@ poll: it is read only inside a `claim` that a wake asked for.
   requiring a hydrated status instead would refuse Send now there, which the
   one-rule-for-all-engines contract of this step does not allow.
 
+## Tightened in review
+
+The round-five review found six rules the design stated but the code did not yet
+hold. Each one now has a test that fails without it:
+
+- `requeue` is owner-scoped like `markHanded`, and only applies to a claim that
+  was never handed over. Another window's row is not this window's to release,
+  and a handed row's message may already be in the engine, so putting it back to
+  `pending` is the one write that could send it twice
+  (`refuses to requeue a row that another window claimed`, `refuses to requeue a
+  row that was already handed over`).
+- An explicit queue add resumes only rows the user's stop held back
+  (`resumePausedTx` now requires a null `handedAt`, the guard `setPaused(false)`
+  and the dispatch gate already used), so queueing a message can no longer flip
+  a parked row into the automatic path
+  (`keeps a parked row out of the automatic path when the user queues another
+  message`).
+- The wake-retry count belongs to the sequence, not to the attempt. Dropping it
+  as each timer fired restarted the sequence every two seconds, so
+  `WAKE_RETRY_LIMIT` bounded nothing; it is now dropped when the pane shows up
+  or the queue is gone (`stops re-asking a pane that never showed up, instead of
+  polling for it`). The pending timers are tracked and go with the subscription
+  (`cancels a pending retry when the sync stops`).
+- A send call that never settles does not hold its row `sending` for the life of
+  the window. Past `SEND_SETTLE_GRACE_MS` (five minutes) after the turn-start
+  wait, the hand-off is parked like any other unconfirmed one
+  (`parks the hand-off when the send call never settles after the wait`).
+- A clear that failed forgets the "this sub-chat has no rows" mark, so the rows
+  main still has are not stranded, and Send now hands its claim back when it
+  races a deletion instead of leaving the row `sending`
+  (`forgets a clear that failed, so the rows main still has can be sent`, `hands
+  the row back when Send now races the sub-chat's deletion`).
+- The loading mark a queued send sets is cleared on the path where the send
+  resolves without any turn reporting itself, which is the only path nothing
+  else clears it (`records the hand-off before the payload leaves and retires
+  the row`).
+
 ## Verification
 
 `bun x biome check . && npm run typecheck && npm run test` plus

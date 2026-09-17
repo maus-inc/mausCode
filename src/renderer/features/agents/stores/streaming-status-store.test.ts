@@ -15,6 +15,13 @@ describe("waitForTurnStart", () => {
     useStreamingStatusStore.setState({ statuses: {} })
   })
 
+  // One test below runs on fake timers. Restoring them here means a failure
+  // inside it cannot leave every later test in the file waiting on a clock
+  // nobody advances.
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("resolves when the status reports a live turn", async () => {
     let resolved = false
     const waiter = waitForTurnStart("sub-a")

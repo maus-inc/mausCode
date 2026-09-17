@@ -331,7 +331,7 @@ describe("queue store", () => {
     it("gives the same row back to Send now after the row is put back", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
-      store.requeue(subChatId, first.id)
+      store.requeue(subChatId, first.id, WINDOW_A)
 
       expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
     })
@@ -437,7 +437,7 @@ describe("queue store", () => {
       const second = store.add({ subChatId, payload: payload("two") })
 
       expect(claim(store, subChatId)?.id).toBe(first.id)
-      expect(store.requeue(subChatId, first.id)).toBe(true)
+      expect(store.requeue(subChatId, first.id, WINDOW_A)).toBe(true)
       expect(ids(store.list(subChatId))).toEqual([first.id, second.id])
       expect(store.list(subChatId)[0].dispatchedAt).toBeNull()
 
@@ -484,6 +484,47 @@ describe("queue store", () => {
       store.setPaused(subChatId, false)
 
       expect(store.list(subChatId)[0].status).toBe("paused")
+    })
+
+    it("keeps a parked row out of the automatic path when the user queues another message", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(store.park(subChatId, first.id)).toBe(true)
+
+      // Queueing is an explicit send, so it ends a user pause. A parked row is
+      // not a pause: it already left for the engine, so it must stay put.
+      store.add({ subChatId, payload: payload("two") })
+
+      const items = store.list(subChatId)
+      expect(items.find((item) => item.id === first.id)?.status).toBe("paused")
+      // The row the user just queued still dispatches, past the parked one.
+      expect(claim(store, subChatId)?.payload.message).toBe("two")
+    })
+
+    it("refuses to requeue a row that another window claimed", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id, WINDOW_A)?.id).toBe(first.id)
+
+      // The write is owner-scoped like the hand-off: a window cannot release a
+      // claim it does not hold, which is what would let the row be sent twice.
+      expect(store.requeue(subChatId, first.id, WINDOW_B)).toBe(false)
+      expect(store.list(subChatId)[0].status).toBe("sending")
+
+      expect(store.requeue(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(store.list(subChatId)[0].status).toBe("pending")
+    })
+
+    it("refuses to requeue a row that was already handed over", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+
+      // The message may be in the engine, so the only thing that may touch this
+      // row is the park that says so.
+      expect(store.requeue(subChatId, first.id, WINDOW_A)).toBe(false)
+      expect(store.list(subChatId)[0].status).toBe("sending")
+      expect(store.park(subChatId, first.id)).toBe(true)
     })
 
     it("hands back what a closed window held", () => {

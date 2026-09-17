@@ -81,7 +81,13 @@ export interface QueueStore {
   /** Release what a window claimed, for a window that closed. */
   releaseOwner(owner: string): number
   complete(subChatId: string, itemId: string): boolean
-  requeue(subChatId: string, itemId: string): boolean
+  /**
+   * Put a claim this window decided not to use back in the queue. Like every
+   * other write after the claim, only the owner may do it, and only for a row
+   * that was never handed over: a handed row's message may already be in the
+   * engine, and making it `pending` again is what would send it twice.
+   */
+  requeue(subChatId: string, itemId: string, owner: string): boolean
   recoverSending(): number
   subscribe(listener: (item: QueueFeedItem) => void): () => void
 }
@@ -202,10 +208,21 @@ function rewritePositionsTx(tx: QueueTx, orderedIds: string[]): void {
   })
 }
 
+/**
+ * End a user pause for this sub-chat. Only the rows the stop held back come
+ * back: a parked row already left for the engine, so it keeps its place where
+ * the user can see it instead of returning to the automatic path.
+ */
 function resumePausedTx(tx: QueueTx, subChatId: string): void {
   tx.update(schema.queueItems)
     .set({ status: "pending" })
-    .where(and(eq(schema.queueItems.subChatId, subChatId), eq(schema.queueItems.status, "paused")))
+    .where(
+      and(
+        eq(schema.queueItems.subChatId, subChatId),
+        eq(schema.queueItems.status, "paused"),
+        isNull(schema.queueItems.handedAt),
+      ),
+    )
     .run()
 }
 
@@ -585,7 +602,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
     return true
   }
 
-  function requeue(subChatId: string, itemId: string): boolean {
+  function requeue(subChatId: string, itemId: string, owner: string): boolean {
     const updated = db
       .update(schema.queueItems)
       .set({ status: "pending", dispatchedAt: null, claimedBy: null, handedAt: null })
@@ -594,6 +611,11 @@ export function createQueueStore(db: QueueDb): QueueStore {
           eq(schema.queueItems.id, itemId),
           eq(schema.queueItems.subChatId, subChatId),
           eq(schema.queueItems.status, "sending"),
+          // Hand back what this window holds, and only what it holds: another
+          // window's claim is not its to release, and a handed row is not a row
+          // to send again.
+          eq(schema.queueItems.claimedBy, owner),
+          isNull(schema.queueItems.handedAt),
         ),
       )
       .returning()

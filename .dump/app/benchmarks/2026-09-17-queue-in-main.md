@@ -107,6 +107,12 @@ items can reach 20 MB, while an ordinary queue of short messages stays in the
 tens of kilobytes, because a payload carries only what the user typed plus the
 mention tokens that expand to it.
 
+## Round five
+
+Round five changed no query shape and no index: it adds two equality guards to
+the single-row `requeue` update, one to the `paused` sweep an add runs, and a
+renderer-side timer bound. The numbers above stand unchanged.
+
 ## Driver caveat
 
 The numbers come from Node's built-in `node:sqlite` through

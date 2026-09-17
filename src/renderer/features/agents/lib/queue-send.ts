@@ -52,6 +52,38 @@ function clearQueueSendStarted(subChatId: string): void {
   )
 }
 
+/**
+ * How long the sender waits on the send call itself after no turn reported
+ * itself. Long enough for a slow engine to answer, short enough that a
+ * transport that never settles cannot keep the row `sending` — hidden from the
+ * queue and blocking everything behind it — for the life of the window.
+ */
+const SEND_SETTLE_GRACE_MS = 5 * 60_000
+
+/** Wait for a settled promise, or give up on it after `ms`. */
+function settlesWithin(settled: Promise<void>, ms: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer: ReturnType<typeof setTimeout> = setTimeout(() => resolve(false), ms)
+    // The renderer has no `unref`; node does, and the tests run this module
+    // there, so a wait that is abandoned must not keep the process alive.
+    ;(timer as unknown as { unref?: () => void }).unref?.()
+    void settled.then(() => {
+      clearTimeout(timer)
+      resolve(true)
+    })
+  })
+}
+
+/**
+ * The row was handed over and the outcome is unknown, so it is parked: visible,
+ * out of the automatic path, and never sent again on its own.
+ */
+function unconfirmed(subChatId: string): QueueSendResult {
+  clearQueueSendStarted(subChatId)
+  toast.error("The queued message may not have gone out. It is paused in the queue.")
+  return "uncertain"
+}
+
 export type QueueSendResult = "sent" | "failed" | "uncertain" | "cancelled"
 
 export interface QueueSendInput {
@@ -161,28 +193,33 @@ export async function sendClaimedQueueItem({
     if (firstEvent === "expired") {
       // No status arrived inside the wait. The send call is still the only
       // thing that can report what happened, so its result is what is recorded;
-      // the row is never sent again either way.
+      // the row is never sent again either way. It does not get to hold the row
+      // forever though: a call that never settles would leave the row `sending`
+      // and the queue behind it stalled, so past the grace the hand-off is
+      // parked like any other one whose fate is unknown.
       console.error("[queue] no turn reported itself for the queued send")
+      if (!(await settlesWithin(finished, SEND_SETTLE_GRACE_MS))) {
+        console.error("[queue] the queued send never settled; parking it as unconfirmed")
+        return unconfirmed(subChatId)
+      }
     }
     await finished
     if (sendFailure) {
       console.error("[queue] queued send failed after the hand-off:", sendFailure)
-      clearQueueSendStarted(subChatId)
-      toast.error("The queued message may not have gone out. It is paused in the queue.")
-      return "uncertain"
+      return unconfirmed(subChatId)
     }
     // The send call resolved without our status store ever seeing a turn. The
     // engine consumed the response for the message it accepted, so the row is
     // retired; retrying it is the one thing that could duplicate it.
     console.warn("[queue] send resolved without a turn start on this window")
+    // No turn reported itself, so nothing else will clear the mark this send
+    // set; without this the sub-chat shows as loading for good.
+    clearQueueSendStarted(subChatId)
     return "sent"
   } catch (error) {
     console.error("[queue] queued send threw:", error)
+    if (handed) return unconfirmed(subChatId)
     clearQueueSendStarted(subChatId)
-    if (handed) {
-      toast.error("The queued message may not have gone out. It is paused in the queue.")
-      return "uncertain"
-    }
     toast.error("Failed to send the queued message. It is still in the queue.")
     return "failed"
   }

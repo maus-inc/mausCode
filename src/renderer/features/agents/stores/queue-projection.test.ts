@@ -4,7 +4,7 @@
  * safe: main decides who gets an item, a window that cannot send never asks,
  * and a failed send is handed back.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { QueueItem } from "../../../../shared/queue-item"
 
 const sendClaimedQueueItem = vi.hoisted(() => vi.fn())
@@ -18,6 +18,7 @@ import {
   hasQueuedMessages,
   type QueueFeedClient,
   sendQueueItemNow,
+  startQueueSync,
   useQueueProjection,
   wakeQueue,
 } from "./queue-projection"
@@ -49,10 +50,18 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
   /** Every claim/hand-off/complete/resume in the order they reached main. */
   const calls: string[] = []
   let handOffAllowed = options.handed ?? true
+  let onFeed: ((item: QueueFeedItem) => void) | null = null
   const queue = {
     claimed: options.claimed ?? [],
     subscribe: {
-      subscribe: (_input: unknown, _handlers: unknown) => ({ unsubscribe: () => {} }),
+      subscribe: (_input: unknown, handlers: { onData?: (item: QueueFeedItem) => void }) => {
+        onFeed = handlers.onData ?? null
+        return {
+          unsubscribe: () => {
+            onFeed = null
+          },
+        }
+      },
     },
     add: { mutate: vi.fn() },
     remove: { mutate: vi.fn() },
@@ -87,7 +96,7 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
       },
     },
     requeue: {
-      mutate: async (input: { subChatId: string; itemId: string }) => {
+      mutate: async (input: { subChatId: string; itemId: string; owner: string }) => {
         requeued.push(input.itemId)
         calls.push(`requeue:${input.itemId}`)
         return true
@@ -103,6 +112,9 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
   }
   return {
     client: { owner: "window-test", queue } as unknown as QueueFeedClient,
+    queue,
+    /** Land a feed on the live subscription, the way main's emits arrive. */
+    pushFeed: (payload: QueueFeedItem) => onFeed?.(payload),
     claims,
     completed,
     requeued,
@@ -132,6 +144,12 @@ describe("queue projection", () => {
     agentChatStore.clear()
     sendClaimedQueueItem.mockReset()
     sendClaimedQueueItem.mockResolvedValue("sent")
+  })
+
+  // The retry tests run on fake timers; a failure inside one must not leave
+  // them on for every test after it.
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it("keeps the card rows and hides the row being sent", () => {
@@ -375,5 +393,71 @@ describe("queue projection", () => {
     // The item is claimed and its bookkeeping finishes before the resume, so
     // the wake the resume causes cannot claim another row for this window.
     expect(fake.calls).toEqual(["claim:q1", "complete:q1", "setPaused:false"])
+  })
+
+  it("stops re-asking a pane that never showed up, instead of polling for it", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
+
+    // A reload can replay rows before the pane that owns the chat exists, so
+    // the first wake has nothing to send with.
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+    expect(fake.claims).toEqual([])
+
+    // The pane never appears. The retries have to run out: a count that is
+    // dropped as each timer fires restarts the sequence every time, which is a
+    // two-second poll for the life of the window instead of a bound.
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("cancels a pending retry when the sync stops", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
+    const stop = startQueueSync(fake.client)
+
+    fake.pushFeed(feed("sub-a", [item("q1", "sub-a", "pending")]))
+    expect(fake.claims).toEqual([])
+
+    // The pane arrives after the sync is gone. A retry that outlived the sync
+    // would claim and send for a window that stopped syncing.
+    registerChat("sub-a")
+    stop()
+
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(fake.claims).toEqual([])
+  })
+
+  it("hands the row back when Send now races the sub-chat's deletion", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+    // The queue was dropped on its way to the click, and the clear may not have
+    // reached main: a claim nobody will send has to go back, or it sits hidden
+    // as `sending` with no window to finish it.
+    await clearQueueItems("sub-a", fake.client)
+
+    const sent = await sendQueueItemNow("sub-a", "q1", async () => true, fake.client)
+
+    expect(sent).toBe(false)
+    expect(fake.requeued).toEqual(["q1"])
+    expect(sendClaimedQueueItem).not.toHaveBeenCalled()
+  })
+
+  it("forgets a clear that failed, so the rows main still has can be sent", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+    fake.queue.clear.mutate.mockRejectedValueOnce(new Error("db is busy"))
+
+    await clearQueueItems("sub-a", fake.client)
+    await wakeQueue("sub-a", fake.client)
+
+    // The clear never landed, so main still has the row. Keeping the mark that
+    // says it has none would make every later wake hand the claim straight back.
+    expect(fake.claims).toHaveLength(1)
+    expect(fake.completed).toEqual(["q1"])
   })
 })

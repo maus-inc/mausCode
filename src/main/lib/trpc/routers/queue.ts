@@ -97,9 +97,16 @@ export const queueRouter = router({
     return getQueueStore().complete(input.subChatId, input.itemId)
   }),
 
-  requeue: publicProcedure.input(itemInput).mutation(({ input }) => {
-    return getQueueStore().requeue(input.subChatId, input.itemId)
-  }),
+  /**
+   * Gives back a claim this window did not use. Owner-scoped like the other
+   * writes after a claim: another window's row is not this window's to release,
+   * and a row that was handed over is parked instead, never requeued.
+   */
+  requeue: publicProcedure
+    .input(itemInput.extend({ owner: z.string().min(1) }))
+    .mutation(({ input }) => {
+      return getQueueStore().requeue(input.subChatId, input.itemId, input.owner)
+    }),
 
   /** A manual stop pauses the queue; an explicit send resumes it. */
   setPaused: publicProcedure

@@ -146,7 +146,7 @@ export type QueueFeedClient = {
       mutate: (input: { subChatId: string; itemId: string }) => Promise<boolean>
     }
     requeue: {
-      mutate: (input: { subChatId: string; itemId: string }) => Promise<boolean>
+      mutate: (input: { subChatId: string; itemId: string; owner: string }) => Promise<boolean>
     }
     setPaused: {
       mutate: (input: { subChatId: string; paused: boolean }) => Promise<number>
@@ -226,7 +226,7 @@ async function deliverClaimedItem(
         // requeue produces cannot immediately claim the same row again in a
         // loop. The sender already told the user the item stays queued.
         useStreamingStatusStore.getState().setStatus(subChatId, "error")
-        await client.queue.requeue.mutate({ subChatId, itemId: item.id })
+        await client.queue.requeue.mutate({ subChatId, itemId: item.id, owner })
         break
       case "cancelled":
         // The claim was cleared or taken over; it is not this window's row.
@@ -245,23 +245,37 @@ const WAKE_RETRY_DELAY_MS = 2000
 /** Attempts after the first wake, so a missing pane costs one delay, not a loop. */
 const WAKE_RETRY_LIMIT = 5
 const wakeRetries = new Map<string, number>()
+/** Pending retries, so stopping the feed cannot leave one behind to fire. */
+const wakeTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 /**
  * Re-ask for a sub-chat whose pane was not up yet. Only a sub-chat this window
- * knows has rows is retried, and only a bounded number of times.
+ * knows has rows is retried, and only a bounded number of times. The count is
+ * the sequence's, not the attempt's: it is dropped when the pane shows up or
+ * the queue is gone, never as a retry starts, or every retry would restart the
+ * sequence and the limit would bound nothing.
  */
 function scheduleWakeRetry(subChatId: string, client: QueueFeedClient): void {
   const state = useQueueProjection.getState()
   const queued =
     (state.queues[subChatId]?.length ?? 0) > 0 || (state.hiddenCounts[subChatId] ?? 0) > 0
-  if (!queued) return
+  if (!queued) {
+    // Nothing left to wake for, so a later queue starts its own sequence.
+    wakeRetries.delete(subChatId)
+    return
+  }
   const attempts = wakeRetries.get(subChatId) ?? 0
   if (attempts >= WAKE_RETRY_LIMIT) return
   wakeRetries.set(subChatId, attempts + 1)
   const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
-    wakeRetries.delete(subChatId)
+    wakeTimers.delete(subChatId)
     void wakeQueue(subChatId, client)
   }, WAKE_RETRY_DELAY_MS)
+  // One pending retry per sub-chat, so the map is what stopping the feed has to
+  // clear and no earlier timer is left behind for the same pane.
+  const pending = wakeTimers.get(subChatId)
+  if (pending) clearTimeout(pending)
+  wakeTimers.set(subChatId, timer)
   // Node keeps its process alive for a pending timer and the tests run this
   // module there; the renderer has no `unref`, which is why it is optional.
   ;(timer as unknown as { unref?: () => void }).unref?.()
@@ -276,6 +290,8 @@ export async function wakeQueue(
   client: QueueFeedClient = trpcClient,
 ): Promise<void> {
   const chat = senderForSubChat(subChatId)
+  // The pane is here, so the retry sequence for this sub-chat is over.
+  if (chat) wakeRetries.delete(subChatId)
   if (!chat) {
     // A window mounts its panes after the feed has already replayed, so a wake
     // can arrive before anything here can send for the sub-chat, and a pane
@@ -320,7 +336,11 @@ export async function wakeQueue(
  */
 async function returnClaimedItem(item: QueueItem, client: QueueFeedClient): Promise<void> {
   try {
-    await client.queue.requeue.mutate({ subChatId: item.subChatId, itemId: item.id })
+    await client.queue.requeue.mutate({
+      subChatId: item.subChatId,
+      itemId: item.id,
+      owner: ownerFor(client),
+    })
   } catch (error) {
     // An un-handed claim is released by the next claim for the sub-chat, so a
     // failed hand-back is recoverable rather than lost.
@@ -360,7 +380,13 @@ export async function sendQueueItemNow(
     // A click that raced this sub-chat's deletion must not start a send for a
     // row main no longer has. A send that already started cannot be recalled;
     // this stops the ones that had not started yet.
-    if (unknownSubChatIds.has(subChatId)) return false
+    if (unknownSubChatIds.has(subChatId)) {
+      // The clear the user asked for may have failed, in which case this row
+      // still exists in main and would otherwise sit `sending` with nobody to
+      // send it. Hand it back before dropping it.
+      await returnClaimedItem(item, client)
+      return false
+    }
     const outcome = await deliverClaimedItem(item, chat, client, stopCurrent)
     // The user sent something, which ends the pause. Doing it after the send
     // started means the wake this causes cannot race the send itself.
@@ -438,6 +464,10 @@ export async function clearQueueItems(
     const cleared = await client.queue.clear.mutate({ subChatId })
     if (cleared > 0) console.log(`[queue] cleared ${cleared} rows`)
   } catch (error) {
+    // Main still has this sub-chat's rows, so the mark that says it has none
+    // would keep every later wake from sending them. Forget it: the queue the
+    // clear did not drop stays the queue the window sends from.
+    unknownSubChatIds.delete(subChatId)
     console.error("[queue] clear failed:", error)
   }
 }
@@ -510,6 +540,11 @@ export function startQueueSync(
       clearTimeout(retryTimer)
       retryTimer = null
     }
+    // A retry still pending would wake, claim and send for a window that has
+    // stopped syncing, so it goes with the subscription.
+    for (const timer of wakeTimers.values()) clearTimeout(timer)
+    wakeTimers.clear()
+    wakeRetries.clear()
     subscription?.unsubscribe()
     subscription = null
     stopStatus()

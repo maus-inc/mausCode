@@ -15,6 +15,8 @@ const held = vi.hoisted(() => ({
   waitForTurnStart: vi.fn(),
   cancel: vi.fn(),
   toastError: vi.fn(),
+  clearLoading: vi.fn(),
+  setLoading: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({ toast: { error: held.toastError } }))
@@ -22,8 +24,8 @@ vi.mock("./queue-parts", () => ({ buildQueueMessageParts: () => [{ type: "text",
 vi.mock("../../../lib/analytics", () => ({ trackMessageSent: () => {} }))
 vi.mock("../../../lib/jotai-store", () => ({ appStore: { get: () => ({}), set: () => {} } }))
 vi.mock("../atoms", () => ({
-  clearLoading: () => {},
-  setLoading: () => {},
+  clearLoading: held.clearLoading,
+  setLoading: held.setLoading,
   loadingSubChatsAtom: {},
 }))
 vi.mock("../stores/agent-chat-store", () => ({
@@ -60,6 +62,8 @@ describe("queue send", () => {
     held.waitForTurnStart.mockReset()
     held.cancel.mockReset()
     held.toastError.mockReset()
+    held.clearLoading.mockReset()
+    held.setLoading.mockReset()
     held.markHanded.mockImplementation(async () => {
       held.order.push("handed")
       return true
@@ -97,6 +101,36 @@ describe("queue send", () => {
     // response for the message it accepted, and resending is the only way to
     // duplicate it.
     expect(held.toastError).not.toHaveBeenCalled()
+    // No turn reported itself, so nothing else clears the loading mark this
+    // send set; leaving it would show the sub-chat as loading for good.
+    expect(held.clearLoading).toHaveBeenCalledWith(expect.any(Function), "sub-a")
+  })
+
+  it("parks the hand-off when the send call never settles after the wait", async () => {
+    vi.useFakeTimers()
+    // No turn reported itself inside the wait, and the transport then never
+    // answers either: the row may not stay `sending` for the life of the window.
+    held.waitForTurnStart.mockReturnValue({
+      promise: new Promise<void>(() => {}),
+      expired: Promise.resolve(),
+      cancel: held.cancel,
+    })
+    held.sendMessage.mockImplementation(() => {
+      held.order.push("send")
+      return new Promise<void>(() => {})
+    })
+
+    const sending = sendClaimedQueueItem(input())
+    // Let the sender reach the wait on the send call, then take the wait past
+    // its grace.
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    const result = await sending
+
+    expect(result).toBe("uncertain")
+    expect(held.toastError).toHaveBeenCalled()
+    expect(held.clearLoading).toHaveBeenCalledWith(expect.any(Function), "sub-a")
+    vi.useRealTimers()
   })
 
   it("sends nothing when the claim moved on", async () => {
