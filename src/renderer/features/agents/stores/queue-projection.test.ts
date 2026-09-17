@@ -89,11 +89,13 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
       },
     },
     complete: {
-      mutate: async (input: { subChatId: string; itemId: string }) => {
+      // A `vi.fn` so a test can make one attempt fail; the retry is otherwise
+      // invisible through this fake.
+      mutate: vi.fn(async (input: { subChatId: string; itemId: string }) => {
         completed.push(input.itemId)
         calls.push(`complete:${input.itemId}`)
         return true
-      },
+      }),
     },
     requeue: {
       mutate: async (input: { subChatId: string; itemId: string; owner: string }) => {
@@ -393,6 +395,34 @@ describe("queue projection", () => {
     // The item is claimed and its bookkeeping finishes before the resume, so
     // the wake the resume causes cannot claim another row for this window.
     expect(fake.calls).toEqual(["claim:q1", "complete:q1", "setPaused:false"])
+  })
+
+  it("retries the bookkeeping once when the first call fails", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+    fake.queue.complete.mutate.mockRejectedValueOnce(new Error("db is busy"))
+
+    await wakeQueue("sub-a", fake.client)
+
+    // A send that went out must not stay hidden as `sending` because one
+    // bookkeeping call failed on the way home.
+    expect(fake.completed).toEqual(["q1"])
+    expect(sendClaimedQueueItem).toHaveBeenCalledTimes(1)
+  })
+
+  it("stops after the second failed bookkeeping call", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+    fake.queue.complete.mutate.mockRejectedValue(new Error("db is busy"))
+
+    await wakeQueue("sub-a", fake.client)
+
+    // Nothing recorded, and no third call: main still holds the row and settles
+    // it on the next wake of this sub-chat, or at startup recovery.
+    expect(fake.completed).toEqual([])
+    expect(fake.queue.complete.mutate).toHaveBeenCalledTimes(2)
   })
 
   it("stops re-asking a pane that never showed up, instead of polling for it", async () => {

@@ -210,7 +210,7 @@ async function deliverClaimedItem(
     stopCurrent,
     markHanded: () => client.queue.markHanded.mutate({ subChatId, itemId: item.id, owner }),
   })
-  try {
+  const recordOutcome = async (): Promise<void> => {
     switch (result) {
       case "sent":
         await client.queue.complete.mutate({ subChatId, itemId: item.id })
@@ -232,10 +232,20 @@ async function deliverClaimedItem(
         // The claim was cleared or taken over; it is not this window's row.
         break
     }
+  }
+  // Two attempts: each of these calls is idempotent for a row that is still
+  // `sending`, so a repeat after a transient failure is safe, and without it a
+  // single failed call leaves the row hidden until the next wake of this
+  // sub-chat parks it or startup recovery does.
+  try {
+    await recordOutcome()
   } catch (error) {
-    // A failed bookkeeping call leaves the row `sending`, which the stall
-    // recovery in main and startup recovery both know how to settle.
-    console.error("[queue] could not record the send outcome:", error)
+    console.error("[queue] could not record the send outcome, retrying once:", error)
+    try {
+      await recordOutcome()
+    } catch (retryError) {
+      console.error("[queue] the send outcome is unrecorded; the row stays `sending`:", retryError)
+    }
   }
   return result
 }
