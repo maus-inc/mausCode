@@ -3,8 +3,12 @@
  * turn to start against the send settling, so the wait has to give the
  * subscription back when the caller stops waiting.
  */
-import { beforeEach, describe, expect, it } from "vitest"
-import { useStreamingStatusStore, waitForTurnStart } from "./streaming-status-store"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  useStreamingStatusStore,
+  waitForStreamingReady,
+  waitForTurnStart,
+} from "./streaming-status-store"
 
 describe("waitForTurnStart", () => {
   beforeEach(() => {
@@ -57,5 +61,46 @@ describe("waitForTurnStart", () => {
 
     expect(resolved).toBe(false)
     waiter.cancel()
+  })
+})
+
+describe("waitForStreamingReady", () => {
+  beforeEach(() => {
+    useStreamingStatusStore.setState({ statuses: {} })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("resolves true at once when no turn is streaming", async () => {
+    await expect(waitForStreamingReady("sub-a")).resolves.toBe(true)
+  })
+
+  it("resolves true when the turn reports that it is done", async () => {
+    useStreamingStatusStore.getState().setStatus("sub-a", "streaming")
+    const ready = waitForStreamingReady("sub-a")
+
+    useStreamingStatusStore.getState().setStatus("sub-a", "ready")
+
+    await expect(ready).resolves.toBe(true)
+  })
+
+  it("resolves false when the turn never reports that it stopped", async () => {
+    vi.useFakeTimers()
+    useStreamingStatusStore.getState().setStatus("sub-a", "streaming")
+    const ready = waitForStreamingReady("sub-a")
+    let settled: boolean | null = null
+    void ready.then((value) => {
+      settled = value
+    })
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    const answer = await ready
+    await Promise.resolve()
+
+    // A caller that starts a send anyway would run two turns at once.
+    expect(answer).toBe(false)
+    expect(settled).toBe(false)
   })
 })

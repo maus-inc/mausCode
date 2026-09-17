@@ -2066,9 +2066,10 @@ const ChatViewInner = memo(function ChatViewInner({
   // main process (roadmap step 08); this window only projects them and sends a
   // claimed item.
   const queue = useQueueProjection((s) => s.queues[subChatId] ?? EMPTY_PROJECTED_QUEUE)
-  const addToQueue = useCallback((targetSubChatId: string, payload: QueuePayload) => {
-    void addQueueItem(targetSubChatId, payload)
-  }, [])
+  const addToQueue = useCallback(
+    (targetSubChatId: string, payload: QueuePayload) => addQueueItem(targetSubChatId, payload),
+    [],
+  )
   const removeFromQueue = useCallback((targetSubChatId: string, itemId: string) => {
     void removeQueueItemFromMain(targetSubChatId, itemId)
   }, [])
@@ -2286,9 +2287,13 @@ const ChatViewInner = memo(function ChatViewInner({
 
       // If streaming, add to queue
       if (isStreamingRef.current) {
-        addToQueue(subChatId, { message })
-        toast.success("Reply queued", {
-          description: "Will be sent when current response completes",
+        // Only claim it is queued once main has the row; a refused add already
+        // told the user why.
+        void addToQueue(subChatId, { message }).then((queued) => {
+          if (!queued) return
+          toast.success("Reply queued", {
+            description: "Will be sent when current response completes",
+          })
         })
       } else {
         // Send directly, which is an explicit send: a paused queue restarts.
@@ -3353,6 +3358,10 @@ const ChatViewInner = memo(function ChatViewInner({
         e.preventDefault()
         // Mark as manually aborted to prevent completion sound
         agentChatStore.setManuallyAborted(subChatId, true)
+        // Stopping means "not now": hold the queue back, as the stop button
+        // does. Without this, the next queued item would start the moment the
+        // turn reports that it stopped.
+        void setQueuePaused(subChatId, true)
         await stop()
       }
     }
@@ -3610,7 +3619,7 @@ const ChatViewInner = memo(function ChatViewInner({
       const queuedDiffTextContexts = currentDiffTextContexts.map(toQueuedDiffTextContext)
       const queuedPastedTexts = currentPastedTexts.map(toQueuedPastedText)
 
-      addToQueue(subChatId, {
+      const queued = await addToQueue(subChatId, {
         message: inputValue.trim(),
         images: queuedImages.length > 0 ? queuedImages : undefined,
         files: queuedFiles.length > 0 ? queuedFiles : undefined,
@@ -3618,6 +3627,9 @@ const ChatViewInner = memo(function ChatViewInner({
         diffTextContexts: queuedDiffTextContexts.length > 0 ? queuedDiffTextContexts : undefined,
         pastedTexts: queuedPastedTexts.length > 0 ? queuedPastedTexts : undefined,
       })
+      // A refused add must not take the message with it; leave the editor,
+      // draft and attachments as they were so the user can retry them.
+      if (!queued) return
 
       // Clear input and attachments
       editorRef.current?.clear()
@@ -3853,6 +3865,9 @@ const ChatViewInner = memo(function ChatViewInner({
   const handleSendFromQueue = useCallback(
     async (itemId: string) => {
       clearPushedMark()
+      // A click that loses the row (another window is already sending it, or
+      // this window is) returns without stopping anything: the winning sender
+      // owns the turn, and the item is on its way.
       await sendQueueItemNow(subChatId, itemId, async () => {
         if (isStreamingRef.current) {
           await handleStop()
@@ -3893,7 +3908,9 @@ const ChatViewInner = memo(function ChatViewInner({
     // message starts fresh without needing an explicit cancel mutation.
     if (isStreamingRef.current) {
       await handleStop()
-      await waitForStreamingReady(subChatId)
+      // Sending into a session whose turn never came back would run two turns
+      // at once; better to leave the text in the input box.
+      if (!(await waitForStreamingReady(subChatId))) return
     }
 
     // Auto-restore archived workspace when sending a message

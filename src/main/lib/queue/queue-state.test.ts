@@ -165,6 +165,26 @@ describe("queue store", () => {
       expect(store.claim({ subChatId })?.payload.message).toBe("one")
     })
 
+    it("refuses Send now for a second row while one is already being sent", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      const second = store.add({ subChatId, payload: payload("two") })
+      // A window holds the first row while its send is starting.
+      expect(store.claim({ subChatId, itemId: first.id })?.id).toBe(first.id)
+
+      // Send now skips the idle gate, but not the one-send-at-a-time rule:
+      // two claimed rows would be two turns on one session.
+      expect(store.claim({ subChatId, itemId: second.id })).toBeNull()
+      expect(store.list(subChatId).filter((item) => item.status === "sending")).toHaveLength(1)
+    })
+
+    it("gives the same row back to Send now after the row is put back", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(store.claim({ subChatId, itemId: first.id })?.id).toBe(first.id)
+      store.requeue(subChatId, first.id)
+
+      expect(store.claim({ subChatId, itemId: first.id })?.id).toBe(first.id)
+    })
+
     it("claims a specific item for Send now without the idle gate", () => {
       store.add({ subChatId, payload: payload("one") })
       const second = store.add({ subChatId, payload: payload("two") })

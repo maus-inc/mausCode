@@ -155,6 +155,13 @@ in `run-feed-projection.ts`, not the queue's.
 - A window that dies between claim and send leaves a `sending` row, which
   startup recovery returns to `pending`. The window is a few milliseconds wide,
   and it is the only path that can send a message twice.
+  - While such a row exists, dispatch for that sub-chat is refused (a claim
+    waits for the sub-chat to be idle) and Send now cannot take it either, so
+    the sub-chat's queue is stuck until the app restarts. A window that closes
+    while the app keeps running (macOS, all windows closed) is the case that
+    reaches this without a restart. Steps 16 and 19 own the fix because it
+    needs a liveness check or a staleness bound, which is the same interval
+    question §15 hands them.
 - The other eleven provider routers still write no run row, a gap step 07 filed
   as its own follow-up. Main cannot see their turn as busy; the claiming
   window's status is the guard, as it is today.

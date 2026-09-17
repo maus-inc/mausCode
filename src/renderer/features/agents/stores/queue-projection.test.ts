@@ -42,6 +42,8 @@ function fakeClient(options: { claimed?: QueueItem[] } = {}) {
   const completed: string[] = []
   const requeued: string[] = []
   const paused: Array<{ subChatId: string; paused: boolean }> = []
+  /** Every claim/send/complete/resume in the order they reached main. */
+  const calls: string[] = []
   const queue = {
     claimed: options.claimed ?? [],
     subscribe: {
@@ -53,12 +55,14 @@ function fakeClient(options: { claimed?: QueueItem[] } = {}) {
     claim: {
       mutate: async (input: { subChatId: string; itemId?: string }) => {
         claims.push(input.itemId ?? `head:${input.subChatId}`)
+        calls.push(`claim:${input.itemId ?? "head"}`)
         return queue.claimed.shift() ?? null
       },
     },
     complete: {
       mutate: async (input: { subChatId: string; itemId: string }) => {
         completed.push(input.itemId)
+        calls.push(`complete:${input.itemId}`)
         return true
       },
     },
@@ -71,6 +75,7 @@ function fakeClient(options: { claimed?: QueueItem[] } = {}) {
     setPaused: {
       mutate: async (input: { subChatId: string; paused: boolean }) => {
         paused.push(input)
+        calls.push(`setPaused:${input.paused}`)
         return 0
       },
     },
@@ -81,6 +86,7 @@ function fakeClient(options: { claimed?: QueueItem[] } = {}) {
     completed,
     requeued,
     paused,
+    calls,
   }
 }
 
@@ -219,5 +225,8 @@ describe("queue projection", () => {
     expect(fake.paused).toEqual([{ subChatId: "sub-a", paused: false }])
     expect(fake.claims).toEqual(["q1"])
     expect(fake.completed).toEqual(["q1"])
+    // Resuming first would let the feed's wake claim another row for this
+    // window, so the send would go out beside the item the user picked.
+    expect(fake.calls).toEqual(["claim:q1", "complete:q1", "setPaused:false"])
   })
 })

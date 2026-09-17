@@ -249,7 +249,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
       .returning()
       .all()
     if (removed.length === 0) return false
-    console.log(`[queue] complete ${itemId.slice(-8)} sub=${subChatId.slice(-8)}`)
+    console.log(`[queue] remove ${itemId.slice(-8)} sub=${subChatId.slice(-8)}`)
     emit(subChatId)
     return true
   }
@@ -321,6 +321,17 @@ export function createQueueStore(db: QueueDb): QueueStore {
             .get()
         : rowByStatusTx(tx, input.subChatId, "pending")
       if (!row || row.status === "sending") return null
+
+      if (input.itemId) {
+        // Send now skips the run gate below, because the caller stops the turn
+        // in flight first. It may not skip this: one send per sub-chat at a
+        // time, so a second Send now cannot start a parallel turn. A row is
+        // `sending` only while a claim is being handed over or a send is
+        // starting, since the claiming window deletes it as soon as the turn
+        // reports that it started.
+        const inFlight = rowByStatusTx(tx, input.subChatId, "sending")
+        if (inFlight && inFlight.id !== row.id) return null
+      }
 
       if (!input.itemId) {
         // A dispatch waits for the sub-chat to be idle. The run table is the

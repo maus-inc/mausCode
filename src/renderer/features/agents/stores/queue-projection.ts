@@ -45,6 +45,10 @@ export const useQueueProjection = create<QueueProjectionState>()(
   subscribeWithSelector((set) => ({
     queues: {},
     setQueue: (subChatId, items) => {
+      // A feed that carries a row means the sub-chat has a queue again. An
+      // empty feed must not clear the mark: the clear the mark was set for
+      // produces one, and a claim still in flight would arrive after it.
+      if (items.length > 0) unknownSubChatIds.delete(subChatId)
       set((state) => {
         const current = state.queues[subChatId]
         if (
@@ -107,6 +111,12 @@ export type QueueFeedClient = {
 
 /** Sub-chats this window is sending for, so two wakes cannot send twice. */
 const inFlightSends = new Set<string>()
+/**
+ * Sub-chats this window knows have no queue left in main. Used to drop a claim
+ * that arrives after the queue was cleared, which the feed cannot show: a
+ * claimed row is hidden from the feed.
+ */
+const unknownSubChatIds = new Set<string>()
 /** Sub-chats with a claim in flight, so a burst of wakes asks main once. */
 const claimAttempts = new Set<string>()
 
@@ -131,11 +141,7 @@ async function deliverClaimedItem(
   stopCurrent?: () => Promise<void>,
 ): Promise<void> {
   const subChatId = item.subChatId
-  inFlightSends.add(subChatId)
-  // The in-flight marker clears when the send settles, whichever way it went.
-  const result = await sendClaimedQueueItem({ item, chat, stopCurrent }).finally(() => {
-    inFlightSends.delete(subChatId)
-  })
+  const result = await sendClaimedQueueItem({ item, chat, stopCurrent })
   try {
     if (result === "sent") {
       await client.queue.complete.mutate({ subChatId, itemId: item.id })
@@ -175,7 +181,15 @@ export async function wakeQueue(
     claimAttempts.delete(subChatId)
   }
   if (!item) return
-  await deliverClaimedItem(item, chat, client)
+  // The claim may have been answered just as the sub-chat was deleted, and a
+  // claimed row is hidden from the feed, so nothing else would report it.
+  if (unknownSubChatIds.has(subChatId)) return
+  inFlightSends.add(subChatId)
+  try {
+    await deliverClaimedItem(item, chat, client)
+  } finally {
+    inFlightSends.delete(subChatId)
+  }
 }
 
 /**
@@ -189,18 +203,26 @@ export async function sendQueueItemNow(
   client: QueueFeedClient = trpcClient,
 ): Promise<boolean> {
   if (inFlightSends.has(subChatId)) return false
-  const chat = agentChatStore.get(subChatId)
-  if (!chat) return false
-  // Claim the row the user picked before anything else, so the resume below
-  // cannot make main hand a different item to this window first. Main allows a
-  // paused row through for Send now.
-  const item = await client.queue.claim.mutate({ subChatId, itemId })
-  if (!item) return false
-  await deliverClaimedItem(item, chat, client, stopCurrent)
-  // The user sent something, which ends the pause. Doing it after the send
-  // started means the wake this causes cannot race the send itself.
-  await resumeQueue(subChatId, client)
-  return true
+  // Take the sub-chat's in-flight slot before the first await. Two quick
+  // clicks would otherwise both reach main, which hands out one row per
+  // request, and both rows would be sent at once.
+  inFlightSends.add(subChatId)
+  try {
+    const chat = agentChatStore.get(subChatId)
+    if (!chat) return false
+    // Claim the row the user picked before anything else, so the resume below
+    // cannot make main hand a different item to this window first. Main allows
+    // a paused row through for Send now.
+    const item = await client.queue.claim.mutate({ subChatId, itemId })
+    if (!item) return false
+    await deliverClaimedItem(item, chat, client, stopCurrent)
+    // The user sent something, which ends the pause. Doing it after the send
+    // started means the wake this causes cannot race the send itself.
+    await resumeQueue(subChatId, client)
+    return true
+  } finally {
+    inFlightSends.delete(subChatId)
+  }
 }
 
 /** An explicit send is what ends a pause, so the queue drains again. */
@@ -251,11 +273,24 @@ export async function removeQueueItem(
   }
 }
 
-export function clearQueueItems(subChatId: string, client: QueueFeedClient = trpcClient): void {
+/**
+ * Drop a sub-chat's queue, in this window and in main. The sub-chat is marked
+ * empty before main is asked, so a claim already in flight cannot drop a row
+ * back into a queue the user just deleted. Resolves once main has cleared, for
+ * callers that must not close the sub-chat before its rows are gone.
+ */
+export async function clearQueueItems(
+  subChatId: string,
+  client: QueueFeedClient = trpcClient,
+): Promise<void> {
+  unknownSubChatIds.add(subChatId)
   useQueueProjection.getState().dropQueue(subChatId)
-  void client.queue.clear.mutate({ subChatId }).catch((error: unknown) => {
+  try {
+    const cleared = await client.queue.clear.mutate({ subChatId })
+    if (cleared > 0) console.log(`[queue] cleared ${cleared} rows`)
+  } catch (error) {
     console.error("[queue] clear failed:", error)
-  })
+  }
 }
 
 export async function setQueuePaused(

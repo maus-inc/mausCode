@@ -77,7 +77,11 @@ export async function sendClaimedQueueItem({
   try {
     if (stopCurrent) {
       await stopCurrent()
-      await waitForStreamingReady(subChatId)
+      // If the turn in flight does not report itself done in time, keep this
+      // item in the queue instead of starting a second turn beside it.
+      if (!(await waitForStreamingReady(subChatId))) {
+        return "failed"
+      }
     }
 
     const parts = buildQueueMessageParts(item.payload)

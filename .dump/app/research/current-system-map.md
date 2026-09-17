@@ -373,7 +373,7 @@ existing `UIMessageChunk` stream so renderer code keeps working during migration
 | 10 | Skills/agents/commands markdown stores | skill tool + agent registry | ADAPT: same file formats; daemon resolves `active_skill`; keep CRUD routers as editors |
 | 11 | Provider config (accounts/customConfig/ollama) | provider catalog + `set/clear_api_key`, `set_model` | REPLACE plumbing; keep onboarding UI flows; Ollama → openai-compatible endpoint entry |
 | 12 | `sub_chats.messages` JSON blob | daemon transcripts + `get_history` | REPLACE gradually: daemon becomes source of truth; DB keeps metadata/index |
-| 13 | Queue (renderer-only) | daemon `soft_interrupt`/queue + bg | MOVE server-side in phase 2; keep renderer queue until then |
+| 13 | Queue (main owns rows, window sends) | daemon `soft_interrupt`/queue + bg | MOVE the send to the daemon in phase 2; step 08 already moved the rows and their order into main |
 | 14 | Rollback stash | `rewind/rewind_undo` + git stash | COMBINE: transcript rewind via runtime, tree rewind via stash (already pairs well) |
 | 15 | Compaction (SDK-side) | `compact` + compaction core | REPLACE (explicit event `compacted`) |
 | 16 | `import-core` + `ResumeTarget` | — (new capability) | SEED for migration engine: Claude/Codex/OpenCode/Cursor/Pi session import |

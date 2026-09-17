@@ -58,7 +58,10 @@ memory, rendering or file weight. Startup gains the recovery call above, memory
 loses the renderer store and its per-window subscriptions, and no renderer asset
 weight changed. The row shape is bounded by `src/shared/queue-item.ts` (text
 200,000 bytes, long text 400,000, base64 attachments 24 MB, 20 attachments per
-kind), so a queue of 100 text items is under 2 MB in the database.
+kind). The bound, not a typical size, is what the schema guarantees: 100 text
+items can reach 20 MB, while an ordinary queue of short messages stays in the
+tens of kilobytes, because a payload carries only what the user typed plus the
+mention tokens that expand to it.
 
 ## Driver caveat
 

@@ -521,8 +521,12 @@ const WorkspaceSubChats = React.memo(function WorkspaceSubChats({
 
   // Delete sub-chat mutation — actually removes from the database
   const deleteSubChatMutation = trpc.chats.deleteSubChat.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       if (archiveConfirmId) {
+        // Forget the deleted sub-chat's queue cards before the tab closes, and
+        // let a claim in flight settle first: main cascades the rows with the
+        // sub-chat, so this window is the only place they can outlive it.
+        await useAgentSubChatStore.getState().clearQueue(archiveConfirmId)
         // Remove from Zustand open tabs + allSubChats
         useAgentSubChatStore.getState().removeFromOpenSubChats(archiveConfirmId)
         // Invalidate the workspace query so the list refreshes

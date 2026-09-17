@@ -56,28 +56,33 @@ export const useStreamingStatusStore = create<StreamingStatusState>()(
   })),
 )
 
-/** Safety timeout for a wait, so no caller can hang forever on a status that
- *  never arrives. */
+/** How long a caller waits for a turn to stop before it gives up. */
 const STREAMING_READY_TIMEOUT_MS = 30_000
 
 /**
  * Wait until a sub-chat's status leaves streaming, by subscribing to the
- * status store. Resolves immediately when it is already done, and after the
- * timeout when the store never reports it, so a caller is never stuck.
+ * status store. Resolves `true` when it is already done or when the store
+ * reports it.
+ *
+ * Resolves `false` when the status never arrives inside the timeout. A caller
+ * that sends into the sub-chat must treat `false` as "the previous turn is
+ * still live" and stop, because starting a send there would run two turns on
+ * one session. Waiting is only a bound on how long the caller holds off, never
+ * a licence to proceed.
  */
-export function waitForStreamingReady(subChatId: string): Promise<void> {
+export function waitForStreamingReady(subChatId: string): Promise<boolean> {
   return new Promise((resolve) => {
     if (!useStreamingStatusStore.getState().isStreaming(subChatId)) {
-      resolve()
+      resolve(true)
       return
     }
 
     const timeout = setTimeout(() => {
       console.warn(
-        `[waitForStreamingReady] Timed out after ${STREAMING_READY_TIMEOUT_MS}ms for subChat ${subChatId.slice(-8)}, proceeding anyway`,
+        `[waitForStreamingReady] Timed out after ${STREAMING_READY_TIMEOUT_MS}ms for subChat ${subChatId.slice(-8)}; the turn is still live`,
       )
       unsub()
-      resolve()
+      resolve(false)
     }, STREAMING_READY_TIMEOUT_MS)
 
     const unsub = useStreamingStatusStore.subscribe(
@@ -86,7 +91,7 @@ export function waitForStreamingReady(subChatId: string): Promise<void> {
         if (status === "ready" || status === undefined) {
           clearTimeout(timeout)
           unsub()
-          resolve()
+          resolve(true)
         }
       },
     )
