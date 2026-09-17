@@ -116,7 +116,8 @@ must close (one `AgentRuntime` interface, see §17).
 - **Zustand**: `sub-chat-store` (tabs: active/open/pinned/all + up-to-4 split panes,
   persisted per window+chat in localStorage), `message-queue-store` (per-subChat
   FIFO with atomic pop/prepend + sent triggers), `streaming-status-store`,
-  `agent-chat-store`, `changes-store`.
+  `agent-chat-store`, `changes-store`. `message-queue-store` was deleted on
+  2026-09-17 by roadmap step 08; the rows moved to main as `queue_items`.
 - **React Query** (server state via tRPC): stale 5s, gc 60s, `refetchOnWindowFocus:
   false`, `retry: false`, global client exported for non-React use (`TRPCProvider`).
 - Conventions are sound (per-message atom isolation during streaming is genuinely
@@ -215,7 +216,9 @@ must close (one `AgentRuntime` interface, see §17).
   (`activeSessions`/`activeStreams`); quitting kills them (close confirmation via
   `hasActiveClaudeSessions/abortAllClaudeSessions`, same for Codex).
 - Queueing exists only in renderer (`message-queue-store` + `lib/queue-utils` +
-  QueueProcessor auto-send) — dies with the window.
+  QueueProcessor auto-send) — dies with the window. No longer true as of
+  2026-09-17: roadmap step 08 put the rows in main, so a queued message
+  survives a reload and a closed window; the window only performs the send.
 - `automations/` views (cards, templates, inbox, triggers) and background-agent
   marketing are hosted-21st.dev features; CONTRIBUTING confirms Background agents =
   hosted-only. `sandbox-import` lets desktop adopt a formerly-remote chat.
