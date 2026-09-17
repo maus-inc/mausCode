@@ -263,9 +263,13 @@ const wakeTimers = new Map<string, ReturnType<typeof setTimeout>>()
  * knows has rows is retried, and only a bounded number of times. The count is
  * the sequence's, not the attempt's: it is dropped when the pane shows up or
  * the queue is gone, never as a retry starts, or every retry would restart the
- * sequence and the limit would bound nothing.
+ * sequence and the limit would bound nothing. An attempt is spent when a retry
+ * is scheduled, and a wake that arrives while one is pending spends nothing:
+ * the pending retry is already the next question, and letting a burst of feed
+ * updates spend the budget would leave the pane no retry at all.
  */
 function scheduleWakeRetry(subChatId: string, client: QueueFeedClient): void {
+  if (wakeTimers.has(subChatId)) return
   const state = useQueueProjection.getState()
   const queued =
     (state.queues[subChatId]?.length ?? 0) > 0 || (state.hiddenCounts[subChatId] ?? 0) > 0
@@ -281,10 +285,7 @@ function scheduleWakeRetry(subChatId: string, client: QueueFeedClient): void {
     wakeTimers.delete(subChatId)
     void wakeQueue(subChatId, client)
   }, WAKE_RETRY_DELAY_MS)
-  // One pending retry per sub-chat, so the map is what stopping the feed has to
-  // clear and no earlier timer is left behind for the same pane.
-  const pending = wakeTimers.get(subChatId)
-  if (pending) clearTimeout(pending)
+  // One pending retry per sub-chat, which is also what stopping the feed clears.
   wakeTimers.set(subChatId, timer)
   // Node keeps its process alive for a pending timer and the tests run this
   // module there; the renderer has no `unref`, which is why it is optional.
@@ -468,16 +469,23 @@ export async function clearQueueItems(
   subChatId: string,
   client: QueueFeedClient = trpcClient,
 ): Promise<void> {
+  const state = useQueueProjection.getState()
+  // What the card held, kept for a clear that does not land: main still has
+  // those rows then, and the queue the user failed to delete is the queue the
+  // card has to keep showing.
+  const cards = state.queues[subChatId] ?? EMPTY_PROJECTED_QUEUE
+  const hidden = state.hiddenCounts[subChatId] ?? 0
   unknownSubChatIds.add(subChatId)
-  useQueueProjection.getState().dropQueue(subChatId)
+  state.dropQueue(subChatId)
   try {
     const cleared = await client.queue.clear.mutate({ subChatId })
     if (cleared > 0) console.log(`[queue] cleared ${cleared} rows`)
   } catch (error) {
     // Main still has this sub-chat's rows, so the mark that says it has none
-    // would keep every later wake from sending them. Forget it: the queue the
-    // clear did not drop stays the queue the window sends from.
+    // would keep every later wake from sending them, and a dropped card would
+    // hide rows that are still there. Forget the mark and put the card back.
     unknownSubChatIds.delete(subChatId)
+    useQueueProjection.getState().setQueue(subChatId, cards, hidden)
     console.error("[queue] clear failed:", error)
   }
 }

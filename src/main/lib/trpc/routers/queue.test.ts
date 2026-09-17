@@ -4,7 +4,7 @@
  * test database, including what the far side of the boundary bounds.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { QueueItem } from "../../../../shared/queue-item"
+import { QUEUE_LONG_TEXT_CAP, type QueueItem } from "../../../../shared/queue-item"
 import { openMigratedTestDb, seedSubChat, type TestDb } from "../../db/test-fixtures"
 import { createQueueStore, type QueueFeedItem, type QueueStore } from "../../queue/queue-state"
 import { queueRouter } from "./queue"
@@ -47,15 +47,14 @@ describe("queue router", () => {
     expect(items.map((item) => item.payload.message)).toEqual(["one", "two"])
   })
 
-  it("rejects a payload past the cap the boundary owns", async () => {
+  it("accepts a payload at the cap and rejects one past it", async () => {
+    const atCap = "x".repeat(QUEUE_LONG_TEXT_CAP)
+
+    // The boundary is the row's: one character past it is a payload the main
+    // process refuses instead of storing.
+    await expect(caller.add({ subChatId, payload: { message: atCap } })).resolves.toBeDefined()
     await expect(
-      caller.add({ subChatId, payload: { message: "x", pastedTexts: [] } }),
-    ).resolves.toBeDefined()
-    await expect(
-      caller.add({
-        subChatId,
-        payload: { message: "x".repeat(400_001) },
-      }),
+      caller.add({ subChatId, payload: { message: `${atCap}x` } }),
     ).rejects.toThrowError()
   })
 
@@ -112,11 +111,12 @@ describe("queue router", () => {
 
     await expect(caller.remove({ subChatId, itemId: first.id })).resolves.toBe(true)
     await expect(caller.remove({ subChatId, itemId: first.id })).resolves.toBe(false)
+    // The row that was not asked for is still there, and it is the second one.
     await expect(caller.list({ subChatId })).resolves.toHaveLength(1)
+    await expect(caller.list({ subChatId })).resolves.toMatchObject([{ id: second.id }])
 
     await expect(caller.clear({ subChatId })).resolves.toBe(1)
     await expect(caller.list({ subChatId })).resolves.toHaveLength(0)
-    expect(second.id).toBeDefined()
   })
 
   it("moves an item to a visible index", async () => {

@@ -40,7 +40,7 @@ vi.mock("../stores/streaming-status-store", () => ({
   waitForTurnStart: held.waitForTurnStart,
 }))
 
-import { sendClaimedQueueItem } from "./queue-send"
+import { sendClaimedQueueItem, subscribeQueueSent } from "./queue-send"
 
 function item(): QueueItem {
   return {
@@ -158,6 +158,37 @@ describe("queue send", () => {
 
     expect(result).toBe("uncertain")
     expect(held.toastError).toHaveBeenCalled()
+  })
+
+  it("signals the pane to scroll when the payload leaves, and only then", async () => {
+    const sent: string[] = []
+    const unsubscribe = subscribeQueueSent((subChatId) => sent.push(subChatId))
+    try {
+      // A claim that moved on sends nothing, so the pane has nothing to scroll
+      // to; a listener told otherwise would jump the view for no message.
+      held.markHanded.mockResolvedValue(false)
+      await sendClaimedQueueItem(input())
+      expect(sent).toEqual([])
+
+      held.markHanded.mockImplementation(async () => {
+        held.order.push("handed")
+        return true
+      })
+      await sendClaimedQueueItem(input())
+      expect(sent).toEqual(["sub-a"])
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it("drops the scroll listener when the pane unmounts", async () => {
+    const sent: string[] = []
+    const unsubscribe = subscribeQueueSent((subChatId) => sent.push(subChatId))
+    unsubscribe()
+
+    await sendClaimedQueueItem(input())
+
+    expect(sent).toEqual([])
   })
 
   it("retires the row when the turn started, even if the turn then fails", async () => {

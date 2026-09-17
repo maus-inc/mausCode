@@ -240,11 +240,13 @@ export const queueItems = sqliteTable(
       .$defaultFn(() => new Date()),
     dispatchedAt: integer("dispatched_at", { mode: "timestamp" }),
     /**
-     * The window session that took this row. A claim may only be handed over
-     * by its owner, and a claim whose owner never reached the hand-off can be
-     * taken over, which is what unsticks a queue after a window dies. The
-     * value is the renderer session token, not a window id, because a reload
-     * keeps the window and replaces the session.
+     * The window that took this row: the renderer's stable window id ("main",
+     * "window-2"), which is also the name the main process releases a closed
+     * window's claims under. A claim may only be handed over by its owner, and
+     * an un-handed claim older than `CLAIM_LEASE_MS` may be taken over, which
+     * unsticks a queue after a window dies. A reload keeps the id, so the
+     * reloaded window can park its own handed row at once instead of waiting
+     * out that lease.
      */
     claimedBy: text("claimed_by"),
     /**

@@ -8,16 +8,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { QueueItem } from "../../../../shared/queue-item"
 
 const sendClaimedQueueItem = vi.hoisted(() => vi.fn())
+const toastError = vi.hoisted(() => vi.fn())
 vi.mock("../lib/queue-send", () => ({ sendClaimedQueueItem }))
+vi.mock("sonner", () => ({ toast: { error: toastError } }))
 
 import type { QueueFeedItem } from "../../../../main/lib/trpc/routers/queue"
 import { agentChatStore } from "./agent-chat-store"
 import {
+  addQueueItem,
   applyQueueFeedItem,
   clearQueueItems,
   hasQueuedMessages,
   type QueueFeedClient,
   sendQueueItemNow,
+  setQueuePaused,
   startQueueSync,
   useQueueProjection,
   wakeQueue,
@@ -63,7 +67,14 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
         }
       },
     },
-    add: { mutate: vi.fn() },
+    add: {
+      // A `vi.fn` so a test can make the add fail; the composer's draft rules
+      // depend on what this answers.
+      mutate: vi.fn(async (input: { subChatId: string; payload: { message: string } }) => {
+        calls.push(`add:${input.payload.message}`)
+        return { ...item("added", input.subChatId, "pending"), payload: input.payload }
+      }),
+    },
     remove: { mutate: vi.fn() },
     clear: { mutate: vi.fn() },
     claim: {
@@ -105,11 +116,13 @@ function fakeClient(options: { claimed?: QueueItem[]; handed?: boolean } = {}) {
       },
     },
     setPaused: {
-      mutate: async (input: { subChatId: string; paused: boolean }) => {
+      // A `vi.fn` so a test can make the pause fail, which is the answer the
+      // stop button warns about.
+      mutate: vi.fn(async (input: { subChatId: string; paused: boolean }) => {
         paused.push(input)
         calls.push(`setPaused:${input.paused}`)
         return 0
-      },
+      }),
     },
   }
   return {
@@ -139,13 +152,24 @@ function registerChat(
   return chat
 }
 
+/**
+ * A wake that finds no pane leaves a bounded retry pending, and that timer
+ * closes over the fake client of the test that scheduled it. Cancel whatever a
+ * previous test left, so no test inherits another's timer or another's client.
+ */
+function cancelPendingWakeRetries(): void {
+  startQueueSync(fakeClient().client)()
+}
+
 describe("queue projection", () => {
   beforeEach(() => {
+    cancelPendingWakeRetries()
     useQueueProjection.setState({ queues: {} })
     useStreamingStatusStore.setState({ statuses: {} })
     agentChatStore.clear()
     sendClaimedQueueItem.mockReset()
     sendClaimedQueueItem.mockResolvedValue("sent")
+    toastError.mockClear()
   })
 
   // The retry tests run on fake timers; a failure inside one must not leave
@@ -248,6 +272,54 @@ describe("queue projection", () => {
     applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "sending")]), fakeClient().client)
 
     expect(hasQueuedMessages("sub-a")).toBe(true)
+  })
+
+  it("keeps the card the indicator renders, with the row in flight hidden", () => {
+    const withPayload: QueueItem = {
+      ...item("q1", "sub-a", "pending"),
+      payload: {
+        message: "look at this",
+        images: [{ id: "i1", url: "blob:1", mediaType: "image/png", filename: "a.png" }],
+      },
+    }
+
+    applyQueueFeedItem(
+      feed("sub-a", [withPayload, item("q2", "sub-a", "sending")]),
+      fakeClient().client,
+    )
+
+    // The card is the payload plus the row's identity, which is what the
+    // indicator's row reads: message, attachments, id and status.
+    expect(useQueueProjection.getState().queues["sub-a"]).toEqual([
+      { ...withPayload.payload, id: "q1", status: "pending" },
+    ])
+    // ... and the `sending` row still counts as queued work.
+    expect(useQueueProjection.getState().hiddenCounts["sub-a"]).toBe(1)
+  })
+
+  it("reports a refused add, so the composer keeps the draft", async () => {
+    const fake = fakeClient()
+    fake.queue.add.mutate.mockRejectedValueOnce(new Error("main is not ready"))
+
+    await expect(addQueueItem("sub-a", { message: "one" }, fake.client)).resolves.toBe(false)
+
+    expect(toastError).toHaveBeenCalled()
+  })
+
+  it("queues the message when main accepts it, and says nothing", async () => {
+    const fake = fakeClient()
+
+    await expect(addQueueItem("sub-a", { message: "one" }, fake.client)).resolves.toBe(true)
+
+    expect(fake.calls).toEqual(["add:one"])
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it("reports a refused pause, so the stop button can warn", async () => {
+    const fake = fakeClient()
+    fake.queue.setPaused.mutate.mockRejectedValueOnce(new Error("database is locked"))
+
+    await expect(setQueuePaused("sub-a", true, fake.client)).resolves.toBe(false)
   })
 
   it("re-asks after a feed arrives before the pane registered its chat", async () => {
@@ -423,6 +495,45 @@ describe("queue projection", () => {
     // it on the next wake of this sub-chat, or at startup recovery.
     expect(fake.completed).toEqual([])
     expect(fake.queue.complete.mutate).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not spend a retry on wakes that arrive while one is pending", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
+
+    // A queue draining in another window emits several feed updates before the
+    // pane that owns the chat is up. Each one is a wake with no pane to send
+    // with, and none of them may spend the budget the pane's own retries need.
+    for (let i = 0; i < 6; i += 1) {
+      applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+    }
+    expect(fake.claims).toEqual([])
+
+    // The pane arrives inside the window, and the retry still runs: it is the
+    // pane's retry, not the feed updates'.
+    await vi.advanceTimersByTimeAsync(2_000)
+    registerChat("sub-a")
+    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(fake.claims).toHaveLength(1)
+    expect(fake.completed).toEqual(["q1"])
+  })
+
+  it("puts the card back when the clear does not land", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+    fake.queue.clear.mutate.mockRejectedValueOnce(new Error("db is busy"))
+    applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
+    await vi.waitFor(() => expect(fake.completed).toEqual(["q1"]))
+
+    await clearQueueItems("sub-a", fake.client)
+
+    // Main still has the row, so the window must still show the queue it holds:
+    // an empty card would be a queue the user believes is gone.
+    expect(useQueueProjection.getState().queues["sub-a"]?.map((row) => row.id)).toEqual(["q1"])
+    expect(hasQueuedMessages("sub-a")).toBe(true)
   })
 
   it("stops re-asking a pane that never showed up, instead of polling for it", async () => {

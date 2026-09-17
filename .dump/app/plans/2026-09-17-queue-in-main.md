@@ -270,6 +270,41 @@ hold. Each one now has a test that fails without it:
   else clears it (`records the hand-off before the payload leaves and retires
   the row`).
 
+### Round six
+
+Two review findings, each fixed with a test that fails without the fix:
+
+- A clear that failed put the card back, not only the "this sub-chat has no
+  rows" mark. Main still has those rows then, so an empty card showed a queue
+  the user believed was gone (`puts the card back when the clear does not
+  land`).
+- A wake that arrives while a retry is already pending spends nothing. The
+  pending retry is already the next question for that sub-chat; clearing and
+  replacing it let a burst of feed updates spend the whole budget on newer
+  timers, so the pane that finally arrived had no retry left (`does not spend a
+  retry on wakes that arrive while one is pending`).
+
+Self-triage in the same commit, after the review round:
+
+- The two hooks between the app and the store had no test. Startup recovery
+  retries instead of leaving rows claimed and returns instead of blocking the
+  app; the window-close release swallows a failure so the window still closes
+  and shares one store with recovery (`src/main/lib/queue/index.test.ts`).
+- The schema comment on `claimedBy` still described a renderer session token,
+  which `ownerFor` does not write: it writes the stable window id, on purpose,
+  because a reload keeps that id and so the reloaded window can park its own
+  handed row at once instead of waiting out the lease. The comment was
+  corrected, and the choice is now stated with its reason.
+- Paths whose answer the UI acts on got their own tests: the scroll signal
+  fires only for a hand-off and is dropped when the pane unmounts
+  (`queue-send.test.ts`); a refused add is reported so the composer keeps the
+  draft; a refused pause is reported so the stop button can warn; and the card
+  is the payload plus the row's identity, with the row in flight still counted
+  (`queue-projection.test.ts`).
+- The router's cap test now pins the boundary — a payload at the cap is
+  accepted, one character past it is refused — and its remove/clear test
+  asserts which row survived instead of a filler `toBeDefined()`.
+
 ## Verification
 
 `bun x biome check . && npm run typecheck && npm run test` plus
