@@ -364,40 +364,93 @@ Self-triage in the same commit, after the review round:
 
 ### Round nine
 
-The same sweep over the renderer: sixteen mutations across the projection and
-the sender. Eight survivors, all now pinned, and two verdicts that are worth
-stating because they are *not* holes:
+The same sweep over everything the step added on the renderer side and at the
+boundary: forty mutations across the projection, the sender, the part builder,
+the router, the composer's conversions and the status store. Nineteen survivors,
+seventeen now pinned, two verdicts stated as *not* holes. The pattern in the
+seventeen is the same one every time: a test that computed its expectation with
+the same function it was testing, so it held under either behaviour, or a fake
+that never produced the situation.
 
-- A reconnect dropped nothing: `startQueueSync` clears the projection before it
-  re-subscribes, so a card cannot hold rows main no longer has after a feed drop
-  (`drops cards main no longer has when the feed reconnects`).
-- The owner this window claims under was never exercised through the real
-  client, which has no `owner` of its own: `ownerFor` falls back to the window
-  id, which is what main keys claims by and what a closed window's release is
-  keyed on (`names this window when the client does not, which is what main keys
-  a claim by`).
-- Two quick Send now clicks could both reach main, because nothing took the
-  sub-chat's in-flight slot (`ignores a second Send now while the first is still
-  working`).
-- A claim that main answered did not end its retry sequence, so a later
-  transient failure was charged to a sequence that was already over
-  (`asks again after a later failure once main has answered a claim`).
-- A wake for a sub-chat with nothing queued started a retry, which is a timer
-  asking a question with no work behind it (`does not re-ask for a sub-chat with
-  nothing queued`).
-- In the sender: a transport that *throws* after the hand-off was answered
-  `failed`, which puts the row back and sends it again — the same situation as a
-  rejection, so it parks (`parks the outcome when the send throws after the
-  hand-off`). And the loading mark the sidebar shows was never actually set in
-  a test, because the fake answered no parent chat id
-  (`marks the sub-chat loading before the payload leaves, for the sidebar`).
-- Two verdicts of "not a hole": the reconnect path has two independent defences
-  — the `stopped` flag in `connect` and the cleared retry timer in the stop —
-  and removing either alone changes nothing observable, because the other one
-  already covers it. The test pins the behaviour they jointly produce (`does not
-  reopen the feed after the sync has stopped`), and both were removed together
-  to prove it fails. `markHanded`'s silence on the feed is the same shape: it is
-  a deliberate no-op for cards, asserted as such in round eight's test.
+**The projection** (five): a reconnect did not drop cards main no longer has, so
+another window's clear would survive in the card
+(`drops cards main no longer has when the feed reconnects`); the owner a window
+claims under — the window id, since the real client carries none — was never
+exercised, and main keys a claim *and* a closed window's release by that id
+(`names this window when the client does not, which is what main keys a claim
+by`); two quick Send now clicks could both reach main, which hands out one row
+per request, so both rows went out for one sub-chat
+(`ignores a second Send now while the first is still working`); a claim main
+answered did not end its retry sequence, so a later transient failure inherited
+a spent budget (`asks again after a later failure once main has answered a
+claim`); a wake for a sub-chat with nothing queued started a timer to ask a
+question with no work behind it (`does not re-ask for a sub-chat with nothing
+queued`).
+
+**The sender** (two): a transport that *throws* on the way in was answered
+`failed` — the payload was already handed over, so the caller requeues a row
+that was sent, which is the one way to send it twice. It parks now, like a
+rejection (`parks the outcome when the send throws after the hand-off`). And the
+sidebar's loading mark was never actually set in a test, because the fake
+answered no parent chat id (`marks the sub-chat loading before the payload
+leaves, for the sidebar`).
+
+**The part builder** (three): the tokens were never asserted as a whole, so
+gluing them together (or dropping the space before the text) survived — a direct
+send joins them with spaces, and a glued pair is one malformed mention and a
+lost selection (`separates the mention tokens and the message the way a direct
+send does`); every preview expectation was computed with `createTextPreview`
+itself, so sanitizing the delimiters out of a preview was unobservable even
+though a `:` ends the preview field and a `]` ends the token
+(`strips the delimiters out of a preview, so the engine still reads one
+token`); the image part was only checked for its `type`, so the base64 bytes
+could be dropped and the engine would receive a queued image it never sees
+(`carries the image bytes and the file metadata through to the part`).
+
+**The router** (five): the replay/listener handshake had no test for its whole
+point — the listener is registered first so nothing slips between the two
+halves, and a change landing during the read is buffered and flushed *after* the
+snapshot; flushing it first has the window apply an older snapshot on top of a
+newer change (`replays the snapshot before anything that lands while it is
+reading`). A feed opened for one sub-chat was never checked to be that
+sub-chat's only (`does not feed a window the changes of another sub-chat`). A
+failed replay leaked its listener for the life of the process
+(`leaves no listener behind when the replay fails`). And the boundary's two
+tightened rules from round seven — a move index that cannot be negative, and a
+claim that must name its window — were enforced but unasserted, which is how a
+schema loosens unnoticed
+(`refuses a move to a negative index and a claim with no window`).
+
+**The composer's conversions** (four): the image media-type default is what
+keeps an unlabelled upload inside the boundary's schema, and dropping it costs
+the whole queued message; the file size, the diff line type and a paste's
+`kind` were all carried but never asserted — the last one is not cosmetic,
+because a chat-history paste with no `kind` arrives as `@[pasted:...]`
+(`carries every composer field the boundary keeps, including the image
+default`). And `createTextPreview` was only exercised through a string of
+identical characters, which hides the head/tail question, the short-text case
+and whitespace collapsing; the last one matters because the preview is
+serialized *inside* a one-line `@[...]` token
+(`collapses whitespace, keeps the head and leaves a short preview alone`, plus
+the token-level `not.toContain("\n")` in the part-builder preview test).
+
+**The status store** (five): `submitted` was not counted as a live turn, so the
+sender could let a queue start a second turn on a session that already has one;
+`clearStatus` could be a no-op, leaving a finished sub-chat reading as streaming
+for the rest of the session; and `waitForStreamingReady` — which the direct-send
+path calls on every send that waits — could keep its store listener on both
+success and timeout, one listener per message the user sends. All four now
+asserted, the listener releases by counting them through a `subscribe` spy.
+
+**Not holes.** The reconnect path has two independent defences — the `stopped`
+flag in `connect` and the cleared retry timer in the stop — and removing either
+alone is invisible because the other covers it; both were removed together to
+prove the new test fails (`does not reopen the feed after the sync has stopped`),
+and what the test pins is the behaviour the pair produces. And
+`getReadySubChats` in the status store: it has no caller anywhere in the tree,
+and had none at the branch point either, so no mutation of it can change
+anything the app does. Deleting it is a tidy-up for another step, not a step-08
+verdict, and pinning dead code would be worse than leaving it alone.
 
 ### Round eight
 

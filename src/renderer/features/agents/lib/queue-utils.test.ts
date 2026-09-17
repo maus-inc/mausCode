@@ -101,6 +101,87 @@ describe("the composer's queue payload", () => {
     ).toThrow()
   })
 
+  it("carries every composer field the boundary keeps, including the image default", () => {
+    // An upload whose type the browser did not report falls back to PNG. The
+    // boundary requires a media type, so a dropped default costs the whole
+    // queued message rather than a label.
+    const image = toQueuedImage({
+      id: "i1",
+      url: "blob:file:///image-1",
+      filename: "shot.png",
+      base64Data: "aGVsbG8=",
+      isLoading: false,
+    })
+    expect(image.mediaType).toBe("image/png")
+    expect(() => queuePayloadSchema.parse({ message: "", images: [image] })).not.toThrow()
+
+    expect(
+      toQueuedFile({
+        id: "f1",
+        url: "blob:file:///file-1",
+        filename: "notes.md",
+        type: "text/markdown",
+        size: 12,
+        isLoading: false,
+      }),
+    ).toEqual({
+      id: "f1",
+      url: "blob:file:///file-1",
+      filename: "notes.md",
+      mediaType: "text/markdown",
+      size: 12,
+    })
+
+    expect(
+      toQueuedDiffTextContext({
+        id: "d1",
+        text: "const a = 1",
+        filePath: "src/a.ts",
+        lineNumber: 4,
+        lineType: "new",
+        preview: "const a = 1",
+        createdAt: new Date(),
+      }),
+    ).toEqual({
+      id: "d1",
+      text: "const a = 1",
+      filePath: "src/a.ts",
+      lineNumber: 4,
+      lineType: "new",
+    })
+
+    // A paste the user took from chat history has to arrive as one: the token
+    // the engine reads is `@[chatHistory:...]` rather than `@[pasted:...]`.
+    expect(
+      toQueuedPastedText({
+        id: "p1",
+        filePath: "/tmp/pasted.md",
+        filename: "pasted.md",
+        size: 2048,
+        preview: "old chat",
+        createdAt: new Date(),
+        kind: "chatHistory",
+      }),
+    ).toEqual({
+      id: "p1",
+      filePath: "/tmp/pasted.md",
+      filename: "pasted.md",
+      size: 2048,
+      preview: "old chat",
+      kind: "chatHistory",
+    })
+  })
+
+  it("collapses whitespace, keeps the head and leaves a short preview alone", () => {
+    // The preview is serialized inside a single-line `@[...]` token, so a
+    // newline or a run of spaces would break the mention the engine parses.
+    expect(createTextPreview("  first\n\n   second  ")).toBe("first second")
+    // The head is what the chip shows, and the same text a direct send shows.
+    expect(createTextPreview(`HEAD${"x".repeat(80)}`)).toBe(`HEAD${"x".repeat(46)}...`)
+    // A text that fits is shown as it is: an ellipsis would claim it was cut.
+    expect(createTextPreview("short")).toBe("short")
+  })
+
   it("keeps the preview the chip shows the same length a direct send uses", () => {
     expect(createTextPreview("a".repeat(80))).toBe(`${"a".repeat(50)}...`)
   })

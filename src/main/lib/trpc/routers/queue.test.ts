@@ -149,6 +149,100 @@ describe("queue router", () => {
     subscription.unsubscribe()
   })
 
+  it("replays the snapshot before anything that lands while it is reading", async () => {
+    const real = holder.store as QueueStore
+
+    // The listener is registered before the replay is read, so a change that
+    // lands during the read is buffered rather than lost. It must still be
+    // emitted *after* the snapshot: flushing it first has the window apply an
+    // older snapshot on top of a newer change, and the row reads as removed.
+    let listeners: ((item: QueueFeedItem) => void)[] = []
+    holder.store = {
+      ...real,
+      subscribe: (listener) => {
+        listeners = [...listeners, listener]
+        return real.subscribe(listener)
+      },
+      list: (id) => {
+        // The row this change carries is not in the snapshot the store is about
+        // to return, which is what makes the order visible.
+        for (const listener of listeners) {
+          listener({ subChatId, items: [{ id: "buffered" } as QueueItem] })
+        }
+        return real.list(id)
+      },
+    } as QueueStore
+
+    const seen: string[][] = []
+    const observable = (await caller.subscribe({ subChatId })) as unknown as {
+      subscribe: (observer: { next: (value: QueueFeedItem) => void }) => { unsubscribe: () => void }
+    }
+    const subscription = observable.subscribe({
+      next: (value) => seen.push(value.items.map((queued) => queued.id)),
+    })
+    subscription.unsubscribe()
+
+    expect(seen).toEqual([[], ["buffered"]])
+  })
+
+  it("does not feed a window the changes of another sub-chat", async () => {
+    const other = seedSubChat(opened.db)
+    const seen: QueueFeedItem[] = []
+    const observable = (await caller.subscribe({ subChatId })) as unknown as {
+      subscribe: (observer: { next: (value: QueueFeedItem) => void }) => { unsubscribe: () => void }
+    }
+    const subscription = observable.subscribe({ next: (value) => seen.push(value) })
+
+    // A subscriber that named one sub-chat is that sub-chat's card. Another
+    // sub-chat's rows would render there.
+    await caller.add({ subChatId: other, payload: { message: "elsewhere" } })
+    await caller.add({ subChatId, payload: { message: "mine" } })
+
+    expect(seen.map((item) => item.subChatId)).toEqual([subChatId, subChatId])
+    subscription.unsubscribe()
+  })
+
+  it("leaves no listener behind when the replay fails", async () => {
+    const real = holder.store as QueueStore
+    let stopped = 0
+    holder.store = {
+      ...real,
+      subscribe: (listener) => {
+        const unsubscribe = real.subscribe(listener)
+        return () => {
+          stopped += 1
+          unsubscribe()
+        }
+      },
+      list: () => {
+        throw new Error("database is locked")
+      },
+    } as QueueStore
+
+    const observable = (await caller.subscribe({ subChatId })) as unknown as {
+      subscribe: (observer: { next: () => void }) => { unsubscribe: () => void }
+    }
+
+    // The failure reaches the caller, and the listener registered just before
+    // it is detached: a window that never got a subscription must not keep
+    // tapping main's feed for the life of the process.
+    expect(() => observable.subscribe({ next: () => {} })).toThrow("database is locked")
+    expect(stopped).toBe(1)
+  })
+
+  it("refuses a move to a negative index and a claim with no window", async () => {
+    const item = await caller.add({ subChatId, payload: { message: "one" } })
+
+    await expect(caller.move({ subChatId, itemId: item.id, index: -1 })).rejects.toThrow()
+
+    // The claiming window is required: it is what main keys a claim by, so a
+    // nameless claim could not be handed back when that window closed.
+    const namelessClaim = caller.claim as unknown as (input: {
+      subChatId: string
+    }) => Promise<unknown>
+    await expect(namelessClaim({ subChatId })).rejects.toThrow()
+  })
+
   it("completes a claimed item only once", async () => {
     const item = (await caller.claim({
       subChatId: (await caller.add({ subChatId, payload: { message: "one" } })).subChatId,

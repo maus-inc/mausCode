@@ -74,6 +74,84 @@ describe("buildQueueMessageParts", () => {
     expect(preview).toContain("first line second line")
     expect(preview.endsWith("...")).toBe(true)
     expect(serialized).toContain(`@[quote:${preview}:${utf8ToBase64(text)}]`)
+    // A newline inside the token would split the mention the engine parses.
+    expect(serialized).not.toContain("\n")
+  })
+
+  it("separates the mention tokens and the message the way a direct send does", () => {
+    const quote = "quoted"
+    const parts = buildQueueMessageParts({
+      message: "explain",
+      textContexts: [{ id: "t1", text: quote, sourceMessageId: "m1" }],
+      diffTextContexts: [{ id: "d1", text: "difftext", filePath: "src/a.ts", lineNumber: 4 }],
+      pastedTexts: [
+        {
+          id: "p1",
+          filePath: "/tmp/pasted.md",
+          filename: "pasted.md",
+          size: 1024,
+          preview: "paste",
+        },
+      ],
+    })
+
+    // A direct send joins the tokens with spaces and leaves one before the text
+    // (`[...].join(" ") + " "`), so the engine reads each token on its own. Drop
+    // either space and the first token's `]` runs straight into the next `@[`,
+    // and a glued pair is one malformed mention plus a lost selection.
+    expect(parts).toHaveLength(1)
+    expect(parts[0]).toEqual({
+      type: "text",
+      text:
+        `@[quote:${quote}:${utf8ToBase64(quote)}] ` +
+        `@[diff:src/a.ts:4:difftext:${utf8ToBase64("difftext")}] ` +
+        "@[pasted:1024:paste|/tmp/pasted.md] explain",
+    })
+  })
+
+  it("strips the delimiters out of a preview, so the engine still reads one token", () => {
+    const text = "type A = [number]; const a: A = [1]"
+    const parts = buildQueueMessageParts({
+      message: "explain",
+      textContexts: [{ id: "t1", text, sourceMessageId: "m1" }],
+      pastedTexts: [
+        { id: "p1", filePath: "/tmp/p.md", filename: "p.md", size: 10, preview: "a:b | c" },
+      ],
+    })
+
+    // `:` ends a preview field and `]` ends the token, so both would arrive as
+    // loose text and the selection itself would be lost. The composer's own
+    // token strips them, and so does this one.
+    const serialized = parts[0].type === "text" ? parts[0].text : ""
+    expect(serialized).toContain(`@[quote:type A = number; const a A = 1:${utf8ToBase64(text)}]`)
+    expect(serialized).toContain("@[pasted:10:ab  c|/tmp/p.md]")
+  })
+
+  it("carries the image bytes and the file metadata through to the part", () => {
+    const parts = buildQueueMessageParts({
+      message: "look",
+      images: [
+        {
+          id: "i1",
+          url: "blob:1",
+          mediaType: "image/png",
+          filename: "a.png",
+          base64Data: "QUJD",
+        },
+      ],
+      files: [{ id: "f1", url: "blob:2", filename: "b.ts", mediaType: "text/plain", size: 12 }],
+    })
+
+    // The base64 is the image the engine actually receives: a part without it
+    // is an attachment the user queued and the model never sees.
+    expect(parts[0]).toEqual({
+      type: "data-image",
+      data: { url: "blob:1", mediaType: "image/png", filename: "a.png", base64Data: "QUJD" },
+    })
+    expect(parts[1]).toEqual({
+      type: "data-file",
+      data: { url: "blob:2", mediaType: "text/plain", filename: "b.ts", size: 12 },
+    })
   })
 
   it("emits mention-only parts when the message text is empty", () => {
