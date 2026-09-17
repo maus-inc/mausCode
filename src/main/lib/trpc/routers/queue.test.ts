@@ -248,6 +248,9 @@ describe("queue router", () => {
       subChatId: (await caller.add({ subChatId, payload: { message: "one" } })).subChatId,
       owner: WINDOW_A,
     })) as QueueItem
+    // The row retires only after the hand-off, which is the order the sender
+    // uses: claim, mark handed, send, complete.
+    expect(await caller.markHanded({ subChatId, itemId: item.id, owner: WINDOW_A })).toBe(true)
 
     await expect(caller.complete({ subChatId, itemId: item.id, owner: WINDOW_B })).resolves.toBe(
       false,

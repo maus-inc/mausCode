@@ -311,6 +311,7 @@ describe("queue store", () => {
           subChatId: sharedSubChatId,
           engine: "legacy",
         })
+        expect(firstStore.markHanded(sharedSubChatId, row.id, WINDOW_A)).toBe(true)
         expect(firstStore.complete(sharedSubChatId, row.id, WINDOW_A)).toBe(true)
         handle.noteFinished()
         handle.settle()
@@ -395,6 +396,7 @@ describe("queue store", () => {
         second.id,
       ])
 
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
       expect(store.complete(subChatId, first.id, WINDOW_A)).toBe(true)
       expect(claim(store, subChatId)?.id).toBe(third.id)
     })
@@ -494,6 +496,7 @@ describe("queue store", () => {
       expect(store.list(subChatId)[0].dispatchedAt).toBeNull()
 
       expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
       expect(store.complete(subChatId, first.id, WINDOW_A)).toBe(true)
       expect(ids(store.list(subChatId))).toEqual([second.id])
     })
@@ -623,9 +626,39 @@ describe("queue store", () => {
       expect(store.park(subChatId, first.id, WINDOW_A)).toBe(true)
     })
 
+    it("refuses to complete a row the engine never saw", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id, WINDOW_A)?.id).toBe(first.id)
+
+      // A completion that arrives before the hand-off is a caller bug, and
+      // deleting the row here would lose the user's message instead of sending
+      // it. The row stays the queue's, so the user can still get it.
+      expect(store.complete(subChatId, first.id, WINDOW_A)).toBe(false)
+      expect(store.list(subChatId)).toHaveLength(1)
+
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(store.complete(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(store.list(subChatId)).toEqual([])
+    })
+
+    it("refuses to park a claim that was never handed over", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id, WINDOW_A)?.id).toBe(first.id)
+
+      // A parked row is never resumed, so parking here would hide a message
+      // that never left: the user would wait for a send that is not coming.
+      expect(store.park(subChatId, first.id, WINDOW_A)).toBe(false)
+      expect(store.list(subChatId)[0].status).toBe("sending")
+
+      // The row is still the queue's, and a requeue is the right way back.
+      expect(store.requeue(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(store.list(subChatId)[0].status).toBe("pending")
+    })
+
     it("refuses a complete from a window that does not hold the claim", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       expect(claim(store, subChatId, first.id, WINDOW_A)?.id).toBe(first.id)
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
 
       expect(store.complete(subChatId, first.id, WINDOW_B)).toBe(false)
       expect(store.list(subChatId)).toHaveLength(1)
@@ -681,7 +714,10 @@ describe("queue store", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       const second = store.add({ subChatId, payload: payload("two") })
       const claimed = claim(store, subChatId)
-      if (claimed) store.complete(subChatId, claimed.id, WINDOW_A)
+      if (claimed) {
+        store.markHanded(subChatId, claimed.id, WINDOW_A)
+        store.complete(subChatId, claimed.id, WINDOW_A)
+      }
 
       expect(seen[0]).toEqual([first.id])
       expect(seen[1]).toEqual([first.id, second.id])
@@ -757,6 +793,7 @@ describe("queue store", () => {
 
       const completed = feedOf(({ subChatId, itemId }) => {
         claim(store, subChatId, itemId, WINDOW_A)
+        store.markHanded(subChatId, itemId, WINDOW_A)
         store.complete(subChatId, itemId, WINDOW_A)
       })
       expect(completed.said).toEqual([[completed.rowId], []])

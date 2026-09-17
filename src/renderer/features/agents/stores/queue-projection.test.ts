@@ -731,6 +731,164 @@ describe("queue projection", () => {
     expect(fake.completed).toEqual(["q1"])
   })
 
+  it("hands the row back when a turn goes live while the claim is in flight", async () => {
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    const chat = registerChat("sub-a")
+
+    // The claim answer is one round trip old, and a turn can go live inside it:
+    // the question asked before the claim cannot answer for after it.
+    fake.queue.claim.mutate.mockImplementationOnce(async () => {
+      useStreamingStatusStore.getState().setStatus("sub-a", "streaming")
+      return claimed
+    })
+    await wakeQueue("sub-a", fake.client)
+
+    // Sending now would run a second turn on the same session, so the row goes
+    // back to the queue instead; the turn's own end is the next wake.
+    expect(chat.sendMessage).not.toHaveBeenCalled()
+    expect(fake.requeued).toEqual(["q1"])
+  })
+
+  it("does not claim for a sub-chat while its clear is in flight", async () => {
+    vi.useFakeTimers()
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+
+    // The user asks to drop the queue, and main has not answered yet: its rows
+    // are still there and a claim can still be handed one.
+    let finish: () => void = () => {}
+    fake.queue.clear.mutate.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(1)
+        }),
+    )
+    const clearing = clearQueueItems("sub-a", fake.client)
+
+    // A feed reading taken before the clear landed carries those rows. Acting
+    // on it would send a message the user just asked to delete, and handing it
+    // back would only make the feed speak again, so the claim is held.
+    applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.queue.claim.mutate).not.toHaveBeenCalled()
+
+    finish()
+    await clearing
+  })
+
+  it("hands an in-flight claim back when a stale reading arrives during the clear", async () => {
+    vi.useFakeTimers()
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    const chat = registerChat("sub-a")
+
+    // A wake claims the row and is about to send it, and the user deletes the
+    // queue in the same breath: the row is handed over before the delete lands.
+    applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
+    let finish: () => void = () => {}
+    fake.queue.clear.mutate.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(1)
+        }),
+    )
+    const clearing = clearQueueItems("sub-a", fake.client)
+    // A reading taken before the delete landed carries the row again. If it
+    // clears the mark that says main has none, the claim in flight sends a
+    // message the user just asked to delete.
+    applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(chat.sendMessage).not.toHaveBeenCalled()
+    expect(fake.requeued).toEqual(["q1"])
+
+    finish()
+    await clearing
+  })
+
+  it("asks once the delete has an answer, so a row added during it is not stranded", async () => {
+    vi.useFakeTimers()
+    const arrived = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [arrived] })
+    registerChat("sub-a")
+
+    let finish: () => void = () => {}
+    fake.queue.clear.mutate.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(1)
+        }),
+    )
+    const clearing = clearQueueItems("sub-a", fake.client)
+
+    // A row that arrived while the delete was in flight is held, because the
+    // reading is older than the delete. The answer to the delete is the event
+    // that ends the hold, and it is the only one: nothing else may come.
+    applyQueueFeedItem(feed("sub-a", [arrived]), fake.client)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.queue.claim.mutate).not.toHaveBeenCalled()
+
+    finish()
+    await clearing
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.claims).toHaveLength(1)
+  })
+
+  it("ends the hold only when the last of two overlapping clears answers", async () => {
+    vi.useFakeTimers()
+    const claimed = item("q1", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [claimed] })
+    registerChat("sub-a")
+
+    // Two clears can overlap (a double click on the same control), so one answer
+    // is not the end of the hold: the rows are still the ones the user asked to
+    // drop, and the second clear has not run yet.
+    const answers: Array<() => void> = []
+    fake.queue.clear.mutate.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answers.push(() => resolve(1))
+        }),
+    )
+    const first = clearQueueItems("sub-a", fake.client)
+    const second = clearQueueItems("sub-a", fake.client)
+
+    answers[0]()
+    await first
+    applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.queue.claim.mutate).not.toHaveBeenCalled()
+
+    answers[1]()
+    await second
+    await vi.advanceTimersByTimeAsync(0)
+    // The last answer is the event that lets this window ask again.
+    expect(fake.claims).toHaveLength(1)
+  })
+
+  it("asks again when a pane that can send appears, after the retries ran out", async () => {
+    vi.useFakeTimers()
+    const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
+    const stop = startQueueSync(fake.client)
+
+    // The feed replays before the pane exists, so the first wake has nothing to
+    // send with, and its bounded re-ask runs out.
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(fake.claims).toEqual([])
+
+    // The pane appears later. Its sub-chat is already `ready`, so no status
+    // write is coming to wake the queue: without the registration wake the rows
+    // wait for something else to happen in that sub-chat.
+    registerChat("sub-a")
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(fake.claims).toHaveLength(1)
+    stop()
+  })
+
   it("puts the card back when the clear does not land", async () => {
     const claimed = item("q1", "sub-a", "pending")
     const fake = fakeClient({ claimed: [claimed] })
@@ -795,14 +953,20 @@ describe("queue projection", () => {
     fake.pushFeed(feed("sub-a", [item("q1", "sub-a", "pending")]))
     expect(fake.claims).toEqual([])
 
-    // The pane arrives after the sync is gone. A retry that outlived the sync
-    // would claim and send for a window that stopped syncing.
+    // The pane arrives while the sync is alive, and that arrival is a wake of
+    // its own: a pane whose sub-chat is already ready writes no status, so
+    // nothing else would ask for the row.
     registerChat("sub-a")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.claims).toHaveLength(1)
+
     stop()
 
+    // A retry that outlived the sync would ask again for a window that stopped
+    // syncing, so the pending timer has to be gone.
     await vi.advanceTimersByTimeAsync(60_000)
 
-    expect(fake.claims).toEqual([])
+    expect(fake.claims).toHaveLength(1)
   })
 
   it("hands the row back when Send now races the sub-chat's deletion", async () => {

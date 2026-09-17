@@ -10,6 +10,11 @@ const chats = new Map<string, Chat<UIMessage>>()
 const streamIds = new Map<string, string | null>()
 const parentChatIds = new Map<string, string>() // subChatId → parentChatId (stored at creation time)
 const manuallyAborted = new Map<string, boolean>() // Track if chat was manually stopped
+const listeners = new Set<() => void>()
+
+function notify(): void {
+  for (const listener of listeners) listener()
+}
 
 export const agentChatStore = {
   get: (id: string) => chats.get(id),
@@ -19,9 +24,15 @@ export const agentChatStore = {
   set: (id: string, chat: Chat<UIMessage>, parentChatId: string) => {
     chats.set(id, chat)
     parentChatIds.set(id, parentChatId)
+    notify()
   },
 
   has: (id: string) => chats.has(id),
+
+  subscribe: (listener: () => void) => {
+    listeners.add(listener)
+    return () => listeners.delete(listener)
+  },
 
   delete: (id: string) => {
     const chat = chats.get(id)
@@ -30,6 +41,7 @@ export const agentChatStore = {
     streamIds.delete(id)
     parentChatIds.delete(id)
     manuallyAborted.delete(id)
+    notify()
   },
 
   // Get the ORIGINAL parentChatId that was set when the Chat was created

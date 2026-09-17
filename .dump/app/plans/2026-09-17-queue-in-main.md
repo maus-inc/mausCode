@@ -528,6 +528,66 @@ map keyed by sub-chat. Recorded as a named exposure, unowned, with the wiring
 option noted.
 
 
+### Round eleven
+
+CodeAnt's pass on the new head, and one further CodeRabbit finding, each checked
+against the code before anything changed. Five were real, and each fix was
+reverted on its own to confirm its test fails without it.
+
+**A row could be parked or retired before the engine ever saw it** (`park`,
+`complete`). Both accepted an owned `sending` row with no `handedAt`, which is a
+claim that has not been handed over. Parking such a row hides it permanently —
+a parked row never returns to the automatic path — and completing it deletes it,
+so an early `complete` would lose the user's message rather than send it. Both
+now require `handedAt`, which is the write `markHanded` makes immediately before
+the payload leaves; the store's own sender already orders its calls that way
+(claim → `markHanded` → send → `complete`), and `park`'s tests were already
+written with the hand-off in them. A row that was never handed over is still the
+queue's: `requeue` is the way back, and the tests say so.
+
+**A stale feed could start a send while the user's clear was in flight.** The
+mark that says "main has none of this sub-chat's rows" is dropped by any feed
+that carries rows, which is right in general — a feed with rows is newer than
+the mark — but wrong while a clear is pending: the rows that reading carries are
+the ones the user just asked to delete, and acting on it either sends one of
+them or clears the mark that an in-flight claim is relying on. Two rules now
+cover it: the mark survives a feed while `clearingSubChatIds` holds the
+sub-chat, and no claim goes out for it either — without the second rule the
+first one would only trade a send for a claim-and-requeue cycle. When the clear
+has an answer, that answer is the event that ends the hold, so the clear asks
+once more if the window still knows of rows; otherwise a row that arrived while
+the delete was in flight would wait for an event that may never come.
+
+**A pane that appeared after the retries ran out was never asked again.** A
+window mounts its panes after the feed has replayed, and a pane whose sub-chat is
+already `ready` writes no status, so the three wake sources could all be spent
+before the pane existed — the bounded re-ask from round six covered two seconds,
+and a pane that mounts on a slow first paint arrives later than that. The
+registration is now a wake source of its own: `agentChatStore` notifies on set
+and delete, and `startQueueSync` asks for every sub-chat the window knows has
+rows. That is event-driven, not a longer poll, and it is also what the queue
+wanted: the pane's arrival is a fact about this window that no feed event
+carries.
+
+**The claim answer is one round trip old.** After `queue.claim` resolves, the
+row was delivered to whatever chat was found before the claim — a turn can go
+live inside that await, and a queued send beside it would run two turns on one
+session. The readiness question is now asked again after the claim, using the
+same `senderForSubChat` rule, and the row is handed back when the answer
+changed. This is the fixable part of the finding; the rest is below.
+
+**Two findings answered, not patched.** CodeAnt's `waitForTurnStart` finding —
+another turn can report `started` for this sub-chat, so the row retires on
+someone else's turn — is real in the same narrow way the busy guard is: it needs
+a *direct* send from another window (or a provider whose turns main cannot see)
+to start a turn beside a queued send, and the status store the wait listens to
+is per sub-chat, not per window, so nothing in the sender can attribute the turn.
+Main's run rows are what would make a turn visible to the window that did not
+start it, and wiring the eleven routers that write none is roadmap step 07. The
+same exposure is already named under "Consequences named on purpose"; the
+sender's local half is what this round could fix and did. The second is the
+cross-window Send-now guard, answered inline on the PR.
+
 ### Round nine
 
 The same sweep over everything the step added on the renderer side and at the

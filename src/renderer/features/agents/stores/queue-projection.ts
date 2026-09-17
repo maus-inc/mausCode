@@ -62,8 +62,14 @@ export const useQueueProjection = create<QueueProjectionState>()(
     setQueue: (subChatId, items, hiddenCount) => {
       // A feed that carries a row means the sub-chat has a queue again. An
       // empty feed must not clear the mark: the clear the mark was set for
-      // produces one, and a claim still in flight would arrive after it.
-      if (items.length > 0) unknownSubChatIds.delete(subChatId)
+      // produces one, and a claim still in flight would arrive after it. While
+      // that clear is still in flight neither does a feed *with* rows: main has
+      // not deleted them yet, so a reading that carries them is older than the
+      // clear, and honouring it would let a wake send a message the user just
+      // asked to delete.
+      if (items.length > 0 && !isClearing(subChatId)) {
+        unknownSubChatIds.delete(subChatId)
+      }
       set((state) => {
         const current = state.queues[subChatId]
         const sameHidden = (state.hiddenCounts[subChatId] ?? 0) === hiddenCount
@@ -162,6 +168,35 @@ const inFlightSends = new Set<string>()
  * claimed row is hidden from the feed.
  */
 const unknownSubChatIds = new Set<string>()
+
+/**
+ * Sub-chats whose rows the user asked to drop, each with the number of answers
+ * still owed: two clears can overlap, and the hold ends only when the last one
+ * has an answer.
+ */
+const clearingSubChatIds = new Map<string, number>()
+
+/** Whether a clear for the sub-chat is still waiting for its answer. */
+function isClearing(subChatId: string): boolean {
+  return (clearingSubChatIds.get(subChatId) ?? 0) > 0
+}
+
+/** Hold this sub-chat's sends back until this clear answers. */
+function holdWhileClearing(subChatId: string): void {
+  clearingSubChatIds.set(subChatId, (clearingSubChatIds.get(subChatId) ?? 0) + 1)
+}
+
+/** Answer one clear. Says whether it was the last one outstanding. */
+function answerClear(subChatId: string): boolean {
+  const owed = (clearingSubChatIds.get(subChatId) ?? 1) - 1
+  if (owed > 0) {
+    clearingSubChatIds.set(subChatId, owed)
+    return false
+  }
+  clearingSubChatIds.delete(subChatId)
+  return true
+}
+
 /** Sub-chats with a claim in flight, so a burst of wakes asks main once. */
 const claimAttempts = new Set<string>()
 
@@ -173,6 +208,12 @@ const claimAttempts = new Set<string>()
 function ownerFor(client: QueueFeedClient): string {
   if (client.owner) return client.owner
   return getWindowId()
+}
+
+/** Sub-chats this window knows to have rows, visible or held `sending`. */
+function subChatsWithQueuedRows(): string[] {
+  const state = useQueueProjection.getState()
+  return [...new Set([...Object.keys(state.queues), ...Object.keys(state.hiddenCounts)])]
 }
 
 function senderForSubChat(subChatId: string): Chat<UIMessage> | null {
@@ -303,6 +344,12 @@ export async function wakeQueue(
   subChatId: string,
   client: QueueFeedClient = trpcClient,
 ): Promise<void> {
+  // The user asked for this sub-chat's rows to go and main has not answered
+  // yet, so nothing may act on a reading taken before that answer. A feed
+  // carrying those rows can arrive while the delete is in flight; sending one
+  // would deliver a message the user just asked to delete, and handing it back
+  // would only make the feed speak again. The claim waits for the answer.
+  if (isClearing(subChatId)) return
   const chat = senderForSubChat(subChatId)
   if (!chat) {
     // A window mounts its panes after the feed has already replayed, so a wake
@@ -336,15 +383,18 @@ export async function wakeQueue(
   wakeRetries.delete(subChatId)
   if (!item) return
   // Nobody here will send this row: the sub-chat was deleted while the claim
-  // was in flight, or another send for it started during that await. A claimed
-  // row is hidden from the feed, so this is the only place that can say so.
-  if (unknownSubChatIds.has(subChatId) || inFlightSends.has(subChatId)) {
+  // was in flight, another send for it started during that await, or a turn
+  // went live here in the meantime — which the question asked before the claim
+  // cannot answer, because the answer is one round trip old. A claimed row is
+  // hidden from the feed, so this is the only place that can say so.
+  const senderNow = senderForSubChat(subChatId)
+  if (unknownSubChatIds.has(subChatId) || !senderNow) {
     await returnClaimedItem(item, client)
     return
   }
   inFlightSends.add(subChatId)
   try {
-    await deliverClaimedItem(item, chat, client)
+    await deliverClaimedItem(item, senderNow, client)
   } finally {
     inFlightSends.delete(subChatId)
   }
@@ -493,6 +543,7 @@ export async function clearQueueItems(
   const cards = state.queues[subChatId] ?? EMPTY_PROJECTED_QUEUE
   const hidden = state.hiddenCounts[subChatId] ?? 0
   unknownSubChatIds.add(subChatId)
+  holdWhileClearing(subChatId)
   state.dropQueue(subChatId)
   try {
     const cleared = await client.queue.clear.mutate({ subChatId })
@@ -510,6 +561,14 @@ export async function clearQueueItems(
       current.setQueue(subChatId, cards, hidden)
     }
     console.error("[queue] clear failed:", error)
+  } finally {
+    // The clear has an answer now, so claims may go out again. A row this
+    // window learned about while the delete was in flight was left alone, and
+    // a feed that arrived then is not a reason to ask again on its own, so ask
+    // once here: the answer is the event that ends the hold.
+    if (answerClear(subChatId) && hasQueuedMessages(subChatId)) {
+      void wakeQueue(subChatId, client)
+    }
   }
 }
 
@@ -573,9 +632,19 @@ export function startQueueSync(
     },
   )
 
+  // The third source is a pane that appears: a window mounts its panes after
+  // the feed has already replayed, and a pane whose sub-chat is already `ready`
+  // writes no status, so nothing else would ask for the rows left waiting.
+  const stopSenders = agentChatStore.subscribe(() => {
+    for (const subChatId of subChatsWithQueuedRows()) {
+      void wakeQueue(subChatId, client)
+    }
+  })
+
   connect()
 
   return () => {
+    stopSenders()
     stopped = true
     if (retryTimer) {
       clearTimeout(retryTimer)

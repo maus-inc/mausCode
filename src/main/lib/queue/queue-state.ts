@@ -85,7 +85,8 @@ export interface QueueStore {
   /**
    * Retire a row whose message went out, so it leaves the queue. Owner-scoped
    * for the same reason as the hand-off: the window that sent it is the only
-   * one that knows it did.
+   * one that knows it did. A row that was never handed over is refused, so a
+   * completion arriving early cannot delete a message the engine never saw.
    */
   complete(subChatId: string, itemId: string, owner: string): boolean
   /**
@@ -547,6 +548,11 @@ export function createQueueStore(db: QueueDb): QueueStore {
           eq(schema.queueItems.subChatId, subChatId),
           eq(schema.queueItems.status, "sending"),
           eq(schema.queueItems.claimedBy, owner),
+          // Only a row that was handed over: a parked row never returns to the
+          // automatic path, so parking a claim the engine never saw would hide
+          // a message the user is still waiting for. That row is the caller's
+          // to requeue, not to park.
+          isNotNull(schema.queueItems.handedAt),
         ),
       )
       .returning()
@@ -610,6 +616,11 @@ export function createQueueStore(db: QueueDb): QueueStore {
           eq(schema.queueItems.subChatId, subChatId),
           eq(schema.queueItems.status, "sending"),
           eq(schema.queueItems.claimedBy, owner),
+          // Only after the hand-off, which is what `markHanded` records:
+          // deleting a claim the engine never saw would lose the message
+          // instead of sending it. A row that was never handed over is still
+          // the queue's, and a completion arriving early must not remove it.
+          isNotNull(schema.queueItems.handedAt),
         ),
       )
       .returning()
