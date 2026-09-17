@@ -197,9 +197,18 @@ poll: it is read only inside a `claim` that a wake asked for.
 - `src/renderer/features/agents/components/queue-sync.tsx`: the single mount
   that starts the run feed and the queue projection per window
 - `src/renderer/features/agents/mentions/mention-prefixes.ts`: the mention
-  prefixes, kept in a light module so the parts builder needs no editor
+  prefixes, kept in a light module so the parts builder needs no editor. It is
+  the agents table, not the mentions system's `features/mentions/types/core.ts`:
+  the two overlap on eight prefixes but each carries entries the other does not
+  (`chatHistory:` here, `symbol:`/`github:issue:`/`github:pr:` there), so merging
+  them would change what a queued token means
 
 ## Consequences named on purpose
+
+- The composer's conversions are checked against the payload schema by
+  `src/renderer/features/agents/lib/queue-utils.test.ts`, because the two live on
+  opposite sides of the process boundary and a field one writes that the other
+  refuses costs the user the whole queued message.
 
 - A closed window means nothing sends until a window is open again. The message
   is not lost; it is a row.
