@@ -96,6 +96,22 @@ marks the sub-chat `error` first, so the feed change the requeue produces cannot
 claim the same row again in a loop. There is no timer retry: the row stays in
 the queue, and the next explicit send or later wake picks it up.
 
+### Line references in the step file and in the bot plan
+
+Step 08's §2 and §3 cite `queue-processor.tsx:17` as a 7 second sleep and `:23`
+as a 2 second interval. The file that was deleted held neither number. At the
+base commit it declared `QUEUE_PROCESS_DELAY = 500` and
+`QUEUE_SAFETY_CHECK_INTERVAL = 30_000`, and its comment records the earlier
+values (7000 and 2000) as history, so the step text was measuring an older
+revision of the same file. The acceptance check in §10 is a grep, and the file
+is gone, so the check passes regardless of which number was current. The same
+step's issue #10 carries a bot-generated plan whose first design choice states
+that step 07 does not exist in its checkout; that is false here, where `runs`,
+`run_events` and `runs.subscribe` shipped in PR #59, so its premise was not
+used. What was reused from it: gapped positions, one shared type module, a
+conditional-update claim, deleting the whole processor file, and leaving the
+indicator's DOM alone.
+
 ### What the deleted safety interval was load bearing for
 
 `QUEUE_SAFETY_CHECK_INTERVAL` (30 s, `queue-processor.tsx:23` before deletion)
