@@ -47,8 +47,9 @@ this section was added to:
 | `recoverSending()` with no `sending` row | 0.260 ms | - | 1 | -0.002 |
 
 The claim's extra update is a lease check over the same index the claim already
-reads (`queue_items_sub_chat_id_idx`, the ordering index at the time of this
-measurement; `0018` replaces it), and the marker is a single-row update by
+reads (`queue_items_sub_chat_id_idx`, the ordering index at the time of that
+measurement; the branch's single migration now creates the composite one
+directly), and the marker is a single-row update by
 primary key keyed to the claiming window, so the added work is bounded by one
 indexed scan over the rows of one sub-chat. A stored queue holds a handful of
 rows per sub-chat, and the dispatching window already pays a turn of seconds
@@ -57,10 +58,10 @@ protects: a message sent twice.
 
 ## Re-measured after the composite ordering index (review round four)
 
-CodeAnt's nitpick on `drizzle/0016_natural_reptil.sql:12` was right about the
+CodeAnt's nitpick on the first revision of the migration was right about the
 shape: both ordering queries filter one sub-chat and sort by `position,
 created_at`, and the single-column index left SQLite a sorter for that order.
-`0018_daffy_zombie.sql` replaces it with
+`0016_queue_in_main.sql` creates
 `queue_items_sub_chat_position_idx (sub_chat_id, position, created_at)`, which
 carries the sort. Measured the same way, three runs:
 

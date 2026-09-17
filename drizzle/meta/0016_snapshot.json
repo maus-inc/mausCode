@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1fbe00d9-7cd7-4864-8382-8e451eed2db8",
+  "id": "fb07c026-3ca9-4355-bc47-2a8b999a5cd2",
   "prevId": "ac46bc17-9223-49bb-9a42-3a9609dfb1b7",
   "tables": {
     "anthropic_accounts": {
@@ -575,13 +575,29 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "claimed_by": {
+          "name": "claimed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "handed_at": {
+          "name": "handed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
-        "queue_items_sub_chat_id_idx": {
-          "name": "queue_items_sub_chat_id_idx",
+        "queue_items_sub_chat_position_idx": {
+          "name": "queue_items_sub_chat_position_idx",
           "columns": [
-            "sub_chat_id"
+            "sub_chat_id",
+            "position",
+            "created_at"
           ],
           "isUnique": false
         }

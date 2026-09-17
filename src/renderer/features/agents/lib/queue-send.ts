@@ -136,6 +136,9 @@ export async function sendClaimedQueueItem({
       // The caller could not clear the sub-chat (a turn that did not stop in
       // time, or one that belongs to another window), so the item stays queued
       // instead of running a second turn beside it. Nothing was handed over.
+      // Say so: every other outcome here tells the user what happened, and this
+      // one is reached by a click that would otherwise look like it did nothing.
+      toast.error("Could not send that queued message now. It is still in the queue.")
       return "failed"
     }
 

@@ -103,9 +103,10 @@ describe("migration upgrade into the run tables", () => {
     expect(tableExists(opened, "queue_items")).toBe(true)
 
     // The queue's ordering index has to come out of the upgrade in the shape
-    // 0018 settled on: the composite one, in the order the ordering queries
-    // read it, and not the single-column one 0016 added first — an upgrade
-    // that kept the old index would leave every dispatch sorting a table.
+    // the migration settles on: the composite one, in the order the ordering
+    // queries read it. A single-column index would leave every dispatch sorting
+    // a table, and an upgrade that produced one would be a regression no other
+    // test would notice.
     expect(indexColumns(opened, "queue_items_sub_chat_position_idx")).toEqual([
       "sub_chat_id",
       "position",

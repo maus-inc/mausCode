@@ -152,6 +152,9 @@ describe("queue send", () => {
     expect(result).toBe("failed")
     expect(held.markHanded).not.toHaveBeenCalled()
     expect(held.sendMessage).not.toHaveBeenCalled()
+    // The user clicked Send now and nothing was sent, so the outcome has to be
+    // visible: the row is still in the queue and they need to know that.
+    expect(held.toastError).toHaveBeenCalled()
   })
 
   it("parks the outcome when the send throws after the hand-off", async () => {
