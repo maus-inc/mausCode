@@ -266,6 +266,36 @@ describe("queue projection", () => {
     expect(sendClaimedQueueItem).not.toHaveBeenCalled()
   })
 
+  it("re-asks after a wake lands while this window's own send is in flight", async () => {
+    const first = item("q1", "sub-a", "pending")
+    const second = item("q2", "sub-a", "pending")
+    const fake = fakeClient({ claimed: [first, second] })
+    registerChat("sub-a")
+
+    // Hold the first send open, so the wake the next feed produces arrives
+    // while the window's own send still owns the sub-chat.
+    let release: () => void = () => {}
+    sendClaimedQueueItem.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve("sent")
+        }),
+    )
+
+    const sending = wakeQueue("sub-a", fake.client)
+    await vi.waitFor(() => expect(sendClaimedQueueItem).toHaveBeenCalledTimes(1))
+
+    // The completion feed for the row in flight: this wake must not claim a
+    // second row, and it must not be dropped either.
+    applyQueueFeedItem(feed("sub-a", [second]), fake.client)
+    expect(fake.claims).toHaveLength(1)
+
+    release()
+    await sending
+    await vi.waitFor(() => expect(fake.claims).toHaveLength(2), { timeout: 5000 })
+    expect(fake.completed).toEqual(["q1", "q2"])
+  })
+
   it("never asks when this window holds no chat for the sub-chat", async () => {
     const fake = fakeClient({ claimed: [item("q1", "sub-a", "pending")] })
 
@@ -329,7 +359,7 @@ describe("queue projection", () => {
     expect(useStreamingStatusStore.getState().getStatus("sub-a")).toBe("error")
   })
 
-  it("Send now resumes the queue before claiming that item", async () => {
+  it("Send now claims the item before it resumes the queue", async () => {
     const claimed = item("q1", "sub-a", "paused")
     const fake = fakeClient({ claimed: [claimed] })
     registerChat("sub-a")
