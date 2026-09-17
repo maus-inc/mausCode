@@ -362,6 +362,118 @@ Self-triage in the same commit, after the review round:
   accepted, one character past it is refused — and its remove/clear test
   asserts which row survived instead of a filler `toBeDefined()`.
 
+### Round seven
+
+Review findings (CodeRabbit `5240377372` and CodeAnt's second pass), each
+verified against the code before acting:
+
+- **Fixed**: `park` and `complete` were the only writes after a claim with no
+  owner scope, although `markHanded` and `requeue` both had one. A stale card in
+  a second window, or a second window's click, could park a row another window
+  was sending, and the sender's own `complete` then failed: a message that had
+  already gone out stayed on the card as something the user could send again.
+  Both now carry the owner in the where clause
+  (`refuses to park or complete a row another window claimed`, `refuses a
+  complete from a window that does not hold the claim`).
+- **Fixed**: a clear that failed restored the card it captured before the drop,
+  even when the feed had spoken in between. That reading is newer than the
+  snapshot, so the restore could hide a row that had just arrived. The restore
+  now happens only when the projection holds nothing for the sub-chat
+  (`keeps what the feed says after a clear that does not land`).
+- **Fixed (test)**: the failed-clear test let the send retire the row before the
+  clear ran, so it asserted the restore over a queue main no longer had. The
+  chat is now streaming, which is the state the rule is about: a pending row and
+  a clear that did not land.
+- **Guarded**: the renderer's fakes ignored the owner on `park` and `complete`,
+  so a projection that stopped naming the claiming window would not have failed
+  anything — and in main those writes match the owner, so the row would have
+  stayed `sending` with nobody to settle it. Both tests now assert the window
+  they name (`parkedBy` / `completedBy`), and each assertion fails when the
+  owner is changed to another id.
+- **Found by mutation, then pinned**: the claim's conditional `UPDATE` — the
+  step's two-window rule — was covered by no test that fails without it. Every
+  existing race test exercises the *busy check above* the update (a dispatch
+  claim, where the read finds no row for the asker), and the one path that
+  reaches the update with a row already `sending` is a claim **by id**: the read
+  names the same row the busy check would have refused, so the branch is skipped
+  and only the `status IN (pending, paused)` guard stands between a second
+  window — a stale card, an impatient second click — and taking a message away
+  from the window that is sending it. With the guard removed, that second claim
+  returns the row. `refuses another window that asks for a row by id while it is
+  being sent` covers the pre-hand-off and post-hand-off cases, and fails when the
+  guard is removed.
+- **Found by mutation, then strengthened**: the reload test's name promised
+  "in order", but two items added in sequence have both position and
+  `createdAt` in insertion order, so dropping `order by position` left it green.
+  A move now precedes the reload, and the test fails when the order clause loses
+  `position`.
+- **Skipped, with the reason**: `remove` (the card's own X) and `clear` (the
+  sub-chat deletion) stay ownerless, because they are the user's intent, as
+  recorded above; and `owner` stays a value the renderer names, because it is a
+  liveness label — live window versus one that reloaded or closed — and not an
+  authorization principal. Every window runs the same trusted bundle with the
+  same capabilities, so moving the id into main's IPC context adds no privilege
+  boundary, while a wrong mapping would break the reload parking this step
+  depends on.
+- **Skipped**: cross-window Send now on the engines that write no run row. That
+  is the exposure `## Consequences named on purpose` already names, and the
+  step's one-rule-for-all-engines contract forbids per-provider run wiring here.
+
+Self-triage after the review round, before the commit:
+
+- Every action that can fail now says so (above): the X and the resume report
+  instead of logging only.
+- A claim call that never reached main was logged and dropped. Nothing changes
+  in main then, so no later feed event is coming to re-ask, and a sub-chat that
+  is already `ready` will not turn ready again — the row sat on the card with
+  nothing that would dispatch it until some unrelated event. It is now re-asked
+  on the same bounded budget a wake with no pane spends
+  (`asks again when the claim never reached main, and sends the row when it
+  does`), and the budget still bounds it (`stops asking after a bounded number
+  of failing claims, instead of polling`). The counter is therefore dropped when
+  main answers, not when the pane is present: a claim failure has a pane, and
+  dropping it there would restart the sequence on every retry.
+- The residual is named in the handoff below: a claim that did reach main but
+  whose answer was lost still needs a later wake, because the lease is only read
+  inside a claim a wake asked for.
+
+### Round eight
+
+A systematic sweep: every guard and every announcement in the main store was
+removed one at a time, and the suite was re-run to see which removals nothing
+noticed. Thirteen mutations, three holes, all three now closed:
+
+- **A user pause was not what stopped a dispatch.** `pause`'s first test held
+  *every* row, so the dispatch query found no `pending` row at all and the
+  `userPausedTx` guard never had to do anything; removing it changed nothing.
+  The guard's real job is the mixed state: Send now claims a held row, the send
+  fails before the hand-off, and the row comes back `pending` while its
+  siblings are still `paused`. Without the guard the automatic path takes it,
+  which is exactly what the user's stop said not to do. `holds a row that came
+  back while the user's stop still stands` fails when the guard is removed.
+- **Recovery's two halves were each masked by the other's absence.** The two
+  existing recovery tests each had only one kind of `sending` row, so a
+  never-handed query that also matched handed rows never met a handed row.
+  `splits recovery by the hand-off when both kinds of row are waiting` puts both
+  in one pass (two sub-chats, one database) and fails when the query loses
+  `isNull(handedAt)` — the case where a message that may already be in the
+  engine is sent again.
+- **The feed's whole surface was pinned for two writes out of eight.** `add`
+  and `remove` had announcement tests; `clear`, `move`, `setPaused`, `park`,
+  `complete` and `requeue` did not, and every card in every window is fed only
+  by that feed. `announces every write, because a card is fed only by the feed`
+  covers all of them and fails when any one emit is dropped. It also records the
+  one deliberate silence: `markHanded` says nothing, because the row is
+  `sending` before and after and a `sending` row is hidden by every card and
+  counted the same either way — `handedAt` is read only by this store. That
+  expectation is written into the test, because the first version of the test
+  assumed an announcement and the store was right.
+
+The verdicts for the other ten mutations: the claim's busy check, its own-handed
+park, the run-table gate, the pause gate on resume, `markHanded`'s single
+hand-off, `recoverSending`'s split, `add`'s resume, `remove`'s sub-chat scope,
+and `add`'s announcement each fail their covering test when removed.
+
 ### Round nine
 
 The same sweep over everything the step added on the renderer side and at the
@@ -451,118 +563,6 @@ and what the test pins is the behaviour the pair produces. And
 and had none at the branch point either, so no mutation of it can change
 anything the app does. Deleting it is a tidy-up for another step, not a step-08
 verdict, and pinning dead code would be worse than leaving it alone.
-
-### Round eight
-
-A systematic sweep: every guard and every announcement in the main store was
-removed one at a time, and the suite was re-run to see which removals nothing
-noticed. Thirteen mutations, three holes, all three now closed:
-
-- **A user pause was not what stopped a dispatch.** `pause`'s first test held
-  *every* row, so the dispatch query found no `pending` row at all and the
-  `userPausedTx` guard never had to do anything; removing it changed nothing.
-  The guard's real job is the mixed state: Send now claims a held row, the send
-  fails before the hand-off, and the row comes back `pending` while its
-  siblings are still `paused`. Without the guard the automatic path takes it,
-  which is exactly what the user's stop said not to do. `holds a row that came
-  back while the user's stop still stands` fails when the guard is removed.
-- **Recovery's two halves were each masked by the other's absence.** The two
-  existing recovery tests each had only one kind of `sending` row, so a
-  never-handed query that also matched handed rows never met a handed row.
-  `splits recovery by the hand-off when both kinds of row are waiting` puts both
-  in one pass (two sub-chats, one database) and fails when the query loses
-  `isNull(handedAt)` — the case where a message that may already be in the
-  engine is sent again.
-- **The feed's whole surface was pinned for two writes out of eight.** `add`
-  and `remove` had announcement tests; `clear`, `move`, `setPaused`, `park`,
-  `complete` and `requeue` did not, and every card in every window is fed only
-  by that feed. `announces every write, because a card is fed only by the feed`
-  covers all of them and fails when any one emit is dropped. It also records the
-  one deliberate silence: `markHanded` says nothing, because the row is
-  `sending` before and after and a `sending` row is hidden by every card and
-  counted the same either way — `handedAt` is read only by this store. That
-  expectation is written into the test, because the first version of the test
-  assumed an announcement and the store was right.
-
-The verdicts for the other ten mutations: the claim's busy check, its own-handed
-park, the run-table gate, the pause gate on resume, `markHanded`'s single
-hand-off, `recoverSending`'s split, `add`'s resume, `remove`'s sub-chat scope,
-and `add`'s announcement each fail their covering test when removed.
-
-### Round seven
-
-Review findings (CodeRabbit `5240377372` and CodeAnt's second pass), each
-verified against the code before acting:
-
-- **Fixed**: `park` and `complete` were the only writes after a claim with no
-  owner scope, although `markHanded` and `requeue` both had one. A stale card in
-  a second window, or a second window's click, could park a row another window
-  was sending, and the sender's own `complete` then failed: a message that had
-  already gone out stayed on the card as something the user could send again.
-  Both now carry the owner in the where clause
-  (`refuses to park or complete a row another window claimed`, `refuses a
-  complete from a window that does not hold the claim`).
-- **Fixed**: a clear that failed restored the card it captured before the drop,
-  even when the feed had spoken in between. That reading is newer than the
-  snapshot, so the restore could hide a row that had just arrived. The restore
-  now happens only when the projection holds nothing for the sub-chat
-  (`keeps what the feed says after a clear that does not land`).
-- **Fixed (test)**: the failed-clear test let the send retire the row before the
-  clear ran, so it asserted the restore over a queue main no longer had. The
-  chat is now streaming, which is the state the rule is about: a pending row and
-  a clear that did not land.
-- **Guarded**: the renderer's fakes ignored the owner on `park` and `complete`,
-  so a projection that stopped naming the claiming window would not have failed
-  anything — and in main those writes match the owner, so the row would have
-  stayed `sending` with nobody to settle it. Both tests now assert the window
-  they name (`parkedBy` / `completedBy`), and each assertion fails when the
-  owner is changed to another id.
-- **Found by mutation, then pinned**: the claim's conditional `UPDATE` — the
-  step's two-window rule — was covered by no test that fails without it. Every
-  existing race test exercises the *busy check above* the update (a dispatch
-  claim, where the read finds no row for the asker), and the one path that
-  reaches the update with a row already `sending` is a claim **by id**: the read
-  names the same row the busy check would have refused, so the branch is skipped
-  and only the `status IN (pending, paused)` guard stands between a second
-  window — a stale card, an impatient second click — and taking a message away
-  from the window that is sending it. With the guard removed, that second claim
-  returns the row. `refuses another window that asks for a row by id while it is
-  being sent` covers the pre-hand-off and post-hand-off cases, and fails when the
-  guard is removed.
-- **Found by mutation, then strengthened**: the reload test's name promised
-  "in order", but two items added in sequence have both position and
-  `createdAt` in insertion order, so dropping `order by position` left it green.
-  A move now precedes the reload, and the test fails when the order clause loses
-  `position`.
-- **Skipped, with the reason**: `remove` (the card's own X) and `clear` (the
-  sub-chat deletion) stay ownerless, because they are the user's intent, as
-  recorded above; and `owner` stays a value the renderer names, because it is a
-  liveness label — live window versus one that reloaded or closed — and not an
-  authorization principal. Every window runs the same trusted bundle with the
-  same capabilities, so moving the id into main's IPC context adds no privilege
-  boundary, while a wrong mapping would break the reload parking this step
-  depends on.
-- **Skipped**: cross-window Send now on the engines that write no run row. That
-  is the exposure `## Consequences named on purpose` already names, and the
-  step's one-rule-for-all-engines contract forbids per-provider run wiring here.
-
-Self-triage after the review round, before the commit:
-
-- Every action that can fail now says so (above): the X and the resume report
-  instead of logging only.
-- A claim call that never reached main was logged and dropped. Nothing changes
-  in main then, so no later feed event is coming to re-ask, and a sub-chat that
-  is already `ready` will not turn ready again — the row sat on the card with
-  nothing that would dispatch it until some unrelated event. It is now re-asked
-  on the same bounded budget a wake with no pane spends
-  (`asks again when the claim never reached main, and sends the row when it
-  does`), and the budget still bounds it (`stops asking after a bounded number
-  of failing claims, instead of polling`). The counter is therefore dropped when
-  main answers, not when the pane is present: a claim failure has a pane, and
-  dropping it there would restart the sequence on every retry.
-- The residual is named in the handoff below: a claim that did reach main but
-  whose answer was lost still needs a later wake, because the lease is only read
-  inside a claim a wake asked for.
 
 ## Verification
 
