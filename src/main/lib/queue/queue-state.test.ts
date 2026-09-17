@@ -281,7 +281,7 @@ describe("queue store", () => {
           subChatId: sharedSubChatId,
           engine: "legacy",
         })
-        expect(firstStore.complete(sharedSubChatId, row.id)).toBe(true)
+        expect(firstStore.complete(sharedSubChatId, row.id, WINDOW_A)).toBe(true)
         handle.noteFinished()
         handle.settle()
 
@@ -365,7 +365,7 @@ describe("queue store", () => {
         second.id,
       ])
 
-      expect(store.complete(subChatId, first.id)).toBe(true)
+      expect(store.complete(subChatId, first.id, WINDOW_A)).toBe(true)
       expect(claim(store, subChatId)?.id).toBe(third.id)
     })
 
@@ -442,7 +442,7 @@ describe("queue store", () => {
       expect(store.list(subChatId)[0].dispatchedAt).toBeNull()
 
       expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
-      expect(store.complete(subChatId, first.id)).toBe(true)
+      expect(store.complete(subChatId, first.id, WINDOW_A)).toBe(true)
       expect(ids(store.list(subChatId))).toEqual([second.id])
     })
 
@@ -477,7 +477,7 @@ describe("queue store", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
       expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
-      expect(store.park(subChatId, first.id)).toBe(true)
+      expect(store.park(subChatId, first.id, WINDOW_A)).toBe(true)
 
       // Resume is about the rows a user stop held back; a parked row already
       // left for the engine, so it stays where the user can decide about it.
@@ -490,7 +490,7 @@ describe("queue store", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       expect(claim(store, subChatId, first.id)?.id).toBe(first.id)
       expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
-      expect(store.park(subChatId, first.id)).toBe(true)
+      expect(store.park(subChatId, first.id, WINDOW_A)).toBe(true)
 
       // Queueing is an explicit send, so it ends a user pause. A parked row is
       // not a pause: it already left for the engine, so it must stay put.
@@ -524,7 +524,36 @@ describe("queue store", () => {
       // row is the park that says so.
       expect(store.requeue(subChatId, first.id, WINDOW_A)).toBe(false)
       expect(store.list(subChatId)[0].status).toBe("sending")
-      expect(store.park(subChatId, first.id)).toBe(true)
+      expect(store.park(subChatId, first.id, WINDOW_A)).toBe(true)
+    })
+
+    it("refuses to park or complete a row another window claimed", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id, WINDOW_A)?.id).toBe(first.id)
+      expect(store.markHanded(subChatId, first.id, WINDOW_A)).toBe(true)
+
+      // A stale card in another window, or a second window clicking on a row
+      // this one is already sending, must not be able to take the row away from
+      // the only window that can still record what happened to it: parking it
+      // would make the sender's own `complete` fail, and the user would then be
+      // offered a message that may already have been sent.
+      expect(store.park(subChatId, first.id, WINDOW_B)).toBe(false)
+      expect(store.complete(subChatId, first.id, WINDOW_B)).toBe(false)
+      expect(store.list(subChatId)[0].status).toBe("sending")
+
+      // The row is still the claiming window's to settle, both ways.
+      expect(store.park(subChatId, first.id, WINDOW_A)).toBe(true)
+    })
+
+    it("refuses a complete from a window that does not hold the claim", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      expect(claim(store, subChatId, first.id, WINDOW_A)?.id).toBe(first.id)
+
+      expect(store.complete(subChatId, first.id, WINDOW_B)).toBe(false)
+      expect(store.list(subChatId)).toHaveLength(1)
+
+      expect(store.complete(subChatId, first.id, WINDOW_A)).toBe(true)
+      expect(store.list(subChatId)).toEqual([])
     })
 
     it("hands back what a closed window held", () => {
@@ -574,7 +603,7 @@ describe("queue store", () => {
       const first = store.add({ subChatId, payload: payload("one") })
       const second = store.add({ subChatId, payload: payload("two") })
       const claimed = claim(store, subChatId)
-      if (claimed) store.complete(subChatId, claimed.id)
+      if (claimed) store.complete(subChatId, claimed.id, WINDOW_A)
 
       expect(seen[0]).toEqual([first.id])
       expect(seen[1]).toEqual([first.id, second.id])

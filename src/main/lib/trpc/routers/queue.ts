@@ -87,15 +87,22 @@ export const queueRouter = router({
   /**
    * Holds a row whose send was handed over but never reported a turn. The row
    * stays visible and out of the automatic path, so a resume cannot send it a
-   * second time.
+   * second time. Owner-scoped: this is the claiming window's own bookkeeping,
+   * and a second window touching the row mid-send would take it away from the
+   * only caller that can still record what happened to it.
    */
-  park: publicProcedure.input(itemInput).mutation(({ input }) => {
-    return getQueueStore().park(input.subChatId, input.itemId)
-  }),
+  park: publicProcedure
+    .input(itemInput.extend({ owner: z.string().min(1) }))
+    .mutation(({ input }) => {
+      return getQueueStore().park(input.subChatId, input.itemId, input.owner)
+    }),
 
-  complete: publicProcedure.input(itemInput).mutation(({ input }) => {
-    return getQueueStore().complete(input.subChatId, input.itemId)
-  }),
+  /** Retires a row whose message went out. Owner-scoped like every write after a claim. */
+  complete: publicProcedure
+    .input(itemInput.extend({ owner: z.string().min(1) }))
+    .mutation(({ input }) => {
+      return getQueueStore().complete(input.subChatId, input.itemId, input.owner)
+    }),
 
   /**
    * Gives back a claim this window did not use. Owner-scoped like the other

@@ -140,10 +140,10 @@ export type QueueFeedClient = {
       mutate: (input: { subChatId: string; itemId: string; owner: string }) => Promise<boolean>
     }
     park: {
-      mutate: (input: { subChatId: string; itemId: string }) => Promise<boolean>
+      mutate: (input: { subChatId: string; itemId: string; owner: string }) => Promise<boolean>
     }
     complete: {
-      mutate: (input: { subChatId: string; itemId: string }) => Promise<boolean>
+      mutate: (input: { subChatId: string; itemId: string; owner: string }) => Promise<boolean>
     }
     requeue: {
       mutate: (input: { subChatId: string; itemId: string; owner: string }) => Promise<boolean>
@@ -213,13 +213,13 @@ async function deliverClaimedItem(
   const recordOutcome = async (): Promise<void> => {
     switch (result) {
       case "sent":
-        await client.queue.complete.mutate({ subChatId, itemId: item.id })
+        await client.queue.complete.mutate({ subChatId, itemId: item.id, owner })
         break
       case "uncertain":
         // The payload was handed over, so nothing here may put it back into
         // the automatic path. It stays visible and paused.
         useStreamingStatusStore.getState().setStatus(subChatId, "error")
-        await client.queue.park.mutate({ subChatId, itemId: item.id })
+        await client.queue.park.mutate({ subChatId, itemId: item.id, owner })
         break
       case "failed":
         // Mark the failure before the requeue lands, so the feed change the
@@ -500,9 +500,15 @@ export async function clearQueueItems(
   } catch (error) {
     // Main still has this sub-chat's rows, so the mark that says it has none
     // would keep every later wake from sending them, and a dropped card would
-    // hide rows that are still there. Forget the mark and put the card back.
+    // hide rows that are still there. Forget the mark, and put the card back
+    // only if the feed has not spoken since the drop: an entry for the sub-chat
+    // means a feed update landed while the clear was in flight, and that
+    // reading is newer than the snapshot taken before it.
     unknownSubChatIds.delete(subChatId)
-    useQueueProjection.getState().setQueue(subChatId, cards, hidden)
+    const current = useQueueProjection.getState()
+    if (!(subChatId in current.queues) && !(subChatId in current.hiddenCounts)) {
+      current.setQueue(subChatId, cards, hidden)
+    }
     console.error("[queue] clear failed:", error)
   }
 }

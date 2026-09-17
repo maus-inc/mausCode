@@ -98,7 +98,8 @@ describe("queue router", () => {
     await caller.claim({ subChatId, owner: WINDOW_A })
     await caller.markHanded({ subChatId, itemId: first.id, owner: WINDOW_A })
 
-    await expect(caller.park({ subChatId, itemId: first.id })).resolves.toBe(true)
+    await expect(caller.park({ subChatId, itemId: first.id, owner: WINDOW_B })).resolves.toBe(false)
+    await expect(caller.park({ subChatId, itemId: first.id, owner: WINDOW_A })).resolves.toBe(true)
     // The parked row is still there to decide about, and the next item can go.
     await expect(caller.list({ subChatId })).resolves.toHaveLength(2)
     const next = await caller.claim({ subChatId, owner: WINDOW_A })
@@ -154,7 +155,14 @@ describe("queue router", () => {
       owner: WINDOW_A,
     })) as QueueItem
 
-    await expect(caller.complete({ subChatId, itemId: item.id })).resolves.toBe(true)
-    await expect(caller.complete({ subChatId, itemId: item.id })).resolves.toBe(false)
+    await expect(caller.complete({ subChatId, itemId: item.id, owner: WINDOW_B })).resolves.toBe(
+      false,
+    )
+    await expect(caller.complete({ subChatId, itemId: item.id, owner: WINDOW_A })).resolves.toBe(
+      true,
+    )
+    await expect(caller.complete({ subChatId, itemId: item.id, owner: WINDOW_A })).resolves.toBe(
+      false,
+    )
   })
 })

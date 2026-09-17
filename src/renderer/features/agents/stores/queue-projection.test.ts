@@ -588,10 +588,12 @@ describe("queue projection", () => {
   it("puts the card back when the clear does not land", async () => {
     const claimed = item("q1", "sub-a", "pending")
     const fake = fakeClient({ claimed: [claimed] })
-    registerChat("sub-a")
+    // A turn is running, so the row stays `pending`: this is the queue the user
+    // tried to delete, not one a send already retired.
+    registerChat("sub-a", "streaming")
     fake.queue.clear.mutate.mockRejectedValueOnce(new Error("db is busy"))
     applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
-    await vi.waitFor(() => expect(fake.completed).toEqual(["q1"]))
+    expect(fake.completed).toEqual([])
 
     await clearQueueItems("sub-a", fake.client)
 
@@ -599,6 +601,27 @@ describe("queue projection", () => {
     // an empty card would be a queue the user believes is gone.
     expect(useQueueProjection.getState().queues["sub-a"]?.map((row) => row.id)).toEqual(["q1"])
     expect(hasQueuedMessages("sub-a")).toBe(true)
+    // The wake found no sender and left a bounded retry pending; it belongs to
+    // this test, so it goes now instead of firing inside the next one.
+    cancelPendingWakeRetries()
+  })
+
+  it("keeps what the feed says after a clear that does not land", async () => {
+    const fake = fakeClient()
+    fake.queue.clear.mutate.mockRejectedValueOnce(new Error("db is busy"))
+    applyQueueFeedItem(feed("sub-a", [item("q1", "sub-a", "pending")]), fake.client)
+
+    const clearing = clearQueueItems("sub-a", fake.client)
+    // While main is being asked, another window's change lands: this reading is
+    // newer than the snapshot the clear is holding.
+    applyQueueFeedItem(feed("sub-a", [item("q2", "sub-a", "pending")]), fake.client)
+    await clearing
+
+    // The failure changed nothing in main, so the card keeps the newest row
+    // rather than the one that was there when the clear started.
+    expect(useQueueProjection.getState().queues["sub-a"]?.map((row) => row.id)).toEqual(["q2"])
+    expect(hasQueuedMessages("sub-a")).toBe(true)
+    cancelPendingWakeRetries()
   })
 
   it("stops re-asking a pane that never showed up, instead of polling for it", async () => {

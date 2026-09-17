@@ -339,6 +339,38 @@ Self-triage in the same commit, after the review round:
 
 ### Round seven
 
+Review findings (CodeRabbit `5240377372` and CodeAnt's second pass), each
+verified against the code before acting:
+
+- **Fixed**: `park` and `complete` were the only writes after a claim with no
+  owner scope, although `markHanded` and `requeue` both had one. A stale card in
+  a second window, or a second window's click, could park a row another window
+  was sending, and the sender's own `complete` then failed: a message that had
+  already gone out stayed on the card as something the user could send again.
+  Both now carry the owner in the where clause
+  (`refuses to park or complete a row another window claimed`, `refuses a
+  complete from a window that does not hold the claim`).
+- **Fixed**: a clear that failed restored the card it captured before the drop,
+  even when the feed had spoken in between. That reading is newer than the
+  snapshot, so the restore could hide a row that had just arrived. The restore
+  now happens only when the projection holds nothing for the sub-chat
+  (`keeps what the feed says after a clear that does not land`).
+- **Fixed (test)**: the failed-clear test let the send retire the row before the
+  clear ran, so it asserted the restore over a queue main no longer had. The
+  chat is now streaming, which is the state the rule is about: a pending row and
+  a clear that did not land.
+- **Skipped, with the reason**: `remove` (the card's own X) and `clear` (the
+  sub-chat deletion) stay ownerless, because they are the user's intent, as
+  recorded above; and `owner` stays a value the renderer names, because it is a
+  liveness label — live window versus one that reloaded or closed — and not an
+  authorization principal. Every window runs the same trusted bundle with the
+  same capabilities, so moving the id into main's IPC context adds no privilege
+  boundary, while a wrong mapping would break the reload parking this step
+  depends on.
+- **Skipped**: cross-window Send now on the engines that write no run row. That
+  is the exposure `## Consequences named on purpose` already names, and the
+  step's one-rule-for-all-engines contract forbids per-provider run wiring here.
+
 Self-triage after the review round, before the commit:
 
 - Every action that can fail now says so (above): the X and the resume report

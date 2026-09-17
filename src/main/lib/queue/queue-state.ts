@@ -75,12 +75,19 @@ export interface QueueStore {
    * Hold a claimed row whose send outcome is unknown: the payload was handed
    * over, and the turn never reported itself. A parked row is visible and is
    * never put back into the automatic path by a resume, because sending it
-   * again is what could duplicate the message.
+   * again is what could duplicate the message. Owner-scoped: parking another
+   * window's live send would take the row away from the one window that can
+   * still record what happened to it.
    */
-  park(subChatId: string, itemId: string): boolean
+  park(subChatId: string, itemId: string, owner: string): boolean
   /** Release what a window claimed, for a window that closed. */
   releaseOwner(owner: string): number
-  complete(subChatId: string, itemId: string): boolean
+  /**
+   * Retire a row whose message went out, so it leaves the queue. Owner-scoped
+   * for the same reason as the hand-off: the window that sent it is the only
+   * one that knows it did.
+   */
+  complete(subChatId: string, itemId: string, owner: string): boolean
   /**
    * Put a claim this window decided not to use back in the queue. Like every
    * other write after the claim, only the owner may do it, and only for a row
@@ -530,7 +537,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
     return claimed
   }
 
-  function park(subChatId: string, itemId: string): boolean {
+  function park(subChatId: string, itemId: string, owner: string): boolean {
     const removed = db
       .update(schema.queueItems)
       .set({ status: "paused", claimedBy: null })
@@ -539,6 +546,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
           eq(schema.queueItems.id, itemId),
           eq(schema.queueItems.subChatId, subChatId),
           eq(schema.queueItems.status, "sending"),
+          eq(schema.queueItems.claimedBy, owner),
         ),
       )
       .returning()
@@ -593,7 +601,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
     return released.length + parked.length
   }
 
-  function complete(subChatId: string, itemId: string): boolean {
+  function complete(subChatId: string, itemId: string, owner: string): boolean {
     const removed = db
       .delete(schema.queueItems)
       .where(
@@ -601,6 +609,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
           eq(schema.queueItems.id, itemId),
           eq(schema.queueItems.subChatId, subChatId),
           eq(schema.queueItems.status, "sending"),
+          eq(schema.queueItems.claimedBy, owner),
         ),
       )
       .returning()
