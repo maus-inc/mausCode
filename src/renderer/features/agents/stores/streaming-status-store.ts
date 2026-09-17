@@ -98,22 +98,39 @@ export function waitForStreamingReady(subChatId: string): Promise<void> {
  * `submitted`), which is what a caller waits for after invoking a send: the
  * engine accepted the message. Resolves immediately when a turn is already
  * live. `error` and `ready` do not resolve it, because neither means the
- * message went out.
+ * message went out. The caller owns the subscription it opens and drops it
+ * with `cancel` when it stops waiting, so a race this promise lost cannot
+ * leave a listener behind.
  */
-export function waitForTurnStart(subChatId: string): Promise<void> {
+export function waitForTurnStart(subChatId: string): {
+  promise: Promise<void>
+  /** Drop the subscription without resolving, for a caller that stopped waiting. */
+  cancel: () => void
+} {
   const current = useStreamingStatusStore.getState().getStatus(subChatId)
   if (current === "streaming" || current === "submitted") {
-    return Promise.resolve()
+    return { promise: Promise.resolve(), cancel: () => {} }
   }
-  return new Promise((resolve) => {
-    const unsub = useStreamingStatusStore.subscribe(
+
+  let unsubscribe: (() => void) | null = null
+  const promise = new Promise<void>((resolve) => {
+    unsubscribe = useStreamingStatusStore.subscribe(
       (state) => state.statuses[subChatId],
       (status) => {
         if (status === "streaming" || status === "submitted") {
-          unsub()
+          unsubscribe?.()
+          unsubscribe = null
           resolve()
         }
       },
     )
   })
+
+  return {
+    promise,
+    cancel: () => {
+      unsubscribe?.()
+      unsubscribe = null
+    },
+  }
 }

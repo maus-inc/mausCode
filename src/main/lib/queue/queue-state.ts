@@ -190,14 +190,15 @@ export function createQueueStore(db: QueueDb): QueueStore {
       }
     }
     return [...grouped.entries()].map(([subChatId, items]) => {
-      // Same total order `list` uses, applied to the rows of one sub-chat.
-      const ordered = items.sort(
+      // Same total order `list` uses. The array is local to this call, so it
+      // is sorted in place rather than through a copy.
+      items.sort(
         (a, b) =>
           a.position - b.position ||
           a.createdAt.getTime() - b.createdAt.getTime() ||
           (a.id < b.id ? -1 : 1),
       )
-      return { subChatId, items: ordered }
+      return { subChatId, items }
     })
   }
 

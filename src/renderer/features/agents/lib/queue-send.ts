@@ -101,10 +101,17 @@ export async function sendClaimedQueueItem({
         sendFailure = error
       },
     )
-    const firstEvent = await Promise.race([
-      waitForTurnStart(subChatId).then(() => "started" as const),
-      finished.then(() => "settled" as const),
-    ])
+    const turnStart = waitForTurnStart(subChatId)
+    let firstEvent: "started" | "settled"
+    try {
+      firstEvent = await Promise.race([
+        turnStart.promise.then(() => "started" as const),
+        finished.then(() => "settled" as const),
+      ])
+    } finally {
+      // Whichever side lost the race must not keep a listener on the store.
+      turnStart.cancel()
+    }
 
     if (firstEvent === "started") {
       // The message is out. The rest of the turn is the turn's business, so a
