@@ -302,8 +302,10 @@ export function createQueueStore(db: QueueDb): QueueStore {
   }
 
   function claim(input: ClaimQueueItemInput): QueueItem | null {
-    let claimed: QueueItem | null = null
-    db.transaction((tx) => {
+    // The claimed row travels out through the transaction's return value, the
+    // shape `add` already uses, so nothing is read from a variable a callback
+    // assigned.
+    const claimed = db.transaction((tx): QueueItem | null => {
       const row = input.itemId
         ? tx
             .select()
@@ -316,7 +318,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
             )
             .get()
         : rowByStatusTx(tx, input.subChatId, "pending")
-      if (!row || row.status === "sending") return
+      if (!row || row.status === "sending") return null
 
       if (!input.itemId) {
         // A dispatch waits for the sub-chat to be idle. The run table is the
@@ -332,11 +334,11 @@ export function createQueueStore(db: QueueDb): QueueStore {
             ),
           )
           .get()
-        if (activeRun) return
-        if (rowByStatusTx(tx, input.subChatId, "sending")) return
+        if (activeRun) return null
+        if (rowByStatusTx(tx, input.subChatId, "sending")) return null
         // One paused row means the user stopped; nothing dispatches until an
         // explicit send resumes the queue.
-        if (rowByStatusTx(tx, input.subChatId, "paused")) return
+        if (rowByStatusTx(tx, input.subChatId, "paused")) return null
       }
 
       const allowedFrom: QueueItemStatus[] = input.itemId ? ["pending", "paused"] : ["pending"]
@@ -348,7 +350,7 @@ export function createQueueStore(db: QueueDb): QueueStore {
         )
         .returning()
         .get()
-      if (updated) claimed = toQueueItem(updated)
+      return updated ? toQueueItem(updated) : null
     })
     if (claimed) {
       // One line per dispatch so a report of a missing or duplicated queued
