@@ -72,6 +72,7 @@ describe("queue send", () => {
     // about: the send call resolved and no status arrived.
     held.waitForTurnStart.mockReturnValue({
       promise: new Promise<void>(() => {}),
+      expired: new Promise<void>(() => {}),
       cancel: held.cancel,
     })
   })
@@ -128,6 +129,7 @@ describe("queue send", () => {
   it("retires the row when the turn started, even if the turn then fails", async () => {
     held.waitForTurnStart.mockReturnValue({
       promise: Promise.resolve(),
+      expired: new Promise<void>(() => {}),
       cancel: held.cancel,
     })
     held.sendMessage.mockImplementation(() => {

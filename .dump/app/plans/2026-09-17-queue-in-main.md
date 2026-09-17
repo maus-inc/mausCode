@@ -219,6 +219,18 @@ poll: it is read only inside a `claim` that a wake asked for.
 - A local send failure leaves the pane marked `error` with the item back in the
   queue; the run feed deliberately does not clear an error that no run row
   explains, so the user sees the failure and can retry with Send now.
+- A queued file keeps its metadata, not its bytes: `queuedFileSchema` is url,
+  media type, filename and size, so a queued attachment whose url was a
+  `blob:` from the upload hook is not readable after a restart. The deleted
+  renderer store had the same shape, so this is not a regression from this
+  step; carrying bytes would be a payload-contract change with its own caps.
+  Images do carry `base64Data` and survive.
+- A second window that holds the same sub-chat on one of the eleven engines
+  that write no run row cannot tell the first window's live turn from an idle
+  chat, because the status store is the only cross-window signal and nothing
+  hydrates it for those engines. Send now from that window is the exposure;
+  requiring a hydrated status instead would refuse Send now there, which the
+  one-rule-for-all-engines contract of this step does not allow.
 
 ## Verification
 

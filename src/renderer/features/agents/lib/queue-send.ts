@@ -135,11 +135,12 @@ export async function sendClaimedQueueItem({
       },
     )
     const turnStart = waitForTurnStart(subChatId)
-    let firstEvent: "started" | "settled"
+    let firstEvent: "started" | "settled" | "expired"
     try {
       firstEvent = await Promise.race([
         turnStart.promise.then(() => "started" as const),
         finished.then(() => "settled" as const),
+        turnStart.expired.then(() => "expired" as const),
       ])
     } finally {
       // Whichever side lost the race must not keep a listener on the store.
@@ -157,6 +158,12 @@ export async function sendClaimedQueueItem({
       return "sent"
     }
 
+    if (firstEvent === "expired") {
+      // No status arrived inside the wait. The send call is still the only
+      // thing that can report what happened, so its result is what is recorded;
+      // the row is never sent again either way.
+      console.error("[queue] no turn reported itself for the queued send")
+    }
     await finished
     if (sendFailure) {
       console.error("[queue] queued send failed after the hand-off:", sendFailure)

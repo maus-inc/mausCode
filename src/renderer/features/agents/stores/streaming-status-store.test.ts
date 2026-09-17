@@ -48,6 +48,30 @@ describe("waitForTurnStart", () => {
     expect(resolved).toBe(false)
   })
 
+  it("gives up on the status, not on the send, when no turn reports itself in time", async () => {
+    vi.useFakeTimers()
+    const waiter = waitForTurnStart("sub-a", 1000)
+    let started = false
+    let expired = false
+    void waiter.promise.then(() => {
+      started = true
+    })
+    void waiter.expired.then(() => {
+      expired = true
+    })
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(expired).toBe(true)
+    expect(started).toBe(false)
+    // The listener is gone by the time it gives up.
+    useStreamingStatusStore.getState().setStatus("sub-a", "streaming")
+    await Promise.resolve()
+    expect(started).toBe(false)
+    waiter.cancel()
+    vi.useRealTimers()
+  })
+
   it("does not resolve on a status that means the message never left", async () => {
     let resolved = false
     const waiter = waitForTurnStart("sub-a")
