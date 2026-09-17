@@ -30,6 +30,7 @@ import {
   restartRuntime,
   writeEndpointSettings,
 } from "../../runtime"
+import { consumeNativeTurnStream } from "../../runtime/consume-turn-stream"
 import { publicProcedure, router } from "../index"
 
 const imageAttachmentSchema = z.object({
@@ -172,26 +173,6 @@ async function setNativeModelWithRetry(
   }
 }
 
-async function consumeNativeTurnStream(
-  stream: ReturnType<JcodeClient["events"]>,
-  translator: NativeTranslator,
-  shouldStop: () => boolean,
-  safeEmit: NativeEmit,
-  markCompleted: () => void,
-): Promise<void> {
-  for await (const event of stream) {
-    if (shouldStop()) return
-    for (const chunk of translator.translate(event)) safeEmit(chunk)
-    // The daemon ended the turn: record completion before breaking so a
-    // teardown racing this point cannot downgrade the outcome to cancelled.
-    if (event.ev === "turn_done" || event.ev === "error") {
-      markCompleted()
-      return
-    }
-  }
-  markCompleted()
-}
-
 function finishNativeTurnBookkeeping(
   runHandle: RunHandle | null,
   turn: { cancelled: boolean; completed: boolean },
@@ -254,6 +235,12 @@ export const runtimeRouter = router({
           }
         }
         const safeComplete = () => {
+          // The producer is ending on its own terms. Record completion before
+          // emitting complete(): @trpc/server runs the subscription teardown
+          // synchronously from complete(), and that teardown must see a
+          // completed producer instead of marking a spurious cancel. A genuine
+          // cancel already set the flag and wins.
+          if (!turn.cancelled) turn.completed = true
           try {
             emit.complete()
           } catch {

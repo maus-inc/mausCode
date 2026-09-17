@@ -10,7 +10,7 @@ import * as os from "node:os"
 import path from "node:path"
 import type { Query, SDKUserMessage, Options as SdkOptions } from "@anthropic-ai/claude-agent-sdk"
 import { observable } from "@trpc/server/observable"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
 import { z } from "zod"
 import { setConnectionMethod } from "../../analytics"
@@ -937,6 +937,16 @@ export const claudeRouter = router({
         const abortController = new AbortController()
         const streamId = crypto.randomUUID()
         activeSessions.set(input.subChatId, abortController)
+
+        // Supersede puts a different controller in the sub-chat's session
+        // slot; cancel leaves the slot empty. Only supersede blocks
+        // persistence: a replacement already owns the messages, and this
+        // handler's partial save would overwrite them. A cancelled turn
+        // keeps saving its accumulated parts as the final truth.
+        const isSuperseded = () => {
+          const current = activeSessions.get(input.subChatId)
+          return current !== undefined && current !== abortController
+        }
 
         // Stream debug logging
         const subId = input.subChatId.slice(-8) // Short ID for logs
@@ -2531,10 +2541,14 @@ ${prompt}
                   console.log(
                     `[claude] Session not found - clearing invalid sessionId from database`,
                   )
-                  db.update(subChats)
-                    .set({ sessionId: null })
-                    .where(eq(subChats.id, input.subChatId))
-                    .run()
+                  // A superseded handler must not wipe the session id the
+                  // replacement turn is using.
+                  if (!isSuperseded()) {
+                    db.update(subChats)
+                      .set({ sessionId: null })
+                      .where(eq(subChats.id, input.subChatId))
+                      .run()
+                  }
 
                   errorContext = "Previous session expired. Please try again."
                   errorCategory = "SESSION_EXPIRED"
@@ -2615,7 +2629,10 @@ ${prompt}
                 if (currentText.trim()) {
                   parts.push({ type: "text", text: currentText })
                 }
-                if (parts.length > 0) {
+                // A superseded handler stops here: the replacement already
+                // owns the messages, and this partial save would overwrite
+                // whatever it produced.
+                if (parts.length > 0 && !isSuperseded()) {
                   const assistantMessage = {
                     id: crypto.randomUUID(),
                     role: "assistant",
@@ -2686,43 +2703,51 @@ ${prompt}
 
             const savedSessionId = (metadata.sessionId as string | undefined) ?? null
 
-            if (parts.length > 0) {
-              const assistantMessage = {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                parts,
-                metadata,
+            // A superseded handler stops before persisting: the replacement
+            // already owns the messages, the session id, and the marker, and
+            // this turn's save would overwrite them.
+            if (!isSuperseded()) {
+              if (parts.length > 0) {
+                const assistantMessage = {
+                  id: crypto.randomUUID(),
+                  role: "assistant",
+                  parts,
+                  metadata,
+                }
+
+                const finalMessages = [...messagesToSave, assistantMessage]
+
+                db.update(subChats)
+                  .set({
+                    messages: JSON.stringify(finalMessages),
+                    sessionId: savedSessionId,
+                    streamId: null,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
+              } else {
+                // No assistant response - just clear streamId
+                db.update(subChats)
+                  .set({
+                    sessionId: savedSessionId,
+                    streamId: null,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(subChats.id, input.subChatId))
+                  .run()
               }
 
-              const finalMessages = [...messagesToSave, assistantMessage]
-
-              db.update(subChats)
-                .set({
-                  messages: JSON.stringify(finalMessages),
-                  sessionId: savedSessionId,
-                  streamId: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
+              // Update parent chat timestamp
+              db.update(chats)
+                .set({ updatedAt: new Date() })
+                .where(eq(chats.id, input.chatId))
                 .run()
-            } else {
-              // No assistant response - just clear streamId
-              db.update(subChats)
-                .set({
-                  sessionId: savedSessionId,
-                  streamId: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(subChats.id, input.subChatId))
-                .run()
-            }
 
-            // Update parent chat timestamp
-            db.update(chats).set({ updatedAt: new Date() }).where(eq(chats.id, input.chatId)).run()
-
-            // Create snapshot stash for rollback support
-            if (historyEnabled && typeof metadata.sdkMessageUuid === "string" && input.cwd) {
-              await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
+              // Create snapshot stash for rollback support
+              if (historyEnabled && typeof metadata.sdkMessageUuid === "string" && input.cwd) {
+                await createRollbackStash(input.cwd, metadata.sdkMessageUuid)
+              }
             }
 
             const duration = ((Date.now() - streamStart) / 1000).toFixed(1)
@@ -2758,15 +2783,25 @@ ${prompt}
           console.log(`[SD] M:CLEANUP sub=${subId} sessionId=${currentSessionId || "none"}`)
           isObservableActive = false // Prevent emit after unsubscribe
           abortController.abort()
-          activeSessions.delete(input.subChatId)
+          // Only free the slot if this turn still owns it: a superseding turn
+          // has already replaced the entry, and the slot must keep pointing
+          // at the replacement.
+          if (activeSessions.get(input.subChatId) === abortController) {
+            activeSessions.delete(input.subChatId)
+          }
           clearPendingApprovals("Session ended.", input.subChatId)
 
-          // Clear streamId since we're no longer streaming.
+          // Clear streamId since we're no longer streaming, and only when it
+          // is still this turn's: a replacement turn writes its own marker.
           // sessionId is NOT saved here — the save block in the async function
-          // handles it (saves on normal completion, clears on abort). This avoids
-          // a redundant DB write that the cancel mutation would then overwrite.
+          // handles it (saves on normal completion, clears on abort). This
+          // avoids a redundant DB write that the cancel mutation would then
+          // overwrite.
           const db = getDatabase()
-          db.update(subChats).set({ streamId: null }).where(eq(subChats.id, input.subChatId)).run()
+          db.update(subChats)
+            .set({ streamId: null })
+            .where(and(eq(subChats.id, input.subChatId), eq(subChats.streamId, streamId)))
+            .run()
         }
       })
     }),

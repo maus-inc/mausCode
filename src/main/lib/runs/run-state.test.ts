@@ -392,6 +392,23 @@ describe("run store", () => {
       expect(map.get(subChatId)?.id).toBe(newest.runId)
     })
 
+    it("listRuns agrees with latestRunBySubChat on same-timestamp runs", () => {
+      // Replay (listRuns) and chat hydration (latestRunBySubChat) must pick
+      // the identical newest run even when every run shares one timestamp
+      // tick, or two windows would disagree on which run is current.
+      for (let i = 0; i < 10; i++) {
+        const done = store.startRun({ subChatId, engine: "legacy" })
+        done.noteFinished()
+        done.settle()
+      }
+      const newest = store.startRun({ subChatId, engine: "legacy" })
+
+      expect(store.listRuns({ subChatId, limit: 1 })[0]?.id).toBe(newest.runId)
+      expect(store.listRuns({ subChatId, limit: 1 })[0]?.id).toBe(
+        store.latestRunBySubChat([subChatId]).get(subChatId)?.id,
+      )
+    })
+
     it("cancelActiveRuns settles every active run and emits each one", () => {
       // One active run per sub-chat: a second send on the same sub-chat
       // supersedes the first, so distinct sub-chats exercise the sweep.

@@ -524,7 +524,10 @@ export function createRunStore(db: RunStoreDb): RunStore {
       .select()
       .from(schema.runs)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(schema.runs.startedAt), desc(schema.runs.id))
+      // rowid (insertion order) is the tie-break everywhere the newest run
+      // matters, so replay and chat hydration always agree on same-timestamp
+      // runs; id order would resolve ties differently.
+      .orderBy(desc(schema.runs.startedAt), desc(sql`"runs"."rowid"`))
       .limit(limit)
     return query.all()
   }
