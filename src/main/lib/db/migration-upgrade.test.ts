@@ -21,6 +21,12 @@ type MigrationFile = {
   hash: string
 }
 
+/** The columns of an index, in the order SQLite will use them. */
+function indexColumns(opened: TestDb, index: string): string[] {
+  const rows = opened.client.prepare(`PRAGMA index_info(${index})`).all() as { name: string }[]
+  return rows.map((row) => row.name)
+}
+
 function tableExists(opened: TestDb, name: string): boolean {
   const rows = opened.db
     .select({ name: sql<string>`name` })
@@ -94,6 +100,20 @@ describe("migration upgrade into the run tables", () => {
 
     expect(tableExists(opened, "runs")).toBe(true)
     expect(tableExists(opened, "run_events")).toBe(true)
+    expect(tableExists(opened, "queue_items")).toBe(true)
+
+    // The queue's ordering index has to come out of the upgrade in the shape
+    // 0018 settled on: the composite one, in the order the ordering queries
+    // read it, and not the single-column one 0016 added first — an upgrade
+    // that kept the old index would leave every dispatch sorting a table.
+    expect(indexColumns(opened, "queue_items_sub_chat_position_idx")).toEqual([
+      "sub_chat_id",
+      "position",
+      "created_at",
+    ])
+    // A missing index reports no columns rather than failing, so emptiness is
+    // the assertion that the old one was dropped.
+    expect(indexColumns(opened, "queue_items_sub_chat_id_idx")).toEqual([])
 
     const afterUpgrade = opened.db.select().from(subChats).all()
     expect(afterUpgrade).toHaveLength(1)

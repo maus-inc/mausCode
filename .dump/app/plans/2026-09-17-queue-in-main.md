@@ -575,6 +575,32 @@ show that; the first attempt only broke the syntax and produced no summary,
 which is a reminder that "no summary" is an unknown, not a survivor.
 
 
+**The storage layer, where the tests were blind in the same way twice.** The
+wipe test walks every table that reaches the chat tree by foreign key and
+asserts each is empty after a wipe — including the `queue_items` this step
+added. Two things hid its own claim: it never *filled* the new table (an empty
+table reads as empty whether or not it is wiped), and with `foreign_keys = ON`
+the delete of `sub_chats` empties `queue_items` by cascade whatever the wipe
+does, so the wipe's explicit deletes could all be removed unnoticed. The file's
+own docstring says it deletes "in foreign-key order" precisely so the guarantee
+does not rest on the pragma; the test now fills a queue row and runs one wipe
+with foreign keys *off*, which is the configuration that makes the order
+load-bearing. Removing the `queue_items`, `runs` or `run_events` delete now fails
+it. Swapping the last two deletes (`sub_chats` before `chats`) is the one
+verdict that stays a non-hole: every tree table is deleted explicitly, so no
+order can leave a row behind, and an order that only matters to a cascade this
+wipe does not use is not a behaviour to pin.
+
+The migration set was verified only by the fact that later tests could insert
+into the new table, which says nothing about the index 0018 exists for. The
+upgrade test now asserts the shape the upgrade has to produce: the composite
+`(sub_chat_id, position, created_at)` index, in that order, with the old
+single-column one gone — and all three of "the composite index is never
+created", "the old index is never dropped" and "the index columns are reordered"
+fail it. A missing index reports no columns rather than erroring, which is what
+the assertion had to be written against.
+
+
 **Not holes.** The reconnect path has two independent defences — the `stopped`
 flag in `connect` and the cleared retry timer in the stop — and removing either
 alone is invisible because the other covers it; both were removed together to

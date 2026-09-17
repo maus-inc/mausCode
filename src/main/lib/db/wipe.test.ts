@@ -76,6 +76,7 @@ function seed(db: TestDb["db"]): void {
     .returning()
     .get()
   db.insert(schema.runEvents).values({ runId: run.id, seq: 1, kind: "created" }).run()
+  db.insert(schema.queueItems).values({ subChatId: subChat.id, position: 0 }).run()
   db.insert(schema.anthropicAccounts).values({ oauthToken: "secret" }).run()
 }
 
@@ -99,18 +100,42 @@ describe("wipe paths", () => {
 
   it("clearChatTree empties every chat-tree table and keeps the rest", () => {
     seed(opened.db)
-    clearChatTree(opened.db)
 
+    // The walk below asserts emptiness, so the table this step added has to be
+    // filled first: an empty table reads as empty whether or not it is wiped.
     const tree = chatTreeTables()
     expect(tree).toContain("runs")
     expect(tree).toContain("run_events")
     expect(tree).toContain("sub_chats")
+    expect(tree).toContain("queue_items")
+    expect(rowCount(opened.db, "queue_items")).toBe(1)
+
+    clearChatTree(opened.db)
+
     for (const tableName of tree) {
       expect(rowCount(opened.db, tableName), tableName).toBe(0)
     }
 
     expect(rowCount(opened.db, "projects")).toBe(1)
     expect(rowCount(opened.db, "anthropic_accounts")).toBe(1)
+  })
+
+  it("empties every chat-tree table even when the cascade cannot do it for it", () => {
+    // Foreign keys are off for this one on purpose. The wipe deletes in
+    // foreign-key order itself, exactly so its guarantee does not rest on the
+    // pragma: a dropped cascade, or a handle opened without it, would otherwise
+    // leave a deleted chat's rows behind. With the pragma on, the cascade
+    // empties those tables anyway and makes every explicit delete in the wipe
+    // unfalsifiable.
+    opened.client.exec("PRAGMA foreign_keys = OFF")
+    seed(opened.db)
+
+    clearChatTree(opened.db)
+
+    for (const tableName of chatTreeTables()) {
+      expect(rowCount(opened.db, tableName), tableName).toBe(0)
+    }
+    expect(rowCount(opened.db, "projects")).toBe(1)
   })
 
   it("clearAllData also empties projects", () => {
