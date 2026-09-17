@@ -31,6 +31,8 @@ Triage rows 1 and 11 accepted both, and the plan sequences them after the permis
 
 `src/main/lib/git/github/` for the fetch path, `src/main/lib/git/worktree.ts` for the checkout the fix runs in, and step 15's cache policy, which is what stops this from becoming a `gh` rate-limit incident. `run_events` from step 07 is where each attempt is recorded. There is no scheduler yet, so the loop rides the run subscription; step 21 gives it a clock.
 
+Known gap carried over from step 07: startup recovery logs a failure and continues without retrying, so a crashed run stays reported active until the next launch when the first attempt fails. An autopilot loop that spans restarts needs dependable recovery, so this step must add a retry or prove the gap unreachable.
+
 ## 6. Implementation plan
 
 1. One module, `src/main/lib/autopilot/`, with two watchers over one primitive: read state, decide, act, record. Do not build two loops.

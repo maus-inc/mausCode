@@ -9,17 +9,23 @@ import { clearLoading, loadingSubChatsAtom, setLoading } from "../atoms"
 import { MENTION_PREFIXES } from "../mentions/agents-mentions-editor"
 import { agentChatStore } from "../stores/agent-chat-store"
 import { useMessageQueueStore } from "../stores/message-queue-store"
+import { startRunFeedSync } from "../stores/run-feed-projection"
 import { useStreamingStatusStore } from "../stores/streaming-status-store"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { utf8ToBase64 } from "../utils/base64"
 
-// Delay between processing queue items (ms)
-const QUEUE_PROCESS_DELAY = 7000
+// Debounce between processing a queue wakeup and sending (ms). The ready
+// signal is the run record settled by the main process and projected into
+// the streaming store by the run feed (roadmap step 07), and claude.ts holds
+// the finish chunk until the message is persisted, so no long pacing gap is
+// needed anymore. The debounce only coalesces the several wakeups one
+// transition produces. Was 7000.
+const QUEUE_PROCESS_DELAY = 500
 
-// Periodic safety re-check interval (ms) — catches missed status transitions
-// (e.g., race conditions where streaming→ready transition doesn't fire the
-// status subscription, leaving the queue stuck waiting).
-const QUEUE_SAFETY_CHECK_INTERVAL = 2000
+// Last-resort safety re-check interval (ms). Status transitions arrive over
+// the run feed subscription, which reconnects on error; this interval only
+// guards against a missed projection write. Was 2000.
+const QUEUE_SAFETY_CHECK_INTERVAL = 30_000
 
 /**
  * Global queue processor component.
@@ -38,6 +44,10 @@ export function QueueProcessor() {
   const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
   useEffect(() => {
+    // Project the main-owned run record into the streaming status store so
+    // every window sees the same run truth (roadmap step 07).
+    const stopRunFeed = startRunFeedSync()
+
     // Function to process queue for a specific sub-chat
     const processQueue = async (subChatId: string) => {
       // Check if already processing this sub-chat
@@ -248,6 +258,7 @@ export function QueueProcessor() {
 
     // Cleanup
     return () => {
+      stopRunFeed()
       unsubscribeQueue()
       unsubscribeStatus()
       clearInterval(safetyInterval)

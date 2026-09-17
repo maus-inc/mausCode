@@ -62,6 +62,7 @@ under delegated authority with the reasoning written down.
 | Ratchet the inherited debt, never fake green | `ci/plans/initial-ci-plan.md`, `ci/decisions/2026-09-11-lint-gate-and-format-sweep.md` | A gate that fails on debt nobody created trains people to ignore CI |
 | Vendored contracts are vocabulary until used, adopt per use | `app/decisions/effect-adoption-t3-layers-2026-09-11.md` and step 13 of the roadmap | 24,860 lines with zero importers is not a live path |
 | OpenSpec changes are scaffolded by hand, validated where the CLI exists | `app/decisions/2026-09-11-openspec-cli.md` | The CLI is unobtainable from verified sources |
+| The temporary lockfile-regen workflow is deleted, and its escape hatch is this command: check out the branch on a runner with bun 1.4.2 and run `bun install --ignore-scripts`, then commit the regenerated `bun.lock` | PR #59, 2026-09-16, supersedes the keep-and-rename note in `plans/2026-09-13-mauscode-roadmap.md` step 31 | The file says delete it once the regenerated lock is committed, `bun.lock` is committed, and it kept firing a zero-job failed run on every push to every arena branch, which reads as failing CI |
 
 ## Deliberately rejected
 

@@ -28,6 +28,7 @@ import { getApiUrl } from "./lib/config"
 import { closeDatabase, initDatabase } from "./lib/db"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
+import { recoverInterruptedRuns } from "./lib/runs"
 import { shutdownRuntime } from "./lib/runtime"
 import {
   abortAllClaudeSessions,
@@ -935,6 +936,9 @@ if (gotTheLock) {
     try {
       initDatabase()
       console.log("[App] Database initialized")
+      // Runs left active by a crash or force-quit have no live owner at this
+      // point; move them to interrupted with the last event as evidence.
+      recoverInterruptedRuns()
     } catch (error) {
       console.error("[App] Failed to initialize database:", error)
     }

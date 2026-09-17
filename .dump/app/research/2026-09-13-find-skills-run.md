@@ -89,3 +89,15 @@ Total added to the repository is about 547 KB of documentation under `.agents/sk
 1. Adopt the rule-file shape for generated skills in step 43, one rule per file with `title`, `impact` and `tags`, since a model that only reads the first screen needs that granularity, and it is how both Vercel skills stay cheap to load.
 2. Adopt `skill-creator`'s validation loop as the acceptance bar for a generated skill in step 43, draft, test prompts, measure triggering, then optimise the description, which is a better rule than "the validator checks length".
 3. Re-run `find-skills` per step as usual. Steps 07, 08, 10, 13, 14, 24, 26, 27, 28, 43 and 44 currently have nothing relevant in this ecosystem, and that is a finding, recorded here so nobody spends ten minutes rediscovering a dead search endpoint.
+
+## 8. Step 07 run, 2026-09-16
+
+Ran for roadmap step 07, run state. Queries: `sqlite migration state machine`,
+`database event sourcing`, `electron trpc` through `npx skills find` (skills CLI
+1.5.26). All three returned "No skills found", matching the broken-endpoint
+finding in section 1 rather than proving an empty ecosystem. No candidates to
+read, nothing installed, nothing refused. Project skills applied: `unslop` to
+every line of prose this step wrote (design record, code comments, benchmark
+record, PR body), `find-skills` itself for this run. `frontend-design` and
+`vercel-react-best-practices` were checked against the step and do not apply:
+step 07 ships no new UI, only a store projection with no visual surface.

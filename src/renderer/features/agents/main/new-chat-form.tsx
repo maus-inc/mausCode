@@ -1244,6 +1244,8 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
         branch: data.branch ?? null,
         baseBranch: data.baseBranch ?? null,
         project: old?.project,
+        // A freshly created chat has no runs yet.
+        subChats: (data.subChats ?? []).map((subChat) => ({ ...subChat, latestRun: null })),
       }))
 
       const firstSubChatId = data.subChats?.[0]?.id

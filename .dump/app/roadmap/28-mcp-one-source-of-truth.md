@@ -33,6 +33,8 @@ There is no MCP source of truth. Adding a server in settings calls `trpc.claude.
 
 `docs/backend-porting-recipe.md` §7, since a server's tool list is a capability. The shared stdio and HTTP tool fetchers the provider records describe already exist, so reuse them for enumeration. `src/main/lib/runtime/mcp-config.ts` is the runtime's projection point, and the openspec proposal above is the seam it expects, so read both before designing the writer.
 
+The session-init snapshot emitted by the native chat handler, `emitNativeSessionSnapshot` in `src/main/lib/trpc/routers/runtime.ts`, is the stopgap seam this step replaces. It is best-effort by contract: a snapshot failure must never fail the turn, and `toolsUnknown` stays true while the v1 harness exposes no tool list. Keep both properties when the registry projection takes over.
+
 ## 6. Implementation plan
 
 1. `mcp_servers` table: `id`, `name`, `transport`, `command`, `argsJson`, `envRefsJson`, `url`, `headersRefsJson`, `disabled`, `toolAllowlistJson`, `scope` global or project path, `providersJson`, `createdAt`, `updatedAt`. Env and headers are references into the step 11 store, never values.

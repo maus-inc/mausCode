@@ -66,6 +66,26 @@ type ActiveStream = {
 
 const activeStreams = new Map<string, ActiveStream>()
 
+/**
+ * Abort every live opencode stream. Mirrors the supersede path: mark the
+ * cancel, abort the controller, and dispose the provider session. The map
+ * stays intact on purpose: the handler's authority check treats a missing
+ * entry as authoritative, so clearing it here would let an aborted handler
+ * keep persisting after a wipe deleted the rows. Each handler removes its
+ * own entry in its finally block. Returns once every session disposal has
+ * finished, so a caller like the debug wipes can wait instead of racing a
+ * session that is still winding down.
+ */
+export async function abortAllOpencodeStreams(): Promise<void> {
+  const disposals: Promise<void>[] = []
+  for (const [subChatId, stream] of activeStreams) {
+    stream.cancelRequested = true
+    stream.controller.abort()
+    disposals.push(cleanupProvider(subChatId))
+  }
+  await Promise.all(disposals)
+}
+
 const AUTH_HINTS = [
   "401",
   "unauthorized",
