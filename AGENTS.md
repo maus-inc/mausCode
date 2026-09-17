@@ -155,6 +155,8 @@ npm --prefix packages/runtime-client run typecheck
 
 For anything that ships, also run `bun run build` and `bun run package:mac`. Do not call a gate green when you did not run it.
 
+Run the gate the way CI runs it, not a substitute, and re-run it after every edit. A piped command reports the exit code of the pipe, so read the printed diagnostics rather than the status, and a clean run from before your last edit proves nothing.
+
 ## The code research gate
 
 The verification gate proves the tree is clean. This gate proves the change is correct, and it applies whenever the diff writes or edits code, meaning anything that the app, its tests or its tooling run. A change that only touches markdown is exempt. Run the gate before you push new changes, before you open a PR and before you consider the work complete, and report it like any other gate: passed, failed or not run.
