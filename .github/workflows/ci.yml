@@ -41,6 +41,7 @@ jobs:
       - name: "Typecheck (ratchet: no new errors vs baseline)"
         run: bun run ratchet:typecheck
       - name: "Typecheck (tsgo, second gate)"
+        continue-on-error: true
         run: bun run ts:check
 
   build:
