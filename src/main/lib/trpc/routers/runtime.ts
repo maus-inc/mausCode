@@ -14,7 +14,7 @@ import { z } from "zod"
 import type { UIMessageChunk } from "../../claude/types"
 import { getDatabase, subChats } from "../../db"
 import { getRunStore } from "../../runs"
-import { observeRunChunk, type RunHandle } from "../../runs/run-state"
+import type { RunHandle } from "../../runs/run-state"
 import {
   applyNativeCredentials,
   ensureNativeSession,
@@ -227,7 +227,7 @@ export const runtimeRouter = router({
 
         const safeEmit = (chunk: UIMessageChunk) => {
           if (!isActive || turn.cancelled) return
-          if (runHandle) observeRunChunk(runHandle, chunk)
+          if (runHandle) runHandle.observeChunk(chunk)
           try {
             emit.next(chunk)
           } catch {
@@ -330,6 +330,9 @@ export const runtimeRouter = router({
               translator,
               () => !isActive || turn.cancelled,
               safeEmit,
+              (runEvent) => {
+                runHandle?.noteHarnessEvent(runEvent.kind, runEvent.payload)
+              },
               () => {
                 turn.completed = true
               },

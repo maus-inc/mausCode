@@ -15,7 +15,9 @@ import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import { alias } from "drizzle-orm/sqlite-core"
 import {
   ACTIVE_RUN_STATUSES,
+  type HarnessRunEventKind,
   isActiveRunStatus,
+  RUN_EVENT_TEXT_CAP,
   type RunEngine,
   type RunStatus,
 } from "../../../shared/run-state"
@@ -50,6 +52,8 @@ export interface RunFeedItem {
 export interface RunHandle {
   runId: string
   subChatId: string
+  observeChunk(chunk: RunObservableChunk): void
+  noteHarnessEvent(kind: HarnessRunEventKind, payload: Record<string, unknown>): void
   noteStarted(): void
   noteApprovalRequested(toolName?: string): void
   noteApprovalResolved(approved: boolean): void
@@ -67,27 +71,34 @@ export interface RunObservableChunk {
   type: string
   errorText?: string
   questions?: Array<{ header?: string }>
+  toolCallId?: string
+  toolName?: string
+  input?: unknown
+  output?: unknown
 }
 
-export function observeRunChunk(handle: RunHandle, chunk: RunObservableChunk): void {
-  handle.noteStarted()
-  switch (chunk.type) {
-    case "ask-user-question":
-      handle.noteApprovalRequested(chunk.questions?.[0]?.header)
-      break
-    case "ask-user-question-timeout":
-      handle.noteApprovalResolved(false)
-      break
-    case "error":
-    case "auth-error":
-      handle.noteError(chunk.errorText ?? "unknown error")
-      break
-    case "finish":
-      handle.noteFinished()
-      break
-    default:
-      break
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/** A completed Compact round-trip's payload: string output wraps as `message`. */
+function compactedPayload(output: unknown): Record<string, unknown> {
+  if (typeof output === "string") return { message: output }
+  if (isRecord(output)) return output
+  return {}
+}
+
+function capHarnessValue(value: unknown): unknown {
+  if (typeof value === "string") return capText(value, RUN_EVENT_TEXT_CAP)
+  if (Array.isArray(value)) return value.map(capHarnessValue)
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, capHarnessValue(v)]))
   }
+  return value
+}
+
+function capHarnessPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(payload).map(([k, v]) => [k, capHarnessValue(v)]))
 }
 
 interface Listener {
@@ -279,6 +290,10 @@ export function createRunStore(db: RunStoreDb): RunStore {
     let finishedNoted = false
     let pendingError: string | null = null
     let settledDone = false
+    // toolCallId of the Compact tool round-trip currently in flight, so the
+    // matching output can be recorded as the `compacted` run event. Both
+    // engines signal compaction this way (roadmap step 09).
+    let compactToolCallId: string | null = null
 
     function activeRun(): Run | null {
       if (settledDone || !isActiveRunStatus(run.status)) return null
@@ -296,9 +311,66 @@ export function createRunStore(db: RunStoreDb): RunStore {
       }
     }
 
-    return {
+    const handle: RunHandle = {
       runId: run.id,
       subChatId,
+
+      observeChunk(chunk: RunObservableChunk): void {
+        handle.noteStarted()
+        if (
+          (chunk.type === "tool-input-start" || chunk.type === "tool-input-available") &&
+          chunk.toolName === "Compact" &&
+          chunk.toolCallId
+        ) {
+          compactToolCallId = chunk.toolCallId
+        }
+        if (
+          (chunk.type === "tool-output-available" || chunk.type === "tool-output-error") &&
+          chunk.toolCallId != null &&
+          chunk.toolCallId === compactToolCallId
+        ) {
+          compactToolCallId = null
+          // Only a completed round-trip is a compaction. An errored one clears
+          // the marker without recording a `compacted` fact that did not
+          // happen.
+          if (chunk.type === "tool-output-available") {
+            handle.noteHarnessEvent("compacted", compactedPayload(chunk.output))
+          }
+        }
+        switch (chunk.type) {
+          case "ask-user-question":
+            handle.noteApprovalRequested(chunk.questions?.[0]?.header)
+            break
+          case "ask-user-question-timeout":
+            handle.noteApprovalResolved(false)
+            break
+          case "error":
+          case "auth-error":
+            handle.noteError(chunk.errorText ?? "unknown error")
+            break
+          case "finish":
+            handle.noteFinished()
+            break
+          default:
+            break
+        }
+      },
+
+      noteHarnessEvent(kind, payload): void {
+        guard(() => {
+          const current = activeRun()
+          if (!current) return
+          let event: RunEvent | null = null
+          db.transaction((tx) => {
+            event = appendEventTx(tx, current, kind, capHarnessPayload(payload))
+            tx.update(schema.runs)
+              .set({ lastSeq: current.lastSeq })
+              .where(eq(schema.runs.id, current.id))
+              .run()
+          })
+          if (event) emit(current, event)
+        }, "noteHarnessEvent")
+      },
 
       noteStarted(): void {
         if (startedNoted) return
@@ -411,6 +483,7 @@ export function createRunStore(db: RunStoreDb): RunStore {
         }, "settle")
       },
     }
+    return handle
   }
 
   function resolveApprovalForSubChat(subChatId: string, approved: boolean): void {

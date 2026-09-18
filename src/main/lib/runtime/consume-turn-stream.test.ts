@@ -6,11 +6,13 @@
 
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import type { ApiEvent } from "@maus-inc/runtime-client"
+import type { ApiEvent, JcodeClient } from "@maus-inc/runtime-client"
+import type { HarnessRunEvent } from "../../../shared/run-state.ts"
+import type { UIMessageChunk } from "../claude/types.ts"
 import { consumeNativeTurnStream, type NativeTurnTranslator } from "./consume-turn-stream.ts"
 
-const translator: NativeTurnTranslator = {
-  translate: () => [],
+const emptyTranslator: NativeTurnTranslator = {
+  translate: () => ({ chunks: [], runEvents: [] }),
 }
 
 /**
@@ -18,7 +20,7 @@ const translator: NativeTurnTranslator = {
  * exactly like cancelRemote() closes a live session stream.
  */
 function makeStream(events: ApiEvent[]): {
-  stream: AsyncIterableIterator<ApiEvent>
+  stream: ReturnType<JcodeClient["events"]>
   close: () => void
 } {
   let index = 0
@@ -32,7 +34,10 @@ function makeStream(events: ApiEvent[]): {
       return this
     },
   }
-  return { stream, close: () => (closed = true) }
+  return {
+    stream: stream as unknown as ReturnType<JcodeClient["events"]>,
+    close: () => (closed = true),
+  }
 }
 
 test("marks completion when the daemon ends the turn", async () => {
@@ -45,8 +50,9 @@ test("marks completion when the daemon ends the turn", async () => {
 
   await consumeNativeTurnStream(
     stream,
-    translator,
+    emptyTranslator,
     () => false,
+    () => {},
     () => {},
     () => {
       completed = true
@@ -62,8 +68,9 @@ test("marks completion when the stream exhausts without a cancel", async () => {
 
   await consumeNativeTurnStream(
     stream,
-    translator,
+    emptyTranslator,
     () => false,
+    () => {},
     () => {},
     () => {
       completed = true
@@ -96,8 +103,9 @@ test("does not mark completion when a cancel closes the iterator", async () => {
 
   await consumeNativeTurnStream(
     stream,
-    translator,
+    emptyTranslator,
     shouldStop,
+    () => {},
     () => {},
     () => {
       completed = true
@@ -113,8 +121,9 @@ test("marks completion on a daemon error event", async () => {
 
   await consumeNativeTurnStream(
     stream,
-    translator,
+    emptyTranslator,
     () => false,
+    () => {},
     () => {},
     () => {
       completed = true
@@ -122,4 +131,39 @@ test("marks completion on a daemon error event", async () => {
   )
 
   assert.equal(completed, true)
+})
+
+test("forwards translator run events in stream order", async () => {
+  const runEvent: HarnessRunEvent = {
+    kind: "session_status",
+    payload: { session_id: "s", status: "busy" },
+  }
+  const chunk: UIMessageChunk = { type: "text-delta", id: "t1", delta: "hi" }
+  const translator: NativeTurnTranslator = {
+    translate: (event) =>
+      event.ev === "text_delta"
+        ? { chunks: [chunk], runEvents: [] }
+        : event.ev === "session_status"
+          ? { chunks: [], runEvents: [runEvent] }
+          : { chunks: [], runEvents: [] },
+  }
+  const { stream } = makeStream([
+    { ev: "text_delta", session_id: "s", text: "hi" },
+    { ev: "session_status", session_id: "s", status: "busy" },
+    { ev: "turn_done", session_id: "s" },
+  ])
+  const emitted: string[] = []
+  const seen: HarnessRunEvent[] = []
+
+  await consumeNativeTurnStream(
+    stream,
+    translator,
+    () => false,
+    (c) => emitted.push(c.type),
+    (event) => seen.push(event),
+    () => {},
+  )
+
+  assert.deepEqual(emitted, ["text-delta"])
+  assert.deepEqual(seen, [runEvent])
 })

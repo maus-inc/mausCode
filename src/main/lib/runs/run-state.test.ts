@@ -4,16 +4,11 @@
  * migrations applied, so schema and machine are tested together.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { RUN_EVENT_TEXT_CAP } from "../../../shared/run-state"
 import { migrationsRoot } from "../db/migrations-path"
 import { chats, projects, runEvents, runs as runsTable, subChats } from "../db/schema"
 import { migrateTestDb, openTestDb } from "../db/test-sqlite"
-import {
-  createRunStore,
-  observeRunChunk,
-  RUN_ERROR_TEXT_CAP,
-  type RunFeedItem,
-  type RunStore,
-} from "./run-state"
+import { createRunStore, RUN_ERROR_TEXT_CAP, type RunFeedItem, type RunStore } from "./run-state"
 
 type TestDb = ReturnType<typeof openTestDb>
 
@@ -234,22 +229,22 @@ describe("run store", () => {
     it("maps chunk types onto transitions once each", () => {
       const handle = store.startRun({ subChatId, engine: "native" })
 
-      observeRunChunk(handle, { type: "start" })
-      observeRunChunk(handle, { type: "text-delta" })
+      handle.observeChunk({ type: "start" })
+      handle.observeChunk({ type: "text-delta" })
       expect(store.getRun(handle.runId)?.events.filter((e) => e.kind === "started")).toHaveLength(1)
 
-      observeRunChunk(handle, {
+      handle.observeChunk({
         type: "ask-user-question",
         toolUseId: "q",
         questions: [{ question: "Allow?", header: "Bash", options: [], multiSelect: false }],
       } as never)
       expect(store.getRun(handle.runId)?.run.status).toBe("waiting_approval")
 
-      observeRunChunk(handle, { type: "ask-user-question-timeout", toolUseId: "q" } as never)
+      handle.observeChunk({ type: "ask-user-question-timeout", toolUseId: "q" } as never)
       expect(store.getRun(handle.runId)?.run.status).toBe("running")
 
-      observeRunChunk(handle, { type: "error", errorText: "boom" })
-      observeRunChunk(handle, { type: "finish" })
+      handle.observeChunk({ type: "error", errorText: "boom" })
+      handle.observeChunk({ type: "finish" })
       handle.settle()
       // The error chunk was observed before finish, so error wins.
       expect(store.getRun(handle.runId)?.run.status).toBe("error")
@@ -257,9 +252,155 @@ describe("run store", () => {
 
     it("maps auth-error chunks to error evidence", () => {
       const handle = store.startRun({ subChatId, engine: "native" })
-      observeRunChunk(handle, { type: "auth-error", errorText: "NATIVE_NO_CREDENTIALS" })
+      handle.observeChunk({ type: "auth-error", errorText: "NATIVE_NO_CREDENTIALS" })
       handle.settle()
       expect(store.getRun(handle.runId)?.run.status).toBe("error")
+    })
+
+    it.each(["legacy", "native"] as const)(
+      "records the compacted run event from the %s Compact chunk round-trip",
+      (engine) => {
+        const handle = store.startRun({ subChatId, engine })
+        const compactId = "compact-1726000000"
+        // Native starts the tool; legacy only emits tool-input-available.
+        handle.observeChunk(
+          engine === "native"
+            ? { type: "tool-input-start", toolCallId: compactId, toolName: "Compact" }
+            : { type: "tool-input-available", toolCallId: compactId, toolName: "Compact" },
+        )
+        // A different tool's output in between must not match.
+        handle.observeChunk({ type: "tool-output-available", toolCallId: "other", output: "x" })
+        expect(
+          store.getRun(handle.runId)?.events.filter((e) => e.kind === "compacted"),
+        ).toHaveLength(0)
+
+        handle.observeChunk({
+          type: "tool-output-available",
+          toolCallId: compactId,
+          output: "done",
+        })
+        const compacted = store.getRun(handle.runId)?.events.find((e) => e.kind === "compacted")
+        expect(compacted).toBeDefined()
+        expect(JSON.parse(compacted?.payload ?? "{}")).toEqual({ message: "done" })
+        // One compaction, one event: a second output cannot re-record it.
+        handle.observeChunk({
+          type: "tool-output-available",
+          toolCallId: compactId,
+          output: "done",
+        })
+        expect(
+          store.getRun(handle.runId)?.events.filter((e) => e.kind === "compacted"),
+        ).toHaveLength(1)
+      },
+    )
+
+    it("does not record compacted when the Compact round-trip errors", () => {
+      const handle = store.startRun({ subChatId, engine: "legacy" })
+      const compactId = "compact-1726000002"
+      handle.observeChunk({
+        type: "tool-input-available",
+        toolCallId: compactId,
+        toolName: "Compact",
+      })
+      handle.observeChunk({ type: "tool-output-error", toolCallId: compactId, errorText: "oom" })
+      expect(store.getRun(handle.runId)?.events.filter((e) => e.kind === "compacted")).toHaveLength(
+        0,
+      )
+    })
+
+    it("records the legacy compact boundary payload shape", () => {
+      const handle = store.startRun({ subChatId, engine: "legacy" })
+      const compactId = "compact-1726000001"
+      handle.observeChunk({
+        type: "tool-input-available",
+        toolCallId: compactId,
+        toolName: "Compact",
+        input: { status: "compacting" },
+      })
+      handle.observeChunk({
+        type: "tool-output-available",
+        toolCallId: compactId,
+        output: { status: "compacted" },
+      })
+      const compacted = store.getRun(handle.runId)?.events.find((e) => e.kind === "compacted")
+      expect(JSON.parse(compacted?.payload ?? "{}")).toEqual({ status: "compacted" })
+    })
+  })
+
+  describe("harness run events", () => {
+    it("appends the event, bumps lastSeq and emits to feed listeners", () => {
+      const handle = store.startRun({ subChatId, engine: "native" })
+      const seen: RunFeedItem[] = []
+      store.subscribe((item) => seen.push(item), { subChatId })
+
+      handle.noteHarnessEvent("wake_requested", {
+        session_id: "daemon-1",
+        reason: "background_task",
+        notification: "build finished",
+      })
+
+      const stored = store.getRun(handle.runId)
+      const event = stored?.events.find((e) => e.kind === "wake_requested")
+      expect(event).toBeDefined()
+      expect(event?.seq).toBe(stored?.run.lastSeq ?? 0)
+      expect(JSON.parse(event?.payload ?? "{}")).toEqual({
+        session_id: "daemon-1",
+        reason: "background_task",
+        notification: "build finished",
+      })
+      expect(seen.some((item) => item.event?.kind === "wake_requested")).toBe(true)
+      // Record-only: no status change.
+      expect(store.getRun(handle.runId)?.run.status).toBe("running")
+    })
+
+    it(`caps string payload fields to RUN_EVENT_TEXT_CAP plus the ellipsis marker`, () => {
+      const handle = store.startRun({ subChatId, engine: "native" })
+      const long = "x".repeat(RUN_EVENT_TEXT_CAP + 50)
+
+      handle.noteHarnessEvent("background_progress", {
+        session_id: "s",
+        task_id: "t1",
+        label: "tests",
+        summary: long,
+      })
+
+      const stored = store.getRun(handle.runId)
+      const event = stored?.events.find((e) => e.kind === "background_progress")
+      const payload = JSON.parse(event?.payload ?? "{}") as { summary: string }
+      // Repo cap convention: slice to the cap, then one ellipsis character.
+      expect(payload.summary).toHaveLength(RUN_EVENT_TEXT_CAP + 1)
+      expect(payload.summary.endsWith("…")).toBe(true)
+    })
+
+    it("caps strings nested inside payload objects and arrays", () => {
+      const handle = store.startRun({ subChatId, engine: "native" })
+      const long = "y".repeat(RUN_EVENT_TEXT_CAP + 10)
+
+      handle.noteHarnessEvent("background_progress", {
+        session_id: "s",
+        task_id: "t1",
+        label: "tests",
+        summary: "ok",
+        detail: { note: long, tags: [long, "short"] },
+      })
+
+      const event = store.getRun(handle.runId)?.events.find((e) => e.kind === "background_progress")
+      const payload = JSON.parse(event?.payload ?? "{}") as {
+        detail: { note: string; tags: string[] }
+      }
+      expect(payload.detail.note).toHaveLength(RUN_EVENT_TEXT_CAP + 1)
+      expect(payload.detail.tags[0]).toHaveLength(RUN_EVENT_TEXT_CAP + 1)
+      expect(payload.detail.tags[1]).toBe("short")
+    })
+
+    it("ignores harness events on a settled run", () => {
+      const handle = store.startRun({ subChatId, engine: "native" })
+      handle.settle()
+      const before = store.getRun(handle.runId)?.run.lastSeq
+
+      handle.noteHarnessEvent("session_status", { session_id: "s", status: "idle" })
+
+      expect(store.getRun(handle.runId)?.run.lastSeq).toBe(before)
     })
   })
 

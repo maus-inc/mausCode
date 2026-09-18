@@ -1,15 +1,19 @@
 /**
- * Native runtime event translation: harness `ApiEvent` -> `UIMessageChunk`.
+ * Native runtime event translation: harness `ApiEvent` -> `UIMessageChunk`
+ * and/or `HarnessRunEvent`.
  *
  * Pure module: no Electron, no I/O, no singletons. One `NativeTranslator`
  * instance serves one chat subscription (one user turn). Unknown event kinds
- * are ignored per protocol v1 forward-compatibility rules.
+ * stay chunk-silent per protocol v1 forward-compatibility rules, but are
+ * logged once per kind so an unmapped event never disappears without a trace
+ * (roadmap step 09).
  *
  * Text-block framing: the harness emits bare `text_delta`s with no block ids,
  * so the translator synthesizes one text block per contiguous text run
  * (`txt-<turn>-<n>`), closing it on tool activity or turn end.
  */
-import type { ApiEvent } from "@maus-inc/runtime-client"
+import { type AnyApiEvent, isKnownEvent } from "@maus-inc/runtime-client"
+import type { HarnessRunEvent } from "../../../shared/run-state.ts"
 import {
   NATIVE_ERROR_PREFIX,
   NATIVE_QUESTION_PREFIX,
@@ -18,6 +22,19 @@ import {
 import type { UIMessageChunk } from "../claude/types"
 
 export { NATIVE_ERROR_PREFIX, NATIVE_QUESTION_PREFIX }
+
+/** Distinct unmapped kinds one translator remembers; warns stay once per kind. */
+const MAX_UNMAPPED_KINDS = 50
+
+/** What one harness event turns into: chat chunks and/or run-record events. */
+export interface NativeTurnTranslation {
+  chunks: UIMessageChunk[]
+  runEvents: HarnessRunEvent[]
+}
+
+function emptyTranslation(): NativeTurnTranslation {
+  return { chunks: [], runEvents: [] }
+}
 
 function tryParseJson(raw: string): unknown {
   const trimmed = raw.trim()
@@ -35,6 +52,7 @@ export class NativeTranslator {
   private textOpen = false
   private textId: string | null = null
   private readonly toolInputs = new Map<string, string>()
+  private readonly unmappedKinds = new Set<string>()
 
   /** Reset per-turn state. Called when a new user message starts streaming. */
   beginTurn(): UIMessageChunk[] {
@@ -46,14 +64,22 @@ export class NativeTranslator {
     return [{ type: "start" }, { type: "start-step" }]
   }
 
-  translate(event: ApiEvent): UIMessageChunk[] {
+  translate(event: AnyApiEvent): NativeTurnTranslation {
+    const kind = event.ev
+    if (!isKnownEvent(event)) {
+      this.warnUnmapped(kind)
+      return emptyTranslation()
+    }
     switch (event.ev) {
       case "text_delta":
-        return this.translateTextDelta(event.text)
+        return { chunks: this.translateTextDelta(event.text), runEvents: [] }
       case "reasoning_delta":
-        return [{ type: "reasoning-delta", id: `reas-${this.turn}`, delta: event.text }]
+        return {
+          chunks: [{ type: "reasoning-delta", id: `reas-${this.turn}`, delta: event.text }],
+          runEvents: [],
+        }
       case "reasoning_done":
-        return []
+        return emptyTranslation()
       case "tool_start": {
         const out = this.closeText()
         this.toolInputs.set(event.call_id, "")
@@ -62,90 +88,161 @@ export class NativeTranslator {
           toolCallId: event.call_id,
           toolName: event.name,
         })
-        return out
+        return { chunks: out, runEvents: [] }
       }
       case "tool_input_delta": {
         const prev = this.toolInputs.get(event.call_id) ?? ""
         this.toolInputs.set(event.call_id, prev + event.delta)
-        return [
-          {
-            type: "tool-input-delta",
-            toolCallId: event.call_id,
-            inputTextDelta: event.delta,
-          },
-        ]
+        return {
+          chunks: [
+            {
+              type: "tool-input-delta",
+              toolCallId: event.call_id,
+              inputTextDelta: event.delta,
+            },
+          ],
+          runEvents: [],
+        }
       }
       case "tool_exec":
-        return [
-          {
-            type: "tool-input-available",
-            toolCallId: event.call_id,
-            toolName: event.name,
-            input: tryParseJson(this.toolInputs.get(event.call_id) ?? ""),
-          },
-        ]
+        return {
+          chunks: [
+            {
+              type: "tool-input-available",
+              toolCallId: event.call_id,
+              toolName: event.name,
+              input: tryParseJson(this.toolInputs.get(event.call_id) ?? ""),
+            },
+          ],
+          runEvents: [],
+        }
       case "tool_done": {
         if (event.error) {
-          return [{ type: "tool-output-error", toolCallId: event.call_id, errorText: event.error }]
+          return {
+            chunks: [
+              { type: "tool-output-error", toolCallId: event.call_id, errorText: event.error },
+            ],
+            runEvents: [],
+          }
         }
-        return [{ type: "tool-output-available", toolCallId: event.call_id, output: event.output }]
+        return {
+          chunks: [
+            { type: "tool-output-available", toolCallId: event.call_id, output: event.output },
+          ],
+          runEvents: [],
+        }
       }
       case "token_usage":
-        return [
-          {
-            type: "message-metadata",
-            messageMetadata: {
-              inputTokens: event.input,
-              outputTokens: event.output,
-              ...(event.cache_read_input !== undefined && {
-                cacheReadInputTokens: event.cache_read_input,
-              }),
-            },
-          },
-        ]
-      case "permission_request":
-        return [
-          {
-            type: "ask-user-question",
-            toolUseId: `${NATIVE_QUESTION_PREFIX}${event.request_id}`,
-            questions: [
-              {
-                question: event.description,
-                header: event.tool_name,
-                options: [
-                  { label: "Allow", description: `Allow ${event.tool_name} this time` },
-                  { label: "Deny", description: `Deny ${event.tool_name}` },
-                ],
-                multiSelect: false,
+        return {
+          chunks: [
+            {
+              type: "message-metadata",
+              messageMetadata: {
+                inputTokens: event.input,
+                outputTokens: event.output,
+                ...(event.cache_read_input !== undefined && {
+                  cacheReadInputTokens: event.cache_read_input,
+                }),
               },
-            ],
-          },
-        ]
+            },
+          ],
+          runEvents: [],
+        }
+      case "permission_request":
+        return {
+          chunks: [
+            {
+              type: "ask-user-question",
+              toolUseId: `${NATIVE_QUESTION_PREFIX}${event.request_id}`,
+              questions: [
+                {
+                  question: event.description,
+                  header: event.tool_name,
+                  options: [
+                    { label: "Allow", description: `Allow ${event.tool_name} this time` },
+                    { label: "Deny", description: `Deny ${event.tool_name}` },
+                  ],
+                  multiSelect: false,
+                },
+              ],
+            },
+          ],
+          runEvents: [],
+        }
       case "compacted": {
         // Reuse the legacy compacting indicator: it keys on toolName "Compact"
-        // plus a `compact-` toolCallId prefix.
+        // plus a `compact-` toolCallId prefix. The chunk observer turns that
+        // tool round-trip into the `compacted` run event, so both engines
+        // record compaction through one code path.
         const id = `compact-${Date.now()}`
-        return [
-          { type: "tool-input-start", toolCallId: id, toolName: "Compact" },
-          { type: "tool-output-available", toolCallId: id, output: event.message },
-        ]
+        return {
+          chunks: [
+            { type: "tool-input-start", toolCallId: id, toolName: "Compact" },
+            { type: "tool-output-available", toolCallId: id, output: event.message },
+          ],
+          runEvents: [],
+        }
       }
       case "turn_done": {
         const out = this.closeText()
         out.push({ type: "finish-step" })
         out.push({ type: "finish" })
-        return out
+        return { chunks: out, runEvents: [] }
       }
       case "error":
-        return [
-          {
-            type: "error",
-            errorText: `${NATIVE_ERROR_PREFIX}${event.code.toUpperCase()}: ${event.message}`,
-          },
-        ]
-      // Session/meta/file events carry no chat-stream content in P1.
-      case "message_accepted":
+        return {
+          chunks: [
+            {
+              type: "error",
+              errorText: `${NATIVE_ERROR_PREFIX}${event.code.toUpperCase()}: ${event.message}`,
+            },
+          ],
+          runEvents: [],
+        }
       case "session_status":
+        return {
+          chunks: [],
+          runEvents: [
+            {
+              kind: "session_status",
+              payload: { session_id: event.session_id, status: event.status },
+            },
+          ],
+        }
+      case "background_progress":
+        return {
+          chunks: [],
+          runEvents: [
+            {
+              kind: "background_progress",
+              payload: {
+                session_id: event.session_id,
+                task_id: event.task_id,
+                label: event.label,
+                percent: event.percent,
+                summary: event.summary,
+                done: event.done,
+              },
+            },
+          ],
+        }
+      case "wake_requested":
+        return {
+          chunks: [],
+          runEvents: [
+            {
+              kind: "wake_requested",
+              payload: {
+                session_id: event.session_id,
+                reason: event.reason,
+                notification: event.notification,
+              },
+            },
+          ],
+        }
+      // Session/meta/file events carry no chat-stream content and no named
+      // run-record consumer (see .dump/app/research/2026-09-13-event-mapping.md).
+      case "message_accepted":
       case "connection_phase":
       case "session_renamed":
       case "credential_updated":
@@ -161,16 +258,24 @@ export class NativeTranslator {
       case "text_matches":
       case "file_status":
       case "side_pane_images":
-      case "wake_requested":
-      case "background_progress":
       case "hello_ok":
       case "ok":
       case "pong":
-        return []
+        return emptyTranslation()
       default:
-        // Unknown kinds (protocol-minor additions) must never break the stream.
-        return []
+        // A kind the client knows but this mapper does not (a protocol minor
+        // newer than this build): same warn-once contract, never fatal.
+        this.warnUnmapped(kind)
+        return emptyTranslation()
     }
+  }
+
+  private warnUnmapped(kind: string): void {
+    // Bounded memory: past the cap, extra unknown kinds stay silent instead
+    // of growing the set for the rest of the turn.
+    if (this.unmappedKinds.has(kind) || this.unmappedKinds.size >= MAX_UNMAPPED_KINDS) return
+    this.unmappedKinds.add(kind)
+    console.warn(`[runtime] unmapped harness event kind: ${JSON.stringify(kind).slice(0, 80)}`)
   }
 
   private translateTextDelta(text: string): UIMessageChunk[] {

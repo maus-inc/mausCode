@@ -59,7 +59,7 @@ import {
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { discoverPluginMcpServers } from "../../plugins"
 import { getRunStore } from "../../runs"
-import { observeRunChunk, type RunHandle } from "../../runs/run-state"
+import type { RunHandle } from "../../runs/run-state"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 import { getApprovedPluginMcpServers, getEnabledPlugins } from "./claude-settings"
@@ -968,7 +968,7 @@ export const claudeRouter = router({
         // Helper to safely emit (no-op if already unsubscribed)
         const safeEmit = (chunk: UIMessageChunk) => {
           if (!isObservableActive) return false
-          if (runHandle) observeRunChunk(runHandle, chunk)
+          if (runHandle) runHandle.observeChunk(chunk)
           try {
             emit.next(chunk)
             return true
