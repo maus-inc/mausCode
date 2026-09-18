@@ -14,6 +14,27 @@ import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:pat
 import { PathValidationError } from "./errors"
 
 /**
+ * True when a path measured against a boundary climbs out of it.
+ *
+ * `..` is the direct parent, `..${sep}` is any higher ancestor, and an absolute
+ * result means the two paths are on different roots. A bare `startsWith("..")`
+ * would be wrong here, because it also catches a directory named `..config`.
+ */
+function escapesBoundary(relativePath: string): boolean {
+  return relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)
+}
+
+/** True when a filesystem call failed because the path does not exist. */
+function isENOENT(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT"
+}
+
+/** Resolve a symlink's target against the directory that holds the link. */
+function resolveLinkTarget(linkPath: string, linkTarget: string): string {
+  return isAbsolute(linkTarget) ? linkTarget : resolve(dirname(linkPath), linkTarget)
+}
+
+/**
  * Check if a resolved path is within the worktree boundary using path.relative().
  * This is safer than string prefix matching which can have boundary bugs.
  */
@@ -21,17 +42,8 @@ export function isPathWithinWorktree(worktreeReal: string, targetReal: string): 
   if (targetReal === worktreeReal) {
     return true
   }
-  const relativePath = relative(worktreeReal, targetReal)
-  // Check if path escapes worktree:
-  // - ".." means direct parent
-  // - "../" prefix means ancestor escape (use sep for cross-platform)
-  // - Absolute path means completely outside
-  // Note: Don't use startsWith("..") as it incorrectly catches "..config" directories
-  // Note: Empty relativePath ("") case is already handled by the equality check above
-  const escapesWorktree =
-    relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)
-
-  return !escapesWorktree
+  // An empty relativePath means the two are equal, which the check above caught.
+  return !escapesBoundary(relative(worktreeReal, targetReal))
 }
 
 /**
@@ -51,62 +63,15 @@ export async function assertParentInWorktree(
   const worktreeReal = await realpath(worktreePath)
   let currentPath = dirname(fullPath)
 
-  // Walk up the directory tree until we find an existing directory
+  // Walk up until an ancestor exists. The loop ends when dirname stops
+  // changing, which is the filesystem root.
   while (currentPath !== dirname(currentPath)) {
-    // Stop at filesystem root
     try {
-      // First check if this path component is a symlink (even if target doesn't exist)
       const stats = await lstat(currentPath)
-
       if (stats.isSymbolicLink()) {
-        // This is a symlink - validate its target even if it doesn't exist
-        const linkTarget = await readlink(currentPath)
-        // Resolve the link target relative to the symlink's parent
-        const resolvedTarget = isAbsolute(linkTarget)
-          ? linkTarget
-          : resolve(dirname(currentPath), linkTarget)
-
-        // Try to get the realpath of the resolved target
-        try {
-          const targetReal = await realpath(resolvedTarget)
-          if (!isPathWithinWorktree(worktreeReal, targetReal)) {
-            throw new PathValidationError(
-              "Symlink in path resolves outside the worktree",
-              "SYMLINK_ESCAPE",
-            )
-          }
-        } catch (error) {
-          // Target doesn't exist - check if the resolved target path
-          // would be within worktree if it existed
-          if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-            // For dangling symlinks, validate the target path itself
-            // We need to check if the target, when resolved, would be in worktree
-            // This is conservative: if we can't determine, fail closed
-            const targetRelative = relative(worktreeReal, resolvedTarget)
-            // Use sep-aware check to avoid false positives on "..config" dirs
-            if (
-              targetRelative === ".." ||
-              targetRelative.startsWith(`..${sep}`) ||
-              isAbsolute(targetRelative)
-            ) {
-              throw new PathValidationError(
-                "Dangling symlink points outside the worktree",
-                "SYMLINK_ESCAPE",
-              )
-            }
-            // Target would be within worktree if it existed - continue
-            return
-          }
-          if (error instanceof PathValidationError) {
-            throw error
-          }
-          // Other errors - fail closed for security
-          throw new PathValidationError("Cannot validate symlink target", "SYMLINK_ESCAPE")
-        }
-        return // Symlink validated successfully
+        await assertSymlinkedAncestor(worktreeReal, currentPath)
+        return
       }
-
-      // Not a symlink - get realpath and validate
       const parentReal = await realpath(currentPath)
       if (!isPathWithinWorktree(worktreeReal, parentReal)) {
         throw new PathValidationError(
@@ -114,26 +79,62 @@ export async function assertParentInWorktree(
           "SYMLINK_ESCAPE",
         )
       }
-      return // Found valid ancestor
+      return
     } catch (error) {
       if (error instanceof PathValidationError) {
         throw error
       }
-      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-        // This ancestor doesn't exist either, keep walking up
-        currentPath = dirname(currentPath)
-        continue
+      // Anything other than a missing ancestor, such as EACCES or ENOTDIR,
+      // fails closed rather than walking further up.
+      if (!isENOENT(error)) {
+        throw new PathValidationError("Cannot validate path ancestry", "SYMLINK_ESCAPE")
       }
-      // Other errors (EACCES, ENOTDIR, etc.) - fail closed for security
-      throw new PathValidationError("Cannot validate path ancestry", "SYMLINK_ESCAPE")
+      currentPath = dirname(currentPath)
     }
   }
 
-  // Reached filesystem root without finding valid ancestor
   throw new PathValidationError(
     "Could not validate path ancestry within worktree",
     "SYMLINK_ESCAPE",
   )
+}
+
+/**
+ * Validate one ancestor that turns out to be a symlink.
+ *
+ * The link's target may not exist yet, so a dangling link is judged on where it
+ * points rather than on a realpath that cannot be taken. Failing closed on any
+ * other error keeps an unreadable link from being treated as a safe one.
+ *
+ * @throws PathValidationError when the link leaves the worktree
+ */
+async function assertSymlinkedAncestor(worktreeReal: string, linkPath: string): Promise<void> {
+  const resolvedTarget = resolveLinkTarget(linkPath, await readlink(linkPath))
+
+  let targetReal: string
+  try {
+    targetReal = await realpath(resolvedTarget)
+  } catch (error) {
+    if (error instanceof PathValidationError) {
+      throw error
+    }
+    if (!isENOENT(error)) {
+      throw new PathValidationError("Cannot validate symlink target", "SYMLINK_ESCAPE")
+    }
+    // Dangling. Judge the literal target, conservatively, since the realpath
+    // that would settle it cannot be taken.
+    if (escapesBoundary(relative(worktreeReal, resolvedTarget))) {
+      throw new PathValidationError(
+        "Dangling symlink points outside the worktree",
+        "SYMLINK_ESCAPE",
+      )
+    }
+    return
+  }
+
+  if (!isPathWithinWorktree(worktreeReal, targetReal)) {
+    throw new PathValidationError("Symlink in path resolves outside the worktree", "SYMLINK_ESCAPE")
+  }
 }
 
 /**
@@ -160,11 +161,10 @@ export async function assertRealpathInWorktree(
   } catch (error) {
     // If realpath fails with ENOENT, the target doesn't exist
     // But the path itself might be a dangling symlink - check that first!
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+    if (isENOENT(error)) {
       await assertDanglingSymlinkSafe(worktreePath, fullPath)
       return
     }
-    // Re-throw PathValidationError
     if (error instanceof PathValidationError) {
       throw error
     }
@@ -194,26 +194,16 @@ async function assertDanglingSymlinkSafe(worktreePath: string, fullPath: string)
 
     if (stats.isSymbolicLink()) {
       // It's a dangling symlink - validate where it points
-      const linkTarget = await readlink(fullPath)
-      const resolvedTarget = isAbsolute(linkTarget)
-        ? linkTarget
-        : resolve(dirname(fullPath), linkTarget)
+      const resolvedTarget = resolveLinkTarget(fullPath, await readlink(fullPath))
 
-      // Check if the resolved target would be within worktree
-      // For dangling symlinks, we can't use realpath on the target,
-      // so we check the literal resolved path
-      const targetRelative = relative(worktreeReal, resolvedTarget)
-      if (
-        targetRelative === ".." ||
-        targetRelative.startsWith(`..${sep}`) ||
-        isAbsolute(targetRelative)
-      ) {
+      // A dangling target has no realpath to take, so the literal resolved path
+      // is what gets judged.
+      if (escapesBoundary(relative(worktreeReal, resolvedTarget))) {
         throw new PathValidationError(
           "Dangling symlink points outside the worktree",
           "SYMLINK_ESCAPE",
         )
       }
-      // Dangling symlink points within worktree - allow the operation
       return
     }
 
@@ -223,8 +213,8 @@ async function assertDanglingSymlinkSafe(worktreePath: string, fullPath: string)
     if (error instanceof PathValidationError) {
       throw error
     }
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-      // Path truly doesn't exist (not even as a symlink) - validate parent chain
+    if (isENOENT(error)) {
+      // Not even a symlink exists here, so the parent chain is what decides.
       await assertParentInWorktree(worktreePath, fullPath)
       return
     }

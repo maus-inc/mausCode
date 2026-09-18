@@ -69,51 +69,46 @@ function skipString(text: string, start: number): number {
 function splitKeyPath(raw: string): string[] | null {
   const parts: string[] = []
   let index = 0
-  let current = ""
-  let openQuote: string | null = null
 
   while (index < raw.length) {
-    const char = raw[index]
-    if (openQuote) {
-      if (char === "\\" && openQuote === '"') {
-        const next = raw[index + 1]
-        const unescaped = next === undefined ? null : unescapeBasic(next)
-        if (unescaped === null) return null
-        current += unescaped
-        index += 2
-        continue
-      }
-      if (char === openQuote) {
-        openQuote = null
-        index += 1
-        continue
-      }
-      current += char
-      index += 1
-      continue
-    }
-    if (char === '"' || char === "'") {
-      openQuote = char
-      index += 1
-      continue
-    }
-    if (char === ".") {
-      const trimmed = current.trim()
-      if (trimmed.length === 0) return null
-      parts.push(trimmed)
-      current = ""
-      index += 1
-      continue
-    }
-    current += char
+    const segment = readKeySegment(raw, index)
+    if (segment === null || segment.text.length === 0) return null
+    parts.push(segment.text)
+    index = segment.end
+    if (index >= raw.length) return parts
+    // Anything other than a dot between segments is a malformed key path.
+    if (raw[index] !== ".") return null
     index += 1
   }
 
-  if (openQuote) return null
-  const trimmed = current.trim()
-  if (trimmed.length === 0) return null
-  parts.push(trimmed)
-  return parts
+  // An empty raw, or a trailing dot with no segment after it.
+  return null
+}
+
+/**
+ * Read one key segment, stopping at the dot that ends it. Quoted parts are read
+ * by `readString`, so a dot inside quotes belongs to the key rather than
+ * separating two of them, and escape handling stays in one place.
+ */
+function readKeySegment(raw: string, start: number): { text: string; end: number } | null {
+  let index = start
+  let text = ""
+
+  while (index < raw.length) {
+    const char = raw[index]
+    if (char === ".") break
+    if (char !== '"' && char !== "'") {
+      text += char
+      index += 1
+      continue
+    }
+    const quoted = readString(raw, index)
+    if (quoted === null) return null
+    text += quoted.value
+    index = quoted.end
+  }
+
+  return { text: text.trim(), end: index }
 }
 
 /** Translate one basic-string escape. Null means the escape is not valid TOML. */
@@ -213,71 +208,137 @@ function descend(from: TomlTable, path: string[]): TomlTable | null {
   return node
 }
 
+/** A parse step: either it consumed lines, or the document is invalid. */
+type StepResult = { ok: true; resumeAt: number } | { ok: false; error: TomlParseResult }
+
+/** A value read off one line, plus the first line still to read after it. */
+type ValueResult =
+  | (StepResult & { ok: true; value: unknown })
+  | { ok: false; error: TomlParseResult }
+
 /** Parse a document into a plain object. */
 export function parseConstrainedToml(text: string): TomlParseResult {
   const root: TomlTable = {}
   let current: TomlTable = root
-  const lines = text.split(/\r?\n/)
+  const physical = text.split(/\r?\n/)
+  // The first line still to read. An array that spans several lines moves this
+  // past the ones it swallowed, so the loop below never assigns its own counter.
+  let resumeAt = 0
 
-  for (let index = 0; index < lines.length; index += 1) {
+  for (const [index, raw] of physical.entries()) {
+    if (index < resumeAt) continue
     const lineNumber = index + 1
-    const uncommented = stripComment(lines[index])
+
+    const uncommented = stripComment(raw)
     if (uncommented === null) return fail(lineNumber, "unterminated string")
     const line = uncommented.trim()
     if (line.length === 0) continue
 
     if (line.startsWith("[")) {
-      if (line.startsWith("[[") || !line.endsWith("]")) {
-        return fail(lineNumber, "only [table] headers are supported")
-      }
-      const path = splitKeyPath(line.slice(1, -1))
-      if (path === null) return fail(lineNumber, "malformed table header")
-      const table = descend(root, path)
-      if (table === null) return fail(lineNumber, "table header collides with a value")
-      current = table
+      const header = readTableHeader(root, line)
+      if ("error" in header) return fail(lineNumber, header.error)
+      current = header.table
       continue
     }
 
-    const equals = findAssignment(line)
-    if (equals === -1) return fail(lineNumber, "expected key = value")
-
-    const keyPath = splitKeyPath(line.slice(0, equals))
-    if (keyPath === null) return fail(lineNumber, "malformed key")
-    const leaf = keyPath[keyPath.length - 1]
-    if (leaf === undefined) return fail(lineNumber, "empty key")
-
-    const rawValue = line.slice(equals + 1).trim()
-    let value: unknown
-    let lastLine = index
-
-    if (rawValue.startsWith("[")) {
-      let body = rawValue
-      while (!body.trimEnd().endsWith("]") && lastLine + 1 < lines.length) {
-        lastLine += 1
-        const next = stripComment(lines[lastLine])
-        if (next === null) return fail(lastLine + 1, "unterminated string")
-        body += `\n${next.trim()}`
-      }
-      if (!body.trimEnd().endsWith("]")) return fail(lineNumber, "unterminated array")
-      const parsed = parseStringArray(body.slice(1, body.lastIndexOf("]")))
-      if (parsed === null) return fail(lineNumber, "only arrays of strings are supported")
-      value = parsed
-      index = lastLine
-    } else if (rawValue.startsWith('"') || rawValue.startsWith("'")) {
-      const parsed = readString(rawValue, 0)
-      if (parsed === null || parsed.end !== rawValue.length) {
-        return fail(lineNumber, "malformed string value")
-      }
-      value = parsed.value
-    } else {
-      return fail(lineNumber, "only string and string-array values are supported")
-    }
-
-    const parent = descend(current, keyPath.slice(0, -1))
-    if (parent === null) return fail(lineNumber, "key collides with a table")
-    if (Object.hasOwn(parent, leaf)) return fail(lineNumber, `duplicate key ${leaf}`)
-    parent[leaf] = value
+    const applied = applyAssignment(current, line, lineNumber, physical, index)
+    if (!applied.ok) return applied.error
+    resumeAt = applied.resumeAt
   }
 
   return { ok: true, value: root }
+}
+
+/** Read a `[table]` header and walk or create the table it names. */
+function readTableHeader(root: TomlTable, line: string): { table: TomlTable } | { error: string } {
+  if (line.startsWith("[[") || !line.endsWith("]")) {
+    return { error: "only [table] headers are supported" }
+  }
+  const path = splitKeyPath(line.slice(1, -1))
+  if (path === null) return { error: "malformed table header" }
+  const table = descend(root, path)
+  if (table === null) return { error: "table header collides with a value" }
+  return { table }
+}
+
+/** Read one `key = value` line, store it, and report the lines it consumed. */
+function applyAssignment(
+  current: TomlTable,
+  line: string,
+  lineNumber: number,
+  physical: string[],
+  start: number,
+): StepResult {
+  const equals = findAssignment(line)
+  if (equals === -1) return { ok: false, error: fail(lineNumber, "expected key = value") }
+
+  const keyPath = splitKeyPath(line.slice(0, equals))
+  if (keyPath === null) return { ok: false, error: fail(lineNumber, "malformed key") }
+  const leaf = keyPath.at(-1)
+  if (leaf === undefined) return { ok: false, error: fail(lineNumber, "empty key") }
+
+  const read = readValue(line.slice(equals + 1).trim(), lineNumber, physical, start)
+  if (!read.ok) return read
+
+  const parent = descend(current, keyPath.slice(0, -1))
+  if (parent === null) return { ok: false, error: fail(lineNumber, "key collides with a table") }
+  if (Object.hasOwn(parent, leaf)) {
+    return { ok: false, error: fail(lineNumber, `duplicate key ${leaf}`) }
+  }
+  parent[leaf] = read.value
+  return { ok: true, resumeAt: read.resumeAt }
+}
+
+/** Read the value on one line. Only strings and arrays of strings are allowed. */
+function readValue(
+  rawValue: string,
+  lineNumber: number,
+  physical: string[],
+  start: number,
+): ValueResult {
+  if (rawValue.startsWith("[")) return readArrayValue(rawValue, lineNumber, physical, start)
+
+  if (rawValue.startsWith('"') || rawValue.startsWith("'")) {
+    const parsed = readString(rawValue, 0)
+    if (parsed?.end !== rawValue.length) {
+      return { ok: false, error: fail(lineNumber, "malformed string value") }
+    }
+    return { ok: true, value: parsed.value, resumeAt: start + 1 }
+  }
+
+  return {
+    ok: false,
+    error: fail(lineNumber, "only string and string-array values are supported"),
+  }
+}
+
+/**
+ * Read an array of strings, joining the physical lines it spans onto the line
+ * that opened it. A comment inside the array is stripped per line, the same as
+ * anywhere else in the document.
+ */
+function readArrayValue(
+  rawValue: string,
+  lineNumber: number,
+  physical: string[],
+  start: number,
+): ValueResult {
+  let body = rawValue
+  let lastLine = start
+
+  while (!body.trimEnd().endsWith("]") && lastLine + 1 < physical.length) {
+    lastLine += 1
+    const next = stripComment(physical[lastLine])
+    if (next === null) return { ok: false, error: fail(lastLine + 1, "unterminated string") }
+    body += `\n${next.trim()}`
+  }
+
+  if (!body.trimEnd().endsWith("]")) {
+    return { ok: false, error: fail(lineNumber, "unterminated array") }
+  }
+  const parsed = parseStringArray(body.slice(1, body.lastIndexOf("]")))
+  if (parsed === null) {
+    return { ok: false, error: fail(lineNumber, "only arrays of strings are supported") }
+  }
+  return { ok: true, value: parsed, resumeAt: lastLine + 1 }
 }

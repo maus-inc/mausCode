@@ -7,7 +7,7 @@
  * that CI's `--ignore-scripts` install does not build. The two leaves are
  * dependency-free on purpose, so the guard is testable here.
  *
- * FIXTURE DISCIPLINE — this file previously deleted the workspace. Its
+ * FIXTURE DISCIPLINE. This file previously deleted the workspace. Its
  * `beforeEach` canonicalised a directory it had not created yet, so the hook
  * threw, a module-level path variable kept its `""` initial value, and
  * `afterEach` ran `rmSync(join("", ".."))`, which resolves to the parent of the
@@ -91,8 +91,11 @@ describe("paths inside the worktree", () => {
     expect(await assertToolPathInWorktree(worktree, "src/../src/a.ts")).toBe("src/a.ts")
   })
 
-  it("accepts a symlink whose target is inside", async () => {
-    if (!symlinksWork) return
+  it("accepts a symlink whose target is inside", async (context) => {
+    if (!symlinksWork) {
+      context.skip()
+      return
+    }
     expect(await assertToolPathInWorktree(worktree, "src/link-in.ts")).toBe("src/link-in.ts")
   })
 })
@@ -116,18 +119,27 @@ describe("traversal", () => {
 })
 
 describe("symlinks that escape", () => {
-  it("rejects a file symlink pointing outside", async () => {
-    if (!symlinksWork) return
+  it("rejects a file symlink pointing outside", async (context) => {
+    if (!symlinksWork) {
+      context.skip()
+      return
+    }
     await expectCode("src/link-out.txt", "SYMLINK_ESCAPE")
   })
 
-  it("rejects a path under a directory symlink pointing outside", async () => {
-    if (!symlinksWork) return
+  it("rejects a path under a directory symlink pointing outside", async (context) => {
+    if (!symlinksWork) {
+      context.skip()
+      return
+    }
     await expectCode("src/dir-out/nested.txt", "SYMLINK_ESCAPE")
   })
 
-  it("rejects a symlinked directory reached through an absolute path", async () => {
-    if (!symlinksWork) return
+  it("rejects a symlinked directory reached through an absolute path", async (context) => {
+    if (!symlinksWork) {
+      context.skip()
+      return
+    }
     await expectCode(join(worktree, "src/dir-out/nested.txt"), "SYMLINK_ESCAPE")
   })
 })
