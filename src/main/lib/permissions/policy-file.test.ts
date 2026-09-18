@@ -146,6 +146,8 @@ describe("a policy file that cannot be used", () => {
     ["an unknown verdict", '[classes]\nnetwork = "maybe"\n'],
     ["an unknown mode", '[modes.yolo]\napproval = "allow"\n'],
     ["a malformed tool rule", '[modes.turbo]\nallow_tools = ["Bash(git"]\n'],
+    ["an exfiltration allow", '[classes]\nexfiltration = "allow"\n'],
+    ["a per-mode exfiltration allow", '[modes.turbo]\nexfiltration = "allow"\n'],
   ])("refuses %s rather than ignoring it", async (_label, text) => {
     writePolicy(text)
     const loaded = await readPolicyFile()

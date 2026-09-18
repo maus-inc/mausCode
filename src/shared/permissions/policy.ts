@@ -137,6 +137,30 @@ export const SHIPPED_POLICY_FLOOR: PermissionPolicy = {
   },
 }
 
+/**
+ * The one verdict a policy file may not choose for exfiltration.
+ *
+ * A secret that leaves the machine cannot be taken back, and no later gate can
+ * catch it, which is why the classifier treats the read itself as the boundary.
+ * The evaluator already refuses to let an allow-list entry cover this class, so
+ * letting the class verdict say `allow` would leave that one refusal as the only
+ * thing standing between a policy file and a shipped secret. The file rejects it
+ * instead, loudly, the same way it rejects `[modes.plan]`.
+ *
+ * `ask` and `deny` stay available. Being prompted before a secret is read is a
+ * legitimate choice and is narrower than what turbo permits for every other
+ * class.
+ */
+const exfiltrationVerdictSchema = permissionVerdictSchema.superRefine((verdict, ctx) => {
+  if (verdict === "allow") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'exfiltration cannot be "allow", because a secret that leaves cannot be taken back; use "ask" or "deny"',
+    })
+  }
+})
+
 const toolRuleSchema = z
   .string()
   .min(1)
@@ -155,7 +179,7 @@ const modePolicySchema = z
     approval: permissionVerdictSchema.optional(),
     destructive: permissionVerdictSchema.optional(),
     network: permissionVerdictSchema.optional(),
-    exfiltration: permissionVerdictSchema.optional(),
+    exfiltration: exfiltrationVerdictSchema.optional(),
     allow_tools: z.array(toolRuleSchema).optional(),
   })
   .strict()
@@ -173,7 +197,7 @@ export const permissionPolicyDocumentSchema = z
         approval: permissionVerdictSchema.optional(),
         destructive: permissionVerdictSchema.optional(),
         network: permissionVerdictSchema.optional(),
-        exfiltration: permissionVerdictSchema.optional(),
+        exfiltration: exfiltrationVerdictSchema.optional(),
       })
       .strict()
       .optional(),
@@ -237,6 +261,21 @@ export interface ToolRule {
  *   That matches `npm run test --watch` and the `npm run test:unit` script form
  *   the colon exists for, and still refuses `npm run tests` and `gitleaks`.
  */
+/**
+ * True when a string can stand in for a tool name.
+ *
+ * A leading dash is refused because these strings become process arguments. An
+ * allow-list entry is pushed onto argv as the value of `--allow`, and a parser
+ * that reads the next token as a flag rather than as that value would turn
+ * `allow_tools = ["--always-approve"]` into the bypass this file exists to keep
+ * off the command line. Refusing it here fails the whole document closed and the
+ * schema error says what to write instead, which is better than hoping every
+ * provider's argument parser is strict.
+ */
+function isToolName(candidate: string): boolean {
+  return candidate.length > 0 && !candidate.startsWith("-")
+}
+
 export function parseToolRule(rule: string): ToolRule | null {
   const trimmed = rule.trim()
   if (trimmed.length === 0) return null
@@ -244,12 +283,12 @@ export function parseToolRule(rule: string): ToolRule | null {
   const open = trimmed.indexOf("(")
   if (open === -1) {
     if (trimmed.includes(")")) return null
-    return { tool: trimmed }
+    return isToolName(trimmed) ? { tool: trimmed } : null
   }
   if (!trimmed.endsWith(")") || trimmed.indexOf(")") !== trimmed.length - 1) return null
 
   const tool = trimmed.slice(0, open).trim()
-  if (tool.length === 0) return null
+  if (!isToolName(tool)) return null
 
   const pattern = trimmed.slice(open + 1, -1).trim()
   if (pattern.length === 0) return null

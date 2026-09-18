@@ -98,12 +98,35 @@ describe("the schema fails closed", () => {
     ["an unknown per-mode key", { modes: { agent: { shell: "allow" } } }],
     ["a malformed tool rule", { modes: { turbo: { allow_tools: ["Bash(git"] } } }],
     ["a colon wildcard with no prefix", { modes: { turbo: { allow_tools: ["Bash(:*)"] } } }],
+    [
+      "an allow entry shaped like a flag",
+      { modes: { turbo: { allow_tools: ["--always-approve"] } } },
+    ],
+    ["a short-flag allow entry", { modes: { turbo: { allow_tools: ["-x"] } } }],
+    ["a flag-shaped specifier", { modes: { turbo: { allow_tools: ["--force(x)"] } } }],
     ["an empty tool rule", { modes: { turbo: { allow_tools: [""] } } }],
     ["a non-string tool rule", { modes: { turbo: { allow_tools: [7] } } }],
+    ["exfiltration allowed globally", { classes: { exfiltration: "allow" } }],
+    ["exfiltration allowed for one mode", { modes: { turbo: { exfiltration: "allow" } } }],
   ]
 
   it.each(rejected)("refuses %s rather than ignoring it", (_label, document) => {
     expect(permissionPolicyDocumentSchema.safeParse(document).success).toBe(false)
+  })
+
+  it("still lets a file ask about exfiltration, which is narrower than allow", () => {
+    // The refusal is about lifting the class to allow. Being prompted for a
+    // secret read is a legitimate choice and must stay writable.
+    for (const document of [
+      { classes: { exfiltration: "ask" } },
+      { classes: { exfiltration: "deny" } },
+      { modes: { turbo: { exfiltration: "ask" } } },
+    ]) {
+      expect(
+        permissionPolicyDocumentSchema.safeParse(document).success,
+        JSON.stringify(document),
+      ).toBe(true)
+    }
   })
 
   it("accepts a well-formed document", () => {
