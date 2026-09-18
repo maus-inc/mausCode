@@ -188,6 +188,31 @@ consequence is worth stating in your §12 edge cases rather than discovering lat
 critical-path breaker**, because no app-side code sees the call. Say which actions
 are ungoverned.
 
+### Say what your classifier cannot see
+
+If your floor reads a shell command to decide what it is, publish the limit of that
+reading next to the claim. A text-level classifier is not a shell parser and cannot
+become one safely. Two things defeat every pattern table:
+
+- **An interpreter taking inline code.** `python -c`, `node -e`, `perl -e`, and a
+  script written to disk and then run all carry arbitrary behaviour in an argument
+  the classifier would have to execute to understand.
+- **Quoted substring reconstruction.** `c"h"m"o"d +x test.sh` executes as `chmod`.
+  So does `c$()url` as `curl`. A shipped agent with six layered regex checks,
+  including command-substitution inspection, was bypassed this way.
+
+Add the wrappers you can, because they are cheap and real: `sudo`, `env`, `timeout`,
+`nice`, `nohup`, `stdbuf`, bare `xargs`, and `sh -c` or `bash -c` with a quoted
+payload. Strip quotes from each word before you read it, and skip a command's own
+global options before you read its subcommand, or `git -C /repo push --force` will
+read as `git` with no subcommand. Then write the remaining gap into your §12 edge
+cases. The honest sentence is that the floor covers the commands it can read and
+that arbitrary code execution needs an OS-level boundary around the spawned
+process, not a longer list.
+
+Accept: the limitation is written down where a porter will read it before claiming
+more than the classifier delivers.
+
 Accept: profile renders in Settings with zero hardcoded renderer branches, and
 the Permission floor row shows a value you can point at a doc line to justify.
 

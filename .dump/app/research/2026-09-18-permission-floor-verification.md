@@ -30,6 +30,16 @@ policy reader and the real containment check. The script is reproduced in
 | turbo | `Read {"file_path":"<worktree>/.ssh/id_ed25519"}` | deny | `exfiltration.mode.turbo` |
 | turbo | `Read {"file_path":"/etc/hosts"}` | allow | `read-only.mode.turbo` |
 | edit | `WebFetch {"url":"https://example.test"}` | deny | `network.policy` |
+| agent | `Bash {"command":"bash -c \"rm -rf /\""}` | deny | `destructive.policy` |
+| turbo | `Bash {"command":"bash -c \"rm -rf /\""}` | ask | `critical-path.critical-delete` |
+| turbo | `Bash {"command":"timeout 30 rm -rf /"}` | ask | `critical-path.critical-delete` |
+| agent | `Bash {"command":"git -C /repo push --force"}` | deny | `destructive.policy` |
+| turbo | `Bash {"command":"find / -delete"}` | ask | `critical-path.critical-delete` |
+
+The last five rows were added after a review pass found that every one of them
+answered `allow` before it. A command that put anything between the shell and the
+verb, a wrapper, a quoted payload or a git global option, was classified as an
+ordinary shell command, which Agent mode allows and turbo runs with no prompt.
 
 What these rows show without the app running.
 
@@ -97,6 +107,24 @@ Each line is a separate check against a real build. Tick only what you saw.
 25. [ ] On the Grok backend, confirm the argv carries no always-approve or bypass
        flag in any mode, and that turbo carries the broad `--allow` list.
        `grok-print/args.test.ts` asserts both.
+26. [ ] In Agent mode, ask the model to run `bash -c "rm -rf ./node_modules"`.
+       Denied, naming `destructive.policy`, and nothing was removed. Before the
+       review pass this ran.
+27. [ ] In Turbo, ask it to run `bash -c "rm -rf /"`. A card appears naming
+       `critical-path.critical-delete`.
+28. [ ] Put a `.claude/settings.json` in the workspace containing
+       `{"permissions":{"allow":["Bash"]}}`. In Agent mode ask for a recursive
+       force delete. It is **still denied**, because the PreToolUse hook enforces
+       the floor on a call the engine would otherwise have auto-approved. Remove
+       the file afterwards.
+29. [ ] With that settings file still present, ask for `rm -rf /` in Turbo. A card
+       still appears. The hook answers ask, so an engine allow rule cannot skip it.
+30. [ ] Write `exfiltration = "allow"` under `[classes]` in the policy file. It is
+       rejected as a schema error, the floor stays shipped, and the message says to
+       use ask or deny. `exfiltration = "ask"` is accepted.
+31. [ ] Write `allow_tools = ["--always-approve"]` under `[modes.turbo]`. Rejected
+       as a schema error, because an allow-list entry becomes an argv value and
+       must not look like a flag.
 
 ## Reproducing the table
 

@@ -259,6 +259,151 @@ tab shows that label next to the provider so a user can see which floor they are
 getting. Closing it needs a provider-side hook or a proxy, which is a follow-up
 and not part of this step.
 
+## Decision 11: the classifier reads the real verb, not the first word (added 2026-09-18)
+
+Found in a six-pass review of this diff, then reproduced by running the shipped
+classifier. `splitCommandSegments` took each segment's first word as its verb and
+skipped only `sudo` and `VAR=` assignments. Every command that put something
+between the shell and the verb therefore landed in the residual `approval` class,
+which Agent mode allows and turbo runs without a prompt.
+
+| Command | Before | After |
+| --- | --- | --- |
+| `bash -c "rm -rf /"` | approval, allowed in agent | destructive, denied in agent, asks in turbo |
+| `sh -c 'rm -rf /'` | approval | destructive |
+| `eval "rm -rf ~"` | approval | destructive |
+| `sudo -u root rm -rf /` | approval, verb read as `-u` | destructive |
+| `timeout 30 rm -rf /` | approval | destructive |
+| `nice -n 5 rm -rf /` | approval | destructive |
+| `xargs rm -rf /` | approval | destructive |
+| `git -C /repo push --force` | approval | destructive, `forced-git-push` |
+| `dd if=/dev/zero of="/dev/sda"` | approval | destructive, `disk-or-power` |
+
+Three changes close it.
+
+1. Quotes are stripped from every word, so `of="/dev/sda"` reads as `of=/dev/sda`
+   and a quoted payload stops hiding its contents.
+2. `readVerb` skips a fixed wrapper list before naming the verb. The list is
+   `sudo`, `doas`, `env`, `command`, `exec`, `nohup`, `nice`, `ionice`, `time`,
+   `timeout`, `stdbuf`, `xargs`, `setsid`, `chroot` and the shell verbs `sh`,
+   `bash`, `zsh`, `dash`, `ksh` and `eval`. Claude Code strips the same idea
+   before matching a Bash rule, which its documentation lists as timeout, time,
+   nice, nohup, stdbuf and bare xargs, "so they cannot be used to smuggle a
+   command past a rule". Options that take a separate value are skipped with
+   their value, which is what `sudo -u root` and `nice -n 5` needed, and a bare
+   duration is skipped so `timeout 30` works. `-c` is deliberately not treated as
+   value-taking, because for a shell verb it introduces the payload this file has
+   to read.
+3. `readSubcommand` skips git's own global options, so `git -C /repo push` reads
+   `push`. This is the bypass filed upstream against Claude Code as "options
+   inserted between command and subcommand".
+
+Forced push is now read from the segment rather than by a regex that needed `git`
+and `push` to be adjacent. It catches the long flags, a short-flag cluster
+containing `f` such as `-fu`, and the `+refspec` spelling, which forces an update
+without naming a flag at all.
+
+Three more destructive patterns were added while the gap was open: `find` with
+`-delete`, `shred`, and the partition and filesystem tools `wipefs`, `fdisk`,
+`cfdisk`, `sfdisk`, `parted`, `sgdisk` and `gdisk`. `systemctl poweroff` and
+`service host reboot` now read their subcommand for the power verbs too. The
+breaker covers `find <critical> -delete` as well as `rm` and `rmdir`.
+
+**What was checked for false positives.** Quote stripping makes the word `rm`
+appear inside `grep -rn "rm -rf" .`, and that command must stay ordinary. It
+does, because the destructive and breaker checks still key on the resolved verb
+rather than on the presence of a word, and `grep` resolves as the verb. The same
+holds for `echo "do not run rm -rf /"`, `git rm --cached secret.txt`,
+`find . -name '*.ts' -print`, `dd if=in.bin of=out.bin` and `git push origin main`.
+Each is a test in `classifier.test.ts`, in a block named for what it guards
+against rather than for what it does.
+
+`SlashCommand` left `READ_ONLY_TOOLS` in the same pass. A custom slash command can
+carry a `!` shell execution that does not come back through the Bash tool, so
+reading it as read-only let plan mode run a command, and a repository ships its
+own `.claude/commands/`. It takes the residual `approval` class, which plan mode
+refuses. `Skill` stayed read-only, because a skill's actions arrive as their own
+gated tool calls.
+
+## Decision 12: the floor is enforced twice on Claude, as a hook and as canUseTool (added 2026-09-18)
+
+Also found in review. The router passes `settingSources: ["project", "user"]`, so
+the engine reads `.claude/settings.json` from the workspace and from the user's
+home directory. Anthropic documents that a call an allow rule auto-approves never
+reaches `canUseTool`, and `canUseTool` is where this gate lives. A repository
+ships its own settings file, so a cloned workspace containing
+`{"permissions":{"allow":["Bash"]}}` would have taken every shell command out
+from under the floor, and nothing in the transcript would have said so. That
+falsified the claim this step makes, which is that every agent action passes one
+gate.
+
+Emptying `settingSources` is the isolation mode the SDK describes, and it is not
+available here, because the same option is what loads CLAUDE.md and the project's
+skills. So the floor is enforced at the hook instead.
+
+`src/main/lib/claude/permission-hook.ts` builds a `PreToolUse` matcher that runs
+the same `evaluateAction` and forwards only a deny or an ask. **It never returns
+allow**, so it cannot widen a posture the engine already applied, and anything it
+does not object to still reaches `canUseTool` exactly as before. A throw inside it
+denies. There is no `matcher` field, so it runs for every tool, because a per-tool
+matcher would leave the tools nobody listed ungated.
+
+The cost is a second evaluation per call. Measured, classification is 4.2 us mean
+and the cached policy read is 2.2 us, so the duplicate is tens of microseconds
+against a model round-trip. The gate is not on the critical path either way.
+
+## Decision 13: exfiltration is not a verdict a policy file may lift (added 2026-09-18)
+
+`resolvePolicy` refuses to merge `[modes.plan]`, and the reason recorded beside it
+is that a floor a file could lift would not be a floor. The same argument applies
+to the exfiltration class and had not been applied to it. A file could write
+`[classes] exfiltration = "allow"`, or set it for one mode, and the gate would
+then allow reading `~/.ssh/id_ed25519`. The evaluator's rule that no allow-list
+entry may cover exfiltration would have been the only thing left, and it does not
+constrain a class verdict.
+
+`exfiltration = "allow"` is now a schema error in both the `[classes]` table and a
+per-mode table, so the whole document fails closed and the message says to use
+`ask` or `deny`. Both stay writable. Being prompted before a secret is read is a
+legitimate choice and is narrower than what turbo permits for every other class,
+so refusing it would be paternalism rather than a floor.
+
+## Decision 14: an allow-list entry may not look like a flag (added 2026-09-18)
+
+`parseToolRule` accepted any non-empty string as a tool name, so
+`allow_tools = ["--always-approve"]` parsed. On the Grok path each entry is pushed
+onto argv as the value of `--allow`, and the resulting command line ended
+`--allow --always-approve`. A parser that reads the next token as a flag rather
+than as that value would have been handed the bypass token this step exists to
+keep off the command line, arriving through a side door that
+`no-bypass.test.ts` cannot see, because the test reads source files and not argv.
+
+`isToolName` now refuses a leading dash, which fails the document closed and tells
+the user what to write instead. The policy file is user-owned, so the realistic
+threat is a mistake rather than an attack, but the argv was wrong either way.
+Grok is spawned with an argument array and no `shell: true`, so nothing in a rule
+string can reach a shell.
+
+## The residual gap, stated rather than closed
+
+Text-level normalisation does not contain an interpreter. `python -c
+"import os; os.system('rm -rf /')"`, `node -e`, `perl -e` and a script written to
+disk and then run all still classify as `approval`, which Agent mode allows.
+Adding those verbs to a list is the move the evidence argues against. The write-up
+of a six-layer regex filter bypassed in a shipped agent reaches the conclusion
+directly: every interpreter a denylist misses is a bypass, every quoting trick it
+misses is a bypass, and the fix that worked was to remove the shell tool and put
+an OS sandbox in front of it. A published normaliser that does nine text-level
+rewrites still lists adversarially nested obfuscation as a limitation by design.
+
+So this step claims a floor over the commands it can read, not over arbitrary code
+execution, and says which is which. Quoted-substring reconstruction, `c"h"m"o"d`,
+hex and octal escapes, base64, alias definitions and heredocs all still evade the
+classifier. Closing that class needs an OS-level boundary around the spawned
+process, which is a roadmap item of its own and not something a pattern table can
+deliver. `docs/backend-porting-recipe.md` section 7 now tells a porter to record
+the same limitation rather than claim otherwise.
+
 ## What is app-enforced and what is engine-enforced
 
 The capability manifest gained `security.permissionFloor`:

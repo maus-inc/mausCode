@@ -30,7 +30,7 @@ cost barely moved, which is the point of measuring it twice.
 
 | Case | first run mean | first run p50 | revised mean | revised p50 | revised p95 |
 | --- | --- | --- | --- | --- | --- |
-| `classifyToolAction` (pure table walk) | 6.7 µs | 2.2 µs | 5.0 µs | 1.7 µs | 8.3 µs |
+| `classifyToolAction` (pure table walk) | 6.7 µs | 2.2 µs | 5.0 µs, then 4.2 µs | 1.0 µs | 9.7 µs |
 | `readPolicyFile` cold | 10.0 ms | | 2.0 ms | | |
 | `readPolicyFile` cached | 0.8 µs | | 2.2 µs | | |
 | `evaluateAction` plan | 135.7 µs | 21.1 µs | 96.7 µs | 12.9 µs | 533 µs |
@@ -43,6 +43,15 @@ cost barely moved, which is the point of measuring it twice.
 The cold policy read dropped from 10.0 ms to 2.0 ms because the second run had a
 warm page cache, not because the reader got faster. Treat 10 ms as the cold
 machine figure and 2 ms as the warm one. Both happen once per TTL window.
+
+A third run followed the review pass that taught the classifier to skip wrapper
+verbs and strip quotes, and that added a second enforcement point on Claude in the
+form of a PreToolUse hook. Classification got marginally cheaper rather than dearer,
+4.2 µs mean against 5.0 µs, because the verb finder returns on the first word that
+is not a wrapper and most commands name their verb immediately. `evaluateAction`
+landed between 70.2 µs and 96.4 µs mean with p50 between 11.9 µs and 17.3 µs,
+inside the spread of the run before it. The hook duplicates one evaluation per tool
+call on the Claude path, which at these numbers is tens of microseconds.
 
 ## Reading
 
@@ -95,6 +104,13 @@ network. Read the shifts against that.
   with no secret paths and no filesystem root in it has nothing left to refuse.
 - Plan, ask and edit did not move, which is the check that the revision narrowed
   where it was asked to and nowhere else.
+- **The same mix came out identical after the review pass**, 800/0/1200,
+  800/1000/200, 1600/0/400, 1800/0/200 and 2000/0/0. Nine commands that used to
+  reach this mix as `approval` now classify as destructive, and none of them is in
+  the mix, so the honest reading is that the ordinary ten-call turn costs exactly
+  what it did and the evasions that were invisible to this table are covered by
+  `classifier.test.ts` instead. The wrapper probes below are that coverage,
+  measured end to end through the wired gate.
 
 ## What this does to acceptance criterion 3
 
@@ -201,3 +217,22 @@ inference from the measured classifier cost, not as a measurement.
 No caching layer beyond the policy TTL, and no bypass of the path check for
 speed. Both would trade a measurable safety property for microseconds that no
 user can perceive.
+
+## Wrapper probes, measured through the wired gate
+
+Added after the review pass. Same temporary worktree, no policy file. Each of
+these classified as `approval` before it, which Agent mode allows and turbo runs
+with no prompt.
+
+| Mode | Command | Verdict | Rule |
+| --- | --- | --- | --- |
+| agent | `bash -c "rm -rf /"` | deny | `destructive.policy` |
+| turbo | `bash -c "rm -rf /"` | ask | `critical-path.critical-delete` |
+| turbo | `timeout 30 rm -rf /` | ask | `critical-path.critical-delete` |
+| agent | `git -C /repo push --force` | deny | `destructive.policy` |
+| turbo | `find / -delete` | ask | `critical-path.critical-delete` |
+
+The two commands that still answer `approval` after all of this are an interpreter
+taking inline code and a script written to disk and then run. They are listed under
+"The residual gap" in the decision record with the sources that explain why a
+pattern table cannot close them.
