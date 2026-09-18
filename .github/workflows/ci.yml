@@ -84,7 +84,7 @@ jobs:
           node-version: "22"
       - name: Fix Python distutils on macOS
         if: matrix.os == 'macos-14'
-        run: python3 -m pip install setuptools
+        run: python3 -m pip install setuptools --break-system-packages
       - name: Install dependencies (full install incl. native module rebuild)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Fetch bundled agent binaries for this platform
