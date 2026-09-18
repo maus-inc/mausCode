@@ -84,6 +84,26 @@ describe("claude transform", () => {
     expect(errorChunk).toMatchObject({ toolCallId: "tu_2", errorText: "nope" })
   })
 
+  it("renders structured tool_result error content as text, not [object Object]", () => {
+    const failing = createTransformer()({
+      type: "user",
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "tu_3",
+            is_error: true,
+            content: [{ type: "text", text: "line one" }, { type: "image" }],
+          },
+        ],
+      },
+    })
+    const errorChunk = [...failing].find((chunk) => chunk.type === "tool-output-error") as {
+      errorText: string
+    }
+    expect(errorChunk.errorText).toBe("line one\n[image]")
+  })
+
   it("maps the compacting status and compact_boundary to the Compact indicator", () => {
     const types = translate(
       { type: "system", subtype: "status", status: "compacting", uuid: U1, session_id: "s" },

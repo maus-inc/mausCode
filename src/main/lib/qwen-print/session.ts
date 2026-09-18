@@ -245,6 +245,78 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
     }
   }
 
+  // The router owns turn completion, so a result line's metadata and finish
+  // chunks are withheld and only their usage/finalTextId facts merge into
+  // the turn result the router emits once.
+  const mergeResultMetadata = (chunk: QwenPrintChunk) => {
+    const meta = (chunk as { messageMetadata?: Record<string, unknown> }).messageMetadata
+    if (!isRecord(meta)) return
+    if (typeof meta.finalTextId === "string") {
+      finalTextId = meta.finalTextId
+    }
+    const tUsage = readUsage({
+      usage: {
+        input_tokens: meta.inputTokens,
+        output_tokens: meta.outputTokens,
+        cache_read_input_tokens: meta.cacheReadInputTokens,
+        total_tokens: meta.totalTokens,
+      },
+    })
+    if (tUsage) resultUsage = { ...tUsage, ...resultUsage }
+  }
+
+  const emitResultChunks = (chunks: Iterable<QwenPrintChunk>) => {
+    for (const chunk of chunks) {
+      if (
+        chunk.type === "message-metadata" ||
+        chunk.type === "finish-step" ||
+        chunk.type === "finish"
+      ) {
+        if (chunk.type === "message-metadata") mergeResultMetadata(chunk)
+        continue
+      }
+      emit(chunk)
+    }
+  }
+
+  const emitDenialNotice = (denied: string[]) => {
+    // Policy violations are visible + persisted (never silent).
+    denialTextId += 1
+    const id = `qwen-denial-${denialTextId}`
+    emit({ type: "text-start", id })
+    emit({
+      type: "text-delta",
+      id,
+      delta: `Permission denied by the qwen approval gate: ${denied.join(", ")}. Re-run in a more permissive mode to allow these tools.`,
+    })
+    emit({ type: "text-end", id })
+  }
+
+  const handleResultLine = (parsed: Record<string, unknown>) => {
+    sawResult = true
+    resultUsage = readUsage(parsed) ?? resultUsage
+    if (typeof parsed.num_turns === "number") {
+      resultNumTurns = parsed.num_turns
+    }
+    if (typeof parsed.subtype === "string") {
+      resultStopReason = parsed.subtype
+    }
+    const errorMessage = resultErrorMessage(parsed)
+    if (errorMessage) {
+      // Error results bypass the transformer (no metadata/finish):
+      // the router holds this chunk for retry routing and owns
+      // completion, mirroring the cursor/grok backends.
+      turnError = errorMessage
+      emit({ type: "error", errorText: errorMessage })
+      return
+    }
+    const message = toClaudeStreamMessage(parsed)
+    if (!message) return
+    emitResultChunks(transform(message))
+    const denied = denialNames(parsed)
+    if (denied.length > 0) emitDenialNotice(denied)
+  }
+
   const feedLine = (rawLine: string) => {
     const text = rawLine.trim()
     if (text.length === 0) return
@@ -263,67 +335,7 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
     }
     premapQwenLine(parsed)
     if (isRecord(parsed) && parsed.type === "result") {
-      sawResult = true
-      resultUsage = readUsage(parsed) ?? resultUsage
-      if (typeof parsed.num_turns === "number") {
-        resultNumTurns = parsed.num_turns
-      }
-      if (typeof parsed.subtype === "string") {
-        resultStopReason = parsed.subtype
-      }
-      const errorMessage = resultErrorMessage(parsed)
-      if (errorMessage) {
-        // Error results bypass the transformer (no metadata/finish):
-        // the router holds this chunk for retry routing and owns
-        // completion, mirroring the cursor/grok backends.
-        turnError = errorMessage
-        emit({ type: "error", errorText: errorMessage })
-        return
-      }
-      const message = toClaudeStreamMessage(parsed)
-      if (!message) return
-      for (const chunk of transform(message)) {
-        if (
-          chunk.type === "message-metadata" ||
-          chunk.type === "finish-step" ||
-          chunk.type === "finish"
-        ) {
-          // Withheld: usage/finalTextId ride the turn result into the
-          // router's single message-metadata emission.
-          if (chunk.type === "message-metadata") {
-            const meta = (chunk as { messageMetadata?: Record<string, unknown> }).messageMetadata
-            if (isRecord(meta)) {
-              if (typeof meta.finalTextId === "string") {
-                finalTextId = meta.finalTextId
-              }
-              const tUsage = readUsage({
-                usage: {
-                  input_tokens: meta.inputTokens,
-                  output_tokens: meta.outputTokens,
-                  cache_read_input_tokens: meta.cacheReadInputTokens,
-                  total_tokens: meta.totalTokens,
-                },
-              })
-              if (tUsage) resultUsage = { ...tUsage, ...resultUsage }
-            }
-          }
-          continue
-        }
-        emit(chunk)
-      }
-      const denied = denialNames(parsed)
-      if (denied.length > 0) {
-        // Policy violations are visible + persisted (never silent).
-        denialTextId += 1
-        const id = `qwen-denial-${denialTextId}`
-        emit({ type: "text-start", id })
-        emit({
-          type: "text-delta",
-          id,
-          delta: `Permission denied by the qwen approval gate: ${denied.join(", ")}. Re-run in a more permissive mode to allow these tools.`,
-        })
-        emit({ type: "text-end", id })
-      }
+      handleResultLine(parsed)
       return
     }
     const message = toClaudeStreamMessage(parsed)

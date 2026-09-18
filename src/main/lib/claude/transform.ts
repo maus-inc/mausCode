@@ -101,6 +101,32 @@ export function toClaudeStreamMessage(raw: unknown): ClaudeStreamMessage | null 
   return raw as ClaudeStreamMessage
 }
 
+/** A failed tool result's text: structured content renders its text parts. */
+function toolResultErrorText(content: ClaudeToolResultBlock["content"]): string {
+  if (typeof content === "string") return content
+  return content.map((part) => (part.type === "text" ? part.text : "[image]")).join("\n")
+}
+
+/** Resolve a tool result's output payload, preferring the CLI's own result. */
+function resolveToolResultOutput(
+  block: ClaudeToolResultBlock,
+  msg: ClaudeUserStreamMessage,
+): unknown {
+  let output: unknown = msg.tool_use_result
+  if (!output && typeof block.content === "string") {
+    try {
+      // Some tool results may have JSON embedded in the string
+      const parsed = JSON.parse(block.content)
+      if (parsed && typeof parsed === "object") {
+        output = parsed
+      }
+    } catch {
+      // Not JSON, use raw content
+    }
+  }
+  return output || block.content
+}
+
 /**
  * NOTE (transplant): `ChunkCoalescer`/`createChunkCoalescer` below, the
  * `providerMetadata` spread-casts, and the `?? "unknown"` tool-name guard were
@@ -566,25 +592,6 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
     }
   }
 
-  function resolveToolResultOutput(
-    block: ClaudeToolResultBlock,
-    msg: ClaudeUserStreamMessage,
-  ): unknown {
-    let output: unknown = msg.tool_use_result
-    if (!output && typeof block.content === "string") {
-      try {
-        // Some tool results may have JSON embedded in the string
-        const parsed = JSON.parse(block.content)
-        if (parsed && typeof parsed === "object") {
-          output = parsed
-        }
-      } catch {
-        // Not JSON, use raw content
-      }
-    }
-    return output || block.content
-  }
-
   function* handleUserMessage(msg: ClaudeUserStreamMessage): Generator<UIMessageChunk> {
     // ===== USER MESSAGE (tool results) =====
     const content = msg.message?.content
@@ -598,7 +605,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
           yield {
             type: "tool-output-error",
             toolCallId: compositeId,
-            errorText: String(block.content),
+            errorText: toolResultErrorText(block.content),
           }
         } else {
           yield {
