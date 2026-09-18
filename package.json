@@ -145,6 +145,7 @@
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.9.3",
+    "@typescript/native-preview": "latest",
     "vite": "^6.3.4",
     "vitest": "^3.2.6"
   },
