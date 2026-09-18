@@ -72,6 +72,9 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
           <Row label="Sandbox">{capability.security.sandbox}</Row>
           <Row label="Egress">{capability.security.egress.join(", ") || "—"}</Row>
           <Row label="Retention">{capability.security.retention}</Row>
+          <Row label="Permission floor">
+            {capability.security.permissionFloor === "app-gate" ? "app gate" : "engine only"}
+          </Row>
         </div>
         <div>
           <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

@@ -2,8 +2,10 @@
  * mausCode RooChatTransport: ChatTransport<UIMessage> over trpc.roo.chat.
  * Mirrors ClineChatTransport (ours, NOT verbatim).
  */
+
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import { DEFAULT_ROO_UI_MODEL } from "../../../../shared/roo-model-id"
 import { rooLoginModalOpenAtom, sessionInfoAtom } from "../../../lib/atoms"
@@ -20,7 +22,7 @@ type RooChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
 }
 
 type ImageAttachment = {

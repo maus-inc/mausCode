@@ -13,32 +13,62 @@ import {
   isGrokUnknownFlagError,
 } from "./args"
 
-it("maps plan/ask to permission-mode/tools and edit/agent/turbo to approve", () => {
+/**
+ * The spellings grok documents as the same bypass. None of them may reach argv
+ * in any mode: a bypass the app cannot see defeats the permission gate.
+ */
+const BYPASS_SPELLINGS = ["--always-approve", "--yolo", "bypassPermissions"]
+
+/** The value that follows `flag`, or undefined when the flag is absent. */
+function flagValue(args: string[], flag: string): string | undefined {
+  const at = args.indexOf(flag)
+  return at === -1 ? undefined : args[at + 1]
+}
+
+/** Every value passed to `flag`, in order. */
+function flagValues(args: string[], flag: string): string[] {
+  return args.flatMap((arg, index) => {
+    const value = args[index + 1]
+    return arg === flag && value !== undefined ? [value] : []
+  })
+}
+
+it("maps plan/ask to permission-mode/tools and the writing modes to acceptEdits", () => {
   const plan = buildGrokPrintArgs({ mode: "plan", prompt: "hi" }).args
-  assert.deepEqual(
-    plan.slice(plan.indexOf("--permission-mode"), plan.indexOf("--permission-mode") + 2),
-    ["--permission-mode", "plan"],
-  )
-  assert.ok(!plan.includes("--always-approve"))
+  assert.equal(flagValue(plan, "--permission-mode"), "plan")
 
   const ask = buildGrokPrintArgs({ mode: "ask", prompt: "hi" }).args
-  assert.deepEqual(ask.slice(ask.indexOf("--tools"), ask.indexOf("--tools") + 2), [
-    "--tools",
-    GROK_ASK_TOOLS,
-  ])
-  assert.ok(!ask.includes("--always-approve"))
+  assert.equal(flagValue(ask, "--tools"), GROK_ASK_TOOLS)
 
-  for (const mode of ["edit", "agent"] as const) {
+  for (const mode of ["edit", "agent", "turbo"] as const) {
     const { args } = buildGrokPrintArgs({ mode, prompt: "hi" })
-    assert.ok(args.includes("--always-approve"))
-    assert.ok(!args.includes("--permission-mode"))
+    assert.equal(flagValue(args, "--permission-mode"), "acceptEdits")
+    assert.deepEqual(flagValues(args, "--allow"), [])
   }
-  const turbo = buildGrokPrintArgs({ mode: "turbo", prompt: "hi" }).args
-  assert.ok(turbo.includes("--always-approve"))
-  assert.deepEqual(
-    turbo.slice(turbo.indexOf("--permission-mode"), turbo.indexOf("--permission-mode") + 2),
-    ["--permission-mode", "bypassPermissions"],
-  )
+})
+
+it("never passes a bypass spelling, with or without an allow-list", () => {
+  for (const mode of ["plan", "ask", "edit", "agent", "turbo"] as const) {
+    for (const allowTools of [undefined, ["run_terminal_cmd(npm test)"]]) {
+      const { args } = buildGrokPrintArgs({ mode, prompt: "hi", allowTools })
+      for (const spelling of BYPASS_SPELLINGS) {
+        assert.ok(!args.includes(spelling), `${mode} passed ${spelling}`)
+      }
+    }
+  }
+})
+
+it("threads the policy allow-list as --allow rules for the writing modes only", () => {
+  const allowTools = ["run_terminal_cmd(npm test)", "read_file(*)"]
+  const { args } = buildGrokPrintArgs({ mode: "turbo", prompt: "hi", allowTools })
+  assert.deepEqual(flagValues(args, "--allow"), allowTools)
+
+  // Plan and ask take their posture from the CLI, so an allow-list cannot
+  // widen either of them from this path.
+  for (const mode of ["plan", "ask"] as const) {
+    const scoped = buildGrokPrintArgs({ mode, prompt: "hi", allowTools }).args
+    assert.deepEqual(flagValues(scoped, "--allow"), [])
+  }
 })
 
 it("always passes streaming-json + no-auto-update and threads model/resume/cwd", () => {
@@ -116,6 +146,7 @@ it("strips newer flags and rewrites prompt-file to -p on fallback", () => {
   assert.ok(!fallback.includes("--no-auto-update"))
   assert.ok(!fallback.includes("--permission-mode"))
   assert.ok(!fallback.includes("plan"))
+  assert.deepEqual(flagValues(fallback, "--allow"), [])
   assert.deepEqual(fallback.slice(0, 2), ["-p", prompt])
   for (const kept of [
     "-m",
@@ -139,10 +170,10 @@ it("does not mistake prose for retryable errors", () => {
 
 it("leaves prompt text alone when it equals --prompt-file", () => {
   const out = buildGrokPrintFallbackArgs(
-    ["-p", "--prompt-file", "--cwd", "/tmp/x", "--always-approve"],
+    ["-p", "--prompt-file", "--cwd", "/tmp/x", "-m", "grok-4.6"],
     "--prompt-file",
   )
-  assert.deepEqual(out, ["-p", "--prompt-file", "--cwd", "/tmp/x", "--always-approve"])
+  assert.deepEqual(out, ["-p", "--prompt-file", "--cwd", "/tmp/x", "-m", "grok-4.6"])
 })
 
 it("matches resume, invalid-model, and unknown-flag errors", () => {

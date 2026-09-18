@@ -137,13 +137,49 @@ cancel is silent-ish; completion persists exactly one assistant message.
 
 Author `src/main/lib/providers/<backend>.ts`: static profile (transport,
 auth, sandbox, approvals, egress/retention, streaming, tools, attachments,
-resume, models, license, billing) + async `probe()` (binary present?
-version? logged in?). Register in `src/main/lib/providers/index.ts`
-(`registry.ts` only holds the map + accessors).
+resume, models, license, billing, **permissionFloor**) + async `probe()`
+(binary present? version? logged in?). Register in
+`src/main/lib/providers/index.ts` (`registry.ts` only holds the map +
+accessors).
 The `providers` tRPC router serves profiles + probes + `evaluateViolations`
 against policy (local-only etc.) to Settings; chat surfaces only violations.
 
-Accept: profile renders in Settings with zero hardcoded renderer branches.
+### `security.permissionFloor` is mandatory
+
+One of two values, and it is a claim you have to be able to defend:
+
+- **`app-gate`** — every side-effecting tool call reaches a callback this app
+  owns, and that callback routes through `src/main/lib/permissions/`. Claude is
+  the only backend that qualifies today, because it is the only one whose SDK
+  hands us `canUseTool` for every action.
+- **`engine-only`** — the floor is whatever the engine's own flags give. Map the
+  policy onto those flags (see §5) and say so honestly.
+
+The check that decides which: **read the engine's docs for what its permission
+mode auto-approves before you claim `app-gate`.** An engine that auto-approves a
+class of action never delivers that action to your callback, so a gate you wrote
+does not cover it. Claude's `acceptEdits` auto-approves Edit, Write and the shell
+commands `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed`, which is why
+mausCode runs the acting modes under `default` instead
+(`.dump/app/decisions/2026-09-13-permission-floor.md`, decision 3).
+
+### A bypass is never portable
+
+Do not carry a target engine's always-approve / skip-permissions / YOLO flag into
+mausCode, whatever it is called upstream. `AGENTS.md` §8 lists the two Claude
+spellings under Never, and
+`src/main/lib/permissions/no-bypass.test.ts` fails the build if either reaches
+`src` outside a test asserting its absence — so the rule is enforced, not
+conventional. A backend whose only headless mode is a bypass gets
+`permissionFloor: "engine-only"` and a §12 edge-case entry saying which actions
+are ungoverned, not a bypass.
+
+If the engine can prompt but not headlessly (grok turbo), map the policy
+allow-list onto its `--allow` rules and let an unlisted destructive action fail
+closed. Failing closed beats asking a question nobody is there to answer.
+
+Accept: profile renders in Settings with zero hardcoded renderer branches, and
+the Permission floor row shows a value you can point at a doc line to justify.
 
 ## 8. Mock + tests
 

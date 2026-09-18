@@ -2,8 +2,10 @@
  * mausCode OpenclawChatTransport: ChatTransport<UIMessage> over trpc.openclaw.chat.
  * Mirrors ClineChatTransport (ours, NOT verbatim).
  */
+
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import { DEFAULT_OPENCLAW_UI_MODEL } from "../../../../shared/openclaw-model-id"
 import { openclawLoginModalOpenAtom, sessionInfoAtom } from "../../../lib/atoms"
@@ -20,7 +22,7 @@ type OpenclawChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
 }
 
 type ImageAttachment = {

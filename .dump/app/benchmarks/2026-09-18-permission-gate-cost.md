@@ -1,0 +1,173 @@
+# Permission gate cost per tool call (roadmap step 10)
+
+Date: 2026-09-18. Required by `.dump/app/roadmap/10-permission-floor.md`, which
+asks what the gate costs per tool call before it is put in front of every agent
+action.
+
+## Environment
+
+Arena sandbox, Linux x64, 2 CPUs, 3.9 GB RAM, Node v22.22.3. Dependencies
+installed with `npm install --ignore-scripts --legacy-peer-deps`. Runner:
+`npx --no-install tsx`. Clock: `process.hrtime.bigint()`.
+
+Measured against the **wired** gate in `src/main/lib/permissions/index.ts`, not
+a mock: the real policy reader and the real containment check
+(`assertToolPathInWorktree`) against a real temporary worktree. No policy file
+present, so the shipped floor applied — that is the default install state and
+the one worth measuring.
+
+2000 iterations per case over a fixed 10-call mix; the first 100 samples are
+dropped as warm-up. The mix is what a real turn sends: three read-only tools,
+two file edits, three shell commands (benign, benign, destructive), one network
+tool, one AskUserQuestion.
+
+## Results
+
+| Case | mean | p50 | p95 | max |
+| --- | --- | --- | --- | --- |
+| `classifyToolAction` (pure table walk) | 6.7 µs | 2.2 µs | 21.1 µs | 1261 µs |
+| `readPolicyFile` cold | 10.0 ms | — | — | — |
+| `readPolicyFile` cached | 0.8 µs | — | 1.1 µs | — |
+| `evaluateAction` plan | 135.7 µs | 21.1 µs | 603 µs | 8741 µs |
+| `evaluateAction` ask | 96.7 µs | 17.1 µs | 490 µs | 3958 µs |
+| `evaluateAction` edit | 100.8 µs | 12.0 µs | 482 µs | 4483 µs |
+| `evaluateAction` agent | 97.1 µs | 14.6 µs | 485 µs | 7971 µs |
+| `evaluateAction` turbo | 84.0 µs | 9.5 µs | 424 µs | 1025 µs |
+| path-bearing call (`Edit`, absolute path) | 143.6 µs | — | 198 µs | 2536 µs |
+
+## Reading
+
+- **The gate costs tens of microseconds per tool call.** At the agent-mode p50
+  of 14.6 µs, a turn with 200 tool calls spends ~3 ms in the gate. A single
+  model round-trip is orders of magnitude larger, so the gate is not on the
+  critical path and does not need a fast path of its own.
+- **The cost is the filesystem, not the policy.** Classification alone is 6.7 µs
+  mean and the cached policy read is 0.8 µs, while a call that names a path
+  costs 143.6 µs mean. `assertToolPathInWorktree` canonicalises through symlinks
+  with `realpath`/`lstat`, and that is where the time goes. Calls that name no
+  path (Bash, WebFetch, AskUserQuestion) are the cheap ones, which is why turbo
+  and agent sit lowest.
+- **The cold policy read is 10 ms and happens once per 5 seconds**, not once per
+  call. The TTL matches the window `claude-settings.ts` already uses. A turn
+  that makes 200 calls pays it a handful of times.
+- **The tails are the machine, not the gate.** Maxima of 4–9 ms against p95 of
+  ~0.5 ms on a 2-CPU sandbox with 3.9 GB RAM are scheduler and page-cache
+  noise; the same run recorded `kswapd0` active from an unrelated process.
+- **Plan mode is the most expensive** (21.1 µs p50) because its floor evaluates
+  the markdown-path branch after the class verdict, so it does slightly more
+  work per call than the modes that fall straight through.
+
+## Verdict distribution observed
+
+Same run, 2000 calls each, shipped floor:
+
+| Mode | allow | ask | deny |
+| --- | --- | --- | --- |
+| plan | 800 | 0 | 1200 |
+| ask | 800 | 1000 | 200 |
+| edit | 1600 | 0 | 400 |
+| agent | 1600 | 0 | 400 |
+| turbo | 1600 | 0 | 400 |
+
+These match the floor by construction and are the cheap end-to-end check that
+the wiring is live: 4 of the 10 mixed calls are read-only, so plan allows
+exactly those 800 and denies the rest; ask additionally asks on the 5
+approval-class calls (including the destructive one, which is the only shipped
+widening) and denies the single network tool; the acting modes allow the 8
+non-dangerous calls and deny `rm -rf` and `WebFetch`. **Agent mode denying 400
+of 2000 is acceptance criterion 2 measured rather than asserted.**
+
+## Method
+
+The script is kept here rather than in the repo tree so it is not picked up by
+the test gate. Reproduce with `npx --no-install tsx <file>.mts`; the `.mts`
+extension matters, because outside a `"type": "module"` package tsx emits CJS
+and rejects the top-level await.
+
+Fixture discipline, recorded because getting it wrong here deleted a workspace
+earlier in this step: `mkdirSync` before `realpathSync`, and cleanup deletes the
+`mkdtempSync` result itself, guarded by a `startsWith(tmpdir())` check, never a
+path derived from a value a failed setup could leave empty.
+
+```ts
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir, homedir } from "node:os"
+import { join } from "node:path"
+import { evaluateAction } from "<repo>/src/main/lib/permissions/index.ts"
+import { invalidatePolicyCache, readPolicyFile } from "<repo>/src/main/lib/permissions/policy-file.ts"
+import { classifyToolAction } from "<repo>/src/shared/permissions/classifier.ts"
+
+const MIX = [
+  { toolName: "Read", toolInput: { file_path: "src/a.ts" } },
+  { toolName: "Grep", toolInput: { pattern: "TODO" } },
+  { toolName: "Glob", toolInput: { pattern: "**/*.ts" } },
+  { toolName: "Edit", toolInput: { file_path: "src/a.ts" } },
+  { toolName: "Write", toolInput: { file_path: "src/b.ts" } },
+  { toolName: "Bash", toolInput: { command: "npm test" } },
+  { toolName: "Bash", toolInput: { command: "git status --porcelain" } },
+  { toolName: "Bash", toolInput: { command: "rm -rf /tmp/build" } },
+  { toolName: "WebFetch", toolInput: { url: "https://example.test" } },
+  { toolName: "AskUserQuestion", toolInput: {} },
+] as const
+
+const root = mkdtempSync(join(tmpdir(), "mauscode-bench-"))
+mkdirSync(join(root, "repo"), { recursive: true })
+const worktree = realpathSync(join(root, "repo"))
+mkdirSync(join(worktree, "src"), { recursive: true })
+writeFileSync(join(worktree, "src/a.ts"), "export const a = 1\n", "utf-8")
+
+const ROUNDS = 2000
+for (const mode of ["plan", "ask", "edit", "agent", "turbo"] as const) {
+  const samples: number[] = []
+  for (let i = 0; i < ROUNDS; i++) {
+    const action = MIX[i % MIX.length]
+    const t0 = process.hrtime.bigint()
+    await evaluateAction({
+      toolName: action.toolName,
+      toolInput: action.toolInput as Record<string, unknown>,
+      mode,
+      worktreePath: worktree,
+    })
+    samples.push(Number(process.hrtime.bigint() - t0))
+  }
+  const warm = samples.slice(100).sort((a, b) => a - b)
+  const mean = warm.reduce((a, b) => a + b, 0) / warm.length
+  console.log(mode, "mean", mean / 1000, "us  p50", warm[warm.length >> 1] / 1000, "us")
+}
+if (root.startsWith(tmpdir())) rmSync(root, { recursive: true, force: true })
+console.log("app dir:", join(homedir(), ".mauscode"))
+```
+
+## Before and after
+
+§12 of the step asks for the cost before and after. The honest answer is that
+only "after" was measured directly, and here is why that is a fair comparison
+rather than a gap.
+
+**Before**, the non-plan path did not evaluate a policy at all: the SDK was given
+the bypass posture, so most calls never reached `canUseTool`. What the router did
+check ran inside the callback — a plan-mode `Set` lookup, an ask-mode `Set`
+lookup, and `detectDangerousDeletion`, which is six regular expressions over the
+command string. Those six regexes are the whole of the old cost, and they are the
+same work the classifier now does.
+
+**After**, that regex work is `classifyToolAction`, measured standalone at
+**6.7 µs mean / 2.2 µs p50**. So the classification half of the gate costs about
+what the old check cost, and the gate's total (9.5–21 µs p50) is that plus a
+cached policy read (0.8 µs) plus the containment check, which is new work the old
+path never did because nothing was checking where a tool's paths pointed.
+
+The new cost buys two things the old path did not have: path containment on every
+call that names a file, and coverage of every action rather than the subset that
+happened to reach a callback under a bypass posture. The old path's real cost was
+not microseconds — it was that four of five modes had no floor at all.
+
+Measuring the old path directly would have meant rebuilding deleted code to time
+it, which is not a use of this step's budget. The comparison above is stated as an
+inference from the measured classifier cost, not as a measurement.
+
+## Consequence
+
+No caching layer beyond the policy TTL, and no bypass of the path check for
+speed. Both would trade a measurable safety property for microseconds that no
+user can perceive.

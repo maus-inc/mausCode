@@ -2,8 +2,10 @@
  * NOTE (transplant): CursorChatTransport: ChatTransport<UIMessage> over trpc.cursor.chat.
  * Source: SamSammane/1code-ui (Apache-2.0), commit 51b79a5.
  */
+
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import { DEFAULT_CURSOR_UI_MODEL } from "../../../../shared/cursor-model-id"
 import { cursorLoginModalOpenAtom, type SessionInfo, sessionInfoAtom } from "../../../lib/atoms"
@@ -40,7 +42,7 @@ type CursorChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
 }
 
 type ImageAttachment = {

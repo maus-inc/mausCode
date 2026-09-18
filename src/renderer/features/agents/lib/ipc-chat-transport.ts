@@ -4,9 +4,11 @@
  * from erenbertr/1code (Apache-2.0). Their auth-error toast replacement was
  * NOT taken — this tree keeps the login-modal retry flow.
  */
+
 import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import {
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
@@ -118,7 +120,7 @@ type IPCChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string // Original project path for MCP config lookup (when using worktrees)
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
   model?: string
 }
 

@@ -68,11 +68,15 @@ export function getClaudeCapability(): ProviderCapability {
     security: {
       auth: ["oauth-claude", "api-key-env", "cli-credentials"],
       storesCredentials: true,
+      // Per-action is a claim about this app, not the SDK: every side-effecting
+      // call is routed through the gate in `src/main/lib/permissions/`, and the
+      // SDK posture is one that never auto-approves behind that gate.
       approvals: "per-action",
       sandbox: "none",
       egress: ["provider-configured"],
       retention: "local-session-files",
       requiresHostedService: false,
+      permissionFloor: "app-gate",
     },
     performance: {
       streaming: true,

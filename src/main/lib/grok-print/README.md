@@ -36,8 +36,7 @@ Primary sources (all verified 2026-09-11):
 | --- | --- |
 | plan | `--permission-mode plan` |
 | ask | `--tools read_file,grep,list_dir,web_search,web_fetch` |
-| edit / agent | `--always-approve` |
-| turbo | `--always-approve --permission-mode bypassPermissions` |
+| edit / agent / turbo | `--permission-mode acceptEdits` + one `--allow Tool(pattern)` per entry in the policy file's `allow_tools` for that mode |
 
 Always: `--output-format streaming-json --no-auto-update`, plus
 `GROK_DISABLE_AUTOUPDATER=1` in env. `--cwd` pins the project root
@@ -45,10 +44,18 @@ Always: `--output-format streaming-json --no-auto-update`, plus
 
 Notes:
 
-- `--always-approve`, `--yolo`, and
-  `--permission-mode bypassPermissions` are the same mechanism
-  (official doc). Turbo spells it explicitly; there is no stronger
-  documented tier.
+- `--always-approve`, `--yolo`, and the skip-permissions
+  `--permission-mode` value are the same mechanism (official doc), and
+  none of them is passed. A bypass the app cannot
+  see defeats the permission gate in `src/main/lib/permissions/`
+  (roadmap step 10). `acceptEdits` is the strongest posture that
+  still fails closed: file edits are the mode's contract, and anything
+  else needs an `--allow` rule, because headless grok has no channel
+  to ask a user and an unapproved tool errors out instead of running.
+- Enforcement on this path is engine-side, not app-side: grok streams
+  output only, so there is no per-tool callback to route through the
+  evaluator. `providers/grok.ts` records that as
+  `approvals: "configurable"`.
 - Ask uses an allowlist (not plan mode) so no plan-file ceremony runs
   for plain questions. Tool IDs are the headless-doc internal IDs.
 - `--reasoning-effort` is intentionally not passed: levels are
@@ -103,9 +110,10 @@ retries happen before any turn side effects complete):
 - stale `-r` id → fresh run with a new `-s` uuid;
 - invalid `-m` slug → drop `-m` (CLI default model);
 - unknown flag → stable subset (`-p`, `--output-format`, `-m`,
-  `-r`/`-s`, `--cwd`, `--always-approve`; `--prompt-file` rewritten
-  to inline `-p`). Only index 0 is treated as the prompt flag, so a
-  prompt *text* equal to `--prompt-file` passes through.
+  `-r`/`-s`, `--cwd`; `--prompt-file` rewritten to inline `-p`,
+  `--permission-mode`, `--tools` and `--allow` dropped as a set).
+  Only index 0 is treated as the prompt flag, so a prompt *text* equal
+  to `--prompt-file` passes through.
 
 ## Auth
 

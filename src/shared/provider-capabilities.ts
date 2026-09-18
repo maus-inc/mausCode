@@ -30,6 +30,20 @@ export const securityPostureSchema = z.object({
    * BYOK) do NOT count — local-only mode leaves those untouched.
    */
   requiresHostedService: z.boolean(),
+  /**
+   * Who enforces the permission floor of roadmap step 10 for the modes that
+   * write, per `.dump/app/decisions/2026-09-13-permission-floor.md`.
+   *
+   * - `app-gate`: every side-effecting action reaches the evaluator in
+   *   `src/main/lib/permissions/`, so all five rule classes are enforced in
+   *   this app and a denial names the rule that produced it.
+   * - `engine-only`: the backend is a subprocess or an extension host that
+   *   gives this app no per-action callback, so the floor can only be
+   *   expressed as engine flags. A class the engine has no flag for is not
+   *   enforced at all, and the decision record names those classes per
+   *   backend rather than this field pretending otherwise.
+   */
+  permissionFloor: z.enum(["app-gate", "engine-only"]),
 })
 
 export const performanceProfileSchema = z.object({

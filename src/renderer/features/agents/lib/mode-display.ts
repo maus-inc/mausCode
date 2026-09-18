@@ -1,7 +1,7 @@
 import { HelpCircle, Pencil, Zap } from "lucide-react"
 import type { ComponentType, SVGProps } from "react"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import { AgentIcon, PlanIcon } from "../../../components/ui/icons"
-import type { AgentMode } from "../atoms"
 
 type IconComponent = ComponentType<{ className?: string } & Partial<SVGProps<SVGSVGElement>>>
 
@@ -25,15 +25,15 @@ export function getModeLabel(mode: AgentMode): string {
 export function getModeTooltip(mode: AgentMode): string {
   switch (mode) {
     case "plan":
-      return "Read-only. Plan before making changes."
+      return "Read-only, and writes only the plan's own markdown."
     case "ask":
-      return "Ask permission before editing files or running commands."
+      return "Asks before edits, commands and deletions. Network and secret access stay blocked."
     case "edit":
-      return "Edit files freely. Dangerous deletions blocked."
+      return "Edits files without asking. Destructive, network and exfiltrating actions are blocked."
     case "agent":
-      return "Full agent. Dangerous deletions blocked."
+      return "Full agent without asking. Destructive, network and exfiltrating actions are blocked."
     case "turbo":
-      return "Run everything without asking. Use with care."
+      return "No prompts. Destructive, network and exfiltrating actions stay blocked unless your policy file widens them."
   }
 }
 

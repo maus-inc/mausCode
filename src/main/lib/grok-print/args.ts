@@ -8,16 +8,26 @@
  * - ask maps to a read-only `--tools` allowlist (internal tool IDs
  *   from the headless doc examples: read_file,grep,list_dir plus
  *   web_search,web_fetch). No writers, no shell, no subagents.
- * - edit/agent pass `--always-approve`; turbo adds the explicit
- *   `--permission-mode bypassPermissions` (same mechanism, strongest
- *   documented spelling).
+ * - edit/agent/turbo map to `--permission-mode acceptEdits` plus the
+ *   `--allow Tool(pattern)` rules the policy file lists for that mode.
+ *   `acceptEdits` is the strongest posture that still leaves anything
+ *   unapproved to fail closed: headless grok has no channel to ask a
+ *   user, so a tool that is neither an edit nor on the allow-list
+ *   errors out instead of running. `--always-approve`, `--yolo` and the
+ *   skip-permissions `--permission-mode` value are documented as the same
+ *   bypass and are never passed, because a bypass the app cannot see
+ *   defeats the gate in `src/main/lib/permissions/`.
  * - `--no-auto-update` on every run (automation requirement) plus
  *   `GROK_DISABLE_AUTOUPDATER=1` in env (belt and suspenders).
  * - Long prompts travel via `--prompt-file` (documented; grok headless
  *   explicitly does NOT read piped stdin into the prompt).
  */
 
-export type GrokPrintMode = "plan" | "ask" | "edit" | "agent" | "turbo"
+import type { AgentMode } from "../../../shared/agent-mode"
+
+/** Same vocabulary as every other provider: one union, one home. */
+
+export type GrokPrintMode = AgentMode
 
 /** Prompts longer than this travel via --prompt-file instead of argv. */
 export const GROK_PROMPT_FILE_CHARS = 8000
@@ -54,15 +64,23 @@ export function buildGrokPrintArgs(opts: {
   newSessionId?: string
   cwd?: string
   prompt: string
+  /**
+   * `Tool(pattern)` allow rules for edit/agent/turbo, straight from the
+   * policy file's `allow_tools` for that mode. Grok reads this syntax
+   * natively and deny rules win over allow rules, so the list is passed
+   * through untranslated rather than reinvented here.
+   */
+  allowTools?: string[]
 }): GrokPrintInvocation {
   const args = ["--output-format", "streaming-json", "--no-auto-update"]
   if (opts.cwd) args.push("--cwd", opts.cwd)
   if (opts.model) args.push("-m", opts.model)
   if (opts.mode === "plan") args.push("--permission-mode", "plan")
   else if (opts.mode === "ask") args.push("--tools", GROK_ASK_TOOLS)
-  else if (opts.mode === "turbo")
-    args.push("--always-approve", "--permission-mode", "bypassPermissions")
-  else args.push("--always-approve")
+  else {
+    args.push("--permission-mode", "acceptEdits")
+    for (const rule of opts.allowTools ?? []) args.push("--allow", rule)
+  }
   if (opts.resumeId) args.push("-r", opts.resumeId)
   else if (opts.newSessionId) {
     // The CLI rejects non-UUID -s values; fail fast instead of burning
@@ -86,10 +104,14 @@ export function buildGrokPrintArgs(opts: {
  * Conservative retry argv when the CLI rejects a newer flag (older `grok`
  * builds): keep only the long-stable subset. `--prompt-file` is rewritten
  * to inline `-p` (argv risk accepted for ancient builds).
+ *
+ * `--permission-mode` and `--allow` go together: an old build that rejects one
+ * rejects the other, and dropping only the allow rules would leave the retry
+ * running under whatever the CLI defaults to.
  */
 export function buildGrokPrintFallbackArgs(spawnedArgs: string[], prompt: string): string[] {
   const dropSingle = new Set(["--no-auto-update"])
-  const dropPair = new Set(["--permission-mode", "--tools"])
+  const dropPair = new Set(["--permission-mode", "--tools", "--allow"])
   const out: string[] = []
   const args = spawnedArgs
   for (let i = 0; i < args.length; i++) {

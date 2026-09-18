@@ -1,5 +1,6 @@
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import { DEFAULT_API_BASE_URL } from "../../../../shared/app-identity"
 import { LOCAL_ONLY_BLOCKED_MESSAGE } from "../../../../shared/local-only"
 import { localOnlyModeAtom } from "../../../lib/atoms"
@@ -22,7 +23,7 @@ type RemoteChatTransportConfig = {
   subChatId: string
   subChatName: string
   sandboxUrl: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
   model?: string // Claude model ID (e.g., "claude-sonnet-4-6")
 }
 
