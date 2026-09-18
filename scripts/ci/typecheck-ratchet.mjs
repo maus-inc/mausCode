@@ -26,6 +26,7 @@ function runTsc() {
   try {
     const output = execFileSync("npx", ["tsc", "--noEmit"], {
       cwd: ROOT,
+      env: { ...process.env, PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin" },
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     })
@@ -47,16 +48,16 @@ function parseErrors(output) {
 }
 
 function main() {
-  const args = process.argv.slice(2)
+  const args = new Set(process.argv.slice(2))
 
-  if (args.includes("--report")) {
+  if (args.has("--report")) {
     const { output } = runTsc()
     const errors = parseErrors(output)
     console.log(`TypeScript errors: ${errors.length}`)
     process.exit(0)
   }
 
-  if (args.includes("--update")) {
+  if (args.has("--update")) {
     const { output } = runTsc()
     const errors = parseErrors(output)
     writeFileSync(BASELINE, errors.join("\n") + (errors.length ? "\n" : ""))

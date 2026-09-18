@@ -32,13 +32,13 @@ jobs:
           - os: windows-2022
             target: windows
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceb73c02c6cf1c2759418d
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@873c37c71d19bcc5755fdc6e91844b4ee6fcad5e
         with:
           bun-version: 1.4.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@a5faef3a4b6ea22964188adeeeea7fb28d54dd37
         with:
           node-version: "22"
       - name: Install dependencies (full install incl. native modules)
@@ -54,14 +54,14 @@ jobs:
       - name: Package (electron-builder, unsigned)
         run: bunx electron-builder --dir
       - name: Upload artifact for testing
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4ab1f0027b672696edb3d5b033d4464780191d73
         with:
           name: mausCode-build-${{ matrix.target }}
           path: |
             release/
           retention-days: 14
       - name: Upload build manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4ab1f0027b672696edb3d5b033d4464780191d73
         with:
           name: mausCode-build-${{ matrix.target }}-manifest
           path: |
@@ -75,9 +75,9 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceb73c02c6cf1c2759418d
       - name: Download all platform artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@4ab1f0027b672696edb3d5b033d4464780191d73
         with:
           path: artifacts/
       - name: Check artifacts exist

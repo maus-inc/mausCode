@@ -29,7 +29,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const LINTABLE = /\.(js|jsx|ts|tsx|mjs|mts|cjs|cts|json|jsonc|css|graphql)$/i
 
 function git(args) {
-  return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim()
+  return execFileSync("git", args, { cwd: ROOT, env: { ...process.env, PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin" }, encoding: "utf8" }).trim()
 }
 
 function getBaseRef() {
@@ -88,5 +88,6 @@ lintableFiles.forEach((f) => console.log(`  ${f}`))
 
 execFileSync("npx", ["biome", "ci", ...lintableFiles], {
   cwd: ROOT,
+  env: { ...process.env, PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin" },
   stdio: "inherit",
 })

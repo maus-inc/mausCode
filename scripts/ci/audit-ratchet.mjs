@@ -19,12 +19,13 @@ import { fileURLToPath } from "node:url"
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const BASELINE = join(ROOT, ".github", "ci-baselines", "audit-critical.txt")
-const GATE_SEVERITIES = ["critical"]
+const GATE_SEVERITIES = new Set(["critical"])
 
 function runAudit() {
   try {
     const output = execFileSync("bun", ["audit", "--json"], {
       cwd: ROOT,
+      env: { ...process.env, PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin" },
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     })
@@ -47,7 +48,7 @@ function main() {
   const audit = runAudit()
 
   const critical = (audit.advisories || []).filter(
-    (a) => a.severity && GATE_SEVERITIES.includes(a.severity),
+    (a) => a.severity && GATE_SEVERITIES.has(a.severity),
   )
 
   if (args.includes("--update")) {
