@@ -81,7 +81,6 @@ export const queuePayloadSchema = z
       })
     }
   })
-)
 
 export type QueuePayload = z.infer<typeof queuePayloadSchema>
 
