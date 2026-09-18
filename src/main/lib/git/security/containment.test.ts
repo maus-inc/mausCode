@@ -29,8 +29,35 @@ let tempRoot = ""
 let worktree = ""
 let outside = ""
 
-/** True when this run can create symlinks; false inside some containers. */
-let symlinksWork = true
+/**
+ * True when this run can create symlinks, false inside some containers.
+ *
+ * Probed once at import time rather than in `beforeEach`, because `it.skipIf`
+ * reads its condition while the suite is being collected. A per-test probe runs
+ * too late for that, and the alternative was an early `return` inside every
+ * symlink test.
+ */
+const symlinksWork = probeSymlinkSupport()
+
+function probeSymlinkSupport(): boolean {
+  // Assigned before anything that can throw, same discipline as the fixtures
+  // below: cleanup must never depend on a failed setup having got further.
+  let probeRoot = ""
+  try {
+    probeRoot = mkdtempSync(join(tmpdir(), "mauscode-symlink-probe-"))
+    mkdirSync(join(probeRoot, "target-dir"), { recursive: true })
+    writeFileSync(join(probeRoot, "target.txt"), "probe\n", "utf-8")
+    symlinkSync(join(probeRoot, "target.txt"), join(probeRoot, "link.txt"))
+    symlinkSync(join(probeRoot, "target-dir"), join(probeRoot, "link-dir"))
+    return true
+  } catch {
+    return false
+  } finally {
+    if (probeRoot.startsWith(tmpdir()) && probeRoot.length > 0) {
+      rmSync(probeRoot, { recursive: true, force: true })
+    }
+  }
+}
 
 beforeEach(() => {
   // Assigned first: every later statement can throw, and cleanup must not
@@ -48,15 +75,14 @@ beforeEach(() => {
   writeFileSync(join(worktree, "src/a.ts"), "export const a = 1\n", "utf-8")
   writeFileSync(join(outside, "leak.txt"), "secret\n", "utf-8")
 
-  try {
+  if (symlinksWork) {
     symlinkSync(join(outside, "leak.txt"), join(worktree, "src/link-out.txt"))
     symlinkSync(join(outside, "sub"), join(worktree, "src/dir-out"))
     mkdirSync(join(outside, "sub"), { recursive: true })
     symlinkSync(join(worktree, "src/a.ts"), join(worktree, "src/link-in.ts"))
-  } catch {
-    // No symlink privilege here. The traversal cases below still run.
-    symlinksWork = false
   }
+  // When symlinksWork is false the four link cases are skipped at collection
+  // time, so there is nothing to build here and the traversal cases still run.
 })
 
 afterEach(() => {
@@ -91,11 +117,7 @@ describe("paths inside the worktree", () => {
     expect(await assertToolPathInWorktree(worktree, "src/../src/a.ts")).toBe("src/a.ts")
   })
 
-  it("accepts a symlink whose target is inside", async (context) => {
-    if (!symlinksWork) {
-      context.skip()
-      return
-    }
+  it.skipIf(!symlinksWork)("accepts a symlink whose target is inside", async () => {
     expect(await assertToolPathInWorktree(worktree, "src/link-in.ts")).toBe("src/link-in.ts")
   })
 })
@@ -119,29 +141,23 @@ describe("traversal", () => {
 })
 
 describe("symlinks that escape", () => {
-  it("rejects a file symlink pointing outside", async (context) => {
-    if (!symlinksWork) {
-      context.skip()
-      return
-    }
+  it.skipIf(!symlinksWork)("rejects a file symlink pointing outside", async () => {
     await expectCode("src/link-out.txt", "SYMLINK_ESCAPE")
   })
 
-  it("rejects a path under a directory symlink pointing outside", async (context) => {
-    if (!symlinksWork) {
-      context.skip()
-      return
-    }
-    await expectCode("src/dir-out/nested.txt", "SYMLINK_ESCAPE")
-  })
+  it.skipIf(!symlinksWork)(
+    "rejects a path under a directory symlink pointing outside",
+    async () => {
+      await expectCode("src/dir-out/nested.txt", "SYMLINK_ESCAPE")
+    },
+  )
 
-  it("rejects a symlinked directory reached through an absolute path", async (context) => {
-    if (!symlinksWork) {
-      context.skip()
-      return
-    }
-    await expectCode(join(worktree, "src/dir-out/nested.txt"), "SYMLINK_ESCAPE")
-  })
+  it.skipIf(!symlinksWork)(
+    "rejects a symlinked directory reached through an absolute path",
+    async () => {
+      await expectCode(join(worktree, "src/dir-out/nested.txt"), "SYMLINK_ESCAPE")
+    },
+  )
 })
 
 describe("isPathWithinWorktree", () => {

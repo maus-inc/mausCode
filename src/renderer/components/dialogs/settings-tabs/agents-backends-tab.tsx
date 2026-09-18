@@ -3,7 +3,13 @@ import type { ProviderCapability } from "../../../../shared/provider-capabilitie
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 
-function Pill({ tone, children }: { tone: "ok" | "warn" | "bad" | "mute"; children: ReactNode }) {
+function Pill({
+  tone,
+  children,
+}: {
+  readonly tone: "ok" | "warn" | "bad" | "mute"
+  readonly children: ReactNode
+}) {
   return (
     <span
       className={cn(
@@ -19,7 +25,7 @@ function Pill({ tone, children }: { tone: "ok" | "warn" | "bad" | "mute"; childr
   )
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 py-1 text-sm">
       <span className="shrink-0 text-muted-foreground">{label}</span>
@@ -47,7 +53,13 @@ function authSuffix(authenticated: boolean | undefined): string {
   return ""
 }
 
-function ProbePill({ probe, loading }: { probe: ProbeFacts | null | undefined; loading: boolean }) {
+function ProbePill({
+  probe,
+  loading,
+}: {
+  readonly probe: ProbeFacts | null | undefined
+  readonly loading: boolean
+}) {
   if (loading) return <Pill tone="mute">probing…</Pill>
   if (!probe?.available) {
     return <Pill tone="bad">unavailable{probe?.detail ? ` · ${probe.detail}` : ""}</Pill>
@@ -60,7 +72,7 @@ function ProbePill({ probe, loading }: { probe: ProbeFacts | null | undefined; l
   )
 }
 
-function FactHeading({ children }: { children: ReactNode }) {
+function FactHeading({ children }: { readonly children: ReactNode }) {
   return (
     <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
@@ -87,7 +99,7 @@ function contextLabel(contextWindow: number | null): string {
   return `${contextWindow.toLocaleString()} tokens`
 }
 
-function SecurityFacts({ security }: { security: ProviderCapability["security"] }) {
+function SecurityFacts({ security }: { readonly security: ProviderCapability["security"] }) {
   return (
     <div>
       <FactHeading>Security</FactHeading>
@@ -101,7 +113,11 @@ function SecurityFacts({ security }: { security: ProviderCapability["security"] 
   )
 }
 
-function PerformanceFacts({ performance }: { performance: ProviderCapability["performance"] }) {
+function PerformanceFacts({
+  performance,
+}: {
+  readonly performance: ProviderCapability["performance"]
+}) {
   return (
     <div>
       <FactHeading>Performance</FactHeading>
