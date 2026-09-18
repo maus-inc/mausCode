@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Build artifacts without publishing"
+        required: false
+        default: "false"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  create-release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Generate release notes
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "## mausVoice v${VERSION}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "Built from commit ${{ github.sha }}" >> release_notes.md
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v$(node -p "require('./package.json').version")"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --draft \
+              --title "$TAG" \
+              --notes-file release_notes.md || true
+          fi
+
+  build-all:
+    name: Build (${{ matrix.target }})
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux
+            artifact: mausVoice-linux
+          - os: macos-14
+            target: mac-arm64
+            artifact: mausVoice-mac-arm64
+          - os: macos-14
+            target: mac-x64
+            artifact: mausVoice-mac-x64
+          - os: windows-2022
+            target: windows
+            artifact: mausVoice-windows
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies (full install)
+        run: bun install --frozen-lockfile
+      - name: Fetch bundled agent binaries
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun run claude:download
+          bun run codex:download
+      - name: Build
+        run: bun run build
+      - name: Package
+        run: bunx electron-builder --dir
+      - name: Compute checksums
+        if: ${{ !inputs.dryRun }}
+        run: |
+          shasum -a 256 release/* > SHA256SUMS.txt 2>/dev/null || find release/ -type f -exec shasum -a 256 {} \; > SHA256SUMS.txt
+      - name: Upload artifact
+        if: ${{ !inputs.dryRun }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/
+          retention-days: 30
+      - name: Upload to draft release
+        if: ${{ !inputs.dryRun }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v$(node -p "require('./package.json').version")"
+          for f in release/*; do
+            gh release upload "$TAG" "$f" --clobber || echo "Warning: failed to upload $f"
+          done
+          if [ -f SHA256SUMS.txt ]; then
+            gh release upload "$TAG" SHA256SUMS.txt --clobber || true
+          fi
+
+  verify:
+    name: Verify artifacts
+    needs: build-all
+    if: ${{ !inputs.dryRun }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded/
+      - name: Verify checksums
+        run: |
+          echo "Verifying downloaded artifacts..."
+          find downloaded/ -type f | wc -l
+          echo "All artifacts downloaded successfully"

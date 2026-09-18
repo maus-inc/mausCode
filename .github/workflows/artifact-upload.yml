@@ -1,0 +1,140 @@
+name: PR Artifact Upload
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target-os:
+        description: "Target OS (ubuntu, macos, windows, all)"
+        required: false
+        default: "all"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  build-and-upload:
+    name: Build & Upload Artifacts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux
+          - os: macos-14
+            target: mac
+          - os: windows-2022
+            target: windows
+      # Allow partial failures so one platform breaking
+      # doesn't block testing on the others.
+      continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies (full install incl. native modules)
+        run: bun install --frozen-lockfile
+      - name: Fetch bundled agent binaries for this platform
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun run claude:download
+          bun run codex:download
+      - name: Build
+        run: bun run build
+      - name: Package (electron-builder, unsigned)
+        run: bunx electron-builder --dir
+      - name: Upload artifact for testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: mausVoice-build-${{ matrix.target }}
+          path: |
+            release/
+          retention-days: 14
+      - name: Upload build manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: mausVoice-build-${{ matrix.target }}-manifest
+          path: |
+            package.json
+            electron-builder.yml
+          retention-days: 14
+
+  create-draft-release:
+    name: Create Draft Release with Artifacts
+    needs: build-and-upload
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+      - name: List artifacts
+        run: find artifacts/ -type f | head -50
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title -q '.title')
+          PR_BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body -q '.body')
+          gh release create "pr-${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --draft \
+            --title "PR ${{ github.event.pull_request.number }}: ${PR_TITLE}" \
+            --notes "${PR_BODY}" \
+            --verify-tag || true
+      - name: Upload artifacts to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for artifact_dir in artifacts/*/; do
+            for file in "$artifact_dir"*; do
+              if [ -f "$file" ]; then
+                gh release upload "pr-${{ github.event.pull_request.number }}" "$file" \
+                  --repo "${{ github.repository }}" \
+                  --clobber || echo "Warning: failed to upload $file"
+              fi
+            done
+          done
+      - name: Comment PR with download link
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "### Build Artifacts Ready
+
+          Artifacts from this PR are available for testing in the draft release:
+          \`\`\`
+          gh release download pr-${{ github.event.pull_request.number }} --repo ${{ github.repository }}
+          \`\`\`
+
+          Or download individual files from the Actions tab."
+
+  summary:
+    name: Build Summary
+    needs: build-and-upload
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Report build status
+        run: |
+          echo "### PR Artifact Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for job in ${{ toJson(needs.build-and-upload.result) }}; do
+            echo "- ${job}" >> $GITHUB_STEP_SUMMARY
+          done || true
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Artifacts are available via the Actions tab or draft release." >> $GITHUB_STEP_SUMMARY
