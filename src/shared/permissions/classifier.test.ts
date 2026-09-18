@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest"
 import {
   classifyToolAction,
+  criticalPathBreach,
   DESTRUCTIVE_PATTERNS,
   findSecretPath,
   isMarkdownPath,
@@ -321,5 +322,54 @@ describe("reasons", () => {
 
   it("name the tool for a tool-class decision", () => {
     expect(classify("WebFetch").reason).toContain("WebFetch")
+  })
+})
+
+describe("criticalPathBreach", () => {
+  const WORKTREE = "/work/mausCode"
+
+  const critical = [
+    ["rm -rf /", "critical-delete"],
+    ["rm -rf /*", "critical-delete"],
+    ["rm -rf ~", "critical-delete"],
+    ["rm -rf $HOME", "critical-delete"],
+    ["rm -rf .", "critical-delete"],
+    ["rmdir ..", "critical-delete"],
+    ["sudo rm -rf /", "critical-delete"],
+    ["rm -rf /work/mauscode", "critical-delete"],
+    ["mkfs.ext4 /dev/sda1", "disk-or-power"],
+    ["dd if=/dev/zero of=/dev/sda", "disk-or-power"],
+    ["shutdown -h now", "disk-or-power"],
+    ["reboot", "disk-or-power"],
+  ] as const
+
+  it.each(critical)("catches %s as %s", (command, id) => {
+    expect(criticalPathBreach(command, WORKTREE)?.id).toBe(id)
+  })
+
+  const ordinary = [
+    "rm -rf ./node_modules",
+    "rm -rf /tmp/build-cache",
+    "rm -rf dist",
+    "rmdir empty-dir",
+    "rm file.txt",
+    "git rm --cached secret.txt",
+    "rm -rf /work/mauscode/src",
+    "dd if=in.bin of=out.bin",
+    "echo shutdown",
+  ]
+
+  it.each(ordinary)("leaves %s alone", (command) => {
+    expect(criticalPathBreach(command, WORKTREE)).toBeNull()
+  })
+
+  it("still catches the lexical targets with no worktree given", () => {
+    expect(criticalPathBreach("rm -rf /")?.id).toBe("critical-delete")
+    // The worktree root is only critical when the caller names it.
+    expect(criticalPathBreach("rm -rf /work/mauscode")).toBeNull()
+  })
+
+  it("catches a critical delete behind a shell operator", () => {
+    expect(criticalPathBreach("npm test && rm -rf /", WORKTREE)?.id).toBe("critical-delete")
   })
 })

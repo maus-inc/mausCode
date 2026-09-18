@@ -4,16 +4,18 @@
  * Centralizes `grok -p` flag selection so mode/flag mapping stays
  * consistent and reviewable in one place:
  * - plan maps to `--permission-mode plan` (edits rejected outright,
- *   even under always-approve — official plan-mode semantics).
+ *   even under always-approve, which are the official plan-mode semantics).
  * - ask maps to a read-only `--tools` allowlist (internal tool IDs
  *   from the headless doc examples: read_file,grep,list_dir plus
  *   web_search,web_fetch). No writers, no shell, no subagents.
- * - edit/agent/turbo map to `--permission-mode acceptEdits` plus the
- *   `--allow Tool(pattern)` rules the policy file lists for that mode.
- *   `acceptEdits` is the strongest posture that still leaves anything
- *   unapproved to fail closed: headless grok has no channel to ask a
- *   user, so a tool that is neither an edit nor on the allow-list
- *   errors out instead of running. `--always-approve`, `--yolo` and the
+ * - edit/agent/turbo map to `--permission-mode acceptEdits` plus
+ *   `--allow Tool(pattern)` rules. Edit and agent pass only what the
+ *   policy file lists; turbo starts from `GROK_TURBO_ALLOW` (all shell
+ *   plus the network tools) so the engine matches what the app gate
+ *   permits there. `acceptEdits` is the strongest posture that still
+ *   leaves anything unapproved to fail closed: headless grok has no
+ *   channel to ask a user, so a tool that is neither an edit nor on the
+ *   allow-list errors out instead of running. `--always-approve`, `--yolo` and the
  *   skip-permissions `--permission-mode` value are documented as the same
  *   bypass and are never passed, because a bypass the app cannot see
  *   defeats the gate in `src/main/lib/permissions/`.
@@ -38,6 +40,26 @@ export const GROK_PROMPT_FILE_CHARS = 8000
  * and MCP invocation (use_tool) are excluded by omission.
  */
 export const GROK_ASK_TOOLS = "read_file,grep,list_dir,web_search,web_fetch"
+
+/**
+ * Turbo's engine allow-list.
+ *
+ * The app gate permits every class in turbo except exfiltration, so the engine
+ * has to be handed rules wide enough to match, otherwise headless grok fails
+ * closed on exactly the shell commands turbo is meant to run, and the two
+ * providers disagree about what turbo is. This is as close as an engine-only
+ * posture gets to unrestricted without passing a bypass token, which step 10's
+ * acceptance criteria forbid and `no-bypass.test.ts` asserts absent.
+ *
+ * `acceptEdits` already covers file edits, so only shell and network are listed.
+ * Deny rules win over allow rules in grok, so a policy file can still narrow
+ * this. Note what it cannot do: the exfiltration class is "a secret path
+ * reaching an egress channel", which is not expressible as a `Tool(pattern)`
+ * rule, so grok turbo does not get that protection. Claude turbo does, because
+ * the app gate evaluates every call there. `provider-capabilities.ts` records
+ * grok as `engine-only` for exactly this reason.
+ */
+export const GROK_TURBO_ALLOW = ["Bash(*)", "WebFetch", "WebSearch"] as const
 
 export type GrokPrintInvocation = {
   /** Full argv excluding the binary (starts with `-p` or `--prompt-file`). */
@@ -79,7 +101,7 @@ export function buildGrokPrintArgs(opts: {
   else if (opts.mode === "ask") args.push("--tools", GROK_ASK_TOOLS)
   else {
     args.push("--permission-mode", "acceptEdits")
-    for (const rule of opts.allowTools ?? []) args.push("--allow", rule)
+    for (const rule of allowRulesFor(opts.mode, opts.allowTools)) args.push("--allow", rule)
   }
   if (opts.resumeId) args.push("-r", opts.resumeId)
   else if (opts.newSessionId) {
@@ -98,6 +120,22 @@ export function buildGrokPrintArgs(opts: {
     return { args: ["--prompt-file", ...args], promptFileText: opts.prompt }
   }
   return { args: ["-p", opts.prompt, ...args] }
+}
+
+/**
+ * Turbo starts from `GROK_TURBO_ALLOW` and adds anything the policy file lists;
+ * every other mode passes only what the policy file lists, so a mode cannot
+ * widen itself by omission. Duplicates are dropped so a policy entry that
+ * repeats a turbo default does not put the same `--allow` on argv twice.
+ */
+function allowRulesFor(mode: AgentMode, allowTools?: string[]): string[] {
+  const fromPolicy = allowTools ?? []
+  if (mode !== "turbo") return fromPolicy
+  const rules: string[] = [...GROK_TURBO_ALLOW]
+  for (const rule of fromPolicy) {
+    if (!rules.includes(rule)) rules.push(rule)
+  }
+  return rules
 }
 
 /**

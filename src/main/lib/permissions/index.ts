@@ -14,12 +14,7 @@
 import { assertToolPathInWorktree } from "../git/security/containment"
 import { PathValidationError } from "../git/security/errors"
 import { createPermissionEvaluator, type PathCheck } from "./evaluator"
-import {
-  describeError,
-  invalidatePolicyCache,
-  permissionsPolicyPath,
-  readPolicyFile,
-} from "./policy-file"
+import { describeError, readPolicyFile } from "./policy-file"
 
 async function checkToolPath(worktreePath: string, candidatePath: string): Promise<PathCheck> {
   try {
@@ -40,4 +35,4 @@ export const { evaluateAction } = createPermissionEvaluator({
 
 export type { PathCheck, PermissionAction, PermissionEvaluatorDeps } from "./evaluator"
 export type { LoadedPolicy } from "./policy-file"
-export { invalidatePolicyCache, permissionsPolicyPath }
+export { invalidatePolicyCache, permissionsPolicyPath } from "./policy-file"

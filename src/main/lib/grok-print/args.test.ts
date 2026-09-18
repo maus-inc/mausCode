@@ -8,6 +8,7 @@ import {
   buildGrokPrintFallbackArgs,
   GROK_ASK_TOOLS,
   GROK_PROMPT_FILE_CHARS,
+  GROK_TURBO_ALLOW,
   isGrokInvalidModelError,
   isGrokResumeError,
   isGrokUnknownFlagError,
@@ -40,11 +41,18 @@ it("maps plan/ask to permission-mode/tools and the writing modes to acceptEdits"
   const ask = buildGrokPrintArgs({ mode: "ask", prompt: "hi" }).args
   assert.equal(flagValue(ask, "--tools"), GROK_ASK_TOOLS)
 
-  for (const mode of ["edit", "agent", "turbo"] as const) {
+  for (const mode of ["edit", "agent"] as const) {
     const { args } = buildGrokPrintArgs({ mode, prompt: "hi" })
     assert.equal(flagValue(args, "--permission-mode"), "acceptEdits")
     assert.deepEqual(flagValues(args, "--allow"), [])
   }
+
+  // Turbo is the opt-out tier, so the engine gets rules wide enough to match
+  // what the app gate permits there. Without them headless grok fails closed on
+  // every shell command and the two providers disagree about what turbo is.
+  const turbo = buildGrokPrintArgs({ mode: "turbo", prompt: "hi" }).args
+  assert.equal(flagValue(turbo, "--permission-mode"), "acceptEdits")
+  assert.deepEqual(flagValues(turbo, "--allow"), [...GROK_TURBO_ALLOW])
 })
 
 it("never passes a bypass spelling, with or without an allow-list", () => {
@@ -60,8 +68,17 @@ it("never passes a bypass spelling, with or without an allow-list", () => {
 
 it("threads the policy allow-list as --allow rules for the writing modes only", () => {
   const allowTools = ["run_terminal_cmd(npm test)", "read_file(*)"]
+
+  // Edit and agent pass only what the policy lists, so neither widens itself by
+  // omission.
+  for (const mode of ["edit", "agent"] as const) {
+    const scoped = buildGrokPrintArgs({ mode, prompt: "hi", allowTools }).args
+    assert.deepEqual(flagValues(scoped, "--allow"), allowTools)
+  }
+
+  // Turbo starts from the broad list and adds whatever the policy lists.
   const { args } = buildGrokPrintArgs({ mode: "turbo", prompt: "hi", allowTools })
-  assert.deepEqual(flagValues(args, "--allow"), allowTools)
+  assert.deepEqual(flagValues(args, "--allow"), [...GROK_TURBO_ALLOW, ...allowTools])
 
   // Plan and ask take their posture from the CLI, so an allow-list cannot
   // widen either of them from this path.
@@ -69,6 +86,15 @@ it("threads the policy allow-list as --allow rules for the writing modes only", 
     const scoped = buildGrokPrintArgs({ mode, prompt: "hi", allowTools }).args
     assert.deepEqual(flagValues(scoped, "--allow"), [])
   }
+})
+
+it("does not put a turbo rule on argv twice", () => {
+  const { args } = buildGrokPrintArgs({
+    mode: "turbo",
+    prompt: "hi",
+    allowTools: ["WebFetch", "Bash(git *)"],
+  })
+  assert.deepEqual(flagValues(args, "--allow"), ["Bash(*)", "WebFetch", "WebSearch", "Bash(git *)"])
 })
 
 it("always passes streaming-json + no-auto-update and threads model/resume/cwd", () => {

@@ -113,7 +113,7 @@ const DOTENV_SAFE_SUFFIXES = new Set(["example", "sample", "template", "dist", "
 
 function isDotenvPath(candidate: string): boolean {
   const segments = candidate.split(/[\\/]/)
-  const name = segments[segments.length - 1] ?? ""
+  const name = segments.at(-1) ?? ""
   if (name === ".env") return true
   if (!name.startsWith(".env.")) return false
   return !DOTENV_SAFE_SUFFIXES.has(name.slice(".env.".length).toLowerCase())
@@ -247,6 +247,80 @@ export const DESTRUCTIVE_PATTERNS: CommandPattern[] = [
   },
 ]
 
+/** A command the critical-path breaker caught, with the reason it shows. */
+export interface CriticalPathBreach {
+  /** Stable rule suffix. The evaluator emits `critical-path.<id>`. */
+  id: string
+  reason: string
+}
+
+/**
+ * The critical-path breaker. Null means the command is ordinary.
+ *
+ * This runs above the allow-list and downgrades an allow to an ask, so no rule a
+ * user writes can approve it. Claude Code holds the same line: an allow rule and
+ * a hook that returns allow both fail to approve an `rm` or `rmdir` on a
+ * critical path, and that stays true in its most permissive mode.
+ *
+ * `worktreeRoot` is optional because the classifier is pure and node-free. The
+ * evaluator passes the run's worktree, which makes `rm -rf <worktree>` critical
+ * too. Without it the lexical targets above still apply.
+ */
+export function criticalPathBreach(
+  command: string,
+  worktreeRoot?: string,
+): CriticalPathBreach | null {
+  const segments = splitCommandSegments(command)
+
+  if (hasDiskOrPowerVerb(segments)) {
+    return {
+      id: "disk-or-power",
+      reason: "the command reformats a device or changes machine power state",
+    }
+  }
+
+  for (const segment of segments) {
+    if (segment.verb !== "rm" && segment.verb !== "rmdir") continue
+    const target = segment.words.find(
+      (word) => word !== segment.verb && word !== "sudo" && !word.startsWith("-"),
+    )
+    if (target === undefined) continue
+    const kind = criticalTargetKind(target, worktreeRoot)
+    if (kind === null) continue
+    return {
+      id: "critical-delete",
+      reason: `the command deletes ${kind}, and nothing recovers that`,
+    }
+  }
+
+  return null
+}
+
+/**
+ * Names a critical target in plain words rather than echoing the token, because
+ * a reason is shown in the UI and this file's other reasons never quote command
+ * text. Null means the target is ordinary and the mode's own verdict governs it.
+ *
+ * Words arrive lowercased from `splitCommandSegments`, so `$HOME` is compared as
+ * `$home`. `.` and `..` count as critical because this repository has a real
+ * incident on record where an empty path variable turned a cleanup call into a
+ * delete of the parent directory. A longer target such as `./node_modules` is
+ * ordinary.
+ */
+function criticalTargetKind(target: string, worktreeRoot?: string): string | null {
+  if (target === "/" || target === "/*") return "the filesystem root"
+  if (target === "~" || target === "~/" || target === "$home" || target === "$home/") {
+    return "the home directory"
+  }
+  if (target === "." || target === "./") return "the whole working directory"
+  if (target === ".." || target === "../") return "the parent of the working directory"
+  if (worktreeRoot !== undefined) {
+    const root = worktreeRoot.toLowerCase()
+    if (target === root || target === `${root}/`) return "the whole worktree"
+  }
+  return null
+}
+
 function hasRemoteRsync(segment: CommandSegment): boolean {
   return (
     segment.verb === "rsync" &&
@@ -307,36 +381,52 @@ export function classifyToolAction(
   }
 
   const command = typeof toolInput.command === "string" ? toolInput.command : ""
-  if (command.trim().length > 0) {
-    const segments = splitCommandSegments(command)
+  if (command.trim().length > 0) return classifyCommand(command)
+  return classifyToolName(toolName)
+}
 
-    if (commandNamesSecret(segments) && hasNetworkVerb(segments)) {
-      return {
-        ruleClass: "exfiltration",
-        ruleId: "secret-egress",
-        reason: "the command sends a secret path over a network channel",
-      }
-    }
+/** Classify a shell command against the pattern tables, in table order. */
+function classifyCommand(command: string): ClassifiedAction {
+  const segments = splitCommandSegments(command)
 
-    for (const pattern of DESTRUCTIVE_PATTERNS) {
-      if (pattern.test(command, segments)) {
-        return { ruleClass: "destructive", ruleId: pattern.id, reason: pattern.reason }
-      }
-    }
-
-    for (const pattern of NETWORK_PATTERNS) {
-      if (pattern.test(command, segments)) {
-        return { ruleClass: "network", ruleId: pattern.id, reason: pattern.reason }
-      }
-    }
-
+  if (commandNamesSecret(segments) && hasNetworkVerb(segments)) {
     return {
-      ruleClass: "approval",
-      ruleId: "shell-command",
-      reason: "a shell command that matches no dangerous pattern",
+      ruleClass: "exfiltration",
+      ruleId: "secret-egress",
+      reason: "the command sends a secret path over a network channel",
     }
   }
 
+  const destructive = firstMatch(DESTRUCTIVE_PATTERNS, command, segments, "destructive")
+  if (destructive) return destructive
+
+  const network = firstMatch(NETWORK_PATTERNS, command, segments, "network")
+  if (network) return network
+
+  return {
+    ruleClass: "approval",
+    ruleId: "shell-command",
+    reason: "a shell command that matches no dangerous pattern",
+  }
+}
+
+/** The first pattern that matches, or null when the command matches none. */
+function firstMatch(
+  patterns: CommandPattern[],
+  command: string,
+  segments: CommandSegment[],
+  ruleClass: ClassifiedAction["ruleClass"],
+): ClassifiedAction | null {
+  for (const pattern of patterns) {
+    if (pattern.test(command, segments)) {
+      return { ruleClass, ruleId: pattern.id, reason: pattern.reason }
+    }
+  }
+  return null
+}
+
+/** Classify a call that carries no shell command, by the tool's own name. */
+function classifyToolName(toolName: string): ClassifiedAction {
   if (NETWORK_TOOLS.has(toolName)) {
     return {
       ruleClass: "network",
@@ -354,11 +444,7 @@ export function classifyToolAction(
   }
 
   if (FILE_EDIT_TOOLS.has(toolName)) {
-    return {
-      ruleClass: "approval",
-      ruleId: "file-edit",
-      reason: `${toolName} changes a file`,
-    }
+    return { ruleClass: "approval", ruleId: "file-edit", reason: `${toolName} changes a file` }
   }
 
   return {

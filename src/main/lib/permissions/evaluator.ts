@@ -7,9 +7,19 @@
  * skip-permissions posture.
  *
  * Precedence, fixed in `.dump/app/plans/2026-09-13-permission-floor.md`:
- * path safety, then the plan-mode floor, then the mode's allow-list, then the
- * policy verdict for the class. Exfiltration sits above the allow-list, so no
- * entry a user writes can carry a secret out.
+ * path safety, then the plan-mode floor, then the critical-path breaker, then
+ * the mode's allow-list, then the policy verdict for the class. Exfiltration and
+ * the breaker both sit above the allow-list, so no entry a user writes can carry
+ * a secret out or approve the deletion of a filesystem root.
+ *
+ * Path safety has exactly one exception: turbo may resolve paths outside the
+ * worktree, because turbo is the tier a user opts into for speed. The exception
+ * does not cover exfiltration, so it widens where turbo can look and never what
+ * it can send.
+ *
+ * The breaker turns an allow into an ask for `rm` or `rmdir` on a critical
+ * target and for the disk and power verbs. Every other mode already asks or
+ * denies those, so in practice it narrows turbo alone.
  *
  * Dependencies are injected so a test passes a fake: the real path check reaches
  * `better-sqlite3` and `electron` through `src/main/lib/db`, which CI installs
@@ -19,6 +29,7 @@ import { type AgentMode, isAgentMode } from "../../../shared/agent-mode"
 import {
   type ClassifiedAction,
   classifyToolAction,
+  criticalPathBreach,
   isMarkdownPath,
   toolMatchText,
   toolPathCandidates,
@@ -144,27 +155,57 @@ async function decide(
   }
 
   const paths = await checkActionPaths(action, checkPath)
-  if (!paths.ok) {
-    return stamp(
-      outcome("deny", `path.${paths.code}`, paths.message, classified.ruleClass),
-      classified.ruleId,
-      context,
-    )
+  if (isPathFailure(paths)) {
+    // Turbo is the deliberate opt-out tier, so reaching outside the worktree is
+    // not by itself a refusal there. Exfiltration still short-circuits in every
+    // mode, and a secret path is what most containment failures are, so letting
+    // turbo roam never becomes a way to carry a secret out.
+    const roamsFreely = action.mode === "turbo" && classified.ruleClass !== "exfiltration"
+    if (!roamsFreely) {
+      return stamp(
+        outcome("deny", `path.${paths.code}`, paths.message, classified.ruleClass),
+        classified.ruleId,
+        context,
+      )
+    }
   }
+  const relativePath = isPathFailure(paths) ? undefined : paths.relative
 
   const planOutcome =
-    action.mode === "plan" ? decidePlanMode(action, classified, paths.relative) : null
+    action.mode === "plan" ? decidePlanMode(action, classified, relativePath) : null
   if (planOutcome) return stamp(planOutcome, classified.ruleId, context)
 
-  const allowListed = matchAllowList(policy, action, classified.ruleClass, paths.relative)
+  // The critical-path breaker sits above the allow-list, so no entry a user
+  // writes can approve it. It only ever narrows: a verdict that already asks or
+  // denies keeps its own rule, which is why only turbo sees it fire.
+  const breach =
+    typeof action.toolInput.command === "string"
+      ? criticalPathBreach(action.toolInput.command, action.worktreePath)
+      : null
+
+  const allowListed = breach
+    ? null
+    : matchAllowList(policy, action, classified.ruleClass, relativePath)
   if (allowListed) return stamp(allowListed, classified.ruleId, context)
 
   const resolved = resolveVerdict(policy, action.mode, classified.ruleClass)
+  if (breach && resolved.verdict === "allow") {
+    return stamp(
+      outcome("ask", `critical-path.${breach.id}`, breach.reason, classified.ruleClass),
+      breach.id,
+      context,
+    )
+  }
   return stamp(
     outcome(resolved.verdict, resolved.rule, classified.reason, classified.ruleClass),
     classified.ruleId,
     context,
   )
+}
+
+/** Narrows a containment answer, so the roaming branch can still read `paths`. */
+function isPathFailure(paths: PathOutcome): paths is { ok: false; code: string; message: string } {
+  return !paths.ok
 }
 
 function stamp(
@@ -183,7 +224,7 @@ async function checkActionPaths(
   for (const candidate of toolPathCandidates(action.toolInput)) {
     const check = await checkPath(action.worktreePath, candidate)
     if (!check.ok) return { ok: false, code: check.code, message: check.message }
-    if (relative === undefined) relative = check.relative
+    relative ??= check.relative
   }
   return { ok: true, relative }
 }

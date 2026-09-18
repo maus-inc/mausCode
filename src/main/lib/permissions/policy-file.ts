@@ -60,7 +60,7 @@ function floor(error?: string): LoadedPolicy {
 export async function readPolicyFile(path = permissionsPolicyPath()): Promise<LoadedPolicy> {
   // Keyed on the path because a caller may point at a fixture, and a cache that
   // ignored the path would answer the fixture for the user's own file.
-  if (cache && cache.path === path && Date.now() - cache.at < POLICY_CACHE_TTL_MS) {
+  if (cache?.path === path && Date.now() - cache.at < POLICY_CACHE_TTL_MS) {
     return cache.loaded
   }
 

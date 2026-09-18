@@ -31,9 +31,9 @@ export function getModeTooltip(mode: AgentMode): string {
     case "edit":
       return "Edits files without asking. Destructive, network and exfiltrating actions are blocked."
     case "agent":
-      return "Full agent without asking. Destructive, network and exfiltrating actions are blocked."
+      return "Runs edits and commands without asking. Web fetches and searches are allowed; outbound shell commands ask first. Destructive and exfiltrating actions stay blocked."
     case "turbo":
-      return "No prompts. Destructive, network and exfiltrating actions stay blocked unless your policy file widens them."
+      return "No prompts and no restrictions: destructive commands and network egress both run. Only exfiltrating a secret is still blocked."
   }
 }
 

@@ -97,7 +97,7 @@ describe("the schema fails closed", () => {
     ["a plan-mode block", { modes: { plan: { approval: "allow" } } }],
     ["an unknown per-mode key", { modes: { agent: { shell: "allow" } } }],
     ["a malformed tool rule", { modes: { turbo: { allow_tools: ["Bash(git"] } } }],
-    ["the refused prefix:* spelling", { modes: { turbo: { allow_tools: ["Bash(git:*)"] } } }],
+    ["a colon wildcard with no prefix", { modes: { turbo: { allow_tools: ["Bash(:*)"] } } }],
     ["an empty tool rule", { modes: { turbo: { allow_tools: [""] } } }],
     ["a non-string tool rule", { modes: { turbo: { allow_tools: [7] } } }],
   ]
@@ -109,7 +109,9 @@ describe("the schema fails closed", () => {
   it("accepts a well-formed document", () => {
     const parsed = permissionPolicyDocumentSchema.safeParse({
       classes: { destructive: "ask" },
-      modes: { turbo: { allow_tools: ["Bash(git *)", "Bash(npm test)", "Read"] } },
+      modes: {
+        turbo: { allow_tools: ["Bash(git *)", "Bash(npm test)", "Bash(npm run test:*)", "Read"] },
+      },
     })
     expect(parsed.success).toBe(true)
   })
@@ -141,9 +143,18 @@ describe("parseToolRule", () => {
     })
   })
 
+  it("parses the colon prefix spelling as a separator-aware prefix", () => {
+    expect(parseToolRule("Bash(npm run test:*)")).toEqual({
+      tool: "Bash",
+      specifier: "npm run test",
+      prefix: true,
+      separator: true,
+    })
+  })
+
   const refused = [
-    "the colon prefix spelling",
-    "Bash(git:*)",
+    "a colon wildcard with no prefix",
+    "Bash(:*)",
     "an unclosed paren",
     "Bash(git",
     "an empty specifier",
@@ -179,6 +190,21 @@ describe("toolRuleMatches", () => {
   const npmTest = rule("Bash(npm test)")
   const anyBash = rule("Bash")
   const wildcard = rule("Bash(*)")
+  const colonForm = rule("Bash(npm run test:*)")
+
+  it("matches a colon rule on a space, a colon or the end of the argument", () => {
+    expect(toolRuleMatches(colonForm, "Bash", "npm run test")).toBe(true)
+    expect(toolRuleMatches(colonForm, "Bash", "npm run test --watch")).toBe(true)
+    // The colon form exists for npm scripts named with a colon, so it has to
+    // reach them.
+    expect(toolRuleMatches(colonForm, "Bash", "npm run test:unit")).toBe(true)
+    // A longer word that shares the prefix is a different command. The official
+    // wording calls this prefix matching and a published guide calls it a
+    // separator requirement, and the narrow reading satisfies both.
+    expect(toolRuleMatches(colonForm, "Bash", "npm run tests")).toBe(false)
+    expect(toolRuleMatches(colonForm, "Bash", "npm run")).toBe(false)
+    expect(toolRuleMatches(colonForm, "Bash", "npm run lint")).toBe(false)
+  })
 
   it("matches a prefix only when the separator is there", () => {
     expect(toolRuleMatches(git, "Bash", "git status")).toBe(true)

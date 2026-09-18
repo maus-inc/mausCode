@@ -99,11 +99,25 @@ export interface PermissionPolicyDocument {
  * underneath whatever the file writes, so a file that mentions only `[classes]`
  * cannot drop the ask-mode or turbo behaviour by omission.
  *
- * `[modes.ask] destructive = "ask"` is the only shipped widening. Ask mode
- * publishes "Ask permission before editing files or running commands" in
- * `src/renderer/features/agents/lib/mode-display.ts`, and a human answers the
- * card, so denying there would break the mode's own contract. Exfiltration and
- * network carry no override in any mode, and plan mode is not here at all.
+ * Three shipped widenings, each tied to what its mode promises the user in
+ * `src/renderer/features/agents/lib/mode-display.ts`:
+ *
+ * - ask gets `destructive = "ask"`, because ask publishes "Ask permission
+ *   before edits, commands and deletions" and a human answers the card, so
+ *   denying there would break the mode's own contract.
+ * - agent gets `network = "ask"` with `WebFetch` and `WebSearch` on its
+ *   allow-list. Those two tools fetch a URL and return it; they cannot carry a
+ *   local file outbound. The egress shell commands (`curl`, `wget`, `nc`,
+ *   `ssh`, `scp`, `ftp`, `telnet`) can, so they fall through to the `ask`
+ *   verdict and reach a human instead of being refused outright. An agent that
+ *   could not reach the network at all could not do research.
+ * - turbo is the deliberate opt-out tier: every class allows, so it runs
+ *   destructive commands and egress without a card.
+ *
+ * Exfiltration denies in all five modes and no override here lifts it, because
+ * `matchAllowList` refuses the class before consulting any list. A mode can be
+ * made fast; it cannot be made able to ship a secret out. Plan mode is not here
+ * at all.
  */
 export const SHIPPED_POLICY_FLOOR: PermissionPolicy = {
   classes: { ...DEFAULT_CLASS_VERDICTS },
@@ -111,8 +125,15 @@ export const SHIPPED_POLICY_FLOOR: PermissionPolicy = {
     plan: {},
     ask: { destructive: "ask" },
     edit: { approval: "allow" },
-    agent: { approval: "allow" },
-    turbo: { approval: "allow", allow_tools: [] },
+    agent: { approval: "allow", network: "ask", allow_tools: ["WebFetch", "WebSearch"] },
+    turbo: {
+      "read-only": "allow",
+      approval: "allow",
+      destructive: "allow",
+      network: "allow",
+      exfiltration: "deny",
+      allow_tools: [],
+    },
   },
 }
 
@@ -123,7 +144,7 @@ const toolRuleSchema = z
     if (parseToolRule(rule) === null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "a tool rule is `Tool`, `Tool(prefix *)` or `Tool(exact text)`",
+        message: "a tool rule is `Tool`, `Tool(prefix *)`, `Tool(prefix:*)` or `Tool(exact text)`",
       })
     }
   })
@@ -191,21 +212,30 @@ export interface ToolRule {
   specifier?: string
   /** True when the specifier ended in `*`, so it matches a prefix. */
   prefix?: boolean
+  /**
+   * True when the rule was spelled `Tool(prefix:*)`. That form requires a
+   * separator after the prefix, so it matches `prefix`, `prefix ...` and
+   * `prefix:...` but not a longer word that merely starts with the prefix.
+   */
+  separator?: boolean
 }
 
 /**
  * Parse one allow-list entry. Null means malformed.
  *
- * Three spellings, and only three:
+ * Four spellings, and only four:
  * - `Bash` names a tool, so every call to it matches.
  * - `Bash(git *)` matches a call whose primary argument starts with `git `,
  *   separator included, so it does not match `gitpush`.
  * - `Bash(npm test)` matches that argument exactly.
- *
- * The `Tool(prefix:*)` spelling some provider docs use is refused on purpose.
- * Its colon is ambiguous about whether the separator is part of the prefix, and
- * an allow-list that has to guess a separator guesses wide. A refused entry is
- * a schema error, which fails the whole file closed rather than widening it.
+ * - `Bash(npm run test:*)` is the prefix form other provider docs use. It is
+ *   accepted because refusing it made one copied line invalidate a whole policy
+ *   file, and the reader then fell back to the shipped floor, so the user lost
+ *   every rule they had written. Its colon is ambiguous about whether the
+ *   separator belongs to the prefix, so this parser resolves it narrow: the
+ *   prefix must be followed by a space, a colon or the end of the argument.
+ *   That matches `npm run test --watch` and the `npm run test:unit` script form
+ *   the colon exists for, and still refuses `npm run tests` and `gitleaks`.
  */
 export function parseToolRule(rule: string): ToolRule | null {
   const trimmed = rule.trim()
@@ -223,13 +253,15 @@ export function parseToolRule(rule: string): ToolRule | null {
 
   const pattern = trimmed.slice(open + 1, -1).trim()
   if (pattern.length === 0) return null
+  if (pattern.endsWith(":*")) {
+    const specifier = pattern.slice(0, -2)
+    // `Bash(:*)` is a bare wildcard wearing a specifier's clothes. Refuse it so
+    // a whole-tool grant has to be written as the whole tool.
+    if (specifier.length === 0) return null
+    return { tool, specifier, prefix: true, separator: true }
+  }
   if (pattern.endsWith("*")) {
-    const specifier = pattern.slice(0, -1)
-    // Refuse the `Tool(prefix:*)` spelling outright. Accepting it would leave a
-    // rule that matches nothing real, and a user who copied it from another
-    // product's docs would believe the tool was allowed.
-    if (specifier.endsWith(":")) return null
-    return { tool, specifier, prefix: true }
+    return { tool, specifier: pattern.slice(0, -1), prefix: true }
   }
   return { tool, specifier: pattern }
 }
@@ -238,7 +270,11 @@ export function parseToolRule(rule: string): ToolRule | null {
 export function toolRuleMatches(rule: ToolRule, toolName: string, matchText: string): boolean {
   if (rule.tool !== toolName) return false
   if (rule.specifier === undefined) return true
-  return rule.prefix ? matchText.startsWith(rule.specifier) : matchText === rule.specifier
+  if (!rule.prefix) return matchText === rule.specifier
+  if (!rule.separator) return matchText.startsWith(rule.specifier)
+  if (matchText === rule.specifier) return true
+  const next = matchText.charAt(rule.specifier.length)
+  return matchText.startsWith(rule.specifier) && (next === " " || next === ":")
 }
 
 /** The verdict a class carries in a mode, and the rule id that decided it. */
