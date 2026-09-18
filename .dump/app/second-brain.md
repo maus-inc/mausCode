@@ -96,7 +96,11 @@ Detail lives in `research/` and `plans/`; this file states what is true.
 ## Important interfaces
 
 - `RuntimeProvider.launch/status/stop` → `RuntimeHandle { request, events }`.
-- `ApiEvent→UIMessageChunk` translation (`main/lib/runtime/translate.ts`).
+- `ApiEvent→{chunks, runEvents}` translation (`main/lib/runtime/translate.ts`,
+  roadmap step 09). 19 harness events stay chunk-internal; `compacted`,
+  `session_status`, `background_progress` and `wake_requested` also produce
+  run events via `RunHandle.noteHarnessEvent`; unknown kinds warn once per
+  kind. The mapping table is `.dump/app/research/2026-09-13-event-mapping.md`.
   Cross-process wire constants (`native:` question prefix, `NATIVE_` error
   prefix) live in `src/shared/runtime-protocol.ts`.
 - tRPC 20 routers shrink to adapters; `chats` keeps product workflows; `changes`
@@ -168,8 +172,10 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   per-feature verdicts recorded in `decisions/2026-09-12-jules-feature-triage.md`. **No code, no OpenSpec
   change, and no task in an existing scaffold has been changed by it.** Two facts it relies on are worth
   carrying here: `src/shared/contracts/` (24,860 lines of ported T3 schemas + 23 test files) has **zero
-  importers** outside its own directory, and `main/lib/runtime/translate.ts:147-168` discards 22 harness events
-  including `session_status`, `background_progress` and `wake_requested`. The vendored PR/CI vocabulary in
+  importers** outside its own directory, and `main/lib/runtime/translate.ts` keeps 19 harness events
+  chunk-internal and records `session_status`, `background_progress`,
+  `wake_requested` and `compacted` as run events (step 09, shipped
+  2026-09-18; table in `.dump/app/research/2026-09-13-event-mapping.md`). The vendored PR/CI vocabulary in
   `contracts/orchestration.ts:630-699` (`ThreadPullRequestLink`/`Snapshot`) is the one part worth wiring up first.
 
 - Recreation of the 1Code v0.0.75→v0.0.84 parity program lives in `plans/release-parity-v0.0.75-0.0.84-plan.md`
