@@ -82,7 +82,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install dependencies (full install)
-        run: bun install --frozen-lockfile  # nosonar
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Fetch bundled agent binaries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
