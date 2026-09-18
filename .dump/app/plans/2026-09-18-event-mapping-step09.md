@@ -175,3 +175,28 @@ assigned `123` to `SDKMessage` successfully) and is real after it.
 | `node scripts/ci/typecheck-ratchet.mjs` | passed (0 <= 0) |
 | `npm --prefix packages/runtime-client run typecheck` | passed |
 | `bun run build` / `package:mac` | not run: no packaging in this step, no renderer or asset change |
+
+## CodeAnt SAST findings, validated 2026-09-18
+
+CodeAnt's deep SAST pass flagged 2 issues in `src/main/lib/qwen-print/session.ts`
+("Rating C", failing its Quality Gates and SAST checks on commits `b28dda4` and
+`1fd9cd9`). Both validated as false positives; no code change made.
+
+1. "[MEDIUM] session.ts:285 - CSP header includes user-controlled value via
+   string interpolation". The file has no HTTP layer: grep for
+   `Content-Security|CSP|http|header|res.set` returns nothing. Line 285 emits a
+   `text-delta` chat chunk whose delta interpolates qwen-reported tool names.
+   The renderer escapes text (React) and routes link clicks through
+   `shell:open-external`, which runs `assertRemoteAllowed` before
+   `shell.openExternal` (`src/main/windows/main.ts:333-342`). There is no CSP
+   header and no web page generation in this module.
+2. "[CRITICAL] session.ts:337-340 - password check short-circuit allows
+   authentication bypass". The file contains no password or authentication
+   code; grep for password/credential/secret/auth tokens hits only
+   `inputTokens`/`outputTokens` usage fields. The flagged lines are a type
+   guard reading `session_id` off a harness JSON frame. The described
+   vulnerability does not exist.
+
+Rebuttal recorded on PR #63. If CodeAnt's gate stays red on these, the
+accepted-finding or path-suppression decision belongs to the human, since the
+repo ships no CodeAnt suppression config.
