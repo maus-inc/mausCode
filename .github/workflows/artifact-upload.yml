@@ -1,0 +1,159 @@
+name: PR Artifact Upload
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target-os:
+        description: "Target OS (ubuntu, macos, windows, all)"
+        required: false
+        default: "all"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  build-and-upload:
+    name: Build & Upload Artifacts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux
+          - os: macos-14
+            target: mac
+          - os: windows-2022
+            target: windows
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - name: Install dependencies (full install incl. native modules)
+        run: bun install --frozen-lockfile
+      - name: Fetch bundled agent binaries for this platform
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun run claude:download
+          bun run codex:download
+      - name: Build
+        run: bun run build
+      - name: Package (electron-builder, unsigned)
+        run: bunx electron-builder --dir
+      - name: Upload artifact for testing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mausCode-build-${{ matrix.target }}
+          path: |
+            release/
+          retention-days: 14
+      - name: Upload build manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mausCode-build-${{ matrix.target }}-manifest
+          path: |
+            package.json
+            electron-builder.yml
+          retention-days: 14
+
+  create-draft-release:
+    name: Create Draft Release with Artifacts
+    needs: build-and-upload
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: artifacts/
+      - name: Check artifacts exist
+        run: |
+          count=$(find artifacts/ -type f | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error title=No artifacts found::build-and-upload produced no downloadable artifacts"
+            exit 1
+          fi
+          echo "Found $count artifact file(s)"
+      - name: List artifacts
+        run: find artifacts/ -type f | head -50
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title -q '.title')
+          PR_BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body -q '.body')
+          gh release create "pr-${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --draft \
+            --title "PR ${{ github.event.pull_request.number }}: ${PR_TITLE}" \
+            --notes "${PR_BODY}"
+      - name: Upload artifacts to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for artifact_dir in artifacts/*/; do
+            for file in "$artifact_dir"*; do
+              if [ -f "$file" ]; then
+                gh release upload "pr-${{ github.event.pull_request.number }}" "$file" \
+                  --repo "${{ github.repository }}" \
+                  --clobber
+              fi
+            done
+          done
+      - name: Delete previous PR artifact comments
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_COMMENTS=$(gh pr view ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" --json comments --jq '.comments[] | select(.author.login == "github-actions[bot]") | select(.body | startswith("### Build Artifacts Ready")) | .id' 2>/dev/null || true)
+          if [ -n "$PREVIOUS_COMMENTS" ]; then
+            for comment_id in $PREVIOUS_COMMENTS; do
+              gh api \
+                --method DELETE \
+                "/repos/${{ github.repository }}/issues/comments/$comment_id" \
+                -f "reason" "Outdated" 2>/dev/null || true
+            done
+          fi
+      - name: Comment PR with download link
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "### Build Artifacts Ready
+
+Artifacts from this PR are available for testing in the draft release:
+\`\`\`
+gh release download pr-${{ github.event.pull_request.number }} --repo ${{ github.repository }}
+\`\`\`
+
+Or download individual files from the Actions tab.
+
+Commit: \`${{ github.sha }}\`"
+
+  summary:
+    name: Build Summary
+    needs: build-and-upload
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Report build status
+        run: |
+          echo "### PR Artifact Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for job in ${{ toJson(needs.build-and-upload.result) }}; do
+            echo "- ${job}" >> $GITHUB_STEP_SUMMARY
+          done || true
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Artifacts are available via the Actions tab or draft release." >> $GITHUB_STEP_SUMMARY

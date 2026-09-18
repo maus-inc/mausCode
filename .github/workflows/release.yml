@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Build artifacts without publishing"
+        required: false
+        default: "false"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  create-release:
+    name: Create draft release
+    if: ${{ !inputs.dryRun }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - name: Generate release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "## mausCode v${VERSION}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "Built from commit ${{ github.sha }}" >> release_notes.md
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release create "${{ github.ref_name }}" \
+              --draft \
+              --title "${{ github.ref_name }}" \
+              --notes-file release_notes.md
+          fi
+
+  build-all:
+    name: Build (${{ matrix.target }})
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux
+            artifact: mausCode-linux
+            electronTarget: linux
+          - os: macos-14
+            target: mac-arm64
+            artifact: mausCode-mac-arm64
+            electronTarget: mac
+          - os: macos-13
+            target: mac-x64
+            artifact: mausCode-mac-x64
+            electronTarget: mac
+          - os: windows-2022
+            target: windows
+            artifact: mausCode-windows
+            electronTarget: windows
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - name: Fix Python distutils on macOS
+        if: matrix.os == 'macos-14'
+        run: python3 -m pip install setuptools --break-system-packages
+      - name: Install dependencies (full install)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Fetch bundled agent binaries
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun run claude:download
+          bun run codex:download
+      - name: Build
+        run: bun run build
+      - name: Package (electron-builder, unsigned)
+        run: bunx electron-builder --${{ matrix.electronTarget }}
+      - name: Compute checksums
+        run: |
+          shasum -a 256 release/* > SHA256SUMS.txt 2>/dev/null || find release/ -type f -exec shasum -a 256 {} \; > SHA256SUMS.txt
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/
+            SHA256SUMS.txt
+          retention-days: 30
+      - name: Upload to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for f in release/*; do
+            gh release upload "${{ github.ref_name }}" "$f" --clobber
+          done
+          if [ -f SHA256SUMS.txt ]; then
+            gh release upload "${{ github.ref_name }}" SHA256SUMS.txt --clobber
+          fi
+
+  verify:
+    name: Verify artifacts
+    needs: build-all
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded/
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release-assets
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --dir release-assets || true
+      - name: Verify checksums
+        run: |
+          echo "Verifying downloaded artifacts..."
+          find downloaded/ -type f | sort
+          echo ""
+          echo "Verifying SHA256 checksums..."
+          if [ -f release-assets/SHA256SUMS.txt ]; then
+            cd release-assets
+            sha256sum -c SHA256SUMS.txt
+            echo "Checksum verification passed."
+          else
+            echo "No SHA256SUMS.txt found, skipping checksum verification."
+          fi

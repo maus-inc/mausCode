@@ -1,0 +1,16 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "placeholder API key in README curl example"
+regexTarget = "line"
+regexes = [
+  '''YOUR_API_KEY''',
+]
+
+[[allowlists]]
+description = "keychain profile name in CLAUDE.md release docs"
+regexTarget = "line"
+regexes = [
+  '''21st-notarize''',
+]
