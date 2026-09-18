@@ -32,13 +32,13 @@ jobs:
           - os: windows-2022
             target: windows
     steps:
-      - uses: actions/checkout@sha:11bd71901bbe5b1630ceb73c02c6cf1c2759418d
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@sha:873c37c71d19bcc5755fdc6e91844b4ee6fcad5e
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: 1.4.2
-      - uses: actions/setup-node@sha:a5faef3a4b6ea22964188adeeeea7fb28d54dd37
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
       - name: Install dependencies (full install incl. native modules)
@@ -54,14 +54,14 @@ jobs:
       - name: Package (electron-builder, unsigned)
         run: bunx electron-builder --dir
       - name: Upload artifact for testing
-        uses: actions/upload-artifact@sha:4ab1f0027b672696edb3d5b033d4464780191d73
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mausCode-build-${{ matrix.target }}
           path: |
             release/
           retention-days: 14
       - name: Upload build manifest
-        uses: actions/upload-artifact@sha:4ab1f0027b672696edb3d5b033d4464780191d73
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mausCode-build-${{ matrix.target }}-manifest
           path: |
@@ -75,9 +75,9 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@sha:11bd71901bbe5b1630ceb73c02c6cf1c2759418d
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Download all platform artifacts
-        uses: actions/download-artifact@sha:4ab1f0027b672696edb3d5b033d4464780191d73
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           path: artifacts/
       - name: Check artifacts exist
