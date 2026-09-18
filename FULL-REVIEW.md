@@ -720,8 +720,13 @@ The tooling boundary matters when you judge a comment. Biome 2.5.13 covers forma
 | Provider adapter | Capability widened without the manifest | Critical | Route approvals, sandbox, and egress through section 7 of the recipe |
 | Persistence | Migration edited after shipping, or `NOT NULL` with no default | Critical | Add a forward-only migration |
 | Persistence | Fresh-database-only test for an upgrade contract | Major | Test a copy of a real database |
+| Persistence | A row already handed to another process deleted, requeued or resent while its outcome is unknown | Major | Keep the record visible until its sender retires or parks it, and return only claims that were never handed over to the automatic path |
+| Tests | A cap test whose fixture the neighbouring cap already refuses, so the rule it names is never reached | Major | Disable the rule the test names, and confirm the test fails |
+| Tests | A test that cannot reach the branch it is named after, or a global restored at the end of the test body | Minor | Give the second actor its own identity, and restore globals in an `afterEach` |
 | React keys | Index key on editable rows, or content key on an input | Major | Ids in state for editable rows, derived keys for display lists |
 | React lifecycle | Stale async completion overwrites newer state | Major | Generation counter, discard stale results |
+| Shared state | A write that changes visible state without emitting, because the emit is keyed on the returned value | Major | Emit when the transaction changed anything, park and release included |
+| Concurrency | A guard written after the event it must precede, such as a pause issued after the stop that wakes other windows | Major | Set the guard before the trigger, and re-read it after every await |
 | Accessibility | `htmlFor` aimed at a Radix checkbox, or `role="group"` on a button set | Medium | `aria-label` on the control, `aria-pressed` on each button |
 | Types | Reintroduced `any`, `as any`, or a suppression | Major | Name the real type, or delete the code that needs the cast |
 | Shared logic | Same rule implemented in two provider adapters | Major | Extract into the module the adapters already share |
