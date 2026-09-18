@@ -303,7 +303,9 @@ describe("run store", () => {
         toolName: "Compact",
       })
       handle.observeChunk({ type: "tool-output-error", toolCallId: compactId, errorText: "oom" })
-      expect(store.getRun(handle.runId)?.events.filter((e) => e.kind === "compacted")).toHaveLength(0)
+      expect(store.getRun(handle.runId)?.events.filter((e) => e.kind === "compacted")).toHaveLength(
+        0,
+      )
     })
 
     it("records the legacy compact boundary payload shape", () => {
