@@ -25,6 +25,7 @@ import {
   logRawClaudeMessage,
   type UIMessageChunk,
 } from "../../claude"
+import { createPermissionFloorHook } from "../../claude/permission-hook"
 import { sdkPermissionMode } from "../../claude/permission-mode"
 import {
   approvalWasDenied,
@@ -1726,6 +1727,19 @@ ${prompt}
                     getOAuthToken: async () => getValidExistingClaudeToken(),
                   }),
                 permissionMode: sdkPermissionMode(input.mode),
+                // The floor again, as a hook. `settingSources` below loads the
+                // workspace's own `.claude/settings.json`, and a call an allow
+                // rule in that file auto-approves never reaches `canUseTool`,
+                // which is where the gate lives. A repository ships its own
+                // settings file, so without this a cloned workspace could take
+                // every shell command out from under the floor. The hook only
+                // ever narrows: it answers deny or ask and never allow.
+                hooks: {
+                  PreToolUse: createPermissionFloorHook({
+                    mode: input.mode,
+                    worktreePath: input.cwd,
+                  }),
+                },
                 includePartialMessages: true,
                 // Load skills from project and user directories (skip for Ollama - not supported)
                 ...(!isUsingOllama && {
