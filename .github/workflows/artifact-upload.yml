@@ -114,18 +114,33 @@ jobs:
               fi
             done
           done
+      - name: Delete previous PR artifact comments
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_COMMENTS=$(gh pr view ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" --json comments --jq '.comments[] | select(.author.login == "github-actions[bot]") | select(.body | startswith("### Build Artifacts Ready")) | .id' 2>/dev/null || true)
+          if [ -n "$PREVIOUS_COMMENTS" ]; then
+            for comment_id in $PREVIOUS_COMMENTS; do
+              gh api \
+                --method DELETE \
+                "/repos/${{ github.repository }}/issues/comments/$comment_id" \
+                -f "reason" "Outdated" 2>/dev/null || true
+            done
+          fi
       - name: Comment PR with download link
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr comment ${{ github.event.pull_request.number }} --body "### Build Artifacts Ready
 
-          Artifacts from this PR are available for testing in the draft release:
-          \`\`\`
-          gh release download pr-${{ github.event.pull_request.number }} --repo ${{ github.repository }}
-          \`\`\`
+Artifacts from this PR are available for testing in the draft release:
+\`\`\`
+gh release download pr-${{ github.event.pull_request.number }} --repo ${{ github.repository }}
+\`\`\`
 
-          Or download individual files from the Actions tab."
+Or download individual files from the Actions tab.
+
+Commit: \`${{ github.sha }}\`"
 
   summary:
     name: Build Summary
