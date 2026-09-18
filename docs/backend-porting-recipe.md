@@ -148,11 +148,11 @@ against policy (local-only etc.) to Settings; chat surfaces only violations.
 
 One of two values, and it is a claim you have to be able to defend:
 
-- **`app-gate`** — every side-effecting tool call reaches a callback this app
+- **`app-gate`** means every side-effecting tool call reaches a callback this app
   owns, and that callback routes through `src/main/lib/permissions/`. Claude is
   the only backend that qualifies today, because it is the only one whose SDK
   hands us `canUseTool` for every action.
-- **`engine-only`** — the floor is whatever the engine's own flags give. Map the
+- **`engine-only`** means the floor is whatever the engine's own flags give. Map the
   policy onto those flags (see §5) and say so honestly.
 
 The check that decides which: **read the engine's docs for what its permission
@@ -169,14 +169,24 @@ Do not carry a target engine's always-approve / skip-permissions / YOLO flag int
 mausCode, whatever it is called upstream. `AGENTS.md` §8 lists the two Claude
 spellings under Never, and
 `src/main/lib/permissions/no-bypass.test.ts` fails the build if either reaches
-`src` outside a test asserting its absence — so the rule is enforced, not
+`src` outside a test asserting its absence, so the rule is enforced, not
 conventional. A backend whose only headless mode is a bypass gets
 `permissionFloor: "engine-only"` and a §12 edge-case entry saying which actions
 are ungoverned, not a bypass.
 
-If the engine can prompt but not headlessly (grok turbo), map the policy
-allow-list onto its `--allow` rules and let an unlisted destructive action fail
-closed. Failing closed beats asking a question nobody is there to answer.
+If the engine can prompt but not headlessly, hand it an explicit rule list rather
+than a mode flag. Grok turbo gets `GROK_TURBO_ALLOW` from
+`src/main/lib/grok-print/args.ts`, which is a broad `--allow` set covering shell,
+web fetch and web search, plus whatever the policy file's `allow_tools` adds. It
+never gets the engine's always-approve token.
+
+Do not assume the engine will narrow that list for you. A filed upstream issue
+reports that an allowed-tools flag has no effect once a bypass flag is active, and
+that Bash command patterns match tool names rather than command content. The
+consequence is worth stating in your §12 edge cases rather than discovering later:
+**on an `engine-only` backend the app cannot enforce the exfiltration class or the
+critical-path breaker**, because no app-side code sees the call. Say which actions
+are ungoverned.
 
 Accept: profile renders in Settings with zero hardcoded renderer branches, and
 the Permission floor row shows a value you can point at a doc line to justify.

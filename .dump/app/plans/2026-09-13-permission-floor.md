@@ -32,12 +32,12 @@ src/main/lib/git/security/containment.ts the containment checks, dependency-free
 so neither was importable from a test under CI's `--ignore-scripts` install,
 which does not build the native `better-sqlite3` binding. Both were split:
 
-- `errors.ts` — `PathValidationError` and its codes. No dependencies.
-- `containment.ts` — `isPathWithinWorktree`, `assertParentInWorktree`,
+- `errors.ts` holds `PathValidationError` and its codes. No dependencies.
+- `containment.ts` holds `isPathWithinWorktree`, `assertParentInWorktree`,
   `assertRealpathInWorktree`, `validateRelativePath`, `resolvePathInWorktree`,
   `assertValidGitPath`, and the new `assertToolPathInWorktree`. Node builtins and
   `./errors` only.
-- `path-validation.ts` — keeps the database-registered worktree checks and
+- `path-validation.ts` keeps the database-registered worktree checks and
   re-exports both leaves, so existing callers are untouched.
 
 Tests import the leaves directly, never the barrel: the barrel still reaches the
@@ -48,7 +48,7 @@ for the same reason.
 `resolvePathInWorktree`. Provider tools hand over absolute paths, unlike the tRPC
 file endpoints. It runs the `FULL-REVIEW.md` §6.3 order: shape, then literal
 containment, then canonicalised containment through symlinks. It deliberately
-does **not** require database registration — that boundary belongs to the tRPC
+does **not** require database registration. That boundary belongs to the tRPC
 file endpoints, where a renderer names the workspace; here the run's own cwd is
 already the workspace the app chose, and re-checking it would deny every tool
 call in a scratch session.
@@ -103,7 +103,7 @@ through `askToolApproval`, allow returns `updatedInput`. The router's three
 inline rule tables, its dangerous-deletion regex and its two near-identical
 approval blocks were deleted; the approval round-trip now has one home.
 
-Grok: engine-enforced, mapped from the same policy — plan gets
+Grok: engine-enforced, mapped from the same policy, where plan gets
 `--permission-mode plan`, ask gets a read-only `--tools` list, edit/agent/turbo
 get `acceptEdits` plus one `--allow` rule per allow-list entry. Headless turbo
 cannot prompt, so an unlisted destructive action fails closed.
