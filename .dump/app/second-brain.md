@@ -120,7 +120,9 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   `complete` refuse a row that was never handed over, so neither can hide or
   delete a message the engine never saw. The renderer projects the feed and
   performs the send, and a window that stops syncing hands its in-flight claim
-  back instead of sending it. A manual stop pauses the queue. Contract:
+  back instead of sending it. `clear` leaves a row whose payload is already
+  handed over — that row is the sub-chat's dispatch slot and its message may be
+  out. A manual stop pauses the queue. Contract:
   `.dump/app/plans/2026-09-17-queue-in-main.md`.
 
 ## Performance principles

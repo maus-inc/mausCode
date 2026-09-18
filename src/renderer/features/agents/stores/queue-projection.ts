@@ -100,12 +100,23 @@ export const useQueueProjection = create<QueueProjectionState>()(
       })
     },
     resetQueues: () => {
-      // The marks describe main's rows, not this window's cards, so they go
+      // The mark describes main's rows, not this window's cards, so it goes
       // with the cards: the replay that follows a reset is what says what main
       // has. A mark left standing after a reconnect would hold sends back for a
-      // sub-chat whose rows are in main and whose feed never arrived.
+      // sub-chat whose rows are in main and whose feed never arrived, and it
+      // repairs itself either way — a feed carrying rows drops it, and a claim
+      // refused for a sub-chat main has nothing for raises it again.
       unknownSubChatIds.clear()
-      clearingSubChatIds.clear()
+      // The hold stays. It belongs to a `clear` still waiting for its own
+      // answer, which arrives on that call, not on this feed, and the replay a
+      // reconnect begins can carry the rows the clear is deleting: main has not
+      // deleted them yet, so that reading is older than the clear, and with the
+      // hold gone the wake it triggers would claim and send a message the user
+      // just asked to delete. `clearQueueItems` ends the hold itself, on the
+      // answer, a refusal or a rejected call alike, so it cannot outlive the
+      // request — a clear that never answers at all means the channel is gone
+      // and nothing in this window works anyway.
+
       set((state) =>
         Object.keys(state.queues).length === 0 && Object.keys(state.hiddenCounts).length === 0
           ? state

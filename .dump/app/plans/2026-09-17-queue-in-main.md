@@ -528,6 +528,57 @@ map keyed by sub-chat. Recorded as a named exposure, unowned, with the wiring
 option noted.
 
 
+### Round fifteen
+
+Two findings on `40dd24f`: CodeRabbit's outside-diff Major and CodeAnt's new
+Major. Both valid; both fixed.
+
+**The clear hold must survive a reconnect.** `resetQueues()` dropped
+`clearingSubChatIds` along with the mark, and CodeRabbit's ordering argument is
+right: `ipcLink` gives no order between a `clear` still in flight and the
+subscription a reconnect opens, so the replay can carry the rows that clear is
+deleting — a reading older than the clear, because main has not deleted them
+yet. With the hold gone, `applyQueueFeedItem`'s wake claims and sends a message
+the user just asked to delete: the exact hazard the hold exists for. The reset
+now keeps the hold and still drops the mark (a feed with rows drops the mark
+anyway, and a claim refused for a sub-chat main has nothing for raises it
+again, so the mark heals itself and the hold does not).
+
+Round thirteen's reading — "a hold waiting on an answer that is no longer
+coming must not survive that" — was wrong about the answer: `clearQueueItems`
+answers its hold in `finally`, on success, a refusal or a rejection alike, so
+the hold ends when its request does. The only way it never ends is a clear that
+never answers, and a channel that cannot answer a mutation cannot carry the
+replay either. The test that pinned the old reading is now its opposite:
+`keeps a clear's hold when the feed reconnects, and ends it on the answer`
+(deferred clear, reconnect + replay, no claim, then answer, then the send).
+Test setup no longer clears holds between tests, so a test answers its own
+clear, as production does.
+
+**A clear must not delete a row whose payload is already handed over.** CodeAnt
+is right, and the router's own doc already said so: this is "not a 'clear the
+queue' action while a send is in flight, because a claimed row is the claiming
+window's to finish". The implementation deleted everything. Beyond the lost
+bookkeeping (the completing window would have nothing to retire, and a send
+that then fails has nothing to park), the handed row *is* the sub-chat's
+dispatch slot: main refuses the next claim while it stands, so deleting it lets
+another window claim the row behind it and start a second turn beside an
+in-flight send. `clear` now deletes everything except a row that is `sending`
+*and* handed over. An un-handed claim is not in flight — the payload never left
+— so it still goes, and its holder's `markHanded` then fails and it sends
+nothing. A parked row is `paused` with `handedAt` set, so it still goes: it is
+the one card the user is looking at.
+
+Consequence, recorded: a clear that races an in-flight send leaves that row to
+its sender, so a send that then fails parks a visible card. That is the honest
+record — the message may have been delivered — and it is the same choice
+parking makes everywhere else. Deleting the row instead would both lose that
+record and drop the dispatch lock while the turn is starting.
+
+Mutations: re-adding `clearingSubChatIds.clear()` to the reset kills the
+rewritten reconnect test; replacing the `clear` filter with `isNull(handedAt)`
+kills the parked-row test; dropping the filter kills the mid-send test.
+
 ### Round fourteen
 
 CodeRabbit's pass on `42ba10a` (four findings), CodeAnt's two on the same head,
@@ -621,7 +672,10 @@ that are in main. Pinned by two tests — `forgets the mark a reconnect cannot v
 later wake sends` and `ends a clear's hold when the feed reconnects with the
 clear unanswered` — and each of the two `clear()` calls is killed by one of
 them, which the second test is what made true: the first draft of the reset
-cleared the mark and left the hold, and nothing noticed.
+cleared the mark and left the hold, and nothing noticed. (Round fifteen
+supersedes the second half: the hold stays across the reset, because clearing
+it lets the replay that follows send a row the user is deleting. The mark still
+goes, and it heals itself.)
 
 **The two-window test did not have two windows in it.** `a window that loses the
 race sends nothing` gave each fake client its own claim list, so the second

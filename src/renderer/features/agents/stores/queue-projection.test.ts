@@ -640,27 +640,40 @@ describe("queue projection", () => {
     expect(sendClaimedQueueItem).toHaveBeenCalledTimes(1)
   })
 
-  it("ends a clear's hold when the feed reconnects with the clear unanswered", async () => {
-    vi.useFakeTimers()
+  it("keeps a clear's hold when the feed reconnects, and ends it on the answer", async () => {
     const claimed = item("q1", "sub-a", "pending")
     const fake = fakeClient({ claimed: [claimed] })
     registerChat("sub-a")
 
-    // A clear that never answers holds this sub-chat's sends back, and the rows
-    // a feed carries while it is in flight are the ones being deleted.
-    fake.queue.clear.mutate.mockImplementation(() => new Promise(() => {}))
-    void clearQueueItems("sub-a", fake.client)
+    // A clear that has not answered holds this sub-chat's sends back, and the
+    // rows a feed carries while it is in flight are the ones being deleted.
+    let answer: ((count: number) => void) | undefined
+    fake.queue.clear.mutate.mockImplementation(
+      () =>
+        new Promise<number>((resolve) => {
+          answer = resolve
+        }),
+    )
+    const clearing = clearQueueItems("sub-a", fake.client)
     applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(fake.queue.claim.mutate).not.toHaveBeenCalled()
 
-    // The connection drops, which reconnects and resets everything this window
-    // projected. A hold waiting on an answer that is no longer coming must not
-    // survive that: the queue would stay silent for the rest of the session.
+    // The connection drops, which reconnects and resets this window's
+    // projection, and the replay carries the same row: main has not deleted it
+    // yet, so that reading is older than the clear. The hold has to survive the
+    // reset — a wake here would claim and send the message the user just asked
+    // to delete — and only the clear's own answer says the delete landed.
     useQueueProjection.getState().resetQueues()
+    applyQueueFeedItem(feed("sub-a", [claimed]), fake.client)
     await wakeQueue("sub-a", fake.client)
 
-    expect(fake.completed).toEqual(["q1"])
+    expect(fake.queue.claim.mutate).not.toHaveBeenCalled()
+    expect(fake.completed).toEqual([])
+
+    // The answer ends the hold, and the queue moves again.
+    answer?.(0)
+    await clearing
+    await wakeQueue("sub-a", fake.client)
+    await vi.waitFor(() => expect(fake.completed).toEqual(["q1"]))
   })
 
   it("forgets the mark a reconnect cannot vouch for, so a later wake sends", async () => {

@@ -728,6 +728,57 @@ describe("queue store", () => {
       expect(store.list(otherSubChatId)[0].status).toBe("sending")
     })
 
+    it("keeps the row a window is mid-send on, so nothing claims beside it", () => {
+      const first = store.add({ subChatId, payload: payload("one") })
+      const second = store.add({ subChatId, payload: payload("two") })
+      const claimed = claim(store, subChatId)
+      expect(claimed?.id).toBe(first.id)
+      if (!claimed) return
+      expect(store.markHanded(subChatId, claimed.id, WINDOW_A)).toBe(true)
+
+      // Only the row that has not left this store's control goes. The handed
+      // one is the sub-chat's dispatch slot: deleting it would let another
+      // window claim the row behind it and run a second turn beside the send,
+      // and the completing window would have nothing left to retire.
+      expect(store.clear(subChatId)).toBe(1)
+
+      expect(store.list(subChatId).map((row) => row.id)).toEqual([first.id])
+      expect(store.list(subChatId)[0].status).toBe("sending")
+      expect(claim(store, subChatId, second.id, WINDOW_B)).toBeNull()
+      expect(store.complete(subChatId, claimed.id, WINDOW_A)).toBe(true)
+      expect(store.list(subChatId)).toHaveLength(0)
+    })
+
+    it("clears a claim that was never handed over, so its holder sends nothing", () => {
+      const item = store.add({ subChatId, payload: payload("one") })
+      const claimed = claim(store, subChatId)
+      expect(claimed?.id).toBe(item.id)
+
+      // The payload never left, so the user's clear takes it: the holder's
+      // `markHanded` finds no row and it sends nothing.
+      expect(store.clear(subChatId)).toBe(1)
+
+      expect(store.list(subChatId)).toHaveLength(0)
+      expect(store.markHanded(subChatId, item.id, WINDOW_A)).toBe(false)
+    })
+
+    it("clears a parked row, which is the card the user is looking at", () => {
+      const item = store.add({ subChatId, payload: payload("one") })
+      const claimed = claim(store, subChatId)
+      if (!claimed) return
+      expect(store.markHanded(subChatId, claimed.id, WINDOW_A)).toBe(true)
+      expect(store.park(subChatId, claimed.id, WINDOW_A)).toBe(true)
+
+      // A parked row is out of the automatic path and on screen, so it is this
+      // action's to remove: the in-flight exception is for a payload that is
+      // still with a window, not for one whose outcome is already settled and
+      // is waiting for the user.
+      expect(store.clear(subChatId)).toBe(1)
+
+      expect(store.list(subChatId)).toHaveLength(0)
+      expect(item.id).toBe(claimed.id)
+    })
+
     it("clears every row for a sub-chat without touching another", () => {
       const otherSubChatId = seedSubChat(opened.db)
       store.add({ subChatId, payload: payload("one") })

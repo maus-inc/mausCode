@@ -14,7 +14,7 @@
  * `src/main/lib/db/test-sqlite.ts`. The main-process singleton lives in
  * `./index.ts` so this module stays free of Electron imports.
  */
-import { and, asc, eq, inArray, isNotNull, isNull, lt, max } from "drizzle-orm"
+import { and, asc, eq, inArray, isNotNull, isNull, lt, max, ne, or } from "drizzle-orm"
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import {
   type QueueItem,
@@ -394,7 +394,25 @@ export function createQueueStore(db: QueueDb): QueueStore {
   function clear(subChatId: string): number {
     const removed = db
       .delete(schema.queueItems)
-      .where(eq(schema.queueItems.subChatId, subChatId))
+      .where(
+        and(
+          eq(schema.queueItems.subChatId, subChatId),
+          // Everything but a row whose payload is already in a window's hands,
+          // which is what the router's own contract says this is: not a clear
+          // "while a send is in flight, because a claimed row is the claiming
+          // window's to finish". Such a row has left this store's control — its
+          // message may already be out — and it is the sub-chat's dispatch
+          // slot, the row main refuses the next claim for, so deleting it would
+          // let another window start a second turn beside that send and lose
+          // the only record of a message whose fate is unknown. It is never a
+          // card, so the queue the user sees is cleared either way; its sender
+          // retires it or parks it when the send answers. A claim that was not
+          // handed over is not in flight — the payload never left — so it goes
+          // with the rest, and its holder's `markHanded` then fails and it
+          // sends nothing.
+          or(ne(schema.queueItems.status, "sending"), isNull(schema.queueItems.handedAt)),
+        ),
+      )
       .returning()
       .all()
     if (removed.length > 0) emit(subChatId)
