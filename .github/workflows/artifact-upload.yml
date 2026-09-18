@@ -11,8 +11,7 @@ on:
         default: "all"
 
 permissions:
-  contents: read
-  packages: write
+  contents: write
 
 env:
   NODE_OPTIONS: --max-old-space-size=4096
@@ -31,9 +30,6 @@ jobs:
             target: mac
           - os: windows-2022
             target: windows
-      # Allow partial failures so one platform breaking
-      # doesn't block testing on the others.
-      continue-on-error: true
     steps:
       - uses: actions/checkout@v5
         with:
@@ -59,14 +55,14 @@ jobs:
       - name: Upload artifact for testing
         uses: actions/upload-artifact@v4
         with:
-          name: mausVoice-build-${{ matrix.target }}
+          name: mausCode-build-${{ matrix.target }}
           path: |
             release/
           retention-days: 14
       - name: Upload build manifest
         uses: actions/upload-artifact@v4
         with:
-          name: mausVoice-build-${{ matrix.target }}-manifest
+          name: mausCode-build-${{ matrix.target }}-manifest
           path: |
             package.json
             electron-builder.yml
@@ -83,6 +79,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
+      - name: Check artifacts exist
+        run: |
+          count=$(find artifacts/ -type f | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error title=No artifacts found::build-and-upload produced no downloadable artifacts"
+            exit 1
+          fi
+          echo "Found $count artifact file(s)"
       - name: List artifacts
         run: find artifacts/ -type f | head -50
       - name: Create draft release
@@ -95,8 +99,7 @@ jobs:
             --repo "${{ github.repository }}" \
             --draft \
             --title "PR ${{ github.event.pull_request.number }}: ${PR_TITLE}" \
-            --notes "${PR_BODY}" \
-            --verify-tag || true
+            --notes "${PR_BODY}"
       - name: Upload artifacts to draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -106,7 +109,7 @@ jobs:
               if [ -f "$file" ]; then
                 gh release upload "pr-${{ github.event.pull_request.number }}" "$file" \
                   --repo "${{ github.repository }}" \
-                  --clobber || echo "Warning: failed to upload $file"
+                  --clobber
               fi
             done
           done

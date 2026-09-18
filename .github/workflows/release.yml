@@ -24,6 +24,7 @@ env:
 jobs:
   create-release:
     name: Create draft release
+    if: ${{ !inputs.dryRun }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,20 +33,19 @@ jobs:
           fetch-depth: 0
       - name: Generate release notes
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "## mausVoice v${VERSION}" > release_notes.md
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "## mausCode v${VERSION}" > release_notes.md
           echo "" >> release_notes.md
           echo "Built from commit ${{ github.sha }}" >> release_notes.md
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v$(node -p "require('./package.json').version")"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" \
+          if ! gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release create "${{ github.ref_name }}" \
               --draft \
-              --title "$TAG" \
-              --notes-file release_notes.md || true
+              --title "${{ github.ref_name }}" \
+              --notes-file release_notes.md
           fi
 
   build-all:
@@ -58,16 +58,20 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: linux
-            artifact: mausVoice-linux
+            artifact: mausCode-linux
+            electronTarget: linux
           - os: macos-14
             target: mac-arm64
-            artifact: mausVoice-mac-arm64
-          - os: macos-14
+            artifact: mausCode-mac-arm64
+            electronTarget: mac
+          - os: macos-13
             target: mac-x64
-            artifact: mausVoice-mac-x64
+            artifact: mausCode-mac-x64
+            electronTarget: mac
           - os: windows-2022
             target: windows
-            artifact: mausVoice-windows
+            artifact: mausCode-windows
+            electronTarget: windows
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -86,36 +90,33 @@ jobs:
           bun run codex:download
       - name: Build
         run: bun run build
-      - name: Package
-        run: bunx electron-builder --dir
+      - name: Package (electron-builder, unsigned)
+        run: bunx electron-builder --${{ matrix.electronTarget }}
       - name: Compute checksums
-        if: ${{ !inputs.dryRun }}
         run: |
           shasum -a 256 release/* > SHA256SUMS.txt 2>/dev/null || find release/ -type f -exec shasum -a 256 {} \; > SHA256SUMS.txt
       - name: Upload artifact
-        if: ${{ !inputs.dryRun }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: release/
+          path: |
+            release/
+            SHA256SUMS.txt
           retention-days: 30
       - name: Upload to draft release
-        if: ${{ !inputs.dryRun }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v$(node -p "require('./package.json').version")"
           for f in release/*; do
-            gh release upload "$TAG" "$f" --clobber || echo "Warning: failed to upload $f"
+            gh release upload "${{ github.ref_name }}" "$f" --clobber
           done
           if [ -f SHA256SUMS.txt ]; then
-            gh release upload "$TAG" SHA256SUMS.txt --clobber || true
+            gh release upload "${{ github.ref_name }}" SHA256SUMS.txt --clobber
           fi
 
   verify:
     name: Verify artifacts
     needs: build-all
-    if: ${{ !inputs.dryRun }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -123,8 +124,24 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: downloaded/
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release-assets
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --dir release-assets || true
       - name: Verify checksums
         run: |
           echo "Verifying downloaded artifacts..."
-          find downloaded/ -type f | wc -l
-          echo "All artifacts downloaded successfully"
+          find downloaded/ -type f | sort
+          echo ""
+          echo "Verifying SHA256 checksums..."
+          if [ -f release-assets/SHA256SUMS.txt ]; then
+            cd release-assets
+            sha256sum -c SHA256SUMS.txt
+            echo "Checksum verification passed."
+          else
+            echo "No SHA256SUMS.txt found, skipping checksum verification."
+          fi

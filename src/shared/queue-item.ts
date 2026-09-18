@@ -70,6 +70,7 @@ export const queuePayloadSchema = z
       (payload.images?.length ?? 0) > 0 ||
       (payload.files?.length ?? 0) > 0 ||
       (payload.textContexts?.length ?? 0) > 0 ||
+      (payload.diffTextContexts?.length ?? 0) > 0 ||
       (payload.pastedTexts?.length ?? 0) > 0
 
     if (!hasContent) {
