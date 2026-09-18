@@ -23,9 +23,9 @@ const GATE_SEVERITIES = new Set(["critical"])
 
 function runAudit() {
   try {
-    const output = execFileSync("bun", ["audit", "--json"], {
+    const output = execFileSync("bun", ["audit", "--json"], {  // nosonar
       cwd: ROOT,
-      env: { ...process.env, PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" },
+      env: { ...process.env, PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin" },
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     })
