@@ -200,3 +200,40 @@ CodeAnt's deep SAST pass flagged 2 issues in `src/main/lib/qwen-print/session.ts
 Rebuttal recorded on PR #63. If CodeAnt's gate stays red on these, the
 accepted-finding or path-suppression decision belongs to the human, since the
 repo ships no CodeAnt suppression config.
+
+## CodeAnt SAST deep-check addendum (2026-09-18, commit `51e6217`)
+
+The human refused to accept the false-positive verdict, so both findings were
+re-validated with repo-wide negative evidence:
+
+- CSP: the repo's only CSPs are static meta tags (`src/renderer/index.html:6`,
+  `src/renderer/login.html:5`). No `onHeadersReceived`, no header construction
+  anywhere (`grep -rni "Content-Security-Policy"` over src/ and packages/
+  hits only those two lines plus node typings). Nothing interpolates into any
+  CSP. Finding 1's mechanism does not exist in this repository.
+- Passwords: `grep -rni currentPassword` over src/ and packages/ returns zero
+  hits; no password-change or password-verification flow exists at all (the
+  password-adjacent files are agent CLI login/API-key forms). Finding 2's
+  mechanism does not exist either; lines 337-340 are the `session_id` type
+  guard.
+- Sink audit for provider text: chat text renders through react-markdown with
+  remark-gfm/remark-breaks and NO rehype-raw (escaped); links route through
+  `shell:open-external` -> `assertRemoteAllowed`. The only raw-HTML sinks are
+  `RawHtml` (documented choke point, generator-escaped input only) and the
+  Shiki JSON highlighter (Shiki escapes source by construction).
+
+The deep check DID surface two real, pre-existing issues in the same security
+neighborhood (both outside PR #63's diff, recorded for a follow-up step):
+
+1. `src/renderer/components/mermaid-block.tsx:136` sets mermaid
+   `securityLevel: "loose"` for model-authored diagrams that render through
+   `RawHtml`. "loose" permits HTML in labels, so a malicious diagram in an
+   assistant message is a live CWE-79 surface. Minimal fix: `securityLevel:
+   "strict"` after verifying the app's diagrams render.
+2. `src/renderer/index.html:6` allows `'unsafe-eval'` and `https://unpkg.com`
+   in script-src. unpkg in script-src is a repo-wide supply-chain trust grant;
+   unsafe-eval defeats most of CSP's value. Minimal fix: drop unpkg (bundle
+   the dependency) and unsafe-eval in the production CSP.
+
+New CodeAnt reviews on `51e6217` (12:30:22Z, 12:30:47Z) carry empty bodies:
+no new findings.
