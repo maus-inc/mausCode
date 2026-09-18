@@ -1,0 +1,37 @@
+# gitleaks configuration for the mauscode repository.
+#
+# `gitleaks dir .` loads this file from the scan target on its own, and the CI
+# step also passes `--config .gitleaks.toml`, so a rename cannot quietly fall
+# back to the default rules.
+#
+# What is excused here, and why by value rather than by path: the vendored
+# engine and its test fixtures (in resources/bin and src/...) feed fake
+# credentials to the engine's own redaction and input-handling code. Each
+# entry below is one such placeholder string, matched against the line gitleaks
+# reports. Excusing the value cannot excuse a real credential, because a real
+# credential is not one of these placeholder strings. A path-based exemption
+# could, so none are used.
+#
+# Nothing under src/, docs/ or .dump/ is excused. Findings this repository owns
+# are fixed instead of excused.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "placeholder values in vendored engine tests and fixtures"
+regexTarget = "line"
+regexes = [
+  '''tok_abc123xyz''',
+  '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+  '''fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210''',
+  '''AIzaSECRET12345''',
+  '''claude-opus-4\.5 anthropic api premium''',
+  '''claude-opus-4-5-2025 anthropic-api responses''',
+  '''eyJhbGciOiJub25lIn0\.eyJleHAiIjo0MTAyNDQ0ODAwfQ\.''',
+  '''api\.github\.com:Iv1\.b507a08c87ecfe98''',
+  '''sk-test-1234567890''',
+  '''anthropic_map_tool_name_from_oauth''',
+  '''AKIAABCDEFGHIJKLMNOP''',
+  '''8ae96ff3-3425-4f4c-8772-b6fd61502868''',
+]

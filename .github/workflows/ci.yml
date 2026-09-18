@@ -1,0 +1,247 @@
+name: CI
+
+# Runs on push (main + arena/init branches) and pull_request. Path filters keep
+# CI green on doc-only changes; the quality job needs fetch-depth: 0 for biome
+# --changed and tsgo ratchet diffs. Mirrors mausVoice's artifact-upload pattern:
+# build-and-package uploads unsigned installers so reviewers can download and
+# smoke-test before merge (7-day retention).
+on:
+  push:
+    branches: [main, "arena/**", init]
+    paths:
+      - "src/**"
+      - "package.json"
+      - "bun.lock"
+      - "bun.lockb"
+      - "tsconfig.json"
+      - "electron.vite.config.ts"
+      - "electron-builder.yml"
+      - "electron-shim.js"
+      - "biome.json"
+      - "vitest.config.ts"
+      - ".nvmrc"
+      - "scripts/**"
+      - "drizzle/**"
+      - "resources/**"
+      - "build/**"
+      - "tailwind.config.js"
+      - "postcss.config.js"
+      - ".github/**"
+  pull_request:
+    paths:
+      - "src/**"
+      - "package.json"
+      - "bun.lock"
+      - "bun.lockb"
+      - "tsconfig.json"
+      - "electron.vite.config.ts"
+      - "electron-builder.yml"
+      - "electron-shim.js"
+      - "biome.json"
+      - "vitest.config.ts"
+      - ".nvmrc"
+      - "scripts/**"
+      - "drizzle/**"
+      - "resources/**"
+      - "build/**"
+      - "tailwind.config.js"
+      - "postcss.config.js"
+      - ".github/**"
+  workflow_dispatch:
+
+# Cancel superseded runs for the same PR (or ref for push/manual) so stacked
+# PRs don't hold runner slots — same pattern as mausVoice build-desktop.yml.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: CI only compiles, lints, tests and uploads artifacts.
+# It never pushes commits or publishes releases.
+permissions:
+  contents: read
+
+env:
+  # Renderer build OOMs below ~3 GB heap (monaco + mermaid + shiki graph);
+  # see .dump/ci/research/repository-infrastructure-audit.md section 6.
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  quality:
+    name: Quality gates (lint, test, typecheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # biome --changed and tsgo ratchet both diff against the base ref.
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: "Install dependencies (scripts skipped: no native modules needed here)"
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Lint (changed files only)
+        # Repo-wide rollout is a ratchet step; gate only what the change touches.
+        # PRs diff against base.sha; pushes diff against the previous head
+        # (falls back to origin/main for branch creation).
+        env:
+          LINT_BASE: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
+        run: node scripts/ci/lint-changed.mjs
+
+      - name: Unit tests (vitest)
+        run: bun run test
+
+      - name: "Typecheck (ratchet: no new errors vs baseline)"
+        run: bun run ratchet:typecheck
+
+      - name: Typecheck (tsgo, non-blocking informational)
+        # tsgo is the second typecheck gate. It's run for visibility but not
+        # blocking yet because the current tree has pre-existing typecheck
+        # debt (110+ errors via tsc). Once the ratchet baseline reaches zero,
+        # this becomes a hard gate: change `continue-on-error: true` to false.
+        continue-on-error: true
+        run: bun run ts:check
+
+  build-and-package:
+    name: Build & Package (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS
+            os: macos-14
+            platform: macos
+            package_flag: "--mac"
+          - label: Windows
+            os: windows-2022
+            platform: windows
+            package_flag: "--win"
+          - label: Linux
+            os: ubuntu-24.04
+            platform: linux
+            package_flag: "--linux"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies (full install incl. native module rebuild)
+        run: bun install --frozen-lockfile
+
+      - name: Fetch agent binaries (claude, codex)
+        # electron-builder extraResources expects resources/bin/<platform-arch> + VERSION.
+        # GITHUB_TOKEN avoids api.github.com anonymous rate limits.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun run claude:download
+          bun run codex:download
+
+      - name: "Build (electron-vite: main, preload, renderer)"
+        run: bun run build
+
+      - name: Package (electron-builder, unsigned — CI testing only)
+        env:
+          # Skip code signing / notarization: artifacts are for download-and-test,
+          # not for distribution. The release workflow handles signed builds.
+          CSC_IDENTITY: null
+          CSC_LINK: null
+          CSC_KEY_PASSWORD: null
+          NOTARIZE: false
+        run: npx electron-builder ${{ matrix.package_flag }} --publish=never
+
+      # ── Artifact upload: the mausVoice pattern the reviewers asked for ─────
+      # Unsigned installers are published as build artifacts (7-day retention)
+      # so reviewers can download and smoke-test a PR before merging.
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: 1code-${{ matrix.platform }}
+          path: |
+            release/**/*.dmg
+            release/**/*.zip
+            release/**/*.msi
+            release/**/*.exe
+            release/**/*.deb
+            release/**/*.AppImage
+            release/**/1Code Setup*.exe
+            release/**/1Code*.exe
+          if-no-files-found: warn
+          retention-days: 7
+
+  security:
+    name: Security gates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: "Dependency audit (ratchet: no new critical advisories)"
+        run: bun run ratchet:audit
+
+      - name: Secrets scan (gitleaks, pinned + checksum-verified)
+        # gitleaks-action requires a paid license for org-owned repos; the CLI does not.
+        # A findings table goes to the step summary (rule, file, line; values redacted)
+        # so a red secrets job is readable through the check-run API when job logs
+        # are unreachable. The JSON report stays on the runner and is never uploaded.
+        run: |
+          set -Eeuo pipefail
+          trap 'echo "::error title=Secrets scan step failed::line ${LINENO}: ${BASH_COMMAND}"' ERR
+          VERSION=8.30.1
+          EXPECTED=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          TARBALL="gitleaks_${VERSION}_linux_x64.tar.gz"
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${TARBALL}" -o /tmp/gitleaks.tar.gz
+          echo "${EXPECTED}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          rm -f /tmp/gitleaks-report.json
+          status=0
+          /tmp/gitleaks dir --config .gitleaks.toml --verbose --redact \
+            --report-format json --report-path /tmp/gitleaks-report.json . || status=$?
+          if [ "$status" -ne 0 ]; then
+            if [ -s /tmp/gitleaks-report.json ]; then
+              count=$(jq 'length' /tmp/gitleaks-report.json)
+              index=$(jq -r '.[]? | "\(.RuleID) \(.File):\(.StartLine)"' /tmp/gitleaks-report.json |
+                awk 'NR>1{printf "%0A"} {printf "%s", $0}')
+              echo "::error title=gitleaks: ${count} finding(s), values redacted::${index}"
+              jq -r '.[]? | "::error file=\(.File),line=\(.StartLine),title=gitleaks \(.RuleID)::\(.RuleID) at \(.File):\(.StartLine), value redacted"' \
+                /tmp/gitleaks-report.json > /tmp/gitleaks-annotations.txt || true
+              cat /tmp/gitleaks-annotations.txt
+              {
+                echo "### Secrets scan failed (gitleaks ${VERSION})"
+                echo
+                echo "Values are redacted; rule, file and line only."
+                echo
+                echo "| Rule | File | Line |"
+                echo "| --- | --- | --- |"
+                jq -r '.[]? | "| \(.RuleID) | \(.File) | \(.StartLine) |"' /tmp/gitleaks-report.json
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error title=Secrets scan::exit ${status} with no JSON report, read the step log"
+            fi
+            exit "$status"
+          fi
+
+      - name: Dependency review (PR-affecting changes)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: critical

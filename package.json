@@ -32,6 +32,13 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "ts:check": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "node scripts/ci/lint-changed.mjs",
+    "lint:ratchet": "node scripts/ci/lint-ratchet.mjs",
+    "ratchet:typecheck": "node scripts/ci/typecheck-ratchet.mjs",
+    "ratchet:audit": "node scripts/ci/audit-ratchet.mjs",
+    "test": "vitest run --passWithNoTests",
+    "test:node": "node --test --experimental-strip-types \"src/main/lib/runtime/*.test.ts\"",
     "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs"
   },
   "dependencies": {
@@ -122,9 +129,10 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@electron/rebuild": "^4.0.3",
     "@tailwindcss/container-queries": "^0.1.1",
+    "@biomejs/biome": "^2.5.13",
     "@types/better-sqlite3": "^7.6.13",
     "@types/diff": "^8.0.0",
-    "@types/node": "^20.17.50",
+    "@types/node": "^22.18.0",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
@@ -136,8 +144,13 @@
     "electron-vite": "^3.0.0",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.4.5",
-    "vite": "^6.3.4"
+    "typescript": "^5.9.3",
+    "vite": "^6.3.4",
+    "vitest": "^3.2.6"
+  },
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "node": ">=22"
   },
   "build": {
     "appId": "dev.21st.agents",
@@ -254,11 +267,6 @@
     "publish": {
       "provider": "generic",
       "url": "https://cdn.21st.dev/releases/desktop"
-    }
-  },
-  "pnpm": {
-    "overrides": {
-      "source-map-support>source-map": "0.7.4"
     }
   }
 }
