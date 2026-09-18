@@ -7,6 +7,92 @@ import type {
 } from "./types"
 
 /**
+ * Message classification (roadmap step 09). Every member of
+ * `ClaudeStreamMessage` is either translated (`HANDLED`) or deliberately
+ * internal with a named reason (`INTERNAL`); the compile guards below fail
+ * typecheck when the SDK grows a member that is neither.
+ *
+ * Internal members, by `msg.type`:
+ * - `tool_progress`: per-tool streaming progress; the transcript already shows
+ *   the tool round-trip, and no renderer surface consumes a second live feed.
+ * - `auth_status`: auth state changes mid-turn; no consumer owns them yet.
+ * - `tool_use_summary`: batch summaries of past tool use; the individual tool
+ *   parts are already in the transcript.
+ *
+ * Internal `system` subtypes: `hook_started`, `hook_progress`,
+ * `hook_response`, `task_notification`, `task_started`, `files_persisted`.
+ * Each is harness bookkeeping with no chat-stream content and no named
+ * consumer; the full table lives in
+ * `.dump/app/research/2026-09-13-event-mapping.md`.
+ */
+export const HANDLED_STREAM_MESSAGE_TYPES = [
+  "stream_event",
+  "assistant",
+  "user",
+  "system",
+  "result",
+] as const satisfies readonly ClaudeStreamMessage["type"][]
+
+export const INTERNAL_STREAM_MESSAGE_TYPES = [
+  "tool_progress",
+  "auth_status",
+  "tool_use_summary",
+] as const satisfies readonly ClaudeStreamMessage["type"][]
+
+export const HANDLED_SYSTEM_SUBTYPES = [
+  "init",
+  "status",
+  "compact_boundary",
+] as const satisfies readonly Extract<ClaudeStreamMessage, { type: "system" }>["subtype"][]
+
+export const INTERNAL_SYSTEM_SUBTYPES = [
+  "hook_started",
+  "hook_progress",
+  "hook_response",
+  "task_notification",
+  "task_started",
+  "files_persisted",
+] as const satisfies readonly Extract<ClaudeStreamMessage, { type: "system" }>["subtype"][]
+
+type AssertNever<T> = [T] extends [never] ? true : never
+
+type UnhandledStreamMessageType = Exclude<
+  ClaudeStreamMessage["type"],
+  (typeof HANDLED_STREAM_MESSAGE_TYPES)[number] | (typeof INTERNAL_STREAM_MESSAGE_TYPES)[number]
+>
+
+/** Compile guard: every SDK message type is mapped or classified internal. */
+export const streamMessageTypesAreClassified: AssertNever<UnhandledStreamMessageType> = true
+
+type UnhandledSystemSubtype = Exclude<
+  Extract<ClaudeStreamMessage, { type: "system" }>["subtype"],
+  (typeof HANDLED_SYSTEM_SUBTYPES)[number] | (typeof INTERNAL_SYSTEM_SUBTYPES)[number]
+>
+
+/** Compile guard: every system subtype is mapped or classified internal. */
+export const systemSubtypesAreClassified: AssertNever<UnhandledSystemSubtype> = true
+
+const knownMessageTypes: ReadonlySet<string> = new Set([
+  ...HANDLED_STREAM_MESSAGE_TYPES,
+  ...INTERNAL_STREAM_MESSAGE_TYPES,
+])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Boundary read for provider stdout lines that reuse the Claude stream
+ * dialect (the qwen print adapter). JSON arrives untyped, so the only honest
+ * pre-check is the `type` discriminant; unknown types flow through and hit
+ * the transformer's warn-once instead of being dropped here.
+ */
+export function toClaudeStreamMessage(raw: unknown): ClaudeStreamMessage | null {
+  if (!isRecord(raw) || typeof raw.type !== "string") return null
+  return raw as ClaudeStreamMessage
+}
+
+/**
  * NOTE (transplant): `ChunkCoalescer`/`createChunkCoalescer` below, the
  * `providerMetadata` spread-casts, and the `?? "unknown"` tool-name guard were
  * transplanted from erenbertr/1code (Apache-2.0, © the 1Code contributors).
@@ -123,6 +209,9 @@ export function createChunkCoalescer<TChunk = UIMessageChunk>(
 
 export function createTransformer(options?: { isUsingOllama?: boolean }) {
   const _isUsingOllama = options?.isUsingOllama === true
+  // Unknown msg.type values (a newer CLI against this build) are logged once
+  // per type per transformer instead of disappearing silently.
+  const warnedMessageTypes = new Set<string>()
   let textId: string | null = null
   let textStarted = false
   let started = false
@@ -305,7 +394,11 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       }
 
       // Tool input delta
-      if (event.delta?.type === "input_json_delta" && currentToolCallId) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta?.type === "input_json_delta" &&
+        currentToolCallId
+      ) {
         const partialJson = event.delta.partial_json || ""
         accumulatedToolInput += partialJson
 
@@ -331,7 +424,12 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       }
 
       // Thinking/reasoning streaming - emit as tool-like chunks for UI
-      if (event.delta?.type === "thinking_delta" && currentThinkingId && inThinkingBlock) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta?.type === "thinking_delta" &&
+        currentThinkingId &&
+        inThinkingBlock
+      ) {
         const thinkingText = String(event.delta.thinking || "")
         accumulatedThinking += thinkingText
 
@@ -501,21 +599,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       if (msg.subtype === "init") {
         // Map MCP servers with validated status type and additional info
         const mcpServers: MCPServer[] = (msg.mcp_servers || []).map(
-          (s: {
-            name: string
-            status: string
-            serverInfo?: {
-              name: string
-              version: string
-              icons?: {
-                src: string
-                mimeType?: string
-                sizes?: string[]
-                theme?: "light" | "dark"
-              }[]
-            }
-            error?: string
-          }) => ({
+          (s): MCPServer => ({
             name: s.name,
             status: (["connected", "failed", "pending", "needs-auth"].includes(s.status)
               ? s.status
@@ -606,6 +690,13 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       yield { type: "message-metadata", messageMetadata: metadata }
       yield { type: "finish-step" }
       yield { type: "finish", messageMetadata: metadata }
+    }
+
+    // An msg.type outside the classified sets means the CLI is newer than
+    // this build's types. Never fatal, never silent.
+    if (!knownMessageTypes.has(msg.type) && !warnedMessageTypes.has(msg.type)) {
+      warnedMessageTypes.add(msg.type)
+      console.warn("[transform] unmapped SDK message type:", msg.type)
     }
   }
 }

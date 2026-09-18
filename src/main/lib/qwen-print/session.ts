@@ -35,7 +35,7 @@
  */
 import { type ChildProcess, spawn } from "node:child_process"
 import { StringDecoder } from "node:string_decoder"
-import { createTransformer } from "../claude/transform"
+import { createTransformer, toClaudeStreamMessage } from "../claude/transform"
 
 export type QwenUsage = {
   inputTokens?: number
@@ -280,7 +280,9 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
         emit({ type: "error", errorText: errorMessage })
         return
       }
-      for (const chunk of transform(parsed)) {
+      const message = toClaudeStreamMessage(parsed)
+      if (!message) return
+      for (const chunk of transform(message)) {
         if (
           chunk.type === "message-metadata" ||
           chunk.type === "finish-step" ||
@@ -324,7 +326,9 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
       }
       return
     }
-    for (const chunk of transform(parsed)) {
+    const message = toClaudeStreamMessage(parsed)
+    if (!message) return
+    for (const chunk of transform(message)) {
       emit(chunk)
     }
   }

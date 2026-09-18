@@ -1,4 +1,17 @@
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
+import type {
+  SDKAuthStatusMessage,
+  SDKCompactBoundaryMessage,
+  SDKFilesPersistedEvent,
+  SDKHookProgressMessage,
+  SDKHookResponseMessage,
+  SDKHookStartedMessage,
+  SDKResultMessage,
+  SDKStatusMessage,
+  SDKTaskNotificationMessage,
+  SDKTaskStartedMessage,
+  SDKToolProgressMessage,
+  SDKToolUseSummaryMessage,
+} from "@anthropic-ai/claude-agent-sdk"
 
 // AI SDK UIMessageChunk format
 export type UIMessageChunk =
@@ -94,12 +107,122 @@ export type MessageMetadata = {
 }
 
 /**
- * The stream messages the translator consumes: the SDK's own discriminated union,
- * widened with the nested-tool marker the CLI attaches to child-agent messages
- * (`parent_tool_use_id`), which the published union does not carry. Typing the
- * translator against this instead of `any` makes a CLI/SDK message-shape change a
- * compile error at the read site rather than a `undefined` in the transcript.
+ * The stream messages and content blocks the translator consumes, declared
+ * locally (roadmap step 09).
+ *
+ * Provenance: the pinned `@anthropic-ai/claude-agent-sdk` 0.2.45 cannot type
+ * this boundary itself. Its `sdk.d.ts` builds `SDKMessage` from 18 members but
+ * never declares `SDKRateLimitEvent`, and the assistant/user/stream-event
+ * payload types import `BetaMessage`, `BetaRawMessageStreamEvent` and
+ * `MessageParam` from `@anthropic-ai/sdk`, which is not in the dependency
+ * tree. Under `skipLibCheck` the top-level union therefore collapses to an
+ * `any`-like type and those payload fields resolve to `any`. The local shapes
+ * below mirror what the CLI actually emits; 13 member types that ARE sound in
+ * the SDK are imported directly, and this file is the one place to revisit on
+ * an SDK pin bump (roadmap step 12 owns that step).
  */
-export type ClaudeStreamMessage = SDKMessage & {
-  readonly parent_tool_use_id?: string | null
+
+/** Anthropic content blocks as the CLI streams or persists them. */
+export type ClaudeTextBlock = { type: "text"; text: string }
+export type ClaudeThinkingBlock = { type: "thinking"; thinking: string; signature?: string }
+export type ClaudeToolUseBlock = { type: "tool_use"; id: string; name: string; input: unknown }
+export type ClaudeToolResultContentBlock = { type: "text"; text: string } | { type: "image" }
+export type ClaudeToolResultBlock = {
+  type: "tool_result"
+  tool_use_id: string
+  content: string | ClaudeToolResultContentBlock[]
+  is_error?: boolean
 }
+export type ClaudeContentBlock = ClaudeTextBlock | ClaudeThinkingBlock | ClaudeToolUseBlock
+export type ClaudeUserContentBlock = ClaudeContentBlock | ClaudeToolResultBlock
+
+/** Usage fields the translator reads for per-turn context metrics. */
+export type ClaudeUsage = {
+  input_tokens?: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+  output_tokens?: number
+}
+
+/**
+ * Raw Anthropic streaming events the translator reads, as forwarded inside
+ * `stream_event` messages. Members the translator never reads (for example
+ * `message_delta`) are deliberately omitted.
+ */
+export type ClaudeStreamApiEvent =
+  | { type: "message_start" }
+  | { type: "content_block_start"; content_block?: ClaudeContentBlock }
+  | {
+      type: "content_block_delta"
+      delta?:
+        | { type: "text_delta"; text: string }
+        | { type: "input_json_delta"; partial_json: string }
+        | { type: "thinking_delta"; thinking: string }
+    }
+  | { type: "content_block_stop" }
+
+export type ClaudeAssistantStreamMessage = {
+  type: "assistant"
+  message: { content: ClaudeContentBlock[]; usage?: ClaudeUsage }
+  parent_tool_use_id?: string | null
+}
+
+export type ClaudeUserStreamMessage = {
+  type: "user"
+  message: { content: string | ClaudeUserContentBlock[] }
+  parent_tool_use_id?: string | null
+  tool_use_result?: unknown
+}
+
+export type ClaudeStreamEventMessage = {
+  type: "stream_event"
+  event?: ClaudeStreamApiEvent
+  parent_tool_use_id?: string | null
+}
+
+/**
+ * The CLI's system/init payload. `SDKSystemMessage` is sound in the SDK, but
+ * its `mcp_servers` entry stops at `{name, status}` while the CLI also sends
+ * `serverInfo` and `error`, and the translator renders both.
+ */
+export type ClaudeSystemInitMessage = {
+  type: "system"
+  subtype: "init"
+  tools: string[]
+  mcp_servers: Array<{
+    name: string
+    status: string
+    serverInfo?: { name: string; version: string; icons?: MCPServerIcon[] }
+    error?: string
+  }>
+  plugins: { name: string; path: string }[]
+  skills: string[]
+  parent_tool_use_id?: string | null
+}
+
+/**
+ * The translator's message union: local shapes where the SDK resolves to
+ * `any`, direct SDK imports where the SDK types are sound. Widened with the
+ * nested-tool marker (`parent_tool_use_id`) on every member, because the
+ * translator reads it before narrowing. Typing the translator against this
+ * makes a CLI/SDK message-shape change a compile error at the read site
+ * rather than an `undefined` in the transcript.
+ */
+export type ClaudeStreamMessage = (
+  | ClaudeAssistantStreamMessage
+  | ClaudeUserStreamMessage
+  | ClaudeStreamEventMessage
+  | ClaudeSystemInitMessage
+  | SDKResultMessage
+  | SDKStatusMessage
+  | SDKCompactBoundaryMessage
+  | SDKHookStartedMessage
+  | SDKHookProgressMessage
+  | SDKHookResponseMessage
+  | SDKToolProgressMessage
+  | SDKAuthStatusMessage
+  | SDKTaskNotificationMessage
+  | SDKTaskStartedMessage
+  | SDKFilesPersistedEvent
+  | SDKToolUseSummaryMessage
+) & { readonly parent_tool_use_id?: string | null }
