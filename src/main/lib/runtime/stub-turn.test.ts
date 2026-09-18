@@ -72,7 +72,7 @@ test("stubbed turn streams text_delta through the translator", async () => {
     let sawDone = false
     const chunks: string[] = []
     for await (const event of stream) {
-      for (const chunk of translator.translate(event)) {
+      for (const chunk of translator.translate(event).chunks) {
         chunks.push((chunk as { type: string }).type)
       }
       const ev = event as { ev: string; text?: string }

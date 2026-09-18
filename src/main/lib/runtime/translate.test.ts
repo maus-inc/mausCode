@@ -4,11 +4,15 @@
  */
 
 import assert from "node:assert/strict"
-import { test } from "node:test"
+import { mock, test } from "node:test"
 import { NATIVE_QUESTION_PREFIX, NativeTranslator } from "./translate.ts"
 
 function events(t: NativeTranslator, evs: Array<Record<string, unknown>>) {
-  return evs.flatMap((ev) => t.translate(ev as never))
+  return evs.flatMap((ev) => t.translate(ev as never).chunks)
+}
+
+function runEvents(t: NativeTranslator, evs: Array<Record<string, unknown>>) {
+  return evs.flatMap((ev) => t.translate(ev as never).runEvents)
 }
 
 test("beginTurn emits start lifecycle", () => {
@@ -125,14 +129,21 @@ test("permission_request synthesizes an approval question", () => {
   )
 })
 
-test("compacted reuses the Compact indicator contract", () => {
+test("compacted reuses the Compact indicator contract and defers the run event", () => {
   const t = new NativeTranslator()
   t.beginTurn()
-  const out = events(t, [{ ev: "compacted", session_id: "s", message: "done" }])
-  assert.equal(out[0].type, "tool-input-start")
-  assert.equal((out[0] as { toolName: string }).toolName, "Compact")
-  assert.ok((out[0] as { toolCallId: string }).toolCallId.startsWith("compact-"))
-  assert.equal(out[1].type, "tool-output-available")
+  const translation = t.translate({
+    ev: "compacted",
+    session_id: "s",
+    message: "done",
+  } as never)
+  assert.equal(translation.chunks[0].type, "tool-input-start")
+  assert.equal((translation.chunks[0] as { toolName: string }).toolName, "Compact")
+  assert.ok((translation.chunks[0] as { toolCallId: string }).toolCallId.startsWith("compact-"))
+  assert.equal(translation.chunks[1].type, "tool-output-available")
+  // The run event comes from the chunk observer so both engines record
+  // compaction through one path (roadmap step 09).
+  assert.deepEqual(translation.runEvents, [])
 })
 
 test("error carries a machine-readable native category", () => {
@@ -142,14 +153,127 @@ test("error carries a machine-readable native category", () => {
   assert.deepEqual(out, [{ type: "error", errorText: "NATIVE_UNKNOWN_SESSION: gone" }])
 })
 
-test("unknown and meta events are ignored, never fatal", () => {
+test("session_status, background_progress and wake_requested become run events", () => {
   const t = new NativeTranslator()
   t.beginTurn()
-  const out = events(t, [
-    { ev: "message_accepted", session_id: "s" },
-    { ev: "session_status", session_id: "s", status: "busy" },
-    { ev: "some_future_kind", session_id: "s" },
-    { ev: "background_progress", session_id: "s", task_id: "t", label: "l", summary: "x" },
+  assert.deepEqual(runEvents(t, [{ ev: "session_status", session_id: "s", status: "busy" }]), [
+    {
+      kind: "session_status",
+      payload: { session_id: "s", status: "busy" },
+    },
   ])
-  assert.deepEqual(out, [])
+  assert.deepEqual(
+    runEvents(t, [
+      {
+        ev: "background_progress",
+        session_id: "s",
+        task_id: "t1",
+        label: "tests",
+        percent: 40,
+        summary: "3/7 green",
+        done: false,
+      },
+    ]),
+    [
+      {
+        kind: "background_progress",
+        payload: {
+          session_id: "s",
+          task_id: "t1",
+          label: "tests",
+          percent: 40,
+          summary: "3/7 green",
+          done: false,
+        },
+      },
+    ],
+  )
+  assert.deepEqual(
+    runEvents(t, [
+      {
+        ev: "wake_requested",
+        session_id: "s",
+        reason: "background_task",
+        notification: "build finished",
+      },
+    ]),
+    [
+      {
+        kind: "wake_requested",
+        payload: { session_id: "s", reason: "background_task", notification: "build finished" },
+      },
+    ],
+  )
+  // None of the three produces chat chunks.
+  assert.deepEqual(
+    events(t, [
+      { ev: "session_status", session_id: "s", status: "idle" },
+      { ev: "background_progress", session_id: "s", task_id: "t", label: "l", summary: "x" },
+      { ev: "wake_requested", session_id: "s", reason: "r", notification: "n" },
+    ]),
+    [],
+  )
+})
+
+test("unknown kinds warn once per kind and stay fatal-free", () => {
+  const t = new NativeTranslator()
+  t.beginTurn()
+  const warning = mock.method(console, "warn", () => {})
+  try {
+    for (const ev of [
+      { ev: "some_future_kind", session_id: "s" },
+      { ev: "some_future_kind", session_id: "s" },
+      { ev: "another_future_kind", session_id: "s" },
+    ]) {
+      const translation = t.translate(ev as never)
+      assert.deepEqual(translation, { chunks: [], runEvents: [] })
+    }
+    assert.deepEqual(
+      warning.mock.calls.map((call) => call.arguments.join(" ")),
+      [
+        "[runtime] unmapped harness event kind: some_future_kind",
+        "[runtime] unmapped harness event kind: another_future_kind",
+      ],
+    )
+  } finally {
+    mock.restoreAll()
+  }
+})
+
+test("internal session, file and transport events stay silent and empty", () => {
+  const t = new NativeTranslator()
+  t.beginTurn()
+  const warning = mock.method(console, "warn", () => {})
+  try {
+    const internalKinds = [
+      "message_accepted",
+      "connection_phase",
+      "session_renamed",
+      "credential_updated",
+      "model_info",
+      "models",
+      "runtime_info",
+      "history",
+      "attached",
+      "session_forked",
+      "sessions",
+      "file_content",
+      "files",
+      "text_matches",
+      "file_status",
+      "side_pane_images",
+      "hello_ok",
+      "ok",
+      "pong",
+    ]
+    for (const ev of internalKinds) {
+      assert.deepEqual(t.translate({ ev, session_id: "s" } as never), {
+        chunks: [],
+        runEvents: [],
+      })
+    }
+    assert.equal(warning.mock.callCount(), 0)
+  } finally {
+    mock.restoreAll()
+  }
 })
