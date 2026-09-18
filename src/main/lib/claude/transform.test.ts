@@ -180,6 +180,37 @@ describe("claude transform", () => {
     expect(warning).toHaveBeenCalledTimes(1)
   })
 
+  it("does not double-emit a nested streamed tool repeated in the assistant message", () => {
+    const transform = createTransformer()
+    const chunks = [
+      {
+        type: "stream_event",
+        parent_tool_use_id: "parent1",
+        event: {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "tool_use", id: "nested1", name: "Bash", input: {} },
+        },
+      },
+      {
+        type: "stream_event",
+        parent_tool_use_id: "parent1",
+        event: { type: "content_block_stop", index: 0 },
+      },
+      {
+        type: "assistant",
+        parent_tool_use_id: "parent1",
+        message: {
+          content: [{ type: "tool_use", id: "nested1", name: "Bash", input: { cmd: "ls" } }],
+        },
+      },
+    ].flatMap((msg) => [...transform(msg as ClaudeStreamMessage)])
+
+    const tools = chunks.filter((chunk) => chunk.type === "tool-input-available")
+    expect(tools).toHaveLength(1)
+    expect((tools[0] as { toolCallId: string }).toolCallId).toBe("parent1:nested1")
+  })
+
   it("warns once for a system subtype outside the classified sets", () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {})
     const mystery = { type: "system", subtype: "something_new" } as never

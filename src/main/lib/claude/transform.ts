@@ -563,12 +563,16 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
     yield* endTextBlock()
     yield* endToolInput()
 
-    // Skip if already emitted via streaming
-    if (emittedToolIds.has(block.id)) return
+    const compositeId = makeCompositeId(block.id, currentParentToolUseId)
+
+    // Skip if already emitted via streaming. Streamed tools are deduped
+    // under their composite id (endToolInput records that one), so both
+    // forms must be checked or a nested tool repeated in the final
+    // assistant message emits twice.
+    if (emittedToolIds.has(block.id) || emittedToolIds.has(compositeId)) return
 
     emittedToolIds.add(block.id)
-
-    const compositeId = makeCompositeId(block.id, currentParentToolUseId)
+    emittedToolIds.add(compositeId)
 
     // Store mapping for tool-result lookup
     toolIdMapping.set(block.id, compositeId)
