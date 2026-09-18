@@ -24,9 +24,9 @@ const ERROR_RE = /^(.+?)\(\d+,\d+\): error (TS\d+):/
 
 function runTsc() {
   try {
-    const output = execFileSync("npx", ["tsc", "--noEmit"], {  // nosonar
+    const output = execFileSync("npx", ["tsc", "--noEmit"], {
       cwd: ROOT,
-      env: { ...process.env, PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin" },
+      env: { ...process.env, PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" },
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     })
