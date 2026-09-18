@@ -1,5 +1,14 @@
+import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk"
 import type {
+  ClaudeAssistantStreamMessage,
+  ClaudeStreamApiEvent,
+  ClaudeStreamEventMessage,
   ClaudeStreamMessage,
+  ClaudeTextBlock,
+  ClaudeThinkingBlock,
+  ClaudeToolResultBlock,
+  ClaudeToolUseBlock,
+  ClaudeUserStreamMessage,
   MCPServer,
   MCPServerStatus,
   MessageMetadata,
@@ -313,6 +322,396 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
     }
   }
 
+  // ===== Per-message-type handlers (roadmap step 09 decomposition) =====
+  // One generator per member of `ClaudeStreamMessage`, all sharing the
+  // closure state above, so the dispatch below stays flat and each handler
+  // owns one message shape.
+
+  function trackAssistantUsage(msg: ClaudeAssistantStreamMessage): void {
+    // Track per-turn usage from main assistant messages only.
+    // Sidechain/subagent assistant messages have parent_tool_use_id set.
+    if (msg.message?.usage && msg.parent_tool_use_id == null) {
+      lastMainAssistantUsage = {
+        input_tokens: msg.message.usage.input_tokens ?? 0,
+        cache_read_input_tokens: msg.message.usage.cache_read_input_tokens ?? 0,
+        cache_creation_input_tokens: msg.message.usage.cache_creation_input_tokens ?? 0,
+        output_tokens: msg.message.usage.output_tokens ?? 0,
+      }
+    }
+  }
+
+  function* handleStreamEvent(msg: ClaudeStreamEventMessage): Generator<UIMessageChunk> {
+    const event = msg.event
+    if (!event) return
+
+    // Reset thinking state on new message start to prevent memory leaks
+    if (event.type === "message_start") {
+      currentThinkingId = null
+      accumulatedThinking = ""
+      inThinkingBlock = false
+    }
+
+    if (event.type === "content_block_start") yield* handleBlockStart(event)
+    if (event.type === "content_block_delta") yield* handleBlockDelta(event)
+    if (event.type === "content_block_stop") yield* handleBlockStop(event)
+  }
+
+  function* handleBlockStart(
+    event: Extract<ClaudeStreamApiEvent, { type: "content_block_start" }>,
+  ): Generator<UIMessageChunk> {
+    // Text block start
+    if (event.content_block?.type === "text") {
+      yield* endTextBlock()
+      yield* endToolInput()
+      textId = genId()
+      yield { type: "text-start", id: textId }
+      textStarted = true
+    }
+
+    // Tool use start (streaming)
+    if (event.content_block?.type === "tool_use") {
+      yield* endTextBlock()
+      yield* endToolInput()
+
+      const originalId = event.content_block.id || genId()
+      currentToolCallId = makeCompositeId(originalId, currentParentToolUseId)
+      currentToolName = event.content_block.name || "unknown"
+      accumulatedToolInput = ""
+
+      // Store mapping for tool-result lookup
+      toolIdMapping.set(originalId, currentToolCallId)
+
+      // Emit tool-input-start for progressive UI
+      yield {
+        type: "tool-input-start",
+        toolCallId: currentToolCallId,
+        toolName: currentToolName ?? "unknown",
+      }
+    }
+
+    // Thinking content block start (Extended Thinking)
+    if (event.content_block?.type === "thinking") {
+      currentThinkingId = `thinking-${Date.now()}`
+      accumulatedThinking = ""
+      inThinkingBlock = true
+      thinkingJsonStarted = false
+      yield {
+        type: "tool-input-start",
+        toolCallId: currentThinkingId,
+        toolName: "Thinking",
+      }
+    }
+  }
+
+  function* handleBlockDelta(
+    event: Extract<ClaudeStreamApiEvent, { type: "content_block_delta" }>,
+  ): Generator<UIMessageChunk> {
+    // Text delta
+    if (event.delta?.type === "text_delta") {
+      if (!textStarted) {
+        yield* endToolInput()
+        textId = genId()
+        yield { type: "text-start", id: textId }
+        textStarted = true
+      }
+      if (textId !== null) {
+        yield { type: "text-delta", id: textId, delta: event.delta.text || "" }
+      }
+    }
+
+    // Tool input delta
+    if (event.delta?.type === "input_json_delta" && currentToolCallId) {
+      const partialJson = event.delta.partial_json || ""
+      accumulatedToolInput += partialJson
+
+      // Emit tool-input-delta for progressive UI
+      yield {
+        type: "tool-input-delta",
+        toolCallId: currentToolCallId,
+        inputTextDelta: partialJson,
+      }
+    }
+
+    // Thinking/reasoning streaming - emit as tool-like chunks for UI
+    if (event.delta?.type === "thinking_delta" && currentThinkingId && inThinkingBlock) {
+      const thinkingText = String(event.delta.thinking || "")
+      accumulatedThinking += thinkingText
+
+      // Emit as JSON fragment so AI SDK's parsePartialJson can parse it incrementally.
+      // AI SDK accumulates all deltas and runs fixJson() to repair incomplete JSON,
+      // so we start with '{"text":"' and send JSON-escaped text chunks.
+      const escaped = JSON.stringify(thinkingText).slice(1, -1)
+      const prefix = !thinkingJsonStarted ? '{"text":"' : ""
+      thinkingJsonStarted = true
+
+      yield {
+        type: "tool-input-delta",
+        toolCallId: currentThinkingId,
+        inputTextDelta: prefix + escaped,
+      }
+    }
+  }
+
+  function* handleBlockStop(
+    _event: Extract<ClaudeStreamApiEvent, { type: "content_block_stop" }>,
+  ): Generator<UIMessageChunk> {
+    if (textStarted) {
+      yield* endTextBlock()
+    }
+    if (currentToolCallId) {
+      yield* endToolInput()
+    }
+
+    // Thinking complete (content_block_stop while in thinking block)
+    if (inThinkingBlock && currentThinkingId) {
+      yield {
+        type: "tool-input-available",
+        toolCallId: currentThinkingId,
+        toolName: "Thinking",
+        input: { text: accumulatedThinking },
+      }
+      yield {
+        type: "tool-output-available",
+        toolCallId: currentThinkingId,
+        output: { completed: true },
+      }
+      // Track as emitted to skip duplicate from assistant message
+      emittedToolIds.add(currentThinkingId)
+      emittedToolIds.add("thinking-streamed")
+      currentThinkingId = null
+      accumulatedThinking = ""
+      inThinkingBlock = false
+    }
+  }
+
+  function* emitAssistantThinking(block: ClaudeThinkingBlock): Generator<UIMessageChunk> {
+    // Check if we already streamed OR are currently streaming this thinking block.
+    // The assistant message can arrive BEFORE content_block_stop, so we also
+    // check inThinkingBlock.
+    if (emittedToolIds.has("thinking-streamed") || inThinkingBlock) return
+
+    const thinkingId = genId()
+    yield {
+      type: "tool-input-available",
+      toolCallId: thinkingId,
+      toolName: "Thinking",
+      input: { text: block.thinking },
+    }
+    // Immediately mark as complete
+    yield {
+      type: "tool-output-available",
+      toolCallId: thinkingId,
+      output: { completed: true },
+    }
+  }
+
+  function* emitAssistantText(block: ClaudeTextBlock): Generator<UIMessageChunk> {
+    yield* endToolInput()
+
+    // Only emit text if we're NOT already streaming (textStarted = false)
+    // When includePartialMessages is true, text comes via stream_event
+    if (!textStarted) {
+      textId = genId()
+      yield { type: "text-start", id: textId }
+      yield { type: "text-delta", id: textId, delta: block.text }
+      yield { type: "text-end", id: textId }
+      lastTextId = textId
+      textId = null
+    }
+  }
+
+  function* emitAssistantToolUse(block: ClaudeToolUseBlock): Generator<UIMessageChunk> {
+    yield* endTextBlock()
+    yield* endToolInput()
+
+    // Skip if already emitted via streaming
+    if (emittedToolIds.has(block.id)) return
+
+    emittedToolIds.add(block.id)
+
+    const compositeId = makeCompositeId(block.id, currentParentToolUseId)
+
+    // Store mapping for tool-result lookup
+    toolIdMapping.set(block.id, compositeId)
+
+    // providerMetadata carries renderer timing (startedAt) outside the base chunk shape.
+    yield {
+      type: "tool-input-available",
+      toolCallId: compositeId,
+      toolName: block.name,
+      input: block.input,
+      ...{ providerMetadata: { custom: { startedAt: Date.now() } } },
+    }
+  }
+
+  function* handleAssistantMessage(msg: ClaudeAssistantStreamMessage): Generator<UIMessageChunk> {
+    // ===== ASSISTANT MESSAGE (complete, often with tool_use) =====
+    // When streaming is enabled, text arrives via stream_event, not here
+    const content = msg.message?.content
+    if (!content) return
+    for (const block of content) {
+      // Handle thinking blocks from Extended Thinking
+      // Skip if already emitted via streaming (thinking_delta)
+      if (block.type === "thinking") {
+        yield* emitAssistantThinking(block)
+      }
+
+      if (block.type === "text") {
+        yield* emitAssistantText(block)
+      }
+
+      if (block.type === "tool_use") {
+        yield* emitAssistantToolUse(block)
+      }
+    }
+  }
+
+  function resolveToolResultOutput(
+    block: ClaudeToolResultBlock,
+    msg: ClaudeUserStreamMessage,
+  ): unknown {
+    let output: unknown = msg.tool_use_result
+    if (!output && typeof block.content === "string") {
+      try {
+        // Some tool results may have JSON embedded in the string
+        const parsed = JSON.parse(block.content)
+        if (parsed && typeof parsed === "object") {
+          output = parsed
+        }
+      } catch {
+        // Not JSON, use raw content
+      }
+    }
+    return output || block.content
+  }
+
+  function* handleUserMessage(msg: ClaudeUserStreamMessage): Generator<UIMessageChunk> {
+    // ===== USER MESSAGE (tool results) =====
+    const content = msg.message?.content
+    if (!Array.isArray(content)) return
+    for (const block of content) {
+      if (block.type === "tool_result") {
+        // Lookup composite ID from mapping, fallback to original
+        const compositeId = toolIdMapping.get(block.tool_use_id) || block.tool_use_id
+
+        if (block.is_error) {
+          yield {
+            type: "tool-output-error",
+            toolCallId: compositeId,
+            errorText: String(block.content),
+          }
+        } else {
+          yield {
+            type: "tool-output-available",
+            toolCallId: compositeId,
+            output: resolveToolResultOutput(block, msg),
+          }
+        }
+      }
+    }
+  }
+
+  function* handleSystemMessage(
+    msg: Extract<ClaudeStreamMessage, { type: "system" }>,
+  ): Generator<UIMessageChunk> {
+    // ===== SYSTEM STATUS (compacting, etc.) =====
+    // Session init - extract MCP servers, plugins, tools
+    if (msg.subtype === "init") {
+      // Map MCP servers with validated status type and additional info
+      const mcpServers: MCPServer[] = (msg.mcp_servers || []).map(
+        (s): MCPServer => ({
+          name: s.name,
+          status: (["connected", "failed", "pending", "needs-auth"].includes(s.status)
+            ? s.status
+            : "pending") as MCPServerStatus,
+          ...(s.serverInfo && { serverInfo: s.serverInfo }),
+          ...(s.error && { error: s.error }),
+        }),
+      )
+      yield {
+        type: "session-init",
+        tools: msg.tools || [],
+        mcpServers,
+        plugins: msg.plugins || [],
+        skills: msg.skills || [],
+      }
+    }
+
+    // Compacting status - expose as a tool so it becomes a UI message part
+    if (msg.subtype === "status" && msg.status === "compacting") {
+      // Create unique ID and save for matching with boundary event
+      lastCompactId = `compact-${Date.now()}-${compactCounter++}`
+      yield {
+        type: "tool-input-available",
+        toolCallId: lastCompactId,
+        toolName: "Compact",
+        input: { status: "compacting" },
+      }
+    }
+
+    // Compact boundary - mark the compacting tool as complete
+    if (msg.subtype === "compact_boundary") {
+      let compactId = lastCompactId
+      // If we didn't receive a compacting status, create a tool invocation now
+      if (!compactId) {
+        compactId = `compact-${Date.now()}-${compactCounter++}`
+        yield {
+          type: "tool-input-available",
+          toolCallId: compactId,
+          toolName: "Compact",
+          input: { status: "compacting" },
+        }
+      }
+      yield {
+        type: "tool-output-available",
+        toolCallId: compactId,
+        output: { status: "compacted" },
+      }
+      lastCompactId = null // Clear for next compacting cycle
+    }
+  }
+
+  function* handleResultMessage(msg: SDKResultMessage): Generator<UIMessageChunk> {
+    // ===== RESULT (final) =====
+    currentParentToolUseId = null
+    yield* endTextBlock()
+    yield* endToolInput()
+
+    const resultOutputTokens = msg.usage?.output_tokens
+    const fallbackUsage = {
+      input_tokens: msg.usage?.input_tokens ?? 0,
+      cache_read_input_tokens: msg.usage?.cache_read_input_tokens ?? 0,
+      cache_creation_input_tokens: msg.usage?.cache_creation_input_tokens ?? 0,
+      output_tokens: resultOutputTokens ?? 0,
+    }
+
+    // Prefer the last main assistant usage snapshot for context metrics.
+    // Fallback to result usage when assistant usage is unavailable.
+    const usage = lastMainAssistantUsage ?? fallbackUsage
+
+    const resolvedInputTokens = usage.input_tokens
+    const resolvedOutputTokens = resultOutputTokens ?? usage.output_tokens
+    const metadata: MessageMetadata = {
+      sessionId: msg.session_id,
+      inputTokens: resolvedInputTokens,
+      cacheReadInputTokens: usage.cache_read_input_tokens,
+      cacheCreationInputTokens: usage.cache_creation_input_tokens,
+      outputTokens: resolvedOutputTokens,
+      totalTokens:
+        resolvedInputTokens != null && resolvedOutputTokens != null
+          ? resolvedInputTokens + resolvedOutputTokens
+          : undefined,
+      totalCostUsd: msg.total_cost_usd,
+      durationMs: startTime ? Date.now() - startTime : undefined,
+      resultSubtype: msg.subtype || "success",
+      // Include finalTextId for collapsing tools when there's a final response
+      finalTextId: lastTextId || undefined,
+    }
+    yield { type: "message-metadata", messageMetadata: metadata }
+    yield { type: "finish-step" }
+    yield { type: "finish", messageMetadata: metadata }
+  }
+
   return function* transform(msg: ClaudeStreamMessage): Generator<UIMessageChunk> {
     // Track parent_tool_use_id for nested tools
     // Only update when explicitly present (don't reset on messages without it)
@@ -328,368 +727,25 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       yield { type: "start-step" }
     }
 
-    // Reset thinking state on new message start to prevent memory leaks
-    if (msg.type === "stream_event" && msg.event?.type === "message_start") {
-      currentThinkingId = null
-      accumulatedThinking = ""
-      inThinkingBlock = false
-    }
-
-    // ===== STREAMING EVENTS (token-by-token) =====
-    if (msg.type === "stream_event") {
-      const event = msg.event
-      if (!event) return
-
-      // Text block start
-      if (event.type === "content_block_start" && event.content_block?.type === "text") {
-        yield* endTextBlock()
-        yield* endToolInput()
-        textId = genId()
-        yield { type: "text-start", id: textId }
-        textStarted = true
-      }
-
-      // Text delta
-      if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-        if (!textStarted) {
-          yield* endToolInput()
-          textId = genId()
-          yield { type: "text-start", id: textId }
-          textStarted = true
-        }
-        if (textId !== null) {
-          yield { type: "text-delta", id: textId, delta: event.delta.text || "" }
-        }
-      }
-
-      // Content block stop
-      if (event.type === "content_block_stop") {
-        if (textStarted) {
-          yield* endTextBlock()
-        }
-        if (currentToolCallId) {
-          yield* endToolInput()
-        }
-      }
-
-      // Tool use start (streaming)
-      if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
-        yield* endTextBlock()
-        yield* endToolInput()
-
-        const originalId = event.content_block.id || genId()
-        currentToolCallId = makeCompositeId(originalId, currentParentToolUseId)
-        currentToolName = event.content_block.name || "unknown"
-        accumulatedToolInput = ""
-
-        // Store mapping for tool-result lookup
-        toolIdMapping.set(originalId, currentToolCallId)
-
-        // Emit tool-input-start for progressive UI
-        yield {
-          type: "tool-input-start",
-          toolCallId: currentToolCallId,
-          toolName: currentToolName ?? "unknown",
-        }
-      }
-
-      // Tool input delta
-      if (
-        event.type === "content_block_delta" &&
-        event.delta?.type === "input_json_delta" &&
-        currentToolCallId
-      ) {
-        const partialJson = event.delta.partial_json || ""
-        accumulatedToolInput += partialJson
-
-        // Emit tool-input-delta for progressive UI
-        yield {
-          type: "tool-input-delta",
-          toolCallId: currentToolCallId,
-          inputTextDelta: partialJson,
-        }
-      }
-
-      // Thinking content block start (Extended Thinking)
-      if (event.type === "content_block_start" && event.content_block?.type === "thinking") {
-        currentThinkingId = `thinking-${Date.now()}`
-        accumulatedThinking = ""
-        inThinkingBlock = true
-        thinkingJsonStarted = false
-        yield {
-          type: "tool-input-start",
-          toolCallId: currentThinkingId,
-          toolName: "Thinking",
-        }
-      }
-
-      // Thinking/reasoning streaming - emit as tool-like chunks for UI
-      if (
-        event.type === "content_block_delta" &&
-        event.delta?.type === "thinking_delta" &&
-        currentThinkingId &&
-        inThinkingBlock
-      ) {
-        const thinkingText = String(event.delta.thinking || "")
-        accumulatedThinking += thinkingText
-
-        // Emit as JSON fragment so AI SDK's parsePartialJson can parse it incrementally.
-        // AI SDK accumulates all deltas and runs fixJson() to repair incomplete JSON,
-        // so we start with '{"text":"' and send JSON-escaped text chunks.
-        const escaped = JSON.stringify(thinkingText).slice(1, -1)
-        const prefix = !thinkingJsonStarted ? '{"text":"' : ""
-        thinkingJsonStarted = true
-
-        yield {
-          type: "tool-input-delta",
-          toolCallId: currentThinkingId,
-          inputTextDelta: prefix + escaped,
-        }
-      }
-
-      // Thinking complete (content_block_stop while in thinking block)
-      if (event.type === "content_block_stop" && inThinkingBlock && currentThinkingId) {
-        yield {
-          type: "tool-input-available",
-          toolCallId: currentThinkingId,
-          toolName: "Thinking",
-          input: { text: accumulatedThinking },
-        }
-        yield {
-          type: "tool-output-available",
-          toolCallId: currentThinkingId,
-          output: { completed: true },
-        }
-        // Track as emitted to skip duplicate from assistant message
-        emittedToolIds.add(currentThinkingId)
-        emittedToolIds.add("thinking-streamed")
-        currentThinkingId = null
-        accumulatedThinking = ""
-        inThinkingBlock = false
-      }
-    }
-
-    // Track per-turn usage from main assistant messages only.
-    // Sidechain/subagent assistant messages have parent_tool_use_id set.
-    if (msg.type === "assistant" && msg.message?.usage && msg.parent_tool_use_id == null) {
-      lastMainAssistantUsage = {
-        input_tokens: msg.message.usage.input_tokens ?? 0,
-        cache_read_input_tokens: msg.message.usage.cache_read_input_tokens ?? 0,
-        cache_creation_input_tokens: msg.message.usage.cache_creation_input_tokens ?? 0,
-        output_tokens: msg.message.usage.output_tokens ?? 0,
-      }
-    }
-
-    // ===== ASSISTANT MESSAGE (complete, often with tool_use) =====
-    // When streaming is enabled, text arrives via stream_event, not here
-    if (msg.type === "assistant" && msg.message?.content) {
-      for (const block of msg.message.content) {
-        // Handle thinking blocks from Extended Thinking
-        // Skip if already emitted via streaming (thinking_delta)
-        if (block.type === "thinking" && block.thinking) {
-          // Check if we already streamed OR are currently streaming this thinking block
-          // The assistant message can arrive BEFORE content_block_stop, so we also check inThinkingBlock
-          const wasStreamed = emittedToolIds.has("thinking-streamed")
-          const isCurrentlyStreaming = inThinkingBlock
-
-          if (wasStreamed || isCurrentlyStreaming) {
-            continue
-          }
-
-          const thinkingId = genId()
-          yield {
-            type: "tool-input-available",
-            toolCallId: thinkingId,
-            toolName: "Thinking",
-            input: { text: block.thinking },
-          }
-          // Immediately mark as complete
-          yield {
-            type: "tool-output-available",
-            toolCallId: thinkingId,
-            output: { completed: true },
-          }
-        }
-
-        if (block.type === "text") {
-          yield* endToolInput()
-
-          // Only emit text if we're NOT already streaming (textStarted = false)
-          // When includePartialMessages is true, text comes via stream_event
-          if (!textStarted) {
-            textId = genId()
-            yield { type: "text-start", id: textId }
-            yield { type: "text-delta", id: textId, delta: block.text }
-            yield { type: "text-end", id: textId }
-            lastTextId = textId
-            textId = null
-          }
-        }
-
-        if (block.type === "tool_use") {
-          yield* endTextBlock()
-          yield* endToolInput()
-
-          // Skip if already emitted via streaming
-          if (emittedToolIds.has(block.id)) {
-            continue
-          }
-
-          emittedToolIds.add(block.id)
-
-          const compositeId = makeCompositeId(block.id, currentParentToolUseId)
-
-          // Store mapping for tool-result lookup
-          toolIdMapping.set(block.id, compositeId)
-
-          // providerMetadata carries renderer timing (startedAt) outside the base chunk shape.
-          yield {
-            type: "tool-input-available",
-            toolCallId: compositeId,
-            toolName: block.name,
-            input: block.input,
-            ...{ providerMetadata: { custom: { startedAt: Date.now() } } },
-          }
-        }
-      }
-    }
-
-    // ===== USER MESSAGE (tool results) =====
-    if (msg.type === "user" && msg.message?.content && Array.isArray(msg.message.content)) {
-      for (const block of msg.message.content) {
-        if (block.type === "tool_result") {
-          // Lookup composite ID from mapping, fallback to original
-          const compositeId = toolIdMapping.get(block.tool_use_id) || block.tool_use_id
-
-          if (block.is_error) {
-            yield {
-              type: "tool-output-error",
-              toolCallId: compositeId,
-              errorText: String(block.content),
-            }
-          } else {
-            // Try to parse structured data from block.content if it's JSON
-            let output = msg.tool_use_result
-            if (!output && typeof block.content === "string") {
-              try {
-                // Some tool results may have JSON embedded in the string
-                const parsed = JSON.parse(block.content)
-                if (parsed && typeof parsed === "object") {
-                  output = parsed
-                }
-              } catch {
-                // Not JSON, use raw content
-              }
-            }
-            output = output || block.content
-
-            yield {
-              type: "tool-output-available",
-              toolCallId: compositeId,
-              output,
-            }
-          }
-        }
-      }
-    }
-
-    // ===== SYSTEM STATUS (compacting, etc.) =====
-    if (msg.type === "system") {
-      // Session init - extract MCP servers, plugins, tools
-      if (msg.subtype === "init") {
-        // Map MCP servers with validated status type and additional info
-        const mcpServers: MCPServer[] = (msg.mcp_servers || []).map(
-          (s): MCPServer => ({
-            name: s.name,
-            status: (["connected", "failed", "pending", "needs-auth"].includes(s.status)
-              ? s.status
-              : "pending") as MCPServerStatus,
-            ...(s.serverInfo && { serverInfo: s.serverInfo }),
-            ...(s.error && { error: s.error }),
-          }),
-        )
-        yield {
-          type: "session-init",
-          tools: msg.tools || [],
-          mcpServers,
-          plugins: msg.plugins || [],
-          skills: msg.skills || [],
-        }
-      }
-
-      // Compacting status - expose as a tool so it becomes a UI message part
-      if (msg.subtype === "status" && msg.status === "compacting") {
-        // Create unique ID and save for matching with boundary event
-        lastCompactId = `compact-${Date.now()}-${compactCounter++}`
-        yield {
-          type: "tool-input-available",
-          toolCallId: lastCompactId,
-          toolName: "Compact",
-          input: { status: "compacting" },
-        }
-      }
-
-      // Compact boundary - mark the compacting tool as complete
-      if (msg.subtype === "compact_boundary") {
-        let compactId = lastCompactId
-        // If we didn't receive a compacting status, create a tool invocation now
-        if (!compactId) {
-          compactId = `compact-${Date.now()}-${compactCounter++}`
-          yield {
-            type: "tool-input-available",
-            toolCallId: compactId,
-            toolName: "Compact",
-            input: { status: "compacting" },
-          }
-        }
-        yield {
-          type: "tool-output-available",
-          toolCallId: compactId,
-          output: { status: "compacted" },
-        }
-        lastCompactId = null // Clear for next compacting cycle
-      }
-    }
-
-    // ===== RESULT (final) =====
-    if (msg.type === "result") {
-      currentParentToolUseId = null
-      yield* endTextBlock()
-      yield* endToolInput()
-
-      const resultOutputTokens = msg.usage?.output_tokens
-      const fallbackUsage = {
-        input_tokens: msg.usage?.input_tokens ?? 0,
-        cache_read_input_tokens: msg.usage?.cache_read_input_tokens ?? 0,
-        cache_creation_input_tokens: msg.usage?.cache_creation_input_tokens ?? 0,
-        output_tokens: resultOutputTokens ?? 0,
-      }
-
-      // Prefer the last main assistant usage snapshot for context metrics.
-      // Fallback to result usage when assistant usage is unavailable.
-      const usage = lastMainAssistantUsage ?? fallbackUsage
-
-      const resolvedInputTokens = usage.input_tokens
-      const resolvedOutputTokens = resultOutputTokens ?? usage.output_tokens
-      const metadata: MessageMetadata = {
-        sessionId: msg.session_id,
-        inputTokens: resolvedInputTokens,
-        cacheReadInputTokens: usage.cache_read_input_tokens,
-        cacheCreationInputTokens: usage.cache_creation_input_tokens,
-        outputTokens: resolvedOutputTokens,
-        totalTokens:
-          resolvedInputTokens != null && resolvedOutputTokens != null
-            ? resolvedInputTokens + resolvedOutputTokens
-            : undefined,
-        totalCostUsd: msg.total_cost_usd,
-        durationMs: startTime ? Date.now() - startTime : undefined,
-        resultSubtype: msg.subtype || "success",
-        // Include finalTextId for collapsing tools when there's a final response
-        finalTextId: lastTextId || undefined,
-      }
-      yield { type: "message-metadata", messageMetadata: metadata }
-      yield { type: "finish-step" }
-      yield { type: "finish", messageMetadata: metadata }
+    switch (msg.type) {
+      case "stream_event":
+        yield* handleStreamEvent(msg)
+        break
+      case "assistant":
+        trackAssistantUsage(msg)
+        yield* handleAssistantMessage(msg)
+        break
+      case "user":
+        yield* handleUserMessage(msg)
+        break
+      case "system":
+        yield* handleSystemMessage(msg)
+        break
+      case "result":
+        yield* handleResultMessage(msg)
+        break
+      default:
+        break
     }
 
     // An msg.type outside the classified sets means the CLI is newer than

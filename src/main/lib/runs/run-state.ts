@@ -81,6 +81,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
+/** A completed Compact round-trip's payload: string output wraps as `message`. */
+function compactedPayload(output: unknown): Record<string, unknown> {
+  if (typeof output === "string") return { message: output }
+  if (isRecord(output)) return output
+  return {}
+}
+
 function capHarnessPayload(payload: Record<string, unknown>): Record<string, unknown> {
   const capped: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(payload)) {
@@ -322,13 +329,7 @@ export function createRunStore(db: RunStoreDb): RunStore {
           // the marker without recording a `compacted` fact that did not
           // happen.
           if (chunk.type === "tool-output-available") {
-            const payload =
-              typeof chunk.output === "string"
-                ? { message: chunk.output }
-                : isRecord(chunk.output)
-                  ? chunk.output
-                  : {}
-            handle.noteHarnessEvent("compacted", payload)
+            handle.noteHarnessEvent("compacted", compactedPayload(chunk.output))
           }
         }
         switch (chunk.type) {

@@ -368,7 +368,7 @@ describe("run store", () => {
       const event = stored?.events.find((e) => e.kind === "background_progress")
       const payload = JSON.parse(event?.payload ?? "{}") as { summary: string }
       // Repo cap convention: slice to the cap, then one ellipsis character.
-      expect(payload.summary.length).toBe(RUN_EVENT_TEXT_CAP + 1)
+      expect(payload.summary).toHaveLength(RUN_EVENT_TEXT_CAP + 1)
       expect(payload.summary.endsWith("…")).toBe(true)
     })
 
