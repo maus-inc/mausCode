@@ -80,6 +80,18 @@ export const queuePayloadSchema = z
         path: [],
       })
     }
+
+    const totalBase64 =
+      (payload.images?.reduce((sum, img) => sum + (img.base64Data?.length ?? 0), 0) ?? 0) +
+      (payload.files?.reduce((sum, file) => sum + (file.url?.length ?? 0), 0) ?? 0)
+
+    if (totalBase64 > QUEUE_ITEM_BASE64_CAP) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Queue item exceeds total base64 cap of ${QUEUE_ITEM_BASE64_CAP} bytes (${totalBase64})`,
+        path: [],
+      })
+    }
   })
 
 export type QueuePayload = z.infer<typeof queuePayloadSchema>
