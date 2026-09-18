@@ -180,6 +180,68 @@ describe("claude transform", () => {
     expect(warning).toHaveBeenCalledTimes(1)
   })
 
+  it("resets a stale parent id when later messages omit parent_tool_use_id", () => {
+    const transform = createTransformer()
+    const chunks = [
+      {
+        type: "stream_event",
+        parent_tool_use_id: "parent1",
+        event: {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "tool_use", id: "nested1", name: "Bash", input: {} },
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_use", id: "top1", name: "Read", input: { path: "a.ts" } }],
+        },
+      },
+    ].flatMap((msg) => [...transform(msg as ClaudeStreamMessage)])
+
+    const tools = chunks.filter((chunk) => chunk.type === "tool-input-available")
+    expect((tools[0] as { toolCallId: string }).toolCallId).toBe("parent1:nested1")
+    expect((tools[1] as { toolCallId: string }).toolCallId).toBe("top1")
+  })
+
+  it("preserves falsy tool_use_result values instead of substituting block content", () => {
+    const transform = createTransformer()
+    const chunks = [
+      ...transform({
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_use", id: "tu_9", name: "Check", input: {} }],
+        },
+      }),
+      ...transform({
+        type: "user",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "tu_9", content: "false" }],
+        },
+        tool_use_result: false,
+      }),
+    ]
+    const output = chunks.find((chunk) => chunk.type === "tool-output-available") as {
+      output: unknown
+    }
+    expect(output.output).toBe(false)
+
+    const zeroChunks = [
+      ...transform({
+        type: "user",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "tu_10", content: "0" }],
+        },
+        tool_use_result: 0,
+      }),
+    ]
+    const zeroOutput = zeroChunks.find((chunk) => chunk.type === "tool-output-available") as {
+      output: unknown
+    }
+    expect(zeroOutput.output).toBe(0)
+  })
+
   it("does not double-emit a nested streamed tool repeated in the assistant message", () => {
     const transform = createTransformer()
     const chunks = [

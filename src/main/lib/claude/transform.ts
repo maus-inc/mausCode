@@ -125,19 +125,21 @@ function resolveToolResultOutput(
   block: ClaudeToolResultBlock,
   msg: ClaudeUserStreamMessage,
 ): unknown {
-  let output: unknown = msg.tool_use_result
-  if (!output && typeof block.content === "string") {
+  // An explicitly present tool_use_result wins even when falsy (false, 0, "");
+  // only null/undefined fall through to the block content.
+  if (msg.tool_use_result != null) return msg.tool_use_result
+  if (typeof block.content === "string") {
     try {
       // Some tool results may have JSON embedded in the string
       const parsed = JSON.parse(block.content)
       if (parsed && typeof parsed === "object") {
-        output = parsed
+        return parsed
       }
     } catch {
       // Not JSON, use raw content
     }
   }
-  return output || block.content
+  return block.content
 }
 
 /**
@@ -737,11 +739,11 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
   }
 
   return function* transform(msg: ClaudeStreamMessage): Generator<UIMessageChunk> {
-    // Track parent_tool_use_id for nested tools
-    // Only update when explicitly present (don't reset on messages without it)
-    if (msg.parent_tool_use_id !== undefined) {
-      currentParentToolUseId = msg.parent_tool_use_id
-    }
+    // Track parent_tool_use_id for nested tools. Every envelope member of the
+    // Claude dialect carries the field (null at top level), so an omitted
+    // value resets to top-level rather than retaining a stale parent;
+    // producers that always send it are unaffected.
+    currentParentToolUseId = msg.parent_tool_use_id ?? null
 
     // Emit start once
     if (!started) {
