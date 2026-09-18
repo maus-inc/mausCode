@@ -372,6 +372,27 @@ describe("run store", () => {
       expect(payload.summary.endsWith("…")).toBe(true)
     })
 
+    it("caps strings nested inside payload objects and arrays", () => {
+      const handle = store.startRun({ subChatId, engine: "native" })
+      const long = "y".repeat(RUN_EVENT_TEXT_CAP + 10)
+
+      handle.noteHarnessEvent("background_progress", {
+        session_id: "s",
+        task_id: "t1",
+        label: "tests",
+        summary: "ok",
+        detail: { note: long, tags: [long, "short"] },
+      })
+
+      const event = store.getRun(handle.runId)?.events.find((e) => e.kind === "background_progress")
+      const payload = JSON.parse(event?.payload ?? "{}") as {
+        detail: { note: string; tags: string[] }
+      }
+      expect(payload.detail.note).toHaveLength(RUN_EVENT_TEXT_CAP + 1)
+      expect(payload.detail.tags[0]).toHaveLength(RUN_EVENT_TEXT_CAP + 1)
+      expect(payload.detail.tags[1]).toBe("short")
+    })
+
     it("ignores harness events on a settled run", () => {
       const handle = store.startRun({ subChatId, engine: "native" })
       handle.settle()

@@ -97,7 +97,7 @@ Detail lives in `research/` and `plans/`; this file states what is true.
 
 - `RuntimeProvider.launch/status/stop` → `RuntimeHandle { request, events }`.
 - `ApiEvent→{chunks, runEvents}` translation (`main/lib/runtime/translate.ts`,
-  roadmap step 09). 19 harness events stay chunk-internal; `compacted`,
+  roadmap step 09). 20 harness events stay chunk-internal; `compacted`,
   `session_status`, `background_progress` and `wake_requested` also produce
   run events via `RunHandle.noteHarnessEvent`; unknown kinds warn once per
   kind. The mapping table is `.dump/app/research/2026-09-13-event-mapping.md`.
@@ -172,7 +172,7 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   per-feature verdicts recorded in `decisions/2026-09-12-jules-feature-triage.md`. **No code, no OpenSpec
   change, and no task in an existing scaffold has been changed by it.** Two facts it relies on are worth
   carrying here: `src/shared/contracts/` (24,860 lines of ported T3 schemas + 23 test files) has **zero
-  importers** outside its own directory, and `main/lib/runtime/translate.ts` keeps 19 harness events
+  importers** outside its own directory, and `main/lib/runtime/translate.ts` keeps 20 harness events
   chunk-internal and records `session_status`, `background_progress`,
   `wake_requested` and `compacted` as run events (step 09, shipped
   2026-09-18; table in `.dump/app/research/2026-09-13-event-mapping.md`). The vendored PR/CI vocabulary in

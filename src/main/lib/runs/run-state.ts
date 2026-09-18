@@ -88,12 +88,17 @@ function compactedPayload(output: unknown): Record<string, unknown> {
   return {}
 }
 
-function capHarnessPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  const capped: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(payload)) {
-    capped[key] = typeof value === "string" ? capText(value, RUN_EVENT_TEXT_CAP) : value
+function capHarnessValue(value: unknown): unknown {
+  if (typeof value === "string") return capText(value, RUN_EVENT_TEXT_CAP)
+  if (Array.isArray(value)) return value.map(capHarnessValue)
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, capHarnessValue(v)]))
   }
-  return capped
+  return value
+}
+
+function capHarnessPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(payload).map(([k, v]) => [k, capHarnessValue(v)]))
 }
 
 interface Listener {

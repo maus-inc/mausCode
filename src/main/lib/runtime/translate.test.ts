@@ -231,10 +231,25 @@ test("unknown kinds warn once per kind and stay fatal-free", () => {
     assert.deepEqual(
       warning.mock.calls.map((call) => call.arguments.join(" ")),
       [
-        "[runtime] unmapped harness event kind: some_future_kind",
-        "[runtime] unmapped harness event kind: another_future_kind",
+        '[runtime] unmapped harness event kind: "some_future_kind"',
+        '[runtime] unmapped harness event kind: "another_future_kind"',
       ],
     )
+  } finally {
+    mock.restoreAll()
+  }
+})
+
+test("unmapped-kind memory is bounded at MAX_UNMAPPED_KINDS", () => {
+  const t = new NativeTranslator()
+  t.beginTurn()
+  const warning = mock.method(console, "warn", () => {})
+  try {
+    for (let i = 0; i < 60; i += 1) {
+      const translation = t.translate({ ev: `future_kind_${i}`, session_id: "s" } as never)
+      assert.deepEqual(translation, { chunks: [], runEvents: [] })
+    }
+    assert.equal(warning.mock.callCount(), 50)
   } finally {
     mock.restoreAll()
   }

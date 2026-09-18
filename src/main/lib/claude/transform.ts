@@ -86,6 +86,19 @@ const knownMessageTypes: ReadonlySet<string> = new Set([
   ...INTERNAL_STREAM_MESSAGE_TYPES,
 ])
 
+const knownSystemSubtypes: ReadonlySet<string> = new Set([
+  ...HANDLED_SYSTEM_SUBTYPES,
+  ...INTERNAL_SYSTEM_SUBTYPES,
+])
+
+function warnOnce(warned: Set<string>, key: string, label: string): void {
+  if (warned.has(key)) return
+  warned.add(key)
+  // JSON-encoding bounds and escapes a provider-controlled string so a
+  // hostile line cannot forge or pad log output.
+  console.warn(`[transform] unmapped ${label}: ${JSON.stringify(key).slice(0, 80)}`)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -755,11 +768,14 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
         break
     }
 
-    // An msg.type outside the classified sets means the CLI is newer than
-    // this build's types. Never fatal, never silent.
-    if (!knownMessageTypes.has(msg.type) && !warnedMessageTypes.has(msg.type)) {
-      warnedMessageTypes.add(msg.type)
-      console.warn("[transform] unmapped SDK message type:", msg.type)
+    // A type or subtype outside the classified sets means the CLI is newer
+    // than this build's types. Never fatal, never silent; the composite key
+    // keeps each system subtype's warning to once.
+    if (!knownMessageTypes.has(msg.type)) {
+      warnOnce(warnedMessageTypes, msg.type, "SDK message type")
+    }
+    if (msg.type === "system" && !knownSystemSubtypes.has(msg.subtype)) {
+      warnOnce(warnedMessageTypes, `system:${msg.subtype}`, "SDK system subtype")
     }
   }
 }

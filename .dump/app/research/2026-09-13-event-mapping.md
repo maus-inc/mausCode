@@ -31,6 +31,7 @@ every string payload field and emits to run-feed listeners.
 | event | reason it stays internal |
 | --- | --- |
 | `message_accepted` | transport ack for `send_message`; the turn lifecycle already has `started`/`settled` run events |
+| `reasoning_done` | no reasoning-end chunk kind exists in the closed dialect, so the reasoning block ends with the turn; emitting nothing is the base behaviour and unchanged |
 | `connection_phase` | daemon attach lifecycle; surfaced through the manager's connection state, not the turn stream |
 | `session_renamed` | title changes flow through the sessions snapshot path |
 | `credential_updated` | credential state is owned by the credential store and settings UI, not the run record |
@@ -40,11 +41,13 @@ every string payload field and emits to run-feed listeners.
 | `side_pane_images` | renderer image pane data, out of run-record scope |
 | `hello_ok` / `ok` / `pong` | transport-level acks |
 
-Count: 19 internal, 4 on run events, 12 on chat chunks (`text_delta`,
-`reasoning_delta`, `reasoning_done`, `tool_start`, `tool_input_delta`,
-`tool_exec`, `tool_done`, `token_usage`, `permission_request`, `compacted`,
-`turn_done`, `error`). The pre-step count of "22 internal" included the three
-now on run events.
+Count: 20 internal, 4 on run events, 11 on chat chunks (`text_delta`,
+`reasoning_delta`, `tool_start`, `tool_input_delta`, `tool_exec`, `tool_done`,
+`token_usage`, `permission_request`, `compacted`, `turn_done`, `error`).
+`compacted` appears in both the run-event and chunk lists, so the unique known
+kind total is 34, matching `KNOWN_EVENT_KINDS`. The pre-step count of "22
+internal" included the three now on run events. Corrected 2026-09-18 after
+CodeAnt caught `reasoning_done` listed among chunk events when it emits none.
 
 ## Part 2: Claude boundary (`src/main/lib/claude/transform.ts`)
 

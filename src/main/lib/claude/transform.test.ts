@@ -180,6 +180,29 @@ describe("claude transform", () => {
     expect(warning).toHaveBeenCalledTimes(1)
   })
 
+  it("warns once for a system subtype outside the classified sets", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const mystery = { type: "system", subtype: "something_new" } as never
+    translate(mystery, mystery)
+    expect(warning).toHaveBeenCalledTimes(1)
+    expect(warning.mock.calls[0]?.join(" ")).toContain("something_new")
+  })
+
+  it("stays silent for classified internal system subtypes", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const types = translate({
+      type: "system",
+      subtype: "task_started",
+      task_id: "t1",
+      output_file: "o",
+      summary: "s",
+      uuid: "00000000-0000-4000-8000-000000000005",
+      session_id: "s",
+    } as never)
+    expect(types).toEqual(["start", "start-step"])
+    expect(warning).not.toHaveBeenCalled()
+  })
+
   it("classifies the union: handled plus internal covers every member", () => {
     // The compile guards carry the real check; this line documents the
     // runtime surface a new SDK member must join.

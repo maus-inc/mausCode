@@ -23,6 +23,9 @@ import type { UIMessageChunk } from "../claude/types"
 
 export { NATIVE_ERROR_PREFIX, NATIVE_QUESTION_PREFIX }
 
+/** Distinct unmapped kinds one translator remembers; warns stay once per kind. */
+const MAX_UNMAPPED_KINDS = 50
+
 /** What one harness event turns into: chat chunks and/or run-record events. */
 export interface NativeTurnTranslation {
   chunks: UIMessageChunk[]
@@ -268,9 +271,11 @@ export class NativeTranslator {
   }
 
   private warnUnmapped(kind: string): void {
-    if (this.unmappedKinds.has(kind)) return
+    // Bounded memory: past the cap, extra unknown kinds stay silent instead
+    // of growing the set for the rest of the turn.
+    if (this.unmappedKinds.has(kind) || this.unmappedKinds.size >= MAX_UNMAPPED_KINDS) return
     this.unmappedKinds.add(kind)
-    console.warn(`[runtime] unmapped harness event kind: ${kind}`)
+    console.warn(`[runtime] unmapped harness event kind: ${JSON.stringify(kind).slice(0, 80)}`)
   }
 
   private translateTextDelta(text: string): UIMessageChunk[] {
