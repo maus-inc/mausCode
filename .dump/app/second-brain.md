@@ -108,6 +108,22 @@ Detail lives in `research/` and `plans/`; this file states what is true.
   store. Startup moves active runs to `interrupted` with the last event as
   evidence. Wired for `claude.chat` and `runtime.chat`; other provider routers
   are declared absent until wired. Contract: `.dump/app/plans/2026-09-13-run-state.md`.
+- Queued messages are database rows in main (roadmap step 08). `queue_items`,
+  statuses `pending | paused | sending`, store in `src/main/lib/queue/`, wire
+  surface `queue.*` with `claim` as the only hand-off: one transaction and a
+  conditional update mean one window receives a row. Order is gapped integer
+  positions, rewritten only when a gap runs out. A claimed row is deleted on
+  `complete`, returned by `requeue`, and returned by startup recovery when a
+  window died holding it — but only while it has not been handed over: once
+  `markHanded` records the hand-off, a row that comes back is `paused`, not
+  `pending`, because it may already have reached the engine. `park` and
+  `complete` refuse a row that was never handed over, so neither can hide or
+  delete a message the engine never saw. The renderer projects the feed and
+  performs the send, and a window that stops syncing hands its in-flight claim
+  back instead of sending it. `clear` leaves a row whose payload is already
+  handed over — that row is the sub-chat's dispatch slot and its message may be
+  out. A manual stop pauses the queue. Contract:
+  `.dump/app/plans/2026-09-17-queue-in-main.md`.
 
 ## Performance principles
 

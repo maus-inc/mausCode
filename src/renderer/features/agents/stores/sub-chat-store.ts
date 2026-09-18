@@ -3,7 +3,7 @@ import { getWindowId } from "../../../contexts/WindowContext"
 import { addPaneRatio, getDefaultRatios, removePaneRatio } from "../atoms"
 import { clearTaskSnapshotCache } from "../ui/agent-task-tools"
 import { agentChatStore } from "./agent-chat-store"
-import { useMessageQueueStore } from "./message-queue-store"
+import { clearQueueItems } from "./queue-projection"
 import { useStreamingStatusStore } from "./streaming-status-store"
 import { clearSubChatRuntimeCaches } from "./sub-chat-runtime-cleanup"
 
@@ -35,6 +35,7 @@ interface AgentSubChatStore {
   setOpenSubChats: (subChatIds: string[]) => void
   addToOpenSubChats: (subChatId: string) => void
   removeFromOpenSubChats: (subChatId: string) => void
+  clearQueue: (subChatId: string) => Promise<void>
   togglePinSubChat: (subChatId: string) => void
   setAllSubChats: (subChats: SubChatMeta[]) => void
   addToAllSubChats: (subChat: SubChatMeta) => void
@@ -265,14 +266,22 @@ export const useAgentSubChatStore = create<AgentSubChatStore>((set, get) => ({
       }
     }
 
-    // Cleanup queue, streaming status, Chat instance, and task snapshot cache
-    // to prevent memory leaks and race conditions (QueueProcessor sending to closed subChat)
-    useMessageQueueStore.getState().clearQueue(subChatId)
+    // Cleanup streaming status, Chat instance, and task snapshot cache to
+    // prevent memory leaks and race conditions (a sender writing to a closed
+    // sub-chat). The queue rows are not touched here: this runs when a tab is
+    // closed too, and closing a tab is not a delete. Deleting the sub-chat in
+    // the sidebar is what drops its rows, through `clearQueue` below.
     useStreamingStatusStore.getState().clearStatus(subChatId)
     clearSubChatRuntimeCaches(subChatId)
     agentChatStore.delete(subChatId)
     clearTaskSnapshotCache(subChatId)
   },
+
+  // Drop a deleted sub-chat's queue: main cascades `queue_items` with the
+  // sub-chat row, so this is about this window, which must forget the cards and
+  // must not let a claim already in flight put them back. Callers await it before
+  // they close the tab, so the projection is gone before the list refetches.
+  clearQueue: (subChatId) => clearQueueItems(subChatId),
 
   togglePinSubChat: (subChatId) => {
     const { pinnedSubChatIds, chatId } = get()

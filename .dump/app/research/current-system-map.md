@@ -114,9 +114,10 @@ must close (one `AgentRuntime` interface, see §17).
   onboarding, settings dialog, multi-select). `atomWithStorage` /
   `atomWithWindowStorage` for persistence; `atomFamily` for per-chat/per-message.
 - **Zustand**: `sub-chat-store` (tabs: active/open/pinned/all + up-to-4 split panes,
-  persisted per window+chat in localStorage), `message-queue-store` (per-subChat
-  FIFO with atomic pop/prepend + sent triggers), `streaming-status-store`,
-  `agent-chat-store`, `changes-store`.
+  persisted per window+chat in localStorage), `streaming-status-store`,
+  `agent-chat-store`, `changes-store`. The queue's `message-queue-store` is gone:
+  deleted on 2026-09-17 by roadmap step 08, and its rows now live in main as
+  `queue_items`.
 - **React Query** (server state via tRPC): stale 5s, gc 60s, `refetchOnWindowFocus:
   false`, `retry: false`, global client exported for non-React use (`TRPCProvider`).
 - Conventions are sound (per-message atom isolation during streaming is genuinely
@@ -214,8 +215,11 @@ must close (one `AgentRuntime` interface, see §17).
 - **No local background daemon.** Agent runs live in main-process memory
   (`activeSessions`/`activeStreams`); quitting kills them (close confirmation via
   `hasActiveClaudeSessions/abortAllClaudeSessions`, same for Codex).
-- Queueing exists only in renderer (`message-queue-store` + `lib/queue-utils` +
-  QueueProcessor auto-send) — dies with the window.
+- Queueing lives in the main process as of 2026-09-17: roadmap step 08 put the
+  rows in `queue_items`, so a queued message survives a reload and a closed
+  window, and a window only performs the send it has claimed. Before that it
+  existed only in renderer (`message-queue-store` + `lib/queue-utils` +
+  QueueProcessor auto-send) and died with the window.
 - `automations/` views (cards, templates, inbox, triggers) and background-agent
   marketing are hosted-21st.dev features; CONTRIBUTING confirms Background agents =
   hosted-only. `sandbox-import` lets desktop adopt a formerly-remote chat.
@@ -370,7 +374,7 @@ existing `UIMessageChunk` stream so renderer code keeps working during migration
 | 10 | Skills/agents/commands markdown stores | skill tool + agent registry | ADAPT: same file formats; daemon resolves `active_skill`; keep CRUD routers as editors |
 | 11 | Provider config (accounts/customConfig/ollama) | provider catalog + `set/clear_api_key`, `set_model` | REPLACE plumbing; keep onboarding UI flows; Ollama → openai-compatible endpoint entry |
 | 12 | `sub_chats.messages` JSON blob | daemon transcripts + `get_history` | REPLACE gradually: daemon becomes source of truth; DB keeps metadata/index |
-| 13 | Queue (renderer-only) | daemon `soft_interrupt`/queue + bg | MOVE server-side in phase 2; keep renderer queue until then |
+| 13 | Queue (main owns rows, window sends) | daemon `soft_interrupt`/queue + bg | MOVE the send to the daemon in phase 2; step 08 already moved the rows and their order into main |
 | 14 | Rollback stash | `rewind/rewind_undo` + git stash | COMBINE: transcript rewind via runtime, tree rewind via stash (already pairs well) |
 | 15 | Compaction (SDK-side) | `compact` + compaction core | REPLACE (explicit event `compacted`) |
 | 16 | `import-core` + `ResumeTarget` | — (new capability) | SEED for migration engine: Claude/Codex/OpenCode/Cursor/Pi session import |

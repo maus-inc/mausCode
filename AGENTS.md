@@ -49,6 +49,11 @@ Prevention beats review. These are the failure classes recorded in `FULL-REVIEW.
 - Ship an icon or font at the size it renders plus headroom, and record the byte delta.
 - Delete the dead state, the unused export and the lying comment in the same change that found them.
 - Report the evidence level of every claim. An E1 read is not an E4 run, and a gate you did not run is reported as not run.
+- A limit test must fail when the rule it names is deleted. Two caps that refuse the same input mask each other, so a fixture the neighbouring cap already rejects proves nothing. Disable the cap and watch the test fail.
+- Once a payload is handed to another process, its record is the only evidence of it. Do not delete, requeue or resend that record automatically. Keep it visible for the user, and return to the automatic path only what never left.
+- A write to shared state announces what it changed, not what it returned. Parking or releasing a row changes every card while the caller gets nothing back, so an emit keyed on the returned value leaves the other windows stale.
+- An action that arms a guard and triggers an event arms the guard first. The event is what other actors wake on, so a guard written after the trigger loses the race it exists to win.
+- A test proves only what its fixture lets it reach. A two-window test carries two owner ids, and a global a test changes is restored in an `afterEach`, because a failure above the restore line leaks it into every later test.
 
 ## How to work a roadmap step
 
@@ -154,6 +159,8 @@ npm --prefix packages/runtime-client run typecheck
 ```
 
 For anything that ships, also run `bun run build` and `bun run package:mac`. Do not call a gate green when you did not run it.
+
+Run the gate the way CI runs it, not a substitute, and re-run it after every edit. A piped command reports the exit code of the pipe, so read the printed diagnostics rather than the status, and a clean run from before your last edit proves nothing.
 
 ## The code research gate
 

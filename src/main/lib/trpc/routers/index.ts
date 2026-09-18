@@ -28,6 +28,7 @@ import { openrouterRouter } from "./openrouter"
 import { pluginsRouter } from "./plugins"
 import { projectsRouter } from "./projects"
 import { providersRouter } from "./providers"
+import { queueRouter } from "./queue"
 import { qwenRouter } from "./qwen"
 import { rooRouter } from "./roo"
 import { runsRouter } from "./runs"
@@ -76,6 +77,7 @@ export function createAppRouter(_getWindow: () => BrowserWindow | null) {
     voice: voiceRouter,
     plugins: pluginsRouter,
     runs: runsRouter,
+    queue: queueRouter,
     runtime: runtimeRouter,
     usage: usageRouter,
     providers: providersRouter,

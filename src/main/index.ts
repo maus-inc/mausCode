@@ -28,6 +28,7 @@ import { getApiUrl } from "./lib/config"
 import { closeDatabase, initDatabase } from "./lib/db"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
+import { recoverQueuedSends } from "./lib/queue"
 import { recoverInterruptedRuns } from "./lib/runs"
 import { shutdownRuntime } from "./lib/runtime"
 import {
@@ -939,6 +940,9 @@ if (gotTheLock) {
       // Runs left active by a crash or force-quit have no live owner at this
       // point; move them to interrupted with the last event as evidence.
       recoverInterruptedRuns()
+      // Queued items claimed by a window that did not survive a restart go
+      // back to the queue.
+      recoverQueuedSends()
     } catch (error) {
       console.error("[App] Failed to initialize database:", error)
     }

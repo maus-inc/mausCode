@@ -4,9 +4,8 @@
  * a real SQLite test database.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { migrationsRoot } from "../../db/migrations-path"
-import { chats, projects, subChats } from "../../db/schema"
-import { migrateTestDb, openTestDb } from "../../db/test-sqlite"
+import { openMigratedTestDb, seedSubChat, type TestDb } from "../../db/test-fixtures"
+import { openTestDb } from "../../db/test-sqlite"
 import { createRunStore, type RunStore } from "../../runs/run-state"
 import { type RunsFeedItem, runsRouter } from "./runs"
 
@@ -19,25 +18,12 @@ vi.mock("../../runs", () => ({
   },
 }))
 
-type TestDb = ReturnType<typeof openTestDb>
-
-function seedSubChat(db: TestDb["db"]): string {
-  const project = db
-    .insert(projects)
-    .values({ name: "p", path: `/p/${Math.random()}` })
-    .returning()
-    .get()
-  const chat = db.insert(chats).values({ projectId: project.id }).returning().get()
-  return db.insert(subChats).values({ chatId: chat.id }).returning().get().id
-}
-
 describe("runs router", () => {
   let opened: TestDb
   const caller = runsRouter.createCaller({ getWindow: () => null })
 
   beforeEach(() => {
-    opened = openTestDb()
-    migrateTestDb(opened.db, migrationsRoot)
+    opened = openMigratedTestDb()
     holder.store = createRunStore(opened.db)
   })
 

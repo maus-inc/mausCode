@@ -1,26 +1,21 @@
 /**
- * Queue utilities for managing message queue in agents chat
- * Adapted from canvas chat queue implementation
+ * Draft-side conversions into the shared queued-message vocabulary (roadmap
+ * step 08). The rows themselves live in the main process; these helpers turn
+ * what the composer holds into the payload `queue.add` takes, and describe the
+ * selection types the composer drafts with.
  */
 
+import type {
+  QueuedDiffTextContext,
+  QueuedFile,
+  QueuedImage,
+  QueuedPastedText,
+  QueuedTextContext,
+} from "../../../../shared/queue-item"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 
-export interface QueuedImage {
-  id: string
-  url: string
-  mediaType: string
-  filename?: string
-  base64Data?: string
-}
-
-export interface QueuedFile {
-  id: string
-  url: string
-  filename: string
-  mediaType?: string
-  size?: number
-}
+export type { QueuedDiffTextContext, QueuedFile, QueuedImage, QueuedPastedText, QueuedTextContext }
 
 // Text context selected from assistant messages
 export interface SelectedTextContext {
@@ -29,12 +24,6 @@ export interface SelectedTextContext {
   sourceMessageId: string
   preview: string // Truncated for display (~50 chars)
   createdAt: Date
-}
-
-export interface QueuedTextContext {
-  id: string
-  text: string
-  sourceMessageId: string
 }
 
 // Text context selected from diff sidebar
@@ -46,78 +35,6 @@ export interface DiffTextContext {
   lineType?: "old" | "new"
   preview: string // Truncated for display
   createdAt: Date
-}
-
-export interface QueuedDiffTextContext {
-  id: string
-  text: string
-  filePath: string
-  lineNumber?: number
-  lineType?: "old" | "new"
-}
-
-export interface QueuedPastedText {
-  id: string
-  filePath: string
-  filename: string
-  size: number
-  preview: string
-  kind?: "pasted" | "chatHistory"
-}
-
-export type AgentQueueItem = {
-  id: string
-  message: string // Serialized value with @[id] tokens for mentions
-  images?: QueuedImage[]
-  files?: QueuedFile[]
-  textContexts?: QueuedTextContext[]
-  diffTextContexts?: QueuedDiffTextContext[]
-  pastedTexts?: QueuedPastedText[]
-  timestamp: Date
-  status: "pending" | "processing"
-}
-
-export function generateQueueId(): string {
-  return `queue_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-}
-
-export function createQueueItem(
-  id: string,
-  message: string,
-  images?: QueuedImage[],
-  files?: QueuedFile[],
-  textContexts?: QueuedTextContext[],
-  diffTextContexts?: QueuedDiffTextContext[],
-  pastedTexts?: QueuedPastedText[],
-): AgentQueueItem {
-  return {
-    id,
-    message,
-    images: images && images.length > 0 ? images : undefined,
-    files: files && files.length > 0 ? files : undefined,
-    textContexts: textContexts && textContexts.length > 0 ? textContexts : undefined,
-    diffTextContexts:
-      diffTextContexts && diffTextContexts.length > 0 ? diffTextContexts : undefined,
-    pastedTexts: pastedTexts && pastedTexts.length > 0 ? pastedTexts : undefined,
-    timestamp: new Date(),
-    status: "pending",
-  }
-}
-
-export function getNextQueueItem(queue: AgentQueueItem[]): AgentQueueItem | null {
-  return queue.find((item) => item.status === "pending") || null
-}
-
-export function removeQueueItem(queue: AgentQueueItem[], itemId: string): AgentQueueItem[] {
-  return queue.filter((item) => item.id !== itemId)
-}
-
-export function updateQueueItemStatus(
-  queue: AgentQueueItem[],
-  itemId: string,
-  status: AgentQueueItem["status"],
-): AgentQueueItem[] {
-  return queue.map((item) => (item.id === itemId ? { ...item, status } : item))
 }
 
 // Helper to convert UploadedImage to QueuedImage

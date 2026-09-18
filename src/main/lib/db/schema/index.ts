@@ -218,6 +218,59 @@ export const runEventsRelations = relations(runEvents, ({ one }) => ({
   }),
 }))
 
+// ============ QUEUE ITEMS ============
+// One row per queued message, owned by the main process (roadmap step 08).
+// `payload` is the JSON the renderer sent and the store never interprets.
+// `position` carries gaps so an insert does not rewrite another row, and the
+// status vocabulary lives in src/shared/queue-item.ts.
+export const queueItems = sqliteTable(
+  "queue_items",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    subChatId: text("sub_chat_id")
+      .notNull()
+      .references(() => subChats.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    status: text("status").notNull().default("pending"),
+    payload: text("payload").notNull().default("{}"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    dispatchedAt: integer("dispatched_at", { mode: "timestamp" }),
+    /**
+     * The window that took this row: the renderer's stable window id ("main",
+     * "window-2"), which is also the name the main process releases a closed
+     * window's claims under. A claim may only be handed over by its owner, and
+     * an un-handed claim older than `CLAIM_LEASE_MS` may be taken over, which
+     * unsticks a queue after a window dies. A reload keeps the id, so the
+     * reloaded window can park its own handed row at once instead of waiting
+     * out that lease.
+     */
+    claimedBy: text("claimed_by"),
+    /**
+     * When the claiming window passed the payload to the engine. Null means
+     * the message never left, which is what lets recovery requeue a row
+     * without risking a second send, and what lets a stuck claim be taken over
+     * safely. Set once, immediately before the send.
+     */
+    handedAt: integer("handed_at", { mode: "timestamp" }),
+  },
+  // Covers both ordering queries: they filter one sub-chat and sort by the
+  // position the index already holds, so SQLite reads the head without a sorter.
+  (table) => [
+    index("queue_items_sub_chat_position_idx").on(table.subChatId, table.position, table.createdAt),
+  ],
+)
+
+export const queueItemsRelations = relations(queueItems, ({ one }) => ({
+  subChat: one(subChats, {
+    fields: [queueItems.subChatId],
+    references: [subChats.id],
+  }),
+}))
+
 // ============ ANTHROPIC ACCOUNTS (Multi-account support) ============
 // Stores multiple Anthropic OAuth accounts for quick switching
 export const anthropicAccounts = sqliteTable("anthropic_accounts", {
@@ -265,3 +318,5 @@ export type Run = typeof runs.$inferSelect
 export type NewRun = typeof runs.$inferInsert
 export type RunEvent = typeof runEvents.$inferSelect
 export type NewRunEvent = typeof runEvents.$inferInsert
+export type QueueItemRow = typeof queueItems.$inferSelect
+export type NewQueueItemRow = typeof queueItems.$inferInsert
