@@ -36,6 +36,7 @@
     "test": "vitest run",
     "test:node": "node --test --experimental-strip-types \"src/main/lib/runtime/*.test.ts\"",
     "lint": "node scripts/ci/lint-changed.mjs",
+    "lint:ratchet": "node scripts/ci/lint-ratchet.mjs",
     "typecheck": "tsc --noEmit",
     "ratchet:typecheck": "node scripts/ci/typecheck-ratchet.mjs",
     "ratchet:audit": "node scripts/ci/audit-ratchet.mjs",

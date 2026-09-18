@@ -32,7 +32,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           # node:test suites use --experimental-strip-types (node >= 22.6).
-          node-version: "22"
+          node-version-file: .nvmrc
       - name: "Install dependencies (scripts skipped: no native modules needed here)"
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Build workspace packages (runtime-client dist for typecheck/tests)
@@ -86,7 +86,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14]
+        include:
+          - os: ubuntu-24.04
+            platform_flag: "--linux"
+          - os: macos-14
+            platform_flag: "--mac"
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -106,8 +110,30 @@ jobs:
         run: bun run build:runtime-client
       - name: Build
         run: bun run build
-      - name: Package (electron-builder --dir, no signing/notarization)
-        run: bunx electron-builder --dir
+      - name: Package (electron-builder, unsigned — CI testing only)
+        env:
+          # Skip code signing / notarization: artifacts are for download-and-test,
+          # not for distribution. The release workflow handles signed builds.
+          CSC_IDENTITY: null
+          CSC_LINK: null
+          CSC_KEY_PASSWORD: null
+          NOTARIZE: false
+        run: npx electron-builder ${{ matrix.platform_flag }} --publish=never
+
+      # ── Artifact upload: unsigned installers as build artifacts ──────
+      # 7-day retention so reviewers can download and smoke-test a PR before
+      # merging. The release workflow produces signed builds for distribution.
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: mauscode-${{ matrix.platform_flag == '--mac' && 'macos' || 'linux' }}
+          path: |
+            release/**/*.dmg
+            release/**/*.zip
+            release/**/*.deb
+            release/**/*.AppImage
+          if-no-files-found: warn
+          retention-days: 7
 
   security:
     name: Security gates

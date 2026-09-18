@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (npm version format, e.g. 0.0.73 or 1.2.3-beta.1)'
+        required: true
+        type: string
+      signed:
+        description: 'Produce signed builds (requires CSC_LINK, CSC_KEY_PASSWORD, CSC_KEY_PASSWORD, NOTARIZE env)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  verify:
+    name: Verify (lint + typecheck + tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: "Install dependencies (scripts skipped: no native modules needed here)"
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build workspace packages (runtime-client dist for typecheck/tests)
+        run: bun run build:runtime-client
+
+      - name: Lint (changed files only)
+        env:
+          LINT_BASE: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
+        run: node scripts/ci/lint-changed.mjs
+
+      - name: Unit tests (vitest)
+        run: bun run test
+
+      - name: "Unit tests (node:test runtime suites)"
+        run: bun run test:node
+
+      - name: Contract tests
+        run: bun run test:contracts
+
+      - name: "Typecheck (ratchet: no new errors vs baseline)"
+        run: bun run ratchet:typecheck
+
+      - name: Typecheck (tsgo, second gate)
+        run: bun run ts:check
+
+  build:
+    name: Build & Package (mausCode)
+    needs: verify
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install dependencies (full install incl. native module rebuild)
+        run: bun install --frozen-lockfile
+
+      - name: Fetch agent binaries (claude, codex)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun run claude:download
+          bun run codex:download
+
+      - name: Build workspace packages (runtime-client dist)
+        run: bun run build:runtime-client
+
+      - name: Set version
+        run: echo "VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+
+      - name: "Build (electron-vite: main, preload, renderer)"
+        run: bun run build
+
+      - name: Package (electron-builder)
+        env:
+          CSC_IDENTITY: ${{ inputs.signed && secrets.CSC_IDENTITY || '' }}
+          CSC_LINK: ${{ inputs.signed && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ inputs.signed && secrets.CSC_KEY_PASSWORD || '' }}
+          NOTARIZE: ${{ inputs.signed && 'true' || 'false' }}
+        run: |
+          if [ "${{ inputs.signed }}" = "true" ]; then
+            npx electron-builder --mac --publish=never
+          else
+            npx electron-builder --mac --publish=never
+          fi
+
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: mauscode-${{ inputs.version }}
+          path: |
+            release/**/*.dmg
+            release/**/*.zip
+            release/**/*.exe
+            release/**/*.msi
+            release/**/*.deb
+            release/**/*.AppImage
+            release/**/mausCode Setup*.exe
+            release/**/mausCode*.exe
+          if-no-files-found: warn
+          retention-days: 30
+
+  release:
+    name: Publish to GitHub Releases
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: mauscode-${{ inputs.version }}
+          path: release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body_path: release/CHANGELOG.md
+          draft: true
+          prerelease: ${{ contains(inputs.version, '-') }}
+          files: |
+            release/**/*.dmg
+            release/**/*.zip
+            release/**/*.exe
+            release/**/*.msi
+            release/**/*.deb
+            release/**/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
