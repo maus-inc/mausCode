@@ -39,6 +39,11 @@ describe("destructive patterns", () => {
     ["forced-git-push", "git push --force origin main"],
     ["forced-git-push", "git push --force-with-lease"],
     ["forced-git-push", "git push -f"],
+    ["forced-git-push", "git push -fu origin main"],
+    ["forced-git-push", "git push origin +main"],
+    ["forced-git-push", "git -C /repo push --force"],
+    ["forced-git-push", "git --no-pager push -f origin main"],
+    ["forced-git-push", "git -c user.name=bot push --force"],
     ["discarding-git-command", "git reset --hard HEAD~3"],
     ["discarding-git-command", "git clean -fd"],
     ["protected-path-overwrite", "echo x > /etc/passwd"],
@@ -47,6 +52,17 @@ describe("destructive patterns", () => {
     ["disk-or-power", "dd if=/dev/zero of=/dev/sda"],
     ["disk-or-power", "chmod 777 /"],
     ["disk-or-power", "shutdown -h now"],
+    ["disk-or-power", "systemctl poweroff"],
+    ["disk-or-power", "service host reboot"],
+    ["disk-or-power", "wipefs -a /dev/sda"],
+    ["disk-or-power", "fdisk /dev/sda"],
+    ["disk-or-power", 'dd if=/dev/zero of="/dev/sda"'],
+    // `shred` names its own pattern, which sits earlier in the table. The
+    // breaker still reports it as disk-or-power, because it reads the device.
+    ["shred", "shred -u /dev/sda"],
+    ["bulk-find-delete", "find . -delete"],
+    ["bulk-find-delete", "find /tmp/build -name '*.log' -delete"],
+    ["shred", "shred secret.txt"],
     ["init-kill", "kill 1"],
     ["init-kill", "killall node"],
   ]
@@ -239,7 +255,6 @@ describe("read-only and approval tools", () => {
     "BashOutput",
     "AskUserQuestion",
     "Skill",
-    "SlashCommand",
   ]
 
   it.each(readOnly)("classifies %s as read-only", (tool) => {
@@ -337,6 +352,10 @@ describe("criticalPathBreach", () => {
     ["rmdir ..", "critical-delete"],
     ["sudo rm -rf /", "critical-delete"],
     ["rm -rf /work/mauscode", "critical-delete"],
+    ["rm -rf /tmp/build /", "critical-delete"],
+    ["rm -rf ./node_modules ~", "critical-delete"],
+    ["rm -rf dist ..", "critical-delete"],
+    ["sudo rm -rf /tmp/x $HOME", "critical-delete"],
     ["mkfs.ext4 /dev/sda1", "disk-or-power"],
     ["dd if=/dev/zero of=/dev/sda", "disk-or-power"],
     ["shutdown -h now", "disk-or-power"],
@@ -355,6 +374,8 @@ describe("criticalPathBreach", () => {
     "rm file.txt",
     "git rm --cached secret.txt",
     "rm -rf /work/mauscode/src",
+    "rm -rf /tmp/a /tmp/b",
+    "rm -rf dist build coverage",
     "dd if=in.bin of=out.bin",
     "echo shutdown",
   ]
@@ -371,5 +392,75 @@ describe("criticalPathBreach", () => {
 
   it("catches a critical delete behind a shell operator", () => {
     expect(criticalPathBreach("npm test && rm -rf /", WORKTREE)?.id).toBe("critical-delete")
+  })
+
+  it("examines every target of a multi-path delete, not just the first", () => {
+    // Regression from code review on PR #65. The scan used to take the first
+    // non-flag word only, find it ordinary, and move on to the next segment, so
+    // an ordinary path listed before a critical one hid the critical one.
+    expect(criticalPathBreach("rm -rf /tmp/build /", WORKTREE)?.id).toBe("critical-delete")
+    expect(criticalPathBreach("rm -rf a b c ~", WORKTREE)?.id).toBe("critical-delete")
+    // And the fix must not turn an ordinary multi-path delete into a breach.
+    expect(criticalPathBreach("rm -rf /tmp/a /tmp/b", WORKTREE)).toBeNull()
+    expect(criticalPathBreach("rm -rf dist build coverage", WORKTREE)).toBeNull()
+  })
+})
+
+describe("commands that hide their verb", () => {
+  /**
+   * Every one of these read as `approval` before the verb finder learned to skip
+   * wrappers, so Agent mode allowed them and turbo ran them with no prompt. Each
+   * is a spelling found in published bypass reports against agent shell filters
+   * rather than one invented here.
+   */
+  const wrappers = [
+    'bash -c "rm -rf /"',
+    "sh -c 'rm -rf /'",
+    'eval "rm -rf ~"',
+    "sudo -u root rm -rf /",
+    "sudo rm -rf /",
+    "xargs rm -rf /",
+    "timeout 30 rm -rf /",
+    "nice -n 5 rm -rf /",
+    "nohup rm -rf /",
+    "env FOO=1 rm -rf /",
+    "/usr/bin/rm -rf /",
+  ]
+
+  it.each(wrappers)("still reads the delete in `%s`", (command) => {
+    const result = bash(command)
+    expect(result.ruleClass, command).toBe("destructive")
+    expect(result.ruleId, command).toBe("recursive-force-delete")
+    expect(criticalPathBreach(command, "/work/mausCode")?.id, command).toBe("critical-delete")
+  })
+
+  const ordinary = [
+    'grep -rn "rm -rf" .',
+    'echo "do not run rm -rf /"',
+    "git rm --cached secret.txt",
+    "rm -rf ./node_modules",
+    "find . -name '*.ts' -print",
+    "dd if=in.bin of=out.bin",
+    "git push origin main",
+    "git push --set-upstream origin main",
+  ]
+
+  it.each(ordinary)("does not invent a delete in `%s`", (command) => {
+    expect(criticalPathBreach(command, "/work/mausCode"), command).toBeNull()
+  })
+
+  it("keeps an ordinary cleanup destructive but not a critical-path breach", () => {
+    // The two verdicts are separate on purpose. `rm -rf ./node_modules` is a
+    // recursive force delete, so Agent mode refuses it, and it names no critical
+    // target, so turbo runs it without a card.
+    expect(bash("rm -rf ./node_modules").ruleClass).toBe("destructive")
+    expect(criticalPathBreach("rm -rf ./node_modules", "/work/mausCode")).toBeNull()
+    expect(criticalPathBreach("rm -rf /tmp/a /tmp/b", "/work/mausCode")).toBeNull()
+  })
+
+  it("classifies SlashCommand as approval, because a custom command can run a shell", () => {
+    const result = classify("SlashCommand")
+    expect(result.ruleClass).toBe("approval")
+    expect(result.ruleId).toBe("unclassified-tool")
   })
 })

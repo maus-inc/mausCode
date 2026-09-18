@@ -25,7 +25,16 @@ interface CommandSegment {
   words: string[]
 }
 
-/** Tools that only ever read, so they carry the read-only class. */
+/**
+ * Tools that only ever read, so they carry the read-only class.
+ *
+ * `SlashCommand` is deliberately absent. A custom slash command can carry a `!`
+ * shell execution that does not come back through the Bash tool, so treating it
+ * as read-only would let plan mode run a command, and a repository can ship its
+ * own commands. It takes the residual `approval` class instead, which plan mode
+ * refuses. `Skill` stays here because a skill's actions arrive as their own
+ * gated tool calls.
+ */
 const READ_ONLY_TOOLS = new Set([
   "Read",
   "Glob",
@@ -36,7 +45,6 @@ const READ_ONLY_TOOLS = new Set([
   "BashOutput",
   "AskUserQuestion",
   "Skill",
-  "SlashCommand",
 ])
 
 /** Tools that reach a network by design, whatever their arguments say. */
@@ -139,10 +147,99 @@ function commandNamesSecret(segments: CommandSegment[]): boolean {
 }
 
 /**
+ * Verbs that run the command after them instead of doing work of their own.
+ *
+ * Stripped before the real verb is read, because a wrapper otherwise hides a
+ * command from every pattern in this file. `timeout 30 rm -rf /` read as the
+ * verb `timeout`, which is not a delete, so the command landed in `approval` and
+ * Agent mode allowed it. Claude Code strips the same idea before matching a Bash
+ * rule, which its documentation lists as timeout, time, nice, nohup, stdbuf and
+ * bare xargs, "so they cannot be used to smuggle a command past a rule".
+ *
+ * The shell verbs are here too, with their `-c` payload. Quotes are stripped
+ * from every word first, so `bash -c "rm -rf /"` reads as the words
+ * `bash -c rm -rf /` and the verb resolves to `rm`.
+ */
+const WRAPPER_VERBS = new Set([
+  "sudo",
+  "doas",
+  "env",
+  "command",
+  "exec",
+  "nohup",
+  "nice",
+  "ionice",
+  "time",
+  "timeout",
+  "stdbuf",
+  "xargs",
+  "setsid",
+  "chroot",
+  "sh",
+  "bash",
+  "zsh",
+  "dash",
+  "ksh",
+  "eval",
+])
+
+/**
+ * Wrapper options that take a separate value, so the value is skipped with them.
+ * Without this, `sudo -u root rm -rf /` resolved its verb to `-u` and then to
+ * `root`, and `nice -n 5 rm -rf /` resolved to `5`.
+ *
+ * `-c` is deliberately absent. It takes a value for some wrappers but for the
+ * shell verbs it introduces the payload this file needs to read, so skipping the
+ * next word would skip the real verb.
+ */
+const WRAPPER_VALUE_FLAGS = new Set([
+  "-u",
+  "-n",
+  "-g",
+  "-t",
+  "--user",
+  "--group",
+  "--priority",
+  "--cores",
+])
+
+/** A bare duration, which is what `timeout` and `time` take as their argument. */
+const DURATION_WORD = /^\d+(?:\.\d+)?[smhd]?$/
+
+/** Drop quote characters, so `of="/dev/sda"` reads as `of=/dev/sda`. */
+function unquote(word: string): string {
+  return word.replace(/["'`]/g, "")
+}
+
+/**
+ * The verb of one segment: the first word that is not an environment
+ * assignment, not a wrapper, and not a flag or a wrapper's value.
+ */
+function readVerb(words: string[]): string {
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index]
+    if (word === undefined) break
+    if (word.includes("=")) continue
+    if (word.startsWith("-")) {
+      if (WRAPPER_VALUE_FLAGS.has(word)) index += 1
+      continue
+    }
+    const base = word.split("/").pop() ?? word
+    if (DURATION_WORD.test(base)) continue
+    if (WRAPPER_VERBS.has(base)) continue
+    return base
+  }
+  return ""
+}
+
+/**
  * Split a shell command into segments on the operators that start a new
- * command. This is not a shell parser and does not claim to be one: it exists
- * so a verb check matches `curl` in `cd build && curl x` and does not match
- * `ssh-keygen`, which is not an egress verb.
+ * command. This is not a shell parser and does not claim to be one, and it is
+ * not a security boundary on its own: an interpreter that takes inline code,
+ * `python -c` or `node -e`, still hides whatever it runs. That gap is recorded
+ * in `.dump/app/decisions/2026-09-13-permission-floor.md` rather than papered
+ * over here, because the research on agent shell filters is unanimous that a
+ * pattern list cannot win against a shell grammar and only an OS sandbox can.
  */
 export function splitCommandSegments(command: string): CommandSegment[] {
   return command
@@ -150,12 +247,12 @@ export function splitCommandSegments(command: string): CommandSegment[] {
     .map((raw) => raw.trim())
     .filter((text) => text.length > 0)
     .map((text) => {
-      const words = text.split(/\s+/).filter((word) => word.length > 0)
-      // Skip env assignments and sudo so `FOO=1 curl x` still reads as curl.
-      const verbWord =
-        words.find((word) => !word.includes("=") && word !== "sudo") ?? words[0] ?? ""
-      const base = verbWord.split("/").pop() ?? verbWord
-      return { verb: base.toLowerCase(), words: words.map((word) => word.toLowerCase()) }
+      const words = text
+        .split(/\s+/)
+        .filter((word) => word.length > 0)
+        .map((word) => unquote(word).toLowerCase())
+        .filter((word) => word.length > 0)
+      return { verb: readVerb(words), words }
     })
 }
 
@@ -180,25 +277,72 @@ function hasDestructiveSql(command: string): boolean {
   return /\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i.test(command)
 }
 
-function hasForcedGitPush(command: string): boolean {
-  return /\bgit\s+push\b[^\n]*(--force\b|--force-with-lease\b|\s-f(\s|$))/.test(command)
+/**
+ * A `git push` that rewrites remote history. Read from the segment rather than
+ * by regex over the whole command, because the regex needed `git` and `push` to
+ * be adjacent and so missed `git -C /repo push --force`.
+ */
+function hasForcedGitPush(segments: CommandSegment[]): boolean {
+  return segments.some((segment) => {
+    if (segment.verb !== "git" || readSubcommand(segment) !== "push") return false
+    return segment.words.some(isForceSpelling)
+  })
+}
+
+/**
+ * True for any way of spelling a forced push: the long flags, a short-flag
+ * cluster containing `f` such as `-f` or `-fu`, and the `+refspec` form, which
+ * forces the update without naming a flag at all.
+ */
+function isForceSpelling(word: string): boolean {
+  if (word.startsWith("--force")) return true
+  if (word.startsWith("+") && word.length > 1) return true
+  return /^-[a-z]*f[a-z]*$/.test(word)
 }
 
 function hasDiscardingGitCommand(command: string): boolean {
   return /\bgit\s+reset\s+--hard\b/.test(command) || /\bgit\s+clean\b[^\n]*\s-[a-z]*f/.test(command)
 }
 
+/** Partition and filesystem tools, which destroy data whatever their args. */
+const DISK_VERBS = new Set(["wipefs", "fdisk", "cfdisk", "sfdisk", "parted", "sgdisk", "gdisk"])
+
+/** Power-state verbs, whether invoked directly or through a service manager. */
+const POWER_VERBS = new Set(["shutdown", "reboot", "halt", "poweroff"])
+
 function hasDiskOrPowerVerb(segments: CommandSegment[]): boolean {
   return segments.some((segment) => {
     if (segment.verb.startsWith("mkfs")) return true
+    if (DISK_VERBS.has(segment.verb)) return true
     if (segment.verb === "dd") {
       return segment.words.some((word) => word.startsWith("of=/dev/"))
+    }
+    if (segment.verb === "shred") {
+      return segment.words.some((word) => word.startsWith("/dev/"))
     }
     if (segment.verb === "chmod" && segment.words.includes("777")) {
       return segment.words.some((word) => word === "/" || word.startsWith("/*"))
     }
-    return ["shutdown", "reboot", "halt", "poweroff"].includes(segment.verb)
+    // `systemctl poweroff` and `service host reboot` reach the same place the
+    // bare verbs do, so the subcommand is read for them too.
+    if (segment.verb === "systemctl" || segment.verb === "service") {
+      return segment.words.some((word) => POWER_VERBS.has(word))
+    }
+    return POWER_VERBS.has(segment.verb)
   })
+}
+
+/**
+ * A `find` that deletes what it matches. It removes a whole tree with no `rm`
+ * in the command line, so a delete check keyed on `rm` alone misses it.
+ */
+function hasFindDelete(segments: CommandSegment[]): boolean {
+  return segments.some((segment) => segment.verb === "find" && segment.words.includes("-delete"))
+}
+
+/** A `shred` of anything. It overwrites a file so it cannot be recovered. */
+function hasShred(segments: CommandSegment[]): boolean {
+  return segments.some((segment) => segment.verb === "shred")
 }
 
 function hasInitKill(segments: CommandSegment[]): boolean {
@@ -216,13 +360,23 @@ export const DESTRUCTIVE_PATTERNS: CommandPattern[] = [
     reason: "a recursive force delete removes files with no way to undo it",
   },
   {
+    id: "bulk-find-delete",
+    test: (_command, segments) => hasFindDelete(segments),
+    reason: "a find with -delete removes every path it matches, with no undo",
+  },
+  {
+    id: "shred",
+    test: (_command, segments) => hasShred(segments),
+    reason: "shred overwrites a file so its contents cannot be recovered",
+  },
+  {
     id: "destructive-sql",
     test: (command) => hasDestructiveSql(command),
     reason: "DROP or TRUNCATE destroys stored data",
   },
   {
     id: "forced-git-push",
-    test: (command) => hasForcedGitPush(command),
+    test: (_command, segments) => hasForcedGitPush(segments),
     reason: "a forced push rewrites history other people may have pulled",
   },
   {
@@ -280,20 +434,46 @@ export function criticalPathBreach(
   }
 
   for (const segment of segments) {
-    if (segment.verb !== "rm" && segment.verb !== "rmdir") continue
-    const target = segment.words.find(
-      (word) => word !== segment.verb && word !== "sudo" && !word.startsWith("-"),
-    )
-    if (target === undefined) continue
-    const kind = criticalTargetKind(target, worktreeRoot)
-    if (kind === null) continue
-    return {
-      id: "critical-delete",
-      reason: `the command deletes ${kind}, and nothing recovers that`,
+    if (!segmentDeletes(segment)) continue
+    // Every target, not just the first. `rm -rf /tmp/build /` names an ordinary
+    // path before the filesystem root, and a scan that stopped at the first
+    // candidate would let the root through.
+    for (const target of deleteTargets(segment)) {
+      const kind = criticalTargetKind(target, worktreeRoot)
+      if (kind === null) continue
+      return {
+        id: "critical-delete",
+        reason: `the command deletes ${kind}, and nothing recovers that`,
+      }
     }
   }
 
   return null
+}
+
+/**
+ * True when this segment deletes something the breaker should look at: `rm`,
+ * `rmdir`, or a `find` carrying `-delete`.
+ */
+function segmentDeletes(segment: CommandSegment): boolean {
+  if (segment.verb === "rm" || segment.verb === "rmdir") return true
+  return segment.verb === "find" && segment.words.includes("-delete")
+}
+
+/**
+ * The candidate delete targets in one segment: every word that is not the verb,
+ * not `sudo`, and not a flag. A delete can name several paths at once, so this
+ * returns them all rather than the first one that happens to match.
+ *
+ * For a `find` the search root is the first non-flag word, and the remaining
+ * words are predicates such as `-name` and their values, which are not paths.
+ * They are harmless here because `criticalTargetKind` only answers for the exact
+ * critical spellings and returns null for anything else.
+ */
+function deleteTargets(segment: CommandSegment): string[] {
+  return segment.words.filter(
+    (word) => word !== segment.verb && word !== "sudo" && !word.startsWith("-"),
+  )
 }
 
 /**
@@ -328,12 +508,34 @@ function hasRemoteRsync(segment: CommandSegment): boolean {
   )
 }
 
+/**
+ * git options that sit between `git` and the subcommand and take a separate
+ * value. `git -C /repo push` read its subcommand as `-C` before this, which is
+ * the bypass filed upstream against Claude Code: options inserted between the
+ * command and the subcommand defeat a matcher that expects them adjacent.
+ */
+const SUBCOMMAND_VALUE_FLAGS = new Set(["-c", "--git-dir", "--work-tree", "--namespace"])
+
+/** The subcommand of a `git` or package-manager segment, skipping global flags. */
+function readSubcommand(segment: CommandSegment): string {
+  for (let index = 1; index < segment.words.length; index += 1) {
+    const word = segment.words[index]
+    if (word === undefined) break
+    if (word.startsWith("-")) {
+      if (SUBCOMMAND_VALUE_FLAGS.has(word)) index += 1
+      continue
+    }
+    return word
+  }
+  return ""
+}
+
 function segmentOpensNetwork(segment: CommandSegment): boolean {
   if (NETWORK_VERBS.has(segment.verb)) return true
-  if (segment.verb === "git") return NETWORK_GIT_SUBCOMMANDS.has(segment.words[1] ?? "")
+  if (segment.verb === "git") return NETWORK_GIT_SUBCOMMANDS.has(readSubcommand(segment))
   if (hasRemoteRsync(segment)) return true
   const publish = NETWORK_PUBLISH_SUBCOMMANDS[segment.verb]
-  return publish ? publish.has(segment.words[1] ?? "") : false
+  return publish ? publish.has(readSubcommand(segment)) : false
 }
 
 function hasNetworkVerb(segments: CommandSegment[]): boolean {

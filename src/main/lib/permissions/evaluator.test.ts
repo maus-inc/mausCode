@@ -470,6 +470,8 @@ describe("the critical-path breaker", () => {
       "rm -rf .",
       "sudo rm -rf $HOME/",
       `rm -rf ${WORKTREE}`,
+      // An ordinary path listed first must not hide the critical one.
+      "rm -rf /tmp/build /",
     ]
     for (const command of commands) {
       const decision = await evaluator().evaluateAction(
