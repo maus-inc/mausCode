@@ -70,7 +70,11 @@ export function getClaudeCapability(): ProviderCapability {
       storesCredentials: true,
       // Per-action is a claim about this app, not the SDK: every side-effecting
       // call is routed through the gate in `src/main/lib/permissions/`, and the
-      // SDK posture is one that never auto-approves behind that gate.
+      // SDK posture is one that never auto-approves behind that gate. The gate
+      // runs at two points on this backend, `canUseTool` and the PreToolUse hook
+      // in `src/main/lib/claude/permission-hook.ts`, because the workspace's own
+      // `.claude/settings.json` can auto-approve a call that then never reaches
+      // `canUseTool`. No other backend has a second point to add.
       approvals: "per-action",
       sandbox: "none",
       egress: ["provider-configured"],
