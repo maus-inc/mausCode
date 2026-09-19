@@ -911,7 +911,12 @@ matched DROP and TRUNCATE against a fixed table, database and schema word, so
 class in Agent mode. TRUNCATE now takes its table with or without the TABLE
 keyword, which is why its argument is an identifier, and DROP reaches every
 object type a client can drop, a column among them. A read of the table and a
-truncate with no table stay approval.
+truncate with no table stay approval. The two patterns stay separate and the
+object types stay a set: the single pattern that listed the types in an
+alternation came in at a complexity of 27 against the analyzer's limit of 20,
+and its two character classes held both cases of the letters while the `i`
+flag made them duplicates, which is why each class names one case and the
+type list lives in code.
 
 **chroot carries its group list with its flag.** The wrapper's value flags
 omitted `--groups`, so `chroot --groups root /mnt rm -rf /` consumed `root` as

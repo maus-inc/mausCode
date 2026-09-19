@@ -784,24 +784,45 @@ const SQL_CLIENT_VERBS = new Set([
 ])
 
 /**
- * The DROP and TRUNCATE forms that remove or empty an object. TRUNCATE takes
- * its table with or without the TABLE keyword, which is why its argument is an
- * identifier rather than a fixed keyword, and DROP reaches every object type a
- * client can drop, a column among them, because a dropped column is gone too.
+ * The object types a client can DROP. The list is data rather than an
+ * alternation, which keeps the pattern under the analyzer's complexity limit,
+ * and a column is among them because a dropped column is gone too.
  */
-const DESTRUCTIVE_SQL_TEXT =
-  /\bDROP\s+(TABLE|DATABASE|SCHEMA|VIEW|INDEX|SEQUENCE|FUNCTION|TRIGGER|EXTENSION|ROLE|USER|SERVER|COLUMN)\b|\bTRUNCATE\s+(?:TABLE\s+)?[A-Za-z_][A-Za-z0-9_$.]*/i
+const DROP_OBJECT_TYPES = new Set([
+  "table",
+  "database",
+  "schema",
+  "view",
+  "index",
+  "sequence",
+  "function",
+  "trigger",
+  "extension",
+  "role",
+  "user",
+  "server",
+  "column",
+])
+
+// The patterns take one case of each letter and the `i` flag, which is what
+// keeps the character classes duplicate-free to the analyzer.
+const DROP_SQL = /\bDROP\s+([A-Z_][A-Z0-9_$]*)/i
+const TRUNCATE_SQL = /\bTRUNCATE\s+(?:TABLE\s+)?[A-Z_][A-Z0-9_$]*/i
 
 /**
  * A DROP or TRUNCATE typed into a database client's command line. Read from
  * the client's segment rather than by regex over the whole command, because
  * the regex matched text in any argument of any verb and so read
- * `echo "DROP TABLE users"` as destructive.
+ * `echo "DROP TABLE users"` as destructive. TRUNCATE takes its table with or
+ * without the TABLE keyword, which is why its argument is an identifier.
  */
 function hasDestructiveSql(segments: CommandSegment[]): boolean {
   return segments.some((segment) => {
     if (!SQL_CLIENT_VERBS.has(segment.verb)) return false
-    return DESTRUCTIVE_SQL_TEXT.test(segment.words.join(" "))
+    const text = segment.words.join(" ")
+    const drop = DROP_SQL.exec(text)
+    if (drop !== null && DROP_OBJECT_TYPES.has(drop[1].toLowerCase())) return true
+    return TRUNCATE_SQL.test(text)
   })
 }
 
