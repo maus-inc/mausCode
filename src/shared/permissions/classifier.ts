@@ -399,7 +399,7 @@ function readVerb(words: string[]): string {
  * deobfuscation residual this classifier does not chase: such a word
  * classifies as itself.
  */
-const PLAIN_WORD_CHAR = /[A-Za-z0-9_]/
+const PLAIN_WORD_CHAR = /\w/
 
 function resolveBracketedWord(base: string): string {
   if (!base.includes("[")) return base
@@ -1720,7 +1720,7 @@ function hasRemoteRsync(segment: CommandSegment): boolean {
  */
 function namesRemoteHost(word: string): boolean {
   if (word.includes("@") || word.includes("://")) return true
-  if (word[0] === "[") {
+  if (word.startsWith("[")) {
     const close = word.indexOf("]", 1)
     if (close <= 1 || word[close + 1] !== ":") return false
     return true

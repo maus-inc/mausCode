@@ -129,8 +129,6 @@ function readKeySegment(raw: string, start: number): { text: string; end: number
   return { text: text.trim(), end: index }
 }
 
-const HEX_DIGIT = /^[0-9a-fA-F]$/
-
 /** The one-character basic-string escapes. Anything else is not valid TOML. */
 const SHORT_ESCAPES: Record<string, string> = {
   n: "\n",
@@ -151,22 +149,25 @@ const SHORT_ESCAPES: Record<string, string> = {
  */
 function unescapeBasic(text: string, start: number): { value: string; end: number } | null {
   const char = text[start]
-  if (char === "u" || char === "U") {
-    const digits = char === "u" ? 4 : 8
-    const hex = text.slice(start + 1, start + 1 + digits)
-    if (hex.length !== digits) return null
-    for (const digit of hex) if (!HEX_DIGIT.test(digit)) return null
-    const code = Number.parseInt(hex, 16)
-    // TOML takes only unicode scalar values, so both widths reject the
-    // surrogate range, and only the wide form can name a point past it.
-    if (code >= 0xd800 && code <= 0xdfff) return null
-    if (char === "U" && code > 0x10ffff) return null
-    const value = String.fromCodePoint(code)
-    return { value, end: start + 1 + digits }
-  }
+  if (char === "u" || char === "U") return unescapeUnicode(text, start, char)
   const translated = char === undefined ? undefined : SHORT_ESCAPES[char]
   if (translated === undefined) return null
   return { value: translated, end: start + 1 }
+}
+
+function unescapeUnicode(
+  text: string,
+  start: number,
+  kind: "u" | "U",
+): { value: string; end: number } | null {
+  const digits = kind === "u" ? 4 : 8
+  const hex = text.slice(start + 1, start + 1 + digits)
+  if (hex.length !== digits) return null
+  if (!/^[0-9a-fA-F]+$/.test(hex)) return null
+  const code = Number.parseInt(hex, 16)
+  if (code >= 0xd800 && code <= 0xdfff) return null
+  if (code > 0x10ffff) return null
+  return { value: String.fromCodePoint(code), end: start + 1 + digits }
 }
 
 /** Read a basic or literal string starting at `start`. */
