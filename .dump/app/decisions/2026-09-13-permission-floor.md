@@ -823,6 +823,48 @@ with. The same pass removed the duplicated cancel block in the native
 subscription, which now shares `cancelTurn`, so the duplication mark on the
 branch's new code comes off as well.
 
+## Decision 34: a value flag carries its value, `dd` writes where `of=` says, and in-place `sed` writes its files (added 2026-09-19)
+
+Three gaps found in the final deep pass against the pushed head, each verified
+as `approval` before the change and closed after it.
+
+**A value flag between the verb and the subcommand carried its value.** The
+subcommand reader stepped over git's value flags and only git's, so
+`docker -f compose.yml run` read its subcommand as `-f`, took the residual
+approval class, and Agent mode allowed a container that starts on the default
+bridge network. The reader now steps over the value-taking globals of every
+subcommand-scoped verb it serves: the docker and podman file, host, config and
+context options, the npm, yarn and pnpm registry, prefix, cache and config
+options, gh's hostname, and cargo's manifest path. The segment words are
+lowercased before the reader runs, so the single-letter host flag is read as
+its lowercase form, which treats `-h` as a value flag. The cost is a line that
+prints help and exits, and no shell runs such a line's subcommand.
+
+**`dd` names its output with `of=`.** The protected-path check read `dd`
+through the ordinary write-verb read, which never looked at the `of=` word, so
+`dd if=/dev/zero of=/etc/passwd` took the residual approval class while the
+block-device check caught the same spelling only when the device was a block
+device. `dd` now writes where its `of=` value says in every read that asks
+where the verb writes, and the block-device check delegates to the same read.
+
+**`sed` writes the files it names only in place.** The classifier read `sed`'s
+files as read targets in every spelling, so `sed -i 's/a/b/' /etc/passwd` took
+the residual approval class, and an in-place edit of a key reported a secret
+read rather than the protected-path overwrite it is. The write read now treats
+in-place `sed`, including the spelling that glues a backup suffix onto the
+flag, as a verb that rewrites every file it names, and the secret check agrees,
+so the denial names the overwrite. A `sed` without the flag still prints to
+standard output, and its files stay reads.
+
+Measured on the build this record ships with: `docker -f /tmp/compose.yml run
+alpine echo hi`, `podman -H unix:///tmp/sock.sock run alpine`,
+`npm --registry https://registry.mirror.example/ publish` and
+`gh --hostname enterprise.corp api repos` breach `network.egress-command`,
+`dd if=/dev/zero of=/etc/passwd` and `sed -i 's/a/b/' /etc/passwd` breach
+`destructive.protected-path-overwrite`, and the plain forms, `sed 's/a/b/'
+/tmp/notes.txt`, `dd if=/dev/zero of=/tmp/disk.img` and
+`docker -f /tmp/compose.yml ps`, stay approval.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

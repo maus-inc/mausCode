@@ -252,7 +252,9 @@ function isWriteTarget(segment: CommandSegment, index: number): boolean {
   // is a protected-path overwrite rather than a read of a secret location. A
   // target-directory flag moves the destination off the last word and turns every
   // other operand into a source, so `cp -t /tmp/x ~/.ssh/id_rsa` reads the key
-  // exactly as `cp ~/.ssh/id_rsa /tmp/x` does.
+  // exactly as `cp ~/.ssh/id_rsa /tmp/x` does. In-place `sed` rewrites every file
+  // it names, which keeps `sed -i` on a key out of the secret-read class.
+  if (segment.verb === "sed" && segment.words.some(isInPlaceFlag)) return true
   if (WRITES_EVERY_ARGUMENT.has(segment.verb)) return true
   if (WRITES_LAST_ARGUMENT.has(segment.verb)) return index === writeTargetIndex(segment)
   const word = segment.words[index] ?? ""
@@ -652,13 +654,32 @@ function writesProtectedPath(segments: CommandSegment[]): boolean {
  * block-device check and `isWriteTarget` all need the same answer, so it lives
  * here once. A verb that writes every argument can hit the target anywhere, while
  * a verb with a distinct destination writes where `writeDestinations` says.
+ * `dd` names its output with `of=`, so its destination is that value, and `sed`
+ * writes the files it names only in place, which its `-i` flag says.
  */
 function writesWhereVerbAims(
   segment: CommandSegment,
   dangerous: (word: string) => boolean,
 ): boolean {
   if (WRITES_EVERY_ARGUMENT.has(segment.verb)) return segment.words.some(dangerous)
+  if (segment.verb === "dd") {
+    const output = segment.words.find((word) => word.startsWith("of="))
+    return output !== undefined && dangerous(output.slice(3))
+  }
+  if (segment.verb === "sed" && segment.words.some(isInPlaceFlag)) {
+    return segment.words.some(dangerous)
+  }
   return writeDestinations(segment).some(dangerous)
+}
+
+/**
+ * `sed`'s in-place flags, in the spellings that rewrite the file they name.
+ * GNU `sed` glues a backup suffix onto the flag, so `-i.bak` rewrites too.
+ * Without `-i`, `sed` prints to standard output and its files are reads.
+ */
+function isInPlaceFlag(word: string): boolean {
+  if (word === "-i" || word === "--in-place") return true
+  return word.startsWith("-i") && !word.startsWith("--")
 }
 
 /** The two spellings of GNU's `--no-target-directory`, in the case they were written. */
@@ -960,11 +981,6 @@ function hasDiskOrPowerVerb(segments: CommandSegment[]): boolean {
  * and every other write verb takes the device as a positional argument.
  */
 function writesBlockDevice(segment: CommandSegment): boolean {
-  // `dd` names its output with `of=`, which is why it reads that word rather
-  // than the segment's arguments.
-  if (segment.verb === "dd") {
-    return segment.words.some((word) => word.startsWith("of=") && isBlockDevice(word.slice(3)))
-  }
   return writesWhereVerbAims(segment, isBlockDevice)
 }
 
@@ -1791,12 +1807,41 @@ function namesRemoteHost(word: string): boolean {
 }
 
 /**
- * git options that sit between `git` and the subcommand and take a separate
- * value. `git -C /repo push` read its subcommand as `-C` before this, which is
- * the bypass filed upstream against Claude Code: options inserted between the
- * command and the subcommand defeat a matcher that expects them adjacent.
+ * Options that sit between a command and its subcommand and take a separate
+ * value, so the value is skipped with them. `git -C /repo push` read its
+ * subcommand as `-C` before this set existed, which is the bypass filed
+ * upstream against Claude Code: options inserted between the command and the
+ * subcommand defeat a matcher that expects them adjacent. The same shape hit
+ * every other subcommand-scoped verb here, so `docker -f compose.yml run`
+ * read its subcommand as `-f` and took the residual approval class instead
+ * of the network one every `run` carries.
  */
-const SUBCOMMAND_VALUE_FLAGS = new Set(["-c", "--git-dir", "--work-tree", "--namespace"])
+const SUBCOMMAND_VALUE_FLAGS = new Set([
+  // git
+  "-c",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  // docker and podman, whose global options precede the subcommand. The
+  // segment words are lowercased before this set reads them, so the
+  // single-letter host flag appears here as its lowercase form.
+  "-f",
+  "--file",
+  "-h",
+  "--host",
+  "--config",
+  "--context",
+  // npm, yarn and pnpm
+  "--registry",
+  "--prefix",
+  "--cache",
+  "--userconfig",
+  "--globalconfig",
+  // gh
+  "--hostname",
+  // cargo
+  "--manifest-path",
+])
 
 /** The subcommand of a `git` or package-manager segment, skipping global flags. */
 function readSubcommand(segment: CommandSegment): string {

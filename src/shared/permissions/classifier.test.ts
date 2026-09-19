@@ -55,6 +55,7 @@ describe("destructive patterns", () => {
     ["forced-git-push", "git -C /repo push --force"],
     ["forced-git-push", "git --no-pager push -f origin main"],
     ["forced-git-push", "git -c user.name=bot push --force"],
+    ["forced-git-push", "git --git-dir /repo/.git -C /repo push --force"],
     ["discarding-git-command", "git reset --hard HEAD~3"],
     ["discarding-git-command", "git clean -fd"],
     // git's own global options sit between `git` and the subcommand, which is
@@ -121,6 +122,13 @@ describe("destructive patterns", () => {
     ["protected-path-overwrite", "echo key > /home/u/.ssh/authorized_keys"],
     ["protected-path-overwrite", "echo key >> /home/u/.ssh/authorized_keys"],
     ["protected-path-overwrite", "cp /tmp/k /home/u/.ssh/authorized_keys"],
+    // `dd` names its output with `of=`, so a stream of zeros to `/etc/passwd`
+    // is the same overwrite as a redirect to it.
+    ["protected-path-overwrite", "dd if=/dev/zero of=/etc/passwd"],
+    // `sed` writes the files it names only in place, and GNU glues a backup
+    // suffix onto the flag, so `-i.bak` rewrites too.
+    ["protected-path-overwrite", "sed -i 's/a/b/' /etc/passwd"],
+    ["protected-path-overwrite", "sed -i.bak 's/a/b/' /home/u/.ssh/authorized_keys"],
     ["protected-path-overwrite", "echo x > /root/.ssh/authorized_keys"],
     // Glued to the operator, with no space for a word split to find.
     ["protected-path-overwrite", "echo key>/home/u/.ssh/authorized_keys"],
@@ -434,6 +442,18 @@ describe("destructive patterns", () => {
       criticalPathBreach("python -c \"import shutil; shutil.rmtree('/tmp/x')\"", "/work/mausCode"),
     ).toBeNull()
   })
+
+  it("reads a plain sed as the file read it is, not an overwrite of the file it prints", () => {
+    expect(bash("sed 's/a/b/' /tmp/notes.txt").ruleClass).toBe("approval")
+  })
+
+  it("reads a dd to an ordinary file as the ordinary write it is", () => {
+    expect(bash("dd if=/dev/zero of=/tmp/disk.img").ruleClass).toBe("approval")
+  })
+
+  it("keeps a non-network subcommand non-network when a value flag sits before it", () => {
+    expect(bash("docker -f /tmp/compose.yml ps").ruleClass).toBe("approval")
+  })
 })
 
 describe("network patterns", () => {
@@ -474,6 +494,12 @@ describe("network patterns", () => {
     // host does not have is pulled before it starts, so these open a channel even
     // when the command inside them names no network verb.
     "docker run alpine echo hi",
+    // A value-taking global option between the verb and the subcommand is
+    // stepped over with its value, the same shape the git global options had.
+    "docker -f /tmp/compose.yml run alpine echo hi",
+    "podman -H unix:///tmp/sock.sock run alpine",
+    "npm --registry https://registry.mirror.example/ publish",
+    "gh --hostname enterprise.corp api repos",
     "docker create alpine",
     "docker start app",
     "docker exec app ls",
