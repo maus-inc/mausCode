@@ -206,6 +206,12 @@ describe("destructive patterns", () => {
     ["bulk-find-delete", "find . -execdir rm -rf {} ;"],
     ["bulk-find-delete", "find . -ok rmdir {} ;"],
     ["bulk-find-delete", "find . -execdir /tmp/run.sh {} ;"],
+    // The first predicate is a shield, not a verdict: the delete behind it
+    // still deletes.
+    // The escaped terminator keeps both predicates in the segment that owns
+    // them, and the second one still deletes.
+    ["bulk-find-delete", "find / -type f -exec echo {} \\; -exec rm {} +"],
+    ["bulk-find-delete", "find / -type f -ok rmdir {} \\; -exec rm -rf {} +"],
     ["env-injection", "LD_PRELOAD=/tmp/x.so git status"],
     ["env-injection", "GIT_PAGER=/tmp/payload.sh git log"],
     ["env-injection", "GIT_EXTERNAL_DIFF=/tmp/evil.sh git diff HEAD~1"],
@@ -257,6 +263,9 @@ describe("destructive patterns", () => {
     "find . -name '*.log' -exec rm.dummy {} ;",
     "find . -exec echo {} ;",
     "find . -execdir grep -l TODO {} +",
+    // A range resolves to many words, and that is the deobfuscation
+    // residual, not a delete.
+    "find . -name '*.log' -exec r[m-n] {} ;",
     "git branch -d merged-branch",
     "git tag -l",
     "git update-ref HEAD abc123",
@@ -296,6 +305,8 @@ describe("destructive patterns", () => {
     "rsync /tmp/a /tmp/b",
     "rsync C:/Users/x /tmp/backup",
     "rsync D:/Users/x /tmp/backup",
+    // A drive-relative path keeps its one-letter drive, so it is not remote.
+    "rsync C:relative /tmp/backup",
     "rsync C::module /tmp/backup",
     "rsync a:b /tmp/backup",
     "rsync /var/log:1 /tmp/backup",
@@ -459,6 +470,9 @@ describe("network patterns", () => {
     "rsync myhost.com:/var/www /tmp/backup",
     "rsync 10.0.0.5:/data /tmp/backup",
     "rsync server:/data /tmp/backup",
+    // The documented remote spelling also covers a host-relative path, the
+    // one rsync reads against the remote user's home.
+    "rsync server:backup /tmp/backup",
     "rsync server::module /tmp/backup",
     "rsync [::1]:/data /tmp/backup",
     "rsync [::1]::module /tmp/backup",
@@ -828,6 +842,9 @@ describe("criticalPathBreach", () => {
 
   const critical = [
     ["rm -rf /", "critical-delete"],
+    // The shell expands the one-member bracket before it runs, so the
+    // spelled word and the resolved word have to read the same.
+    ["/bin/r[m] -rf /", "critical-delete"],
     ["rm -rf /*", "critical-delete"],
     ["rm -rf ~", "critical-delete"],
     ["rm -rf $HOME", "critical-delete"],

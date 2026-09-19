@@ -10,8 +10,10 @@
  * Supported subset, per TOML v1.0.0 (https://toml.io/en/v1.0.0): comments,
  * blank lines, `[table]` and `[table.sub]` headers, bare and quoted keys,
  * dotted key paths, basic and literal strings, and arrays of strings on one
- * line or many. Not supported: integers, floats, booleans, dates, inline
- * tables, and arrays of tables.
+ * line or many. Basic strings take the full TOML escape set, including the
+ * `\u` and `\U` unicode escapes, and literal strings keep their backslashes.
+ * Not supported: integers, floats, booleans, dates, inline tables, and
+ * arrays of tables.
  *
  * Read-only on purpose. Nothing writes this file yet: the policy is edited by
  * hand, and a serializer with no caller is an unused export. The settings
@@ -127,26 +129,41 @@ function readKeySegment(raw: string, start: number): { text: string; end: number
   return { text: text.trim(), end: index }
 }
 
-/** Translate one basic-string escape. Null means the escape is not valid TOML. */
-function unescapeBasic(char: string): string | null {
-  switch (char) {
-    case "n":
-      return "\n"
-    case "t":
-      return "\t"
-    case "r":
-      return "\r"
-    case "f":
-      return "\f"
-    case "b":
-      return "\b"
-    case '"':
-      return '"'
-    case "\\":
-      return "\\"
-    default:
-      return null
+const HEX_DIGIT = /^[0-9a-fA-F]$/
+
+/** The one-character basic-string escapes. Anything else is not valid TOML. */
+const SHORT_ESCAPES: Record<string, string> = {
+  n: "\n",
+  t: "\t",
+  r: "\r",
+  f: "\f",
+  b: "\b",
+  '"': '"',
+  "\\": "\\",
+}
+
+/**
+ * Translate one basic-string escape starting at `start`. Null means the
+ * escape is not valid TOML. The two unicode escapes need their hex digits, so
+ * the reader hands over the whole line rather than one character. A `\u`
+ * escape may not name a surrogate, because TOML says to spell those as `\U`.
+ */
+function unescapeBasic(text: string, start: number): { value: string; end: number } | null {
+  const char = text[start]
+  if (char === "u" || char === "U") {
+    const digits = char === "u" ? 4 : 8
+    const hex = text.slice(start + 1, start + 1 + digits)
+    if (hex.length !== digits) return null
+    for (const digit of hex) if (!HEX_DIGIT.test(digit)) return null
+    const code = Number.parseInt(hex, 16)
+    if (char === "u" && code >= 0xd800 && code <= 0xdfff) return null
+    if (char === "U" && code > 0x10ffff) return null
+    const value = char === "u" ? String.fromCharCode(code) : String.fromCodePoint(code)
+    return { value, end: start + 1 + digits }
   }
+  const translated = char === undefined ? undefined : SHORT_ESCAPES[char]
+  if (translated === undefined) return null
+  return { value: translated, end: start + 1 }
 }
 
 /** Read a basic or literal string starting at `start`. */
@@ -159,12 +176,11 @@ function readString(text: string, start: number): { value: string; end: number }
   while (index < text.length) {
     const char = text[index]
     if (char === "\\" && quote === '"') {
-      const next = text[index + 1]
-      if (next === undefined) return null
-      const unescaped = unescapeBasic(next)
+      if (text[index + 1] === undefined) return null
+      const unescaped = unescapeBasic(text, index + 1)
       if (unescaped === null) return null
-      value += unescaped
-      index += 2
+      value += unescaped.value
+      index = unescaped.end
       continue
     }
     if (char === quote) return { value, end: index + 1 }

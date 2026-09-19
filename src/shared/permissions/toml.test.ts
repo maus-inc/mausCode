@@ -87,6 +87,21 @@ destructive = "ask"   # a trailing comment
     expect(ok(`value = "a${written}b"`)).toEqual({ value: `a${expected}b` })
   })
 
+  it.each([
+    ["\\u00e9", "\u00e9"],
+    ["\\u00E9", "\u00e9"],
+    ["\\U0001F600", "\u{1F600}"],
+  ])("unescapes the unicode escape %s in a basic string", (written, expected) => {
+    expect(ok(`value = "a${written}b"`)).toEqual({ value: `a${expected}b` })
+  })
+
+  it("rejects a unicode escape with a bad digit, no digit, a surrogate, or a code point past 0x10FFFF", () => {
+    expect(error('value = "a\\u12G4b"')).toContain("malformed string value")
+    expect(error('value = "a\\u12"')).toContain("malformed string value")
+    expect(error('value = "a\\ud800b"')).toContain("malformed string value")
+    expect(error('value = "a\\U110000b"')).toContain("malformed string value")
+  })
+
   it("reads a one-line array of strings", () => {
     expect(ok('allow_tools = ["Bash(git *)", "Read"]')).toEqual({
       allow_tools: ["Bash(git *)", "Read"],

@@ -652,21 +652,23 @@ because a path that is merely named is not a write.
 
 The remote-rsync rule required an `@` or a `://` in a word, so
 `rsync myhost.com:/var/www /tmp/backup` classified as `approval.shell-command`.
-rsync's manual spells the remote form `[user@]host:path`, the daemon form
-`host::module`, and a bracketed host when the address carries a colon of its
-own, and neither the `@`, a scheme nor a dot is part of any of them, so a plain
-label such as `server:/data` is remote as well. The check now also accepts a
-word whose host part ends in `:/` or `::` and is longer than one letter, and a
-bracketed host followed by either separator, which keeps the local spellings
-off the rule: the only local spelling that keeps a colon and a slash is a drive
-letter, a single colon that is neither a path nor a daemon separator is a plain
-word, and a host part that carries a slash is a path, not a host.
+rsync's manual spells the remote form `[user@]host:path` with the path either
+absolute or host-relative, the daemon form `host::module`, and a bracketed host
+when the address carries a colon of its own, and neither the `@`, a scheme nor
+a dot is part of any of them, so a plain label such as `server:/data` is remote
+as well, and so is a host-relative path such as `server:backup`, which rsync
+reads against the remote user's home. The check accepts a word whose host part
+is longer than one letter and carries no slash, and a bracketed host, which
+keeps the local spellings off the rule: the only local spellings that keep a
+colon are a drive letter, which is one letter, and a path, where a slash in the
+host part keeps the rule off a file that merely contains a colon.
 
 Measured on the build this record ships with, `rsync myhost.com:/var/www
 /tmp/backup`, `rsync 10.0.0.5:/data /tmp/backup`, `rsync server:/data
-/tmp/backup`, `rsync server::module /tmp/backup` and `rsync [::1]:/data
-/tmp/backup` classify `network.egress-command`, and `rsync /tmp/a /tmp/b`,
-`rsync C:/Users/x /tmp/backup`, `rsync C::module /tmp/backup` and
+/tmp/backup`, `rsync server:backup /tmp/backup`, `rsync server::module
+/tmp/backup` and `rsync [::1]:/data /tmp/backup` classify
+`network.egress-command`, and `rsync /tmp/a /tmp/b`, `rsync C:/Users/x
+/tmp/backup`, `rsync C:relative /tmp/backup`, `rsync C::module /tmp/backup` and
 `rsync a:b /tmp/backup` stay `approval`.
 
 ## Decision 29: an interpreter copy or move is judged by its destination (added 2026-09-19)
@@ -738,6 +740,46 @@ policy loader turns into the deny-by-default floor. Measured:
 with `duplicate table header`, and `[a]` followed by `[a.b]` still parses,
 which is the spelling the supported subset exists to read.
 
+**A basic string takes the unicode escapes.** The reader translated the short
+escapes only, so a valid basic string such as `b = "caf\u00e9"` was a parse
+error, and the policy file that carried it fell back to the shipped floor
+without telling the user whose policy was not in effect. The reader now takes
+`\uXXXX` and `\UXXXXXXXX` with their hex digits validated, and rejects a
+`\u` surrogate, which TOML says to spell as `\U`. Measured: `"\u00e9"`
+reads as the accented letter and `"\U0001F600"` as the pictograph on the build
+this record ships with, and a bad digit, a missing digit, a `\u` surrogate and
+a code point past `0x10FFFF` each fail with `malformed string value`.
+
+## Decision 31: a one-member glob reads as the word it resolves to, and every exec predicate is read (added 2026-09-19)
+
+Two review findings on the pushed head, each verified open before the change
+and closed after it.
+
+**A bracket that names one character is one word.** The shell expands `r[m]`
+to `rm` before it runs, so `/bin/r[m] -rf /` was a delete that read as an
+unknown verb and took the residual approval class. The verb read now resolves
+a command word made of plain characters and one-member bracket classes to the
+single word it is, and that is the only glob the classifier claims: a range, a
+negation, a wildcard, a multi-member class and a parameter spelling such as
+`who$@ami` resolve to many words, and that is the deobfuscation residual the
+section below names. Measured: `/bin/r[m] -rf /` breaches
+`recursive-force-delete` the way `rm -rf /` does, and `su[d]o rm -rf /` reads
+its verb past the bracketed wrapper, on the build this record ships with.
+`no[p]e rm -rf /tmp/x` stays approval, because it names no command at all.
+
+**Every exec predicate is read, not just the first.** `findDeletes` read the
+first `-exec` it found and stopped, so `find / -type f -exec echo {} \;
+-exec rm {} +` was an ordinary command: the benign first predicate was a
+shield for the delete behind it. The check now reads every `-exec`,
+`-execdir`, `-ok` and `-okdir` the segment carries, and the escaped
+terminators `\;` and `\&` that end a predicate are arguments like the
+escaped parentheses already were, so the second predicate stays in the segment
+its `find` carries. Measured: `find / -type f -exec echo {} \; -exec rm {} +`
+and `find / -type f -ok rmdir {} \; -exec rm -rf {} +` classify
+`bulk-find-delete` on the build this record ships with, `find . -name '*.log'
+-exec echo {} ;` stays approval, and a range, `find . -name '*.log' -exec
+r[m-n] {} ;`, stays approval because it names no delete verb.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
@@ -766,9 +808,11 @@ Still evading, verified:
   carries a full secret path. Following a value from one segment into the next is
   data lineage, which is what a real product in this space sells, and it is out of
   scope for a classifier that is a pure function of one command string.
-- **Glob and parameter spellings the shell resolves at exec time.** `/usr/bin/n[c]`
-  is `nc`, `who$@ami` is `whoami`, `/usr/bin/p?ng` is `ping`. The classifier sees
-  the text before the shell expands it.
+- **Globs that resolve to more than one word, and parameter spellings the shell
+  resolves at exec time.** `/usr/bin/p?ng` is `ping`, `r[m-n]` is `rm` or `rn`,
+  `who$@ami` is `whoami`. The classifier sees the text before the shell expands
+  it, and a bracket that names one member is the one glob it does resolve, by
+  decision 31.
 - **Hex and octal escapes, base64 payloads, alias definitions, heredocs.** A
   published bypass write-up reaches the conclusion directly: every interpreter a
   denylist misses is a bypass, every quoting trick it misses is a bypass, and the
@@ -793,6 +837,9 @@ about:
   `rm`. That is luck rather than design, and it is recorded here because claiming
   credit for it would overstate the guarantee.
 - `\rm -rf /` and `rm$IFS-rf$IFS/` are caught, by decision 20.
+- `/usr/bin/n[c]` and `/bin/r[m]` are caught, by decision 31. A bracket that
+  names one member resolves to the single word it is, and the resolved word is
+  what gets classified.
 
 So the claim stays precise and is now narrower than it was. This step puts a floor
 under the commands the classifier can read. It does not contain arbitrary code

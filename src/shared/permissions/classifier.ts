@@ -394,12 +394,49 @@ function readVerb(words: string[]): string {
  * The verb this word carries, or null when the word is one the finder steps
  * over: an environment assignment, a flag, a bare duration, or a wrapper.
  */
+/**
+ * A command word made of plain characters and one-member bracket classes
+ * resolves to exactly one word, and the shell expands it to that word before
+ * it runs. `r[m]` is the documented spelling that slips past a matcher keyed
+ * on `rm`, so the resolved word is what gets classified. A range, a negation
+ * or a multi-member class can resolve to many words, and that is the
+ * deobfuscation residual this classifier does not chase: such a word
+ * classifies as itself.
+ */
+const PLAIN_WORD_CHAR = /[A-Za-z0-9_]/
+
+function resolveBracketedWord(base: string): string {
+  if (!base.includes("[")) return base
+  let out = ""
+  let index = 0
+  while (index < base.length) {
+    const char = base[index]
+    if (char === "[") {
+      const close = base.indexOf("]", index + 2)
+      const member = base[index + 1]
+      if (close !== index + 2 || member === undefined || member === "!") return base
+      out += member
+      index = close + 1
+      continue
+    }
+    if (char === undefined || !PLAIN_WORD_CHAR.test(char)) return base
+    out += char
+    index += 1
+  }
+  return out
+}
+
+/**
+ * The verb this word carries, or null when the word is one the finder steps
+ * over: an environment assignment, a flag, a bare duration, or a wrapper.
+ */
 function verbCandidate(word: string): string | null {
   if (word.includes("=")) return null
   if (word.startsWith("-")) return null
   const base = word.split("/").pop() ?? word
   if (DURATION_WORD.test(base)) return null
-  return WRAPPER_VERBS.has(base) ? null : base
+  const verb = resolveBracketedWord(base)
+  return WRAPPER_VERBS.has(verb) ? null : verb
 }
 
 /**
@@ -423,11 +460,12 @@ function wordsConsumed(word: string, next: string | undefined): number {
  * This is not a shell parser and does not claim to be one, and it is not a
  * security boundary on its own: an interpreter that takes inline code,
  * `python -c` or `node -e`, still hides whatever it runs, and so do glob and
- * parameter spellings such as `/usr/bin/n[c]` and `who$@ami`. That gap is
- * recorded in `.dump/app/decisions/2026-09-13-permission-floor.md` rather than
- * papered over here, because the research on agent shell filters is unanimous
- * that a pattern list cannot win against a shell grammar and only an OS sandbox
- * can.
+ * parameter spellings such as `/usr/bin/p?ng` and `who$@ami`. A bracket that
+ * names one character, `n[c]`, resolves to the single word it is, and that is
+ * the only glob the splitter claims to read. The wider gap is recorded in
+ * `.dump/app/decisions/2026-09-13-permission-floor.md` rather than papered
+ * over here, because the research on agent shell filters is unanimous that a
+ * pattern list cannot win against a shell grammar and only an OS sandbox can.
  */
 export function splitCommandSegments(command: string): CommandSegment[] {
   return (
@@ -436,8 +474,11 @@ export function splitCommandSegments(command: string): CommandSegment[] {
       // `find . \( -name x \) -delete` groups its predicates with escaped
       // parentheses, which are arguments rather than a subshell. Splitting on them
       // put `-delete` in a segment of its own, away from the `find` that carries
-      // it, and the delete read as an ordinary command.
-      .replaceAll(/\\\(|\\\)/g, " ")
+      // it, and the delete read as an ordinary command. An exec predicate ends
+      // the same way, `find . -exec echo {} \; -exec rm {} +`, and a split on the
+      // escaped terminator put the second predicate in a segment of its own,
+      // away from the `find` that carries it.
+      .replaceAll(/\\\(|\\\)|\\;|\\&/g, " ")
       .split(/&&|\|\||[|;\n`()]|\$\(/)
       .map((raw) => raw.trim())
       .filter((text) => text.length > 0)
@@ -898,17 +939,26 @@ function isBlockDevice(word: string): boolean {
  *
  * An exec'd path is caught as well as an exec'd delete verb, because
  * `find . -execdir /tmp/run.sh {} ;` runs attacker-chosen code once per matched
- * file and names no delete verb at all.
+ * file and names no delete verb at all. Every exec predicate is inspected, not
+ * just the first: a benign `-exec echo` in front is a shield, not a verdict,
+ * and `-exec rm` behind it deletes just the same.
  */
 function findDeletes(segment: CommandSegment): boolean {
   if (segment.verb !== "find") return false
   if (segment.words.includes("-delete")) return true
-  const flagIndex = segment.words.findIndex((word) => FIND_EXEC_FLAGS.has(word))
-  if (flagIndex < 0) return false
-  const executed = segment.words[flagIndex + 1]
-  if (executed === undefined) return false
-  if (DELETE_VERBS.has(executed.split("/").pop() ?? executed)) return true
-  return executed.startsWith("/") || executed.startsWith("./") || SCRIPT_SUFFIX.test(executed)
+  let flagIndex = segment.words.findIndex((word) => FIND_EXEC_FLAGS.has(word))
+  while (flagIndex >= 0) {
+    const executed = segment.words[flagIndex + 1]
+    if (executed !== undefined) {
+      const executedVerb = resolveBracketedWord(executed.split("/").pop() ?? executed)
+      if (DELETE_VERBS.has(executedVerb)) return true
+      if (executed.startsWith("/") || executed.startsWith("./") || SCRIPT_SUFFIX.test(executed))
+        return true
+    }
+    const next = segment.words.slice(flagIndex + 2).findIndex((word) => FIND_EXEC_FLAGS.has(word))
+    flagIndex = next < 0 ? -1 : flagIndex + 2 + next
+  }
+  return false
 }
 
 /** The `find` predicates that run a command per matched file. */
@@ -1656,12 +1706,13 @@ function hasRemoteRsync(segment: CommandSegment): boolean {
 /**
  * True when a word names a remote rsync target.
  *
- * The documented remote spellings are `[user@]host:/path`, the daemon form
- * `host::module`, and `rsync://host/module`, and neither `@`, a scheme nor a
- * dot is required, so `server:/data` is remote as well. A host that carries a
- * colon of its own is bracketed, as an IPv6 address is. The only local
- * spelling that keeps a colon and a slash is a drive letter, which is one
- * letter, and a slash in the host keeps the rule off a path that merely
+ * The documented remote spellings are `[user@]host:path` with the path either
+ * absolute or host-relative, the daemon form `host::module`, and
+ * `rsync://host/module`, and neither `@`, a scheme nor a dot is required, so
+ * `server:/data` and `server:backup` are remote as well. A host that carries
+ * a colon of its own is bracketed, as an IPv6 address is. The only local
+ * spellings that keep a colon are a drive letter, which is one letter, and a
+ * path, where a slash in the host part keeps the rule off a file that merely
  * contains a colon.
  */
 function namesRemoteHost(word: string): boolean {
@@ -1673,8 +1724,6 @@ function namesRemoteHost(word: string): boolean {
   }
   const colon = word.indexOf(":")
   if (colon <= 0) return false
-  const next = word[colon + 1]
-  if (next !== "/" && next !== ":") return false
   const host = word.slice(0, colon)
   if (host.includes("/")) return false
   return host.length > 1
