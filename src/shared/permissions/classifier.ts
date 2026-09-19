@@ -669,7 +669,9 @@ function joinUnderDirectory(directory: string, source: string): string | null {
   const slash = source.lastIndexOf("/")
   const base = slash === -1 ? source : source.slice(slash + 1)
   if (base.length === 0) return null
-  return `${directory.replace(/\/+$/, "")}/${base}`
+  let end = directory.length
+  while (end > 0 && directory[end - 1] === "/") end--
+  return `${directory.slice(0, end)}/${base}`
 }
 
 /** The word this segment's destination is read from, which a flag can move. */
@@ -1227,7 +1229,7 @@ const COPY_MOVE_INTERPRETER_CALLS = [
 ]
 
 /** The mode literals that turn an interpreter `open` into a write rather than a read. */
-const WRITE_MODE_LITERAL = /["'](w|a|x|r\+)(\+?b?t?)?["']/
+const WRITE_MODE_LITERAL = /["'](w|a|x|r\+)(\+|b|t|\+b|\+t|bt|\+bt)?["']/
 
 /**
  * Network calls an interpreter payload can make, which is what the egress rule
@@ -1281,7 +1283,10 @@ const PAYLOAD_HOST_LITERAL =
 function payloadPaths(command: string): string[] {
   const found: string[] = []
   for (const match of command.matchAll(/(?:~\/|\/)[^\s'"`()|;,&<>]*/g)) {
-    const path = match[0].replace(/[,}\]]+$/, "")
+    const raw = match[0]
+    let end = raw.length
+    while (end > 0 && (raw[end - 1] === "," || raw[end - 1] === "}" || raw[end - 1] === "]")) end--
+    const path = raw.slice(0, end)
     if (path.length > 0) found.push(path)
   }
   return found
@@ -1294,7 +1299,7 @@ function payloadPaths(command: string): string[] {
  */
 function isProtectedTarget(path: string): boolean {
   if (isProtectedLocation(path)) return true
-  return PROTECTED_WRITE_PREFIXES.some((prefix) => `${path}/` === prefix)
+  return PROTECTED_WRITE_PREFIXES.includes(`${path}/`)
 }
 
 /**

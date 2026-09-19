@@ -1965,29 +1965,34 @@ export const ChatInputArea = memo(function ChatInputArea({
                       })}
                     </DropdownMenuContent>
                     {modeTooltip?.visible &&
-                      createPortal(
-                        <div
-                          className="fixed z-[100000]"
-                          style={{
-                            top: modeTooltip.position.top + 14,
-                            left: modeTooltip.position.left,
-                            transform: "translateY(-50%)",
-                          }}
-                        >
+                      (() => {
+                        let text: string
+                        if (engine === "native") {
+                          text =
+                            nativeModeRefusal(modeTooltip.mode) ??
+                            getModeTooltip(modeTooltip.mode, "engine-only")
+                        } else {
+                          text = getModeTooltip(modeTooltip.mode, permissionFloorFor(provider))
+                        }
+                        return createPortal(
                           <div
-                            data-tooltip="true"
-                            className="relative rounded-xl bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
+                            className="fixed z-[100000]"
+                            style={{
+                              top: modeTooltip.position.top + 14,
+                              left: modeTooltip.position.left,
+                              transform: "translateY(-50%)",
+                            }}
                           >
-                            <span>
-                              {engine === "native"
-                                ? (nativeModeRefusal(modeTooltip.mode) ??
-                                  getModeTooltip(modeTooltip.mode, "engine-only"))
-                                : getModeTooltip(modeTooltip.mode, permissionFloorFor(provider))}
-                            </span>
-                          </div>
-                        </div>,
-                        document.body,
-                      )}
+                            <div
+                              data-tooltip="true"
+                              className="relative rounded-xl bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
+                            >
+                              <span>{text}</span>
+                            </div>
+                          </div>,
+                          document.body,
+                        )
+                      })()}
                   </DropdownMenu>
 
                   <button
