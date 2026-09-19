@@ -745,10 +745,11 @@ escapes only, so a valid basic string such as `b = "caf\u00e9"` was a parse
 error, and the policy file that carried it fell back to the shipped floor
 without telling the user whose policy was not in effect. The reader now takes
 `\uXXXX` and `\UXXXXXXXX` with their hex digits validated, and rejects a
-`\u` surrogate, which TOML says to spell as `\U`. Measured: `"\u00e9"`
-reads as the accented letter and `"\U0001F600"` as the pictograph on the build
-this record ships with, and a bad digit, a missing digit, a `\u` surrogate and
-a code point past `0x10FFFF` each fail with `malformed string value`.
+surrogate at either width, because TOML takes only unicode scalar values.
+Measured: `"\u00e9"` reads as the accented letter and `"\U0001F600"` as the
+pictograph on the build this record ships with, and a bad digit, a missing
+digit, a surrogate at either width and a code point past `0x10FFFF` each fail
+with `malformed string value`.
 
 ## Decision 31: a one-member glob reads as the word it resolves to, and every exec predicate is read (added 2026-09-19)
 
@@ -774,8 +775,11 @@ shield for the delete behind it. The check now reads every `-exec`,
 `-execdir`, `-ok` and `-okdir` the segment carries, and the escaped
 terminators `\;` and `\&` that end a predicate are arguments like the
 escaped parentheses already were, so the second predicate stays in the segment
-its `find` carries. Measured: `find / -type f -exec echo {} \; -exec rm {} +`
-and `find / -type f -ok rmdir {} \; -exec rm -rf {} +` classify
+its `find` carries. Each predicate is read with `readVerb`, so the wrapper,
+the assignment and the flags a predicate puts in front of its delete are
+stepped over the way a leading `sudo rm` is. Measured: `find / -type f -exec
+echo {} \; -exec rm {} +`, `find / -type f -ok rmdir {} \; -exec rm -rf {} +`,
+`find / -exec sudo rm -rf {} +` and `find / -exec env FOO=1 rm {} +` classify
 `bulk-find-delete` on the build this record ships with, `find . -name '*.log'
 -exec echo {} ;` stays approval, and a range, `find . -name '*.log' -exec
 r[m-n] {} ;`, stays approval because it names no delete verb.

@@ -95,10 +95,12 @@ destructive = "ask"   # a trailing comment
     expect(ok(`value = "a${written}b"`)).toEqual({ value: `a${expected}b` })
   })
 
-  it("rejects a unicode escape with a bad digit, no digit, a surrogate, or a code point past 0x10FFFF", () => {
+  it("rejects a unicode escape with a bad digit, no digit, a surrogate at either width, or a point past 0x10FFFF", () => {
     expect(error('value = "a\\u12G4b"')).toContain("malformed string value")
     expect(error('value = "a\\u12"')).toContain("malformed string value")
     expect(error('value = "a\\ud800b"')).toContain("malformed string value")
+    expect(error('value = "a\\U0000D800b"')).toContain("malformed string value")
+    expect(error('value = "a\\U0000DFFFb"')).toContain("malformed string value")
     expect(error('value = "a\\U110000b"')).toContain("malformed string value")
   })
 

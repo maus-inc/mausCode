@@ -391,10 +391,6 @@ function readVerb(words: string[]): string {
 }
 
 /**
- * The verb this word carries, or null when the word is one the finder steps
- * over: an environment assignment, a flag, a bare duration, or a wrapper.
- */
-/**
  * A command word made of plain characters and one-member bracket classes
  * resolves to exactly one word, and the shell expands it to that word before
  * it runs. `r[m]` is the documented spelling that slips past a matcher keyed
@@ -941,22 +937,29 @@ function isBlockDevice(word: string): boolean {
  * `find . -execdir /tmp/run.sh {} ;` runs attacker-chosen code once per matched
  * file and names no delete verb at all. Every exec predicate is inspected, not
  * just the first: a benign `-exec echo` in front is a shield, not a verdict,
- * and `-exec rm` behind it deletes just the same.
+ * and `-exec rm` behind it deletes just the same. Each predicate is read with
+ * `readVerb`, so the wrapper, the assignment and the flags a predicate puts in
+ * front of its delete are stepped over the way a leading `sudo rm` is.
  */
 function findDeletes(segment: CommandSegment): boolean {
   if (segment.verb !== "find") return false
   if (segment.words.includes("-delete")) return true
   let flagIndex = segment.words.findIndex((word) => FIND_EXEC_FLAGS.has(word))
   while (flagIndex >= 0) {
-    const executed = segment.words[flagIndex + 1]
+    // findIndex takes no start position, so the search walks a slice.
+    const rest = segment.words.slice(flagIndex + 2)
+    const restIndex = rest.findIndex((word) => FIND_EXEC_FLAGS.has(word))
+    const next = restIndex < 0 ? -1 : flagIndex + 2 + restIndex
+    const predicate = segment.words.slice(flagIndex + 1, next < 0 ? undefined : next)
+    const executed = predicate[0]
     if (executed !== undefined) {
       const executedVerb = resolveBracketedWord(executed.split("/").pop() ?? executed)
       if (DELETE_VERBS.has(executedVerb)) return true
       if (executed.startsWith("/") || executed.startsWith("./") || SCRIPT_SUFFIX.test(executed))
         return true
     }
-    const next = segment.words.slice(flagIndex + 2).findIndex((word) => FIND_EXEC_FLAGS.has(word))
-    flagIndex = next < 0 ? -1 : flagIndex + 2 + next
+    if (DELETE_VERBS.has(readVerb(predicate))) return true
+    flagIndex = next
   }
   return false
 }

@@ -212,6 +212,10 @@ describe("destructive patterns", () => {
     // them, and the second one still deletes.
     ["bulk-find-delete", "find / -type f -exec echo {} \\; -exec rm {} +"],
     ["bulk-find-delete", "find / -type f -ok rmdir {} \\; -exec rm -rf {} +"],
+    // A predicate puts its wrapper in front of the delete, and the verb read
+    // steps over it the way the leading position does.
+    ["bulk-find-delete", "find / -exec sudo rm -rf {} +"],
+    ["bulk-find-delete", "find / -exec env FOO=1 rm {} +"],
     ["env-injection", "LD_PRELOAD=/tmp/x.so git status"],
     ["env-injection", "GIT_PAGER=/tmp/payload.sh git log"],
     ["env-injection", "GIT_EXTERNAL_DIFF=/tmp/evil.sh git diff HEAD~1"],

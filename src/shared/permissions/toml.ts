@@ -145,8 +145,9 @@ const SHORT_ESCAPES: Record<string, string> = {
 /**
  * Translate one basic-string escape starting at `start`. Null means the
  * escape is not valid TOML. The two unicode escapes need their hex digits, so
- * the reader hands over the whole line rather than one character. A `\u`
- * escape may not name a surrogate, because TOML says to spell those as `\U`.
+ * the reader hands over the whole line rather than one character. Neither
+ * width may name a surrogate, because TOML takes only unicode scalar values,
+ * and only the wide form may name a point past `0x10FFFF`.
  */
 function unescapeBasic(text: string, start: number): { value: string; end: number } | null {
   const char = text[start]
@@ -156,9 +157,11 @@ function unescapeBasic(text: string, start: number): { value: string; end: numbe
     if (hex.length !== digits) return null
     for (const digit of hex) if (!HEX_DIGIT.test(digit)) return null
     const code = Number.parseInt(hex, 16)
-    if (char === "u" && code >= 0xd800 && code <= 0xdfff) return null
+    // TOML takes only unicode scalar values, so both widths reject the
+    // surrogate range, and only the wide form can name a point past it.
+    if (code >= 0xd800 && code <= 0xdfff) return null
     if (char === "U" && code > 0x10ffff) return null
-    const value = char === "u" ? String.fromCharCode(code) : String.fromCodePoint(code)
+    const value = String.fromCodePoint(code)
     return { value, end: start + 1 + digits }
   }
   const translated = char === undefined ? undefined : SHORT_ESCAPES[char]
