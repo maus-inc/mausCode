@@ -129,6 +129,7 @@ describe("destructive patterns", () => {
     // suffix onto the flag, so `-i.bak` rewrites too.
     ["protected-path-overwrite", "sed -i 's/a/b/' /etc/passwd"],
     ["protected-path-overwrite", "sed -i.bak 's/a/b/' /home/u/.ssh/authorized_keys"],
+    ["protected-path-overwrite", "sed --in-place=.bak 's/a/b/' /etc/passwd"],
     ["protected-path-overwrite", "echo x > /root/.ssh/authorized_keys"],
     // Glued to the operator, with no space for a word split to find.
     ["protected-path-overwrite", "echo key>/home/u/.ssh/authorized_keys"],

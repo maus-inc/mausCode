@@ -674,11 +674,12 @@ function writesWhereVerbAims(
 
 /**
  * `sed`'s in-place flags, in the spellings that rewrite the file they name.
- * GNU `sed` glues a backup suffix onto the flag, so `-i.bak` rewrites too.
- * Without `-i`, `sed` prints to standard output and its files are reads.
+ * GNU `sed` glues a backup suffix onto the flag, so `-i.bak` rewrites too, and
+ * the long form takes the suffix after an equals sign. Without the flag, `sed`
+ * prints to standard output and its files are reads.
  */
 function isInPlaceFlag(word: string): boolean {
-  if (word === "-i" || word === "--in-place") return true
+  if (word === "-i" || word === "--in-place" || word.startsWith("--in-place=")) return true
   return word.startsWith("-i") && !word.startsWith("--")
 }
 

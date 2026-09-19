@@ -865,6 +865,32 @@ alpine echo hi`, `podman -H unix:///tmp/sock.sock run alpine`,
 /tmp/notes.txt`, `dd if=/dev/zero of=/tmp/disk.img` and
 `docker -f /tmp/compose.yml ps`, stay approval.
 
+## Decision 35: the long in-place spelling, and a native answer settles only the approval it answered (added 2026-09-19)
+
+Two findings on the head that closed decision 34, each verified before and
+closed after.
+
+**`sed` takes its backup suffix after an equals sign too.** GNU `sed` writes
+`--in-place[=SUFFIX]`, so `sed --in-place=.bak 's/a/b/' /etc/passwd` is the
+same overwrite as `sed -i.bak`, and the in-place flag read of decision 34
+matched only the glued short form and the bare long form. The read now takes
+the `=` spelling as well, and the plain-form near-miss of decision 34 is
+unchanged.
+
+**A native approval answer settles only the approval it answered.** The SDK
+path's registry in `tool-approval.ts` already holds the invariant that a card
+which is gone cannot settle a newer run for the same sub-chat, because it
+resolves by the tool use id the engine handed out. The native path resolved
+by sub-chat alone: the engine call carries the request id, but once the engine
+accepted the answer, the run left `waiting_approval` whatever approval the run
+was actually waiting on. A stale or duplicated id the engine accepted as a
+no-op could therefore flip a different approval out of its pending state. The
+native path now records the request id of each permission card when the card
+chunk is emitted, clears it with the turn, and settles the run only when the
+answered id is the id the sub-chat is waiting on. A process restart empties
+the registry, so an answer after a restart settles nothing and the run keeps
+its pending state until the turn settles, which is the conservative reading.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

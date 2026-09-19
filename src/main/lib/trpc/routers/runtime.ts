@@ -23,6 +23,7 @@ import {
   ensureNativeSession,
   getMappedNativeSession,
   getRuntimeManager,
+  NATIVE_QUESTION_PREFIX,
   NativeCredentialError,
   type NativeEndpoints,
   NativeTranslator,
@@ -51,6 +52,16 @@ const activeTurns = new Map<
   string,
   { cancelled: boolean; completed: boolean; cancelRemote: () => void }
 >()
+
+/**
+ * The permission request id each native sub-chat is awaiting, so a response
+ * settles only the run that is actually waiting on it. The legacy registry in
+ * `tool-approval.ts` holds the same invariant for the SDK path: a card that is
+ * already gone cannot settle a newer run for the same sub-chat. The native
+ * engine call carries the id too, but the engine accepting a stale or
+ * duplicated id must not flip a different approval out of waiting_approval.
+ */
+const pendingNativeApprovals = new Map<string, string>()
 
 function registerTurn(subChatId: string): {
   cancelled: boolean
@@ -227,6 +238,8 @@ function finishNativeTurnBookkeeping(
   runHandle?.settle(turn.cancelled && !turn.completed ? "cancelled" : undefined)
   if (activeTurns.get(subChatId) === turn) {
     activeTurns.delete(subChatId)
+    // This turn's card is over: a late answer to it must not settle anything.
+    pendingNativeApprovals.delete(subChatId)
   }
   try {
     // Clear the marker only when it is still this turn's: a replacement turn
@@ -283,6 +296,17 @@ export const runtimeRouter = router({
 
         const safeEmit = (chunk: UIMessageChunk) => {
           if (!isActive || turn.cancelled) return
+          // A native permission card is the run's wait, keyed on its request id,
+          // so respondApproval settles only the approval it actually answers.
+          if (
+            chunk.type === "ask-user-question" &&
+            chunk.toolUseId.startsWith(NATIVE_QUESTION_PREFIX)
+          ) {
+            pendingNativeApprovals.set(
+              input.subChatId,
+              chunk.toolUseId.slice(NATIVE_QUESTION_PREFIX.length),
+            )
+          }
           if (runHandle) runHandle.observeChunk(chunk)
           try {
             emit.next(chunk)
@@ -460,9 +484,14 @@ export const runtimeRouter = router({
       })
       try {
         await client.respondToPermission(sessionId, input.requestId, approved ? "allow" : "deny")
-        // The engine accepted the answer, so the run leaves waiting_approval.
-        // A failed or stale answer must not clear the pending state.
-        getRunStore().resolveApprovalForSubChat(input.subChatId, approved)
+        // Settle the run only for the approval it actually answered. The
+        // engine accepting a stale or duplicated id must not flip a different
+        // approval out of waiting_approval, which the legacy registry already
+        // forbids for the SDK path.
+        if (pendingNativeApprovals.get(input.subChatId) === input.requestId) {
+          pendingNativeApprovals.delete(input.subChatId)
+          getRunStore().resolveApprovalForSubChat(input.subChatId, approved)
+        }
         return { ok: true }
       } catch {
         // Stock bridge has no permissions capability yet; the call path is
