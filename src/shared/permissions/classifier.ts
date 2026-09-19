@@ -119,13 +119,14 @@ const NETWORK_VERBS = new Set([
  *
  * A container that starts gets the default bridge network, and an image the host
  * does not have is pulled before it starts, so `run`, `create` and `start` open a
- * channel, and `exec` runs code in a container that already has one. `build` stays
- * out because a build on a base image the host already holds opens nothing, and a
- * test pins that.
+ * channel, and `exec` runs code in a container that already has one. `build`
+ * joins them, because a `RUN` step runs on the default build network whether or
+ * not the base image is cached, so a cached base changes nothing about the
+ * channel.
  */
 const NETWORK_SUBCOMMAND_VERBS: Record<string, Set<string>> = {
-  docker: new Set(["push", "pull", "login", "run", "create", "start", "exec"]),
-  podman: new Set(["push", "pull", "login", "run", "create", "start", "exec"]),
+  docker: new Set(["push", "pull", "login", "run", "create", "start", "exec", "build"]),
+  podman: new Set(["push", "pull", "login", "run", "create", "start", "exec", "build"]),
   gh: new Set(["api", "release", "gist"]),
   openssl: new Set(["s_client", "s_server"]),
 }
@@ -267,7 +268,9 @@ function namesSecret(word: string): boolean {
     candidates.push(value, value.replace(/^@/, ""))
   }
   return candidates.some((candidate) =>
-    SECRET_PATH_PATTERNS.some((pattern) => pattern.test(candidate)),
+    SECRET_PATH_PATTERNS.some(
+      (pattern) => pattern.test(candidate) || pattern.test(resolveDotSegments(candidate)),
+    ),
   )
 }
 
@@ -489,8 +492,38 @@ function isSshDirectory(word: string): boolean {
 // cost here runs the other way, because a false positive calls an ordinary
 // directory a protected system path.
 
+/**
+ * The absolute path a string of `dir/..` pairs resolves to, without touching the
+ * filesystem.
+ *
+ * Only absolute paths are resolved, because a relative path climbs from a working
+ * directory this gate cannot see, and a bare `..` stays what it is, which is the
+ * critical target `criticalTargetKind` names. This is what lets
+ * `tee /tmp/../etc/passwd` read as the write to `/etc/passwd` it is.
+ */
+function resolveDotSegments(path: string): string {
+  if (!path.startsWith("/")) return path
+  const stack: string[] = []
+  for (const part of path.split("/")) {
+    if (part === "" || part === ".") continue
+    if (part === "..") {
+      stack.pop()
+      continue
+    }
+    stack.push(part)
+  }
+  return `/${stack.join("/")}`
+}
+
 function isProtectedLocation(word: string): boolean {
-  return isSshDirectory(word) || PROTECTED_WRITE_PREFIXES.some((prefix) => word.startsWith(prefix))
+  // A protected path reached through a `dir/..` pair is the same write, so the
+  // check resolves the path before it reads the prefix.
+  const path = resolveDotSegments(word)
+  return (
+    isSshDirectory(word) ||
+    isSshDirectory(path) ||
+    PROTECTED_WRITE_PREFIXES.some((prefix) => path.startsWith(prefix))
+  )
 }
 
 /**
@@ -837,13 +870,13 @@ function writesBlockDevice(segment: CommandSegment): boolean {
   // `dd` names its output with `of=`, which is why it reads that word rather
   // than the segment's arguments.
   if (segment.verb === "dd") {
-    return segment.words.some((word) => word.startsWith("of=") && BLOCK_DEVICE.test(word.slice(3)))
+    return segment.words.some((word) => word.startsWith("of=") && isBlockDevice(word.slice(3)))
   }
   return writesWhereVerbAims(segment, isBlockDevice)
 }
 
 function isBlockDevice(word: string): boolean {
-  return BLOCK_DEVICE.test(word)
+  return BLOCK_DEVICE.test(resolveDotSegments(word))
 }
 
 /**
@@ -1171,6 +1204,28 @@ const DESTRUCTIVE_INTERPRETER_CALLS = [
   "unlink",
 ]
 
+/**
+ * Interpreter calls that copy or move a file.
+ *
+ * Such a call writes only the destination, so a payload whose calls are all in
+ * this list is judged by the last named path alone. That is the shell rule for
+ * the same verbs, where `cp /etc/passwd /tmp/x` and `mv /etc/hosts ./h.bak` are
+ * not overwrites of the protected path. The critical-path breaker reads the
+ * source of a payload separately, so moving the worktree still counts there.
+ */
+const COPY_MOVE_INTERPRETER_CALLS = [
+  "shutil.copy",
+  "copyfile",
+  "copyfilesync",
+  "shutil.move",
+  "os.rename",
+  "os.replace",
+  "fs.rename",
+  "file.rename",
+  "renamesync",
+  "movesync",
+]
+
 /** The mode literals that turn an interpreter `open` into a write rather than a read. */
 const WRITE_MODE_LITERAL = /["'](w|a|x|r\+)(\+?b?t?)?["']/
 
@@ -1254,7 +1309,18 @@ function hasDestructiveInterpreterPayload(command: string, segments: CommandSegm
   const calls = DESTRUCTIVE_INTERPRETER_CALLS.some((call) => lower.includes(call))
   const opensForWrite = lower.includes("open(") && WRITE_MODE_LITERAL.test(lower)
   if (!calls && !opensForWrite) return false
-  return payloadPaths(lower).some(isProtectedTarget)
+  const paths = payloadPaths(lower)
+  // A copy or move writes only its destination, so a payload of nothing but
+  // such calls is judged by the last named path. A delete or a write mode in
+  // the same payload keeps every path in play.
+  const copyMoveOnly =
+    !opensForWrite &&
+    COPY_MOVE_INTERPRETER_CALLS.some((call) => lower.includes(call)) &&
+    !DESTRUCTIVE_INTERPRETER_CALLS.some(
+      (call) => !COPY_MOVE_INTERPRETER_CALLS.includes(call) && lower.includes(call),
+    )
+  const targets = copyMoveOnly ? paths.slice(-1) : paths
+  return targets.some(isProtectedTarget)
 }
 
 /** True when an inline interpreter payload opens a channel to a host it names. */
@@ -1507,6 +1573,9 @@ function deleteTargets(segment: CommandSegment): string[] {
  * ordinary.
  */
 function criticalTargetKind(target: string, worktreeRoot?: string): string | null {
+  // `/work/mausCode/..` is the parent of the worktree and `/tmp/..` is the root,
+  // so the target resolves before it is compared. A bare `..` stays what it is.
+  target = resolveDotSegments(target)
   if (target === "/" || target === "/*") return "the filesystem root"
   if (target === "~" || target === "~/" || target === "$home" || target === "$home/") {
     return "the home directory"
@@ -1521,10 +1590,24 @@ function criticalTargetKind(target: string, worktreeRoot?: string): string | nul
 }
 
 function hasRemoteRsync(segment: CommandSegment): boolean {
-  return (
-    segment.verb === "rsync" &&
-    segment.words.some((word) => word.includes("@") || word.includes("://"))
-  )
+  return segment.verb === "rsync" && segment.words.some(namesRemoteHost)
+}
+
+/**
+ * True when a word names a remote rsync target.
+ *
+ * The documented remote spellings are `[user@]host:/path` and
+ * `rsync://host/module`, and neither `@` nor a scheme is required, so
+ * `myhost.com:/var/www` is remote as well. A dot in the host keeps the rule off
+ * local spellings, `C:/Users` among them, and a slash in the host keeps it off a
+ * path that merely contains a colon.
+ */
+function namesRemoteHost(word: string): boolean {
+  if (word.includes("@") || word.includes("://")) return true
+  const colon = word.indexOf(":")
+  if (colon <= 0 || word[colon + 1] !== "/") return false
+  const host = word.slice(0, colon)
+  return host.includes(".") && !host.includes("/")
 }
 
 /**

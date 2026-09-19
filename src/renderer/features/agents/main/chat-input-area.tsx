@@ -13,6 +13,7 @@ import { ChevronDown, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
 import { permissionFloorFor } from "../../../../shared/provider-capabilities"
 import { Button } from "../../../components/ui/button"
 import {
@@ -1978,7 +1979,10 @@ export const ChatInputArea = memo(function ChatInputArea({
                             className="relative rounded-xl bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
                           >
                             <span>
-                              {getModeTooltip(modeTooltip.mode, permissionFloorFor(provider))}
+                              {engine === "native"
+                                ? (nativeModeRefusal(modeTooltip.mode) ??
+                                  getModeTooltip(modeTooltip.mode, "engine-only"))
+                                : getModeTooltip(modeTooltip.mode, permissionFloorFor(provider))}
                             </span>
                           </div>
                         </div>,

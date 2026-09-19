@@ -507,10 +507,13 @@ and an image the host does not have is pulled before it starts, so the channel
 opens whether or not the command inside the container names a network verb.
 `exec` is there because it runs code in a container that already has one.
 
-`build` stays out. A build on a base image the host already holds opens nothing,
-and a test pins `docker build -t app .` as not network, so widening it would have
-to be a deliberate reversal rather than a side effect of this one. `ps`, `logs`
-and `images` stay local for the reason the subcommand table exists at all.
+`build` started out of the set on the ground that a build on a base image the
+host already holds opens nothing, and a test pinned `docker build -t app .` as
+not network. CodeRabbit found the ground wrong: a `RUN` step runs on the default
+build network whether or not the base is cached, so a cached base changes nothing
+about the channel. `build` is now a network subcommand for `docker` and `podman`,
+and the test pins it on the network side instead. `ps`, `logs` and `images` stay
+local for the reason the subcommand table exists at all.
 
 The consequence in Agent mode is a card on a container start, because network is
 the class the owner set to ask there. CodeAnt asked for `docker run` alone;
@@ -621,6 +624,73 @@ reach the rules in pieces. The residual, stated in the section below, is a name
 the payload builds at runtime, which is dataflow, and the embedded-shell case the
 old text credited stays caught the way it always was.
 
+## Decision 27: a protected path reached through `dir/..` is the same path (added 2026-09-19)
+
+CodeAnt measured the bypass on the pushed head: `tee /tmp/../etc/passwd`
+classified as `approval.shell-command`, because the protected-path check read the
+word as written and the word starts with `/tmp/`. The check now resolves the
+absolute path's `dir/..` pairs before it reads the prefix, in the four places a
+path is matched: the protected-location check, the block-device check, the secret
+path check and the critical-path target check. The resolver touches the text
+only, so it costs the classifier nothing it did not already pay.
+
+Only absolute paths are resolved, and a bare `..` stays what it is. A relative
+pair climbs from a working directory the gate cannot see, and `criticalTargetKind`
+names a bare `..` as the critical target it is from the working directory, so the
+two edges stay on opposite sides of the resolver on purpose.
+
+Measured on the build before the rule, each of these was `approval`:
+`echo x > /tmp/../etc/passwd`, `tee /tmp/../etc/passwd`,
+`tee /tmp/../home/u/.ssh/authorized_keys`, `cp /tmp/k
+/tmp/../home/u/.ssh/authorized_keys`, `cat /tmp/../home/u/.ssh/id_rsa` and
+`dd if=/tmp/x of=/tmp/../dev/sda`. On the build this record ships with each
+classifies `destructive` or `exfiltration` under the rule that names the path it
+resolves to, and `ls /tmp/..` and `echo /tmp/../etc/passwd` stay `approval`,
+because a path that is merely named is not a write.
+
+## Decision 28: a remote rsync target needs no `@` (added 2026-09-19)
+
+The remote-rsync rule required an `@` or a `://` in a word, so
+`rsync myhost.com:/var/www /tmp/backup` classified as `approval.shell-command`.
+rsync's manual spells the remote form `[user@]host:path`, and neither the `@` nor
+a scheme is part of it. The check now also accepts a word whose host part carries
+a dot and ends in `:/`, which keeps the local spellings off the rule: a drive
+letter has no dot, so `C:/Users` stays local, and a host part that carries a
+slash is a path, not a host.
+
+Measured on the build this record ships with, `rsync myhost.com:/var/www
+/tmp/backup` and `rsync 10.0.0.5:/data /tmp/backup` classify
+`network.egress-command`, and `rsync /tmp/a /tmp/b` and
+`rsync C:/Users/x /tmp/backup` stay `approval`.
+
+## Decision 29: an interpreter copy or move is judged by its destination (added 2026-09-19)
+
+The check decision 26 added counted every path a payload names, so
+`shutil.copy('/usr/bin/python', '/tmp/x')` classified
+`destructive.interpreter-payload` although the source is read and the
+destination is what gets overwritten. That is the false positive the shell rule
+does not have, where a protected operand of `cp` and `mv` is a source. The check
+now judges a payload of nothing but copy and move calls by its last named path:
+`shutil.copy` and its friends, `copyfile` and `copyfilesync` in their `fs` and
+`promises` spellings, `shutil.move`, `os.rename`, `os.replace`, `fs.rename`,
+`file.rename`, `renamesync` and `movesync`, read as substrings the way decision 26
+reads every other call.
+
+A delete call, or an `open(` with a write mode, in the same payload keeps every
+path in play, and the critical-path breaker reads the source of a payload
+separately, so a move of the worktree still reaches it.
+
+Measured on the build before the change, the four spellings with a protected
+source and an ordinary destination,
+`shutil.copy('/usr/bin/python', '/tmp/x')`,
+`os.rename('/etc/passwd', '/tmp/x')`,
+`shutil.move('/etc/hosts', '/tmp/x')` and
+`fs.copyFileSync('/etc/hosts', '/tmp/x')`, all classified `destructive`. On the
+build this record ships with they classify `approval`, and the same calls with a
+protected destination, `shutil.copy('/tmp/x', '/etc/cron.d/job')` and
+`os.rename('/tmp/x', '/etc/cron.d/job')`, classify `destructive` under
+`interpreter-payload`.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
@@ -630,6 +700,10 @@ disappeared.
 
 Still evading, verified:
 
+- **A relative `dir/..` pair the gate cannot resolve.** Decision 27 resolves
+  absolute paths only, because a relative pair climbs from a working directory the
+  classifier does not see, and `echo x > ../etc/passwd` is the write of
+  `/etc/passwd` from any directory whose parent holds the protected tree.
 - **A script written to disk and then run.** `python /tmp/evil.py`, `bash /tmp/x.sh`.
   The behaviour is in the file, and reading it to decide would mean executing it.
 - **An interpreter payload that builds its call's name at runtime.** The
@@ -772,9 +846,9 @@ Measured in `.dump/app/benchmarks/2026-09-18-permission-gate-cost.md`: 9.5 to 21
 median per tool call, dominated by the filesystem path check, with the policy
 read cached at sub-microsecond.
 
-Decisions 22 and 23 add work to the classifier, so the same ten-call mix was
-measured again against the commit before them, nine interleaved batches of 20000
-calls per variant: 4.045 µs per call before, 4.106 µs after, a delta of 0.061 µs
-that sits inside the run-to-run spread of either variant. The section in the
-benchmark file carries the per-batch numbers and the two verdict changes the same
-run reports.
+Decisions 22 to 26 add work to the classifier, so the same ten-call mix was
+measured again against `f2b74b4`, the commit the review round landed on, nine
+interleaved batches of 20000 calls per variant: 4.027 µs per call before, 4.057 µs
+after, a delta of 0.030 µs that sits inside the run-to-run spread of either
+variant. The section in the benchmark file carries the per-batch numbers and the
+four verdict changes the same run reports.
