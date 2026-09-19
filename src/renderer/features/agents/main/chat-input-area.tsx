@@ -3,8 +3,8 @@
 /**
  * NOTE (transplant): Gemini/OpenRouter provider wiring (model atoms, auth
  * queries, selector props, placeholder names) was transplanted from
- * erenbertr/1code (Apache-2.0). Their engine-toggle removal was NOT taken —
- * this tree keeps the native/legacy switch (locked to legacy for the new
+ * erenbertr/1code (Apache-2.0). Their engine-toggle removal was NOT taken,
+ * and this tree keeps the native/legacy switch (locked to legacy for the new
  * providers, which the native runtime cannot serve).
  */
 
@@ -1999,13 +1999,15 @@ export const ChatInputArea = memo(function ChatInputArea({
                     type="button"
                     onClick={() => switchEngine(engine === "native" ? "legacy" : "native")}
                     disabled={!canSwitchEngine}
-                    title={
-                      provider === "codex"
-                        ? "Engine: Legacy — Codex chats are served by the Codex CLI adapter; the native runtime doesn't serve Codex (subscription OAuth can't be provisioned to it)."
-                        : engine === "native"
-                          ? "Engine: Native (mausCode runtime). This transport advertises no permissions capability, so no action reaches the permission gate and plan mode is refused here. Click to switch back to Legacy. Switchable on empty chats only."
-                          : "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
-                    }
+                    title={(() => {
+                      if (provider === "codex") {
+                        return "Engine: Legacy. Codex chats are served by the Codex CLI adapter, and the native runtime doesn't serve Codex, because subscription OAuth can't be provisioned to it."
+                      }
+                      if (engine === "native") {
+                        return "Engine: Native (mausCode runtime). This transport advertises no permissions capability, so no action reaches the permission gate and plan and ask modes are refused here. Click to switch back to Legacy. Switchable on empty chats only."
+                      }
+                      return "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
+                    })()}
                     className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Zap
