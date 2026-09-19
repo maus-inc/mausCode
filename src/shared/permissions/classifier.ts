@@ -783,30 +783,13 @@ const SQL_CLIENT_VERBS = new Set([
   "sqlplus",
 ])
 
-/**
- * The object types a client can DROP. The list is data rather than an
- * alternation, which keeps the pattern under the analyzer's complexity limit,
- * and a column is among them because a dropped column is gone too.
- */
-const DROP_OBJECT_TYPES = new Set([
-  "table",
-  "database",
-  "schema",
-  "view",
-  "index",
-  "sequence",
-  "function",
-  "trigger",
-  "extension",
-  "role",
-  "user",
-  "server",
-  "column",
-])
-
-// The patterns take one case of each letter and the `i` flag, which is what
-// keeps the character classes duplicate-free to the analyzer.
-const DROP_SQL = /\bDROP\s+([A-Z_][A-Z0-9_$]*)/i
+// A target-bearing DROP: the object type and the target it removes. The type
+// is any word, which is what keeps TYPE, TABLESPACE, and MATERIALIZED VIEW
+// inside the rule without a list to maintain, and a DROP without a target is
+// incomplete SQL that errors, so it stays a near-miss. The patterns take one
+// case of each letter and the `i` flag, which keeps the character classes
+// duplicate-free to the analyzer.
+const DROP_SQL = /\bDROP\s+[A-Z_][A-Z0-9_$]*\s+[A-Z_][A-Z0-9_$]*/i
 const TRUNCATE_SQL = /\bTRUNCATE\s+(?:TABLE\s+)?[A-Z_][A-Z0-9_$]*/i
 
 /**
@@ -820,9 +803,7 @@ function hasDestructiveSql(segments: CommandSegment[]): boolean {
   return segments.some((segment) => {
     if (!SQL_CLIENT_VERBS.has(segment.verb)) return false
     const text = segment.words.join(" ")
-    const drop = DROP_SQL.exec(text)
-    if (drop !== null && DROP_OBJECT_TYPES.has(drop[1].toLowerCase())) return true
-    return TRUNCATE_SQL.test(text)
+    return DROP_SQL.test(text) || TRUNCATE_SQL.test(text)
   })
 }
 

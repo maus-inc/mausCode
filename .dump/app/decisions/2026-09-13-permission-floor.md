@@ -923,6 +923,19 @@ omitted `--groups`, so `chroot --groups root /mnt rm -rf /` consumed `root` as
 the root operand and read `/mnt` as the verb. The flag now carries its value,
 which is what keeps the root operand on the path and the verb on the delete.
 
+## Decision 37: a target-bearing DROP is destructive, whatever the object type (added 2026-09-19)
+
+A finding on the head that closed decision 36, and it is the flaw in the fix
+itself. The DROP read checked the word after DROP against a list of object
+types, and a list is a hole: `DROP TYPE money`, `DROP TABLESPACE fast` and
+`DROP MATERIALIZED VIEW mv` are all drops a client can run, and none of the
+words is on the list, so each took the residual approval class in Agent mode.
+The read is now structural: DROP followed by the object type and a target is
+destructive, whatever the type, and a DROP without a target is incomplete SQL
+that errors, so it stays a near-miss. The list is gone, which leaves nothing
+to maintain under the analyzer's complexity limit, and the TRUNCATE read of
+decision 36 is unchanged.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

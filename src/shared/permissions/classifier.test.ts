@@ -51,6 +51,10 @@ describe("destructive patterns", () => {
     ["destructive-sql", 'psql -c "TRUNCATE users"'],
     ["destructive-sql", 'mysql -e "DROP VIEW customer_export"'],
     ["destructive-sql", 'sqlcmd -Q "ALTER TABLE t DROP COLUMN c"'],
+    // The type is any word, which is what keeps these inside the rule.
+    ["destructive-sql", 'psql -c "DROP TYPE money"'],
+    ["destructive-sql", 'psql -c "DROP TABLESPACE fast"'],
+    ["destructive-sql", 'psql -c "DROP MATERIALIZED VIEW mv"'],
     ["forced-git-push", "git push --force origin main"],
     ["forced-git-push", "git push --force-with-lease"],
     ["forced-git-push", "git push -f"],
@@ -454,6 +458,10 @@ describe("destructive patterns", () => {
 
   it("does not call a truncate with no table destructive", () => {
     expect(bash('psql -c "TRUNCATE"').ruleClass).toBe("approval")
+  })
+
+  it("does not call a drop with no target destructive", () => {
+    expect(bash('psql -c "DROP TABLE"').ruleClass).toBe("approval")
   })
 
   it("reads a plain sed as the file read it is, not an overwrite of the file it prints", () => {
