@@ -301,7 +301,15 @@ export function parseConstrainedToml(text: string): TomlParseResult {
       continue
     }
 
-    const applied = applyAssignment(current, currentPath, line, lineNumber, physical, index, defined)
+    const applied = applyAssignment(
+      current,
+      currentPath,
+      line,
+      lineNumber,
+      physical,
+      index,
+      defined,
+    )
     if (!applied.ok) return applied.error
     resumeAt = applied.resumeAt
   }
