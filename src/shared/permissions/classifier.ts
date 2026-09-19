@@ -365,14 +365,19 @@ const DURATION_WORD = /^\d+(?:\.\d+)?[smhd]?$/
  * Normalise one word so a hidden verb cannot ride through it.
  *
  * Quotes are dropped, which is what turns `of="/dev/sda"` into `of=/dev/sda` and
- * `c"h"m"o"d` into `chmod`. Backslashes become forward slashes for two reasons:
- * `\rm -rf /` is the classic spelling that steps around a shell alias and it
- * resolves to the verb `rm` once the basename is taken, and a Windows path gains
- * the separators the secret patterns match on, so `C:\Users\me\.ssh\id_rsa`
- * reaches the `.ssh/` rule instead of sliding past it.
+ * `c"h"m"o"d` into `chmod`. A backslash has two jobs and the word decides
+ * which: when the word already looks like a path (a slash or a drive colon is
+ * in it) the backslash is a path separator, so `C:\Users\me\.ssh\id_rsa`
+ * gains the separators the secret patterns match on and reaches the `.ssh/`
+ * rule instead of sliding past it. In a plain word the backslash is the
+ * shell's character quote, and stripping it is what resolves the alias-step
+ * spelling `\rm` to the verb `rm`, and `r\m` the same way, instead of
+ * splitting the word into a two-letter base no rule recognises.
  */
 function unquote(word: string): string {
-  return word.replaceAll("\\", "/").replaceAll(/["'`]/g, "")
+  const bare = word.replaceAll(/["'`]/g, "")
+  if (bare.includes("/") || bare.includes(":")) return bare.replaceAll("\\", "/")
+  return bare.replace(/\\/g, "")
 }
 
 /**
@@ -724,8 +729,34 @@ function writeTargetIndex(segment: CommandSegment): number {
   return target === null ? segment.words.length - 1 : target.index
 }
 
-function hasDestructiveSql(command: string): boolean {
-  return /\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i.test(command)
+/**
+ * Database clients that can carry a SQL statement directly on the command
+ * line. The destructive-sql check reads only their segments.
+ */
+const SQL_CLIENT_VERBS = new Set([
+  "psql",
+  "mysql",
+  "mariadb",
+  "sqlite3",
+  "sqlcmd",
+  "pgcli",
+  "mycli",
+  "sqlplus",
+])
+
+const DESTRUCTIVE_SQL_TEXT = /\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i
+
+/**
+ * A DROP or TRUNCATE typed into a database client's command line. Read from
+ * the client's segment rather than by regex over the whole command, because
+ * the regex matched text in any argument of any verb and so read
+ * `echo "DROP TABLE users"` as destructive.
+ */
+function hasDestructiveSql(segments: CommandSegment[]): boolean {
+  return segments.some((segment) => {
+    if (!SQL_CLIENT_VERBS.has(segment.verb)) return false
+    return DESTRUCTIVE_SQL_TEXT.test(segment.words.join(" "))
+  })
 }
 
 /**
@@ -1526,7 +1557,7 @@ export const DESTRUCTIVE_PATTERNS: CommandPattern[] = [
   },
   {
     id: "destructive-sql",
-    test: (command) => hasDestructiveSql(command),
+    test: (_command, segments) => hasDestructiveSql(segments),
     reason: "DROP or TRUNCATE destroys stored data",
   },
   {
@@ -1711,15 +1742,17 @@ function hasRemoteRsync(segment: CommandSegment): boolean {
  *
  * The documented remote spellings are `[user@]host:path` with the path either
  * absolute or host-relative, the daemon form `host::module`, and
- * `rsync://host/module`, and neither `@`, a scheme nor a dot is required, so
+ * `rsync://host/module`, and neither a scheme nor a dot is required, so
  * `server:/data` and `server:backup` are remote as well. A host that carries
  * a colon of its own is bracketed, as an IPv6 address is. The only local
  * spellings that keep a colon are a drive letter, which is one letter, and a
  * path, where a slash in the host part keeps the rule off a file that merely
- * contains a colon.
+ * contains a colon. An `@` without a colon names nothing remote, because
+ * `user@host` without a path is not an rsync remote at all, and a local file
+ * may well be called `backup@2024`.
  */
 function namesRemoteHost(word: string): boolean {
-  if (word.includes("@") || word.includes("://")) return true
+  if (word.includes("://")) return true
   if (word.startsWith("[")) {
     const close = word.indexOf("]", 1)
     if (close <= 1 || word[close + 1] !== ":") return false

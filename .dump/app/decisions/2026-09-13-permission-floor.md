@@ -784,6 +784,18 @@ echo {} \; -exec rm {} +`, `find / -type f -ok rmdir {} \; -exec rm -rf {} +`,
 -exec echo {} ;` stays approval, and a range, `find . -name '*.log' -exec
 r[m-n] {} ;`, stays approval because it names no delete verb.
 
+## Decision 32: a backslash is a quote in a word and a separator in a path, SQL is read where a database hears it, an @ needs its colon, and a refusal precedes the register (added 2026-09-19)
+
+Four review findings on the pushed head, each verified open before the change and closed after it.
+
+**A backslash has two jobs, and the word decides which.** The normaliser turned every backslash into a forward slash, which is what makes `C:\Users\me\.ssh\id_rsa` reach the `.ssh/` rule. The same rewrite split `r\m` into `r/m` and took `m` as the verb, so the alias-step spelling of the delete, `r\m -r\f /`, read as an unknown verb and took the residual approval class. A backslash in a word that already looks like a path (a slash or a drive colon is in it) stays a separator, and a backslash in a plain word is stripped as the shell's character quote, which is the shell's own reading. Measured on the build this record ships with: `r\m -rf /` and `r\m -r\f /` breach `recursive-force-delete`, `\rm -rf /` still does, and `cat C:\Users\me\.ssh\id_rsa` still reports `secret-command`.
+
+**A DROP is destructive where a database hears it.** `hasDestructiveSql` regexed the whole command, so `echo "DROP TABLE users"` classified destructive. The check now reads only the segments whose verb is a database client, `psql`, `mysql`, `mariadb`, `sqlite3`, `sqlcmd`, `pgcli`, `mycli` and `sqlplus`, and it reads the client's own words. A statement in a script file, `mysql db < drop.sql`, stays approval, and that is the script-on-disk residual this section already names. Measured: `psql -c "DROP TABLE users"` and `sqlite3 db "TRUNCATE DATABASE prod"` still breach `destructive-sql`, and `echo "DROP TABLE users"` is approval.
+
+**An @ without a colon is a filename.** The rsync remote check counted any `@` in a word as a host, so `rsync -av ./backup@2024 /tmp/x` asked for the network card. The `@` shortcut is gone, because it was redundant from the start: `user@host:/data` is already remote through the host part, which is `user@host`, a label with no slash and more than one letter. Measured: `rsync -av ./backup@2024 /tmp/x` is approval, `rsync user@host:/data /tmp/backup`, `rsync server:/data /tmp/backup` and `rsync server::module /tmp/backup` stay network, and `rsync C:/Users/x /tmp/backup` stays approval.
+
+**A refusal precedes the register.** The native chat subscription called `registerTurn` while setting up, and the mode floor ran later, inside the turn's producer. A plan or ask request on a backend the floor refuses therefore cancelled the native turn it replaced before the refusal reached the user. The floor now runs before the register, and the refusal emits directly, because nothing else of the refused turn exists to tear down. The refusal text and the two refused modes are unchanged, so `native-mode-floor.test.ts` still holds.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

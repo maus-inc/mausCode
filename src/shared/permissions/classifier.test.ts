@@ -34,6 +34,11 @@ describe("destructive patterns", () => {
     ["recursive-force-delete", "rm -fr ./dist"],
     ["recursive-force-delete", "rm -r -f node_modules"],
     ["recursive-force-delete", "rm --recursive --force ."],
+    // A backslash inside a word is the shell's character quote, so the word
+    // resolves to the verb it spells. Reading it as a path separator split the
+    // word into a two-letter base, which no rule recognised.
+    ["recursive-force-delete", "r\\m -rf /"],
+    ["recursive-force-delete", "r\\m -r\\f /"],
     ["destructive-sql", 'psql -c "DROP TABLE users"'],
     ["destructive-sql", 'sqlite3 db "TRUNCATE DATABASE prod"'],
     ["forced-git-push", "git push --force origin main"],
@@ -255,6 +260,9 @@ describe("destructive patterns", () => {
     "dd if=in.txt of=out.txt",
     "echo x > ./notes.md",
     "SELECT * FROM users",
+    // The SQL text is an argument of a verb that never talks to a database,
+    // so printing it is not a DROP.
+    'echo "DROP TABLE users"',
     // The benign examples published beside CVE-2026-55743. An assignment alone
     // is not an injection; the variable has to carry code and the value has to
     // look like something that can be run or loaded.
@@ -477,6 +485,9 @@ describe("network patterns", () => {
     // The documented remote spelling also covers a host-relative path, the
     // one rsync reads against the remote user's home.
     "rsync server:backup /tmp/backup",
+    // The user@ form carries its @ into the host part, and the colon reading
+    // keeps it remote.
+    "rsync user@host:/data /tmp/backup",
     "rsync server::module /tmp/backup",
     "rsync [::1]:/data /tmp/backup",
     "rsync [::1]::module /tmp/backup",
@@ -524,6 +535,9 @@ describe("network patterns", () => {
     "gh pr list",
     "openssl version",
     "podman images",
+    // An @ without a colon is a filename, not a remote: rsync itself reads
+    // `backup@2024` as a local path.
+    "rsync -av ./backup@2024 /tmp/x",
   ])("does not classify `%s` as network", (command) => {
     expect(bash(command).ruleClass).not.toBe("network")
   })

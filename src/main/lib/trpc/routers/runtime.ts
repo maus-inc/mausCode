@@ -249,9 +249,23 @@ export const runtimeRouter = router({
     )
     .subscription(({ input }) => {
       return observable<UIMessageChunk>((emit) => {
+        const subId = input.subChatId.slice(-8)
+        // The mode floor runs before registerTurn: a refused plan or ask
+        // request must not cancel the native turn it replaces, and the refusal
+        // emits directly because nothing else of this turn exists yet to tear
+        // down.
+        const refuse = (errorText: string) => {
+          try {
+            emit.next({ type: "error", errorText })
+            emit.complete()
+          } catch {
+            // The subscriber is already gone; there is nothing to deliver.
+          }
+        }
+        if (!enforceNativeModeFloor(input.mode, refuse)) return () => {}
+
         const turn = registerTurn(input.subChatId)
         const translator = new NativeTranslator()
-        const subId = input.subChatId.slice(-8)
         let isActive = true
         // Run record for this turn (roadmap step 07). Created once the turn
         // is accepted, observed on every emitted chunk, settled in the finally.
@@ -289,8 +303,6 @@ export const runtimeRouter = router({
         void (async () => {
           const streamId = crypto.randomUUID()
           try {
-            if (!enforceNativeModeFloor(input.mode, fail)) return
-
             runHandle = getRunStore().startRun({
               subChatId: input.subChatId,
               engine: "native",
