@@ -378,7 +378,7 @@ const DURATION_WORD = /^\d+(?:\.\d+)?[smhd]?$/
 function unquote(word: string): string {
   const bare = word.replaceAll(/["'`]/g, "")
   if (bare.includes("/") || bare.includes(":")) return bare.replaceAll("\\", "/")
-  return bare.replace(/\\/g, "")
+  return bare.replaceAll(/\\/g, "")
 }
 
 /**
