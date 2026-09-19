@@ -44,9 +44,13 @@ describe("destructive patterns", () => {
     ["recursive-force-delete", "chroot /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --skip-chdir /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --userspec root:root /mnt rm -rf /"],
+    ["recursive-force-delete", "chroot --groups root /mnt rm -rf /"],
     ["bulk-find-delete", "find / -exec chroot /mnt rm -rf {} +"],
     ["destructive-sql", 'psql -c "DROP TABLE users"'],
     ["destructive-sql", 'sqlite3 db "TRUNCATE DATABASE prod"'],
+    ["destructive-sql", 'psql -c "TRUNCATE users"'],
+    ["destructive-sql", 'mysql -e "DROP VIEW customer_export"'],
+    ["destructive-sql", 'sqlcmd -Q "ALTER TABLE t DROP COLUMN c"'],
     ["forced-git-push", "git push --force origin main"],
     ["forced-git-push", "git push --force-with-lease"],
     ["forced-git-push", "git push -f"],
@@ -444,6 +448,14 @@ describe("destructive patterns", () => {
     ).toBeNull()
   })
 
+  it("does not call a read of the table destructive", () => {
+    expect(bash('psql -c "SELECT * FROM users"').ruleClass).toBe("approval")
+  })
+
+  it("does not call a truncate with no table destructive", () => {
+    expect(bash('psql -c "TRUNCATE"').ruleClass).toBe("approval")
+  })
+
   it("reads a plain sed as the file read it is, not an overwrite of the file it prints", () => {
     expect(bash("sed 's/a/b/' /tmp/notes.txt").ruleClass).toBe("approval")
   })
@@ -499,6 +511,8 @@ describe("network patterns", () => {
     // stepped over with its value, the same shape the git global options had.
     "docker -f /tmp/compose.yml run alpine echo hi",
     "podman -H unix:///tmp/sock.sock run alpine",
+    "docker --log-level debug run alpine",
+    "docker -l debug run alpine",
     "npm --registry https://registry.mirror.example/ publish",
     "gh --hostname enterprise.corp api repos",
     "docker create alpine",

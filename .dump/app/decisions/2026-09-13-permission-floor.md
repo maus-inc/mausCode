@@ -891,6 +891,33 @@ answered id is the id the sub-chat is waiting on. A process restart empties
 the registry, so an answer after a restart settles nothing and the run keeps
 its pending state until the turn settles, which is the conservative reading.
 
+## Decision 36: the remaining value flags, the drop a client can drop, and chroot's group list (added 2026-09-19)
+
+Three review findings on the head that closed decision 35, each verified as a
+real miss before the change and closed after it.
+
+**The subcommand read skips docker and podman's remaining value flags.** The
+set of decision 34 held the file, host, config and context globals, but the
+daemons carry more, and `docker --log-level debug run alpine` read its
+subcommand as `debug` and took the residual approval class. The set now also
+skips the log-level, log-driver, TLS certificate and podman certificate
+directory globals, with the single-letter log-level form read in its lowercase
+form as with the host flag. The `-D` and bare-subcommand near-misses are
+unchanged.
+
+**The destructive SQL read reaches every object a client can drop.** The read
+matched DROP and TRUNCATE against a fixed table, database and schema word, so
+`TRUNCATE users` and `DROP VIEW customer_export` took the residual approval
+class in Agent mode. TRUNCATE now takes its table with or without the TABLE
+keyword, which is why its argument is an identifier, and DROP reaches every
+object type a client can drop, a column among them. A read of the table and a
+truncate with no table stay approval.
+
+**chroot carries its group list with its flag.** The wrapper's value flags
+omitted `--groups`, so `chroot --groups root /mnt rm -rf /` consumed `root` as
+the root operand and read `/mnt` as the verb. The flag now carries its value,
+which is what keeps the root operand on the path and the verb on the delete.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

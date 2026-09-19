@@ -350,6 +350,7 @@ const WRAPPER_VALUE_FLAGS = new Set([
   "--priority",
   "--cores",
   "--userspec",
+  "--groups",
 ])
 
 /**
@@ -782,7 +783,13 @@ const SQL_CLIENT_VERBS = new Set([
   "sqlplus",
 ])
 
-const DESTRUCTIVE_SQL_TEXT = /\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i
+/**
+ * The DROP and TRUNCATE forms that remove or empty an object. TRUNCATE takes
+ * its table with or without the TABLE keyword, which is why its argument is an
+ * identifier rather than a fixed keyword, and DROP reaches every object type a
+ * client can drop, a column among them, because a dropped column is gone too.
+ */
+const DESTRUCTIVE_SQL_TEXT = /\bDROP\s+(TABLE|DATABASE|SCHEMA|VIEW|INDEX|SEQUENCE|FUNCTION|TRIGGER|EXTENSION|ROLE|USER|SERVER|COLUMN)\b|\bTRUNCATE\s+(?:TABLE\s+)?[A-Za-z_][A-Za-z0-9_$.]*/i
 
 /**
  * A DROP or TRUNCATE typed into a database client's command line. Read from
@@ -1825,11 +1832,18 @@ const SUBCOMMAND_VALUE_FLAGS = new Set([
   "--namespace",
   // docker and podman, whose global options precede the subcommand. The
   // segment words are lowercased before this set reads them, so the
-  // single-letter host flag appears here as its lowercase form.
+  // single-letter options appear here in their lowercase form.
   "-f",
   "--file",
   "-h",
   "--host",
+  "-l",
+  "--log-level",
+  "--log-driver",
+  "--tlscacert",
+  "--tlscert",
+  "--tlskey",
+  "--cert-dir",
   "--config",
   "--context",
   // npm, yarn and pnpm
