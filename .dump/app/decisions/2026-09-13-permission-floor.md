@@ -652,17 +652,22 @@ because a path that is merely named is not a write.
 
 The remote-rsync rule required an `@` or a `://` in a word, so
 `rsync myhost.com:/var/www /tmp/backup` classified as `approval.shell-command`.
-rsync's manual spells the remote form `[user@]host:path`, and neither the `@`,
-a scheme nor a dot is part of it, so a plain label such as `server:/data` is
-remote as well. The check now also accepts a word whose host part ends in `:/`
-and is longer than one letter, which keeps the local spellings off the rule:
-the only local spelling that keeps a colon and a slash is a drive letter, and
-a host part that carries a slash is a path, not a host.
+rsync's manual spells the remote form `[user@]host:path`, the daemon form
+`host::module`, and a bracketed host when the address carries a colon of its
+own, and neither the `@`, a scheme nor a dot is part of any of them, so a plain
+label such as `server:/data` is remote as well. The check now also accepts a
+word whose host part ends in `:/` or `::` and is longer than one letter, and a
+bracketed host followed by either separator, which keeps the local spellings
+off the rule: the only local spelling that keeps a colon and a slash is a drive
+letter, a single colon that is neither a path nor a daemon separator is a plain
+word, and a host part that carries a slash is a path, not a host.
 
 Measured on the build this record ships with, `rsync myhost.com:/var/www
-/tmp/backup`, `rsync 10.0.0.5:/data /tmp/backup` and `rsync server:/data
-/tmp/backup` classify `network.egress-command`, and `rsync /tmp/a /tmp/b` and
-`rsync C:/Users/x /tmp/backup` stay `approval`.
+/tmp/backup`, `rsync 10.0.0.5:/data /tmp/backup`, `rsync server:/data
+/tmp/backup`, `rsync server::module /tmp/backup` and `rsync [::1]:/data
+/tmp/backup` classify `network.egress-command`, and `rsync /tmp/a /tmp/b`,
+`rsync C:/Users/x /tmp/backup`, `rsync C::module /tmp/backup` and
+`rsync a:b /tmp/backup` stay `approval`.
 
 ## Decision 29: an interpreter copy or move is judged by its destination (added 2026-09-19)
 

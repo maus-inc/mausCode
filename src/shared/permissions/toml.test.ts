@@ -177,8 +177,20 @@ describe("rejections", () => {
     expect(error('a.b = "1"\n[a]\nc = "2"')).toContain("duplicate table header")
   })
 
+  it("records a table created by a dotted key under its absolute name", () => {
+    // The key lives in table `a`, so the table it creates is `a.b`, the name a
+    // header would use, and the header is the duplicate it is.
+    expect(error('[a]\nb.c = "1"\n[a.b]\nd = "2"')).toContain("duplicate table header")
+    expect(error('a.b.c = "1"\n[a.b]\nd = "2"')).toContain("duplicate table header")
+  })
+
   it("lets a deeper header define a table its parent header left unnamed", () => {
     const result = parseConstrainedToml('[a]\nx = "1"\n[a.b]\ny = "2"')
+    expect(result.ok).toBe(true)
+  })
+
+  it("lets a sibling header stand beside a table a dotted key created", () => {
+    const result = parseConstrainedToml('[a]\nb.c = "1"\n[a.c]\nd = "2"')
     expect(result.ok).toBe(true)
   })
 

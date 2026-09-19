@@ -232,11 +232,19 @@ function findAssignment(line: string): number {
 }
 
 /**
- * Walk or create nested tables, marking every table it creates in `defined`.
- * Null means a value already holds that key. The mark is what keeps a second
- * header from naming a table that already exists, explicit or not.
+ * Walk or create nested tables, marking every table it creates in `defined`
+ * under its absolute path: `base` is the path of `from` from the root, so a
+ * dotted key in a table the root does not sit under still records the name a
+ * header would use. Null means a value already holds that key. The mark is
+ * what keeps a second header from naming a table that already exists,
+ * explicit or not.
  */
-function descend(from: TomlTable, path: string[], defined: Set<string>): TomlTable | null {
+function descend(
+  from: TomlTable,
+  path: string[],
+  defined: Set<string>,
+  base: string[],
+): TomlTable | null {
   let node = from
   const walked: string[] = []
   for (const part of path) {
@@ -247,7 +255,7 @@ function descend(from: TomlTable, path: string[], defined: Set<string>): TomlTab
     if (existing === undefined) {
       const created: TomlTable = {}
       node[part] = created
-      defined.add(walked.join("\u0000"))
+      defined.add(base.concat(walked).join("\u0000"))
       node = created
       continue
     }
@@ -270,6 +278,7 @@ export function parseConstrainedToml(text: string): TomlParseResult {
   const root: TomlTable = {}
   const defined = new Set<string>()
   let current: TomlTable = root
+  let currentPath: string[] = []
   const physical = text.split(/\r?\n/)
   // The first line still to read. An array that spans several lines moves this
   // past the ones it swallowed, so the loop below never assigns its own counter.
@@ -288,10 +297,11 @@ export function parseConstrainedToml(text: string): TomlParseResult {
       const header = readTableHeader(root, line, defined)
       if ("error" in header) return fail(lineNumber, header.error)
       current = header.table
+      currentPath = header.path
       continue
     }
 
-    const applied = applyAssignment(current, line, lineNumber, physical, index, defined)
+    const applied = applyAssignment(current, currentPath, line, lineNumber, physical, index, defined)
     if (!applied.ok) return applied.error
     resumeAt = applied.resumeAt
   }
@@ -311,21 +321,22 @@ function readTableHeader(
   root: TomlTable,
   line: string,
   defined: Set<string>,
-): { table: TomlTable } | { error: string } {
+): { table: TomlTable; path: string[] } | { error: string } {
   if (line.startsWith("[[") || !line.endsWith("]")) {
     return { error: "only [table] headers are supported" }
   }
   const path = splitKeyPath(line.slice(1, -1))
   if (path === null) return { error: "malformed table header" }
   if (defined.has(path.join("\u0000"))) return { error: "duplicate table header" }
-  const table = descend(root, path, defined)
+  const table = descend(root, path, defined, [])
   if (table === null) return { error: "table header collides with a value" }
-  return { table }
+  return { table, path }
 }
 
 /** Read one `key = value` line, store it, and report the lines it consumed. */
 function applyAssignment(
   current: TomlTable,
+  currentPath: string[],
   line: string,
   lineNumber: number,
   physical: string[],
@@ -343,7 +354,7 @@ function applyAssignment(
   const read = readValue(line.slice(equals + 1).trim(), lineNumber, physical, start)
   if (!read.ok) return read
 
-  const parent = descend(current, keyPath.slice(0, -1), defined)
+  const parent = descend(current, keyPath.slice(0, -1), defined, currentPath)
   if (parent === null) return { ok: false, error: fail(lineNumber, "key collides with a table") }
   if (Object.hasOwn(parent, leaf)) {
     return { ok: false, error: fail(lineNumber, `duplicate key ${leaf}`) }

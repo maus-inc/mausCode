@@ -290,10 +290,15 @@ describe("destructive patterns", () => {
     "node -e \"require('fs').copyFileSync('/etc/hosts', '/tmp/x')\"",
     "python -c \"import shutil; shutil.copy('/tmp/a', '/tmp/c'); shutil.copy('/tmp/b', '/tmp/d')\"",
     // A local rsync, including a Windows path whose one-letter drive letter is
-    // the only host that keeps a colon and a slash, transfers nothing.
+    // the only host that keeps a colon and a slash, transfers nothing, and a
+    // single colon that is neither a path nor a daemon separator is a plain
+    // word, not a remote.
     "rsync /tmp/a /tmp/b",
     "rsync C:/Users/x /tmp/backup",
     "rsync D:/Users/x /tmp/backup",
+    "rsync C::module /tmp/backup",
+    "rsync a:b /tmp/backup",
+    "rsync /var/log:1 /tmp/backup",
     // An interpreter that names an ordinary path, or a spawn whose list holds no
     // dangerous command, deletes nothing.
     "python -c \"print('hello world')\"",
@@ -449,10 +454,14 @@ describe("network patterns", () => {
     "docker build -t app .",
     "podman build -t app .",
     // The remote spelling [user@]host:/path requires neither the @, a scheme
-    // nor a dot, so a plain label before a colon and a slash is remote.
+    // nor a dot, so a plain label before a colon and a slash is remote, and
+    // the daemon form and a bracketed IPv6 host keep their own colons.
     "rsync myhost.com:/var/www /tmp/backup",
     "rsync 10.0.0.5:/data /tmp/backup",
     "rsync server:/data /tmp/backup",
+    "rsync server::module /tmp/backup",
+    "rsync [::1]:/data /tmp/backup",
+    "rsync [::1]::module /tmp/backup",
   ]
 
   it.each(positives)("classifies `%s` as network", (command) => {

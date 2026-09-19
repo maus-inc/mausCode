@@ -1656,16 +1656,25 @@ function hasRemoteRsync(segment: CommandSegment): boolean {
 /**
  * True when a word names a remote rsync target.
  *
- * The documented remote spellings are `[user@]host:/path` and
- * `rsync://host/module`, and neither `@`, a scheme nor a dot is required, so
- * `server:/data` is remote as well. The only local spelling that keeps a colon
- * and a slash is a drive letter, which is one letter, and a slash in the host
- * keeps the rule off a path that merely contains a colon.
+ * The documented remote spellings are `[user@]host:/path`, the daemon form
+ * `host::module`, and `rsync://host/module`, and neither `@`, a scheme nor a
+ * dot is required, so `server:/data` is remote as well. A host that carries a
+ * colon of its own is bracketed, as an IPv6 address is. The only local
+ * spelling that keeps a colon and a slash is a drive letter, which is one
+ * letter, and a slash in the host keeps the rule off a path that merely
+ * contains a colon.
  */
 function namesRemoteHost(word: string): boolean {
   if (word.includes("@") || word.includes("://")) return true
+  if (word[0] === "[") {
+    const close = word.indexOf("]", 1)
+    if (close <= 1 || word[close + 1] !== ":") return false
+    return true
+  }
   const colon = word.indexOf(":")
-  if (colon <= 0 || word[colon + 1] !== "/") return false
+  if (colon <= 0) return false
+  const next = word[colon + 1]
+  if (next !== "/" && next !== ":") return false
   const host = word.slice(0, colon)
   if (host.includes("/")) return false
   return host.length > 1
