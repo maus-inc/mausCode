@@ -2113,7 +2113,7 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
                               >
                                 <div
                                   data-tooltip="true"
-                                  className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
+                                  className="relative rounded-xl bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
                                 >
                                   <span>
                                     {getModeTooltip(
