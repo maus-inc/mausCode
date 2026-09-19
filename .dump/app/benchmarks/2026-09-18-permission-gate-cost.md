@@ -236,3 +236,58 @@ The two commands that still answer `approval` after all of this are an interpret
 taking inline code and a script written to disk and then run. They are listed under
 "The residual gap" in the decision record with the sources that explain why a
 pattern table cannot close them.
+
+## Fourth run, 2026-09-19, after the adversarial probe round
+
+This run is the first one with a controlled comparison. The classifier was restored
+to its committed state, measured twice, then replaced with the revised one and
+measured twice more, in the same session on the same machine, so the delta is not
+being read across a change in load.
+
+Harness `/home/user/bench3.mts`, 2000 iterations, no policy file, temporary worktree.
+The mix is the same ten calls: 4 read-only, `Edit`, a non-markdown `Write`,
+`Bash npm test`, `Bash mkdir -p build/out`, `Bash rm -rf ./dist`, `WebFetch`.
+
+| Measurement | Committed classifier | Revised classifier |
+| --- | --- | --- |
+| `classifyToolAction`, 10-call mix, mean | 36.8 to 48.2 µs | 42.0 to 46.0 µs |
+| `classifyToolAction`, per call, mean | 3.7 to 4.8 µs | 4.2 to 4.6 µs |
+| `classifyToolAction`, per call, p50 | ~1.7 µs | ~2.1 µs |
+| `evaluateAction`, agent, mean | 225.7 to 238.8 µs | 195.9 to 246.4 µs |
+| `evaluateAction`, agent, p50 | 19.5 to 21.3 µs | 19.3 to 22.7 µs |
+| `evaluateAction`, turbo, mean | 186.6 to 195.1 µs | 201.4 to 223.2 µs |
+| `evaluateAction`, turbo, p50 | 17.4 to 19.6 µs | 18.8 to 19.1 µs |
+
+**The gate cost did not move.** The `evaluateAction` bands overlap completely, and the
+committed classifier's own mean swung from 36.8 to 48.2 µs on identical code, a wider
+band than the delta being measured. Classification costs about 0.4 µs more per call
+at the median, which is a second pass over a segment's words.
+
+**The figures recorded earlier in this file are not comparable to these**, and the
+difference is the harness rather than the code. This one drives the wired gate in
+`src/main/lib/permissions/index.ts`, so every call performs the real path check in
+`containment.ts`, which stats and canonicalises on the filesystem. Those syscalls are
+what the mean is made of, and the p50 is the representative number for a call that
+names no path. The earlier 70 to 96 µs means were measured without that work. Both
+runs agree on the conclusion, which is that the gate is three or four orders of
+magnitude below a model round-trip and is not on the critical path.
+
+**The verdict mix is byte-identical to every run before it**: 800/0/1200, 800/1000/200,
+1600/0/400, 1800/0/200, 2000/0/0. That is the result worth the most here. Two probe
+batteries closed 42 silently-allowed commands and added 149 tests, and the ordinary
+ten-call turn behaves exactly as it did, in every mode.
+
+### The evasion battery, timed on its own
+
+Five commands that exercise the new patterns rather than the ordinary ones: the
+numbered `GIT_CONFIG` injection, a `--mount=type=bind` container escape, a grouped
+`find` with `-exec rm`, a `/dev/tcp` reverse shell, and `su root -c`.
+
+| Measurement | Result |
+| --- | --- |
+| `classifyToolAction`, 5 heavy commands, mean | 51.1 to 58.4 µs, so 10.2 to 11.7 µs each |
+| `evaluateAction`, turbo, 5 heavy commands, mean | 73.1 to 82.3 µs, so 14.6 to 16.5 µs each |
+
+A heavy command costs two to three times an ordinary one, because the strings are
+longer and more patterns run. At the turbo p50 that is still under twenty
+microseconds, and turbo is the mode that runs the most calls without stopping.

