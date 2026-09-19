@@ -39,6 +39,12 @@ describe("destructive patterns", () => {
     // word into a two-letter base, which no rule recognised.
     ["recursive-force-delete", "r\\m -rf /"],
     ["recursive-force-delete", "r\\m -r\\f /"],
+    // chroot is a wrapper that also carries a required root operand before
+    // the command. Without consuming it, the verb read lands on the root.
+    ["recursive-force-delete", "chroot /mnt rm -rf /"],
+    ["recursive-force-delete", "chroot --skip-chdir /mnt rm -rf /"],
+    ["recursive-force-delete", "chroot --userspec root:root /mnt rm -rf /"],
+    ["bulk-find-delete", "find / -exec chroot /mnt rm -rf {} +"],
     ["destructive-sql", 'psql -c "DROP TABLE users"'],
     ["destructive-sql", 'sqlite3 db "TRUNCATE DATABASE prod"'],
     ["forced-git-push", "git push --force origin main"],

@@ -62,17 +62,27 @@ function registerTurn(subChatId: string): {
     // Only mark the replaced turn cancelled while it is still producing; a
     // completed turn keeps its real outcome through the finally block.
     if (!existing.completed) {
-      existing.cancelled = true
-      try {
-        existing.cancelRemote()
-      } catch {
-        // Superseded turn already gone; the new turn proceeds.
-      }
+      cancelTurn(existing)
     }
   }
   const turn = { cancelled: false, completed: false, cancelRemote: () => {} }
   activeTurns.set(subChatId, turn)
   return turn
+}
+
+/**
+ * Mark a turn cancelled and ask the remote to stop. The callers check
+ * `completed` first, because a turn the daemon already ended keeps its real
+ * outcome, and the remote call is best-effort: a turn that is already gone
+ * leaves nothing to ask.
+ */
+function cancelTurn(turn: { cancelled: boolean; cancelRemote: () => void }): void {
+  turn.cancelled = true
+  try {
+    turn.cancelRemote()
+  } catch {
+    // The remote is already gone.
+  }
 }
 
 type NativeEmit = (chunk: UIMessageChunk) => void
@@ -394,12 +404,7 @@ export const runtimeRouter = router({
           // daemon has ended the turn, the finally block preserves the real
           // outcome and there is nothing left to cancel remotely either.
           if (!turn.completed) {
-            turn.cancelled = true
-            try {
-              turn.cancelRemote()
-            } catch {
-              // Client already gone.
-            }
+            cancelTurn(turn)
           }
         }
       })
@@ -413,12 +418,7 @@ export const runtimeRouter = router({
       return { cancelled: false }
     }
     if (turn) {
-      turn.cancelled = true
-      try {
-        turn.cancelRemote()
-      } catch {
-        // Remote already gone.
-      }
+      cancelTurn(turn)
       activeTurns.delete(input.subChatId)
     }
     // Settling the persisted run counts as a cancel too, so a caller after a

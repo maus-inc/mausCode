@@ -347,6 +347,7 @@ const WRAPPER_VALUE_FLAGS = new Set([
   "--group",
   "--priority",
   "--cores",
+  "--userspec",
 ])
 
 /**
@@ -390,7 +391,7 @@ function readVerb(words: string[]): string {
     if (word === undefined) break
     const verb = verbCandidate(word)
     if (verb !== null) return verb
-    index += wordsConsumed(word, words[index + 1])
+    index += wordsConsumed(word, words, index)
   }
   return ""
 }
@@ -441,14 +442,29 @@ function verbCandidate(word: string): string | null {
 }
 
 /**
- * How many words this one takes with it, so the finder can step over both.
+ * How many words this one takes with it, so the finder can step over them.
  * A value flag carries its value, and a wrapper that takes a subject carries the
- * user or unit it acts on.
+ * user or unit it acts on. `chroot` takes options and a required root operand
+ * before the command, so the options are stepped over and the root counts with
+ * them; without that, `chroot /mnt rm -rf /` read its verb as `mnt` and a
+ * `find -exec chroot /mnt rm` behind a benign first predicate deleted with no
+ * rule naming it.
  */
-function wordsConsumed(word: string, next: string | undefined): number {
+function wordsConsumed(word: string, words: string[], index: number): number {
   if (word.startsWith("-")) return WRAPPER_VALUE_FLAGS.has(word) ? 1 : 0
   const base = word.split("/").pop() ?? word
+  if (base === "chroot") {
+    let consumed = 0
+    let position = index + 1
+    while (position < words.length && (words[position] ?? "").startsWith("-")) {
+      consumed += 1
+      if (WRAPPER_VALUE_FLAGS.has(words[position] ?? "")) consumed += 1
+      position += 1
+    }
+    return consumed + 1
+  }
   if (!WRAPPER_SUBJECT_VERBS.has(base)) return 0
+  const next = words[index + 1]
   return next !== undefined && !next.startsWith("-") ? 1 : 0
 }
 
@@ -975,24 +991,33 @@ function isBlockDevice(word: string): boolean {
 function findDeletes(segment: CommandSegment): boolean {
   if (segment.verb !== "find") return false
   if (segment.words.includes("-delete")) return true
-  let flagIndex = segment.words.findIndex((word) => FIND_EXEC_FLAGS.has(word))
-  while (flagIndex >= 0) {
-    // findIndex takes no start position, so the search walks a slice.
-    const rest = segment.words.slice(flagIndex + 2)
-    const restIndex = rest.findIndex((word) => FIND_EXEC_FLAGS.has(word))
-    const next = restIndex < 0 ? -1 : flagIndex + 2 + restIndex
-    const predicate = segment.words.slice(flagIndex + 1, next < 0 ? undefined : next)
-    const executed = predicate[0]
-    if (executed !== undefined) {
-      const executedVerb = resolveBracketedWord(executed.split("/").pop() ?? executed)
-      if (DELETE_VERBS.has(executedVerb)) return true
-      if (executed.startsWith("/") || executed.startsWith("./") || SCRIPT_SUFFIX.test(executed))
-        return true
-    }
-    if (DELETE_VERBS.has(readVerb(predicate))) return true
-    flagIndex = next
+  const flagIndices: number[] = []
+  segment.words.forEach((word, index) => {
+    if (FIND_EXEC_FLAGS.has(word)) flagIndices.push(index)
+  })
+  for (let position = 0; position < flagIndices.length; position += 1) {
+    const flagIndex = flagIndices[position] ?? 0
+    const next = flagIndices[position + 1] ?? segment.words.length
+    if (predicateExecutesDelete(segment.words.slice(flagIndex + 1, next))) return true
   }
   return false
+}
+
+/**
+ * One exec predicate of a find, the words between its flag and the next. True
+ * when it runs a delete, directly or through the wrapper, assignment and flags
+ * a predicate can put in front of its verb.
+ */
+function predicateExecutesDelete(predicate: string[]): boolean {
+  const executed = predicate[0]
+  if (executed !== undefined) {
+    const executedVerb = resolveBracketedWord(executed.split("/").pop() ?? executed)
+    if (DELETE_VERBS.has(executedVerb)) return true
+    if (executed.startsWith("/") || executed.startsWith("./") || SCRIPT_SUFFIX.test(executed)) {
+      return true
+    }
+  }
+  return DELETE_VERBS.has(readVerb(predicate))
 }
 
 /** The `find` predicates that run a command per matched file. */

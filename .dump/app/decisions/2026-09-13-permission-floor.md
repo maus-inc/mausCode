@@ -796,6 +796,33 @@ Four review findings on the pushed head, each verified open before the change an
 
 **A refusal precedes the register.** The native chat subscription called `registerTurn` while setting up, and the mode floor ran later, inside the turn's producer. A plan or ask request on a backend the floor refuses therefore cancelled the native turn it replaced before the refusal reached the user. The floor now runs before the register, and the refusal emits directly, because nothing else of the refused turn exists to tear down. The refusal text and the two refused modes are unchanged, so `native-mode-floor.test.ts` still holds.
 
+## Decision 33: chroot carries its root, and the find loop reads its flags once (added 2026-09-19)
+
+A CodeRabbit finding and the two SonarCloud marks on the pushed head, each
+verified before the change and closed after it.
+
+**`chroot` is a wrapper that also carries a root.** `chroot` was in the wrapper
+set, but the wrapper consumer skipped no operand for it, so `chroot /mnt rm -rf /`
+read its verb as `mnt`, the root, and the delete behind it took the residual
+approval class. The consumer now steps over `chroot`'s options, with the
+value-taking ones carrying their values, and counts the required root operand
+with them, so the verb read lands on the command the root jail runs. Measured on
+the build this record ships with: `chroot /mnt rm -rf /`,
+`chroot --skip-chdir /mnt rm -rf /` and
+`chroot --userspec root:root /mnt rm -rf /` breach
+`destructive.recursive-force-delete`, `find / -exec chroot /mnt rm -rf {} +`
+breaches `destructive.bulk-find-delete`, and `chroot /mnt ls /` stays approval.
+
+**The find loop reads its flags in one pass.** `findDeletes` walked the segment
+flag by flag, and its per-predicate read made its cognitive complexity 17, one
+over SonarCloud's limit of 15. The flags are now collected in one pass, each
+predicate is the words between its flag and the next, and the per-predicate read
+lives in `predicateExecutesDelete`. The loop sits under the limit, and the
+measured verdicts of decision 31 are unchanged on the build this record ships
+with. The same pass removed the duplicated cancel block in the native
+subscription, which now shares `cancelTurn`, so the duplication mark on the
+branch's new code comes off as well.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
