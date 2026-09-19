@@ -186,8 +186,24 @@ export function findSecretPath(
  */
 function commandReadsSecret(segments: CommandSegment[]): boolean {
   return segments.some((segment) =>
-    segment.words.some((word, index) => namesSecret(word) && !isWriteTarget(segment, index)),
+    segment.words.some((word, index) => readsSecretHere(segment, word, index)),
   )
+}
+
+/**
+ * True when this word names a secret and the segment is reading it rather than
+ * writing to it.
+ *
+ * A word glued to a redirect operator is a write when the secret sits after the
+ * operator, which is what `echo key>/home/u/.ssh/authorized_keys` does. The same
+ * word with the secret before the operator is a read, because
+ * `echo ~/.ssh/id_rsa>/tmp/x` prints the key and sends it somewhere ordinary.
+ */
+function readsSecretHere(segment: CommandSegment, word: string, index: number): boolean {
+  if (!namesSecret(word)) return false
+  const operator = word.lastIndexOf(">")
+  if (operator >= 0) return !namesSecret(word.slice(operator + 1))
+  return !isWriteTarget(segment, index)
 }
 
 /**
@@ -200,7 +216,12 @@ function commandReadsSecret(segments: CommandSegment[]): boolean {
  * question that matters is whether this word sits on the receiving end of one.
  */
 function isWriteTarget(segment: CommandSegment, index: number): boolean {
-  if (segment.verb === "tee") return true
+  // A write verb's destination is a write, so `cp /tmp/k ~/.ssh/authorized_keys`
+  // is a protected-path overwrite rather than a read of a secret location. This
+  // reads the same two verb sets as `writesWhereVerbAims`, and answers a question
+  // about one index rather than about the segment, which is why it cannot call it.
+  if (WRITES_EVERY_ARGUMENT.has(segment.verb)) return true
+  if (WRITES_LAST_ARGUMENT.has(segment.verb)) return index === segment.words.length - 1
   const word = segment.words[index] ?? ""
   if (word.startsWith(">")) return true
   const previous = segment.words[index - 1] ?? ""
@@ -316,7 +337,7 @@ const DURATION_WORD = /^\d+(?:\.\d+)?[smhd]?$/
  * reaches the `.ssh/` rule instead of sliding past it.
  */
 function unquote(word: string): string {
-  return word.replace(/\\/g, "/").replace(/["'`]/g, "")
+  return word.replaceAll("\\", "/").replaceAll(/["'`]/g, "")
 }
 
 /**
@@ -327,21 +348,35 @@ function readVerb(words: string[]): string {
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index]
     if (word === undefined) break
-    if (word.includes("=")) continue
-    if (word.startsWith("-")) {
-      if (WRAPPER_VALUE_FLAGS.has(word)) index += 1
-      continue
-    }
-    const base = word.split("/").pop() ?? word
-    if (DURATION_WORD.test(base)) continue
-    if (WRAPPER_VERBS.has(base)) {
-      const subject = words[index + 1]
-      if (WRAPPER_SUBJECT_VERBS.has(base) && subject && !subject.startsWith("-")) index += 1
-      continue
-    }
-    return base
+    const verb = verbCandidate(word)
+    if (verb !== null) return verb
+    index += wordsConsumed(word, words[index + 1])
   }
   return ""
+}
+
+/**
+ * The verb this word carries, or null when the word is one the finder steps
+ * over: an environment assignment, a flag, a bare duration, or a wrapper.
+ */
+function verbCandidate(word: string): string | null {
+  if (word.includes("=")) return null
+  if (word.startsWith("-")) return null
+  const base = word.split("/").pop() ?? word
+  if (DURATION_WORD.test(base)) return null
+  return WRAPPER_VERBS.has(base) ? null : base
+}
+
+/**
+ * How many words this one takes with it, so the finder can step over both.
+ * A value flag carries its value, and a wrapper that takes a subject carries the
+ * user or unit it acts on.
+ */
+function wordsConsumed(word: string, next: string | undefined): number {
+  if (word.startsWith("-")) return WRAPPER_VALUE_FLAGS.has(word) ? 1 : 0
+  const base = word.split("/").pop() ?? word
+  if (!WRAPPER_SUBJECT_VERBS.has(base)) return 0
+  return next !== undefined && !next.startsWith("-") ? 1 : 0
 }
 
 /**
@@ -362,12 +397,12 @@ function readVerb(words: string[]): string {
 export function splitCommandSegments(command: string): CommandSegment[] {
   return (
     command
-      .replace(/\$\{?ifs\}?/gi, " ")
+      .replaceAll(/\$\{?ifs\}?/gi, " ")
       // `find . \( -name x \) -delete` groups its predicates with escaped
       // parentheses, which are arguments rather than a subshell. Splitting on them
       // put `-delete` in a segment of its own, away from the `find` that carries
       // it, and the delete read as an ordinary command.
-      .replace(/\\\(|\\\)/g, " ")
+      .replaceAll(/\\\(|\\\)/g, " ")
       .split(/&&|\|\||[|;\n`()]|\$\(/)
       .map((raw) => raw.trim())
       .filter((text) => text.length > 0)
@@ -396,51 +431,108 @@ function hasRecursiveForceRm(segments: CommandSegment[]): boolean {
 }
 
 /**
- * True when the command redirects into a protected location.
+ * Locations a write needs a card for.
  *
- * `/dev/tcp` and `/dev/udp` are excluded because they are bash's pseudo-device
- * sockets rather than files, and `exec 196<>/dev/tcp/host/port` is a network
- * connection. Calling that a write into a protected directory would deny it for
- * the wrong reason, and the network rule names what it actually is.
+ * `/dev` is absent because `redirectsOntoBlockDevice` and `writesBlockDevice` read
+ * the block-device pattern instead, which is precise where a prefix match is not.
+ * A `/dev/` prefix called `dd of=/dev/null` a disk reformat.
  */
-/** Verbs whose argument is always a destination, so any position counts. */
-const WRITES_TO_ARGUMENT = new Set(["tee", "truncate"])
-
-/** Verbs whose destination is their last argument, so only that one counts. */
-const MOVES_INTO_ARGUMENT = new Set(["cp", "mv", "install"])
+const PROTECTED_WRITE_PREFIXES = ["/etc/", "/usr/", "/bin/", "/sbin/", "/boot/"]
 
 /**
- * Locations a write needs a card for. `/dev` is absent because the block-device
- * rule covers it precisely, and a prefix match there would call `dd of=/dev/null`
- * a disk reformat.
+ * True for the ssh directory in any spelling.
+ *
+ * A provider hands over an absolute path, so matching `~/.ssh/` alone left
+ * `tee /home/u/.ssh/authorized_keys` and `echo key > /home/u/.ssh/authorized_keys`
+ * matching nothing at all. Both install a login key, and both landed in the
+ * approval class, which Agent mode allows without a card.
  */
-const PROTECTED_WRITE_PREFIXES = ["/etc/", "~/.ssh/", "/usr/", "/bin/", "/sbin/", "/boot/"]
+function isSshDirectory(word: string): boolean {
+  return word.startsWith(".ssh/") || word.includes("/.ssh/")
+}
 
-function hasProtectedRedirect(command: string): boolean {
-  return />\s*(\/etc\/|~\/\.ssh\/|\/usr\/|\/bin\/|\/sbin\/|\/boot\/|\/dev\/(?!tcp|udp))/.test(
-    command,
-  )
+// `SECRET_PATH_PATTERNS` matches `.ssh/` as a bare substring, with no boundary
+// before the dot, so `backup.ssh/keys` reads as a secret there and as an ordinary
+// path here. That difference is deliberate and the two are not drift. The cost of
+// a false positive on a read is a card, and the cost of a false negative is a key
+// in a provider's context, so the read matcher stays the broader of the two. The
+// cost here runs the other way, because a false positive calls an ordinary
+// directory a protected system path.
+
+function isProtectedLocation(word: string): boolean {
+  return isSshDirectory(word) || PROTECTED_WRITE_PREFIXES.some((prefix) => word.startsWith(prefix))
+}
+
+/**
+ * True when a segment redirects into a protected location.
+ *
+ * This reads the same `isProtectedLocation` that `writesProtectedPath` reads,
+ * because the two used to spell the ssh directory differently and an absolute home
+ * path matched neither of them.
+ *
+ * `/dev/tcp` and `/dev/udp` are neither protected nor a device. They are bash's
+ * pseudo-device sockets, so `exec 196<>/dev/tcp/host/port` is a network
+ * connection, and the network rule names what it actually is. Denying that as a
+ * write into a protected directory refuses the right command for the wrong reason.
+ */
+function hasProtectedRedirect(segments: CommandSegment[]): boolean {
+  return segments.some((segment) => redirectTargets(segment).some(isProtectedLocation))
+}
+
+/**
+ * True when a segment redirects onto a block device. Kept apart from the
+ * protected-path rule because that rule's reason names a system directory and
+ * `/dev/sda` is not one, so a denial for `echo x > /dev/sda` would have described
+ * the wrong thing.
+ */
+function redirectsOntoBlockDevice(segment: CommandSegment): boolean {
+  return redirectTargets(segment).some(isBlockDevice)
+}
+
+/**
+ * Every redirect target in one segment. The target is the tail of the word
+ * holding the operator, or the word after it, so `>/etc/passwd` and
+ * `> /etc/passwd` both count and a check that read only one of the two spellings
+ * would miss the other.
+ */
+function redirectTargets(segment: CommandSegment): string[] {
+  const targets: string[] = []
+  segment.words.forEach((word, index) => {
+    const operator = word.lastIndexOf(">")
+    if (operator < 0) return
+    const glued = word.slice(operator + 1)
+    if (glued.length > 0) targets.push(glued)
+    const next = segment.words[index + 1]
+    if (next !== undefined) targets.push(next)
+  })
+  return targets
 }
 
 /**
  * True when a write verb targets a protected location with no redirect operator
  * to match. `tee ~/.ssh/authorized_keys` installs a key and would otherwise land
- * in the approval class, which Agent mode allows.
+ * in the approval class.
  */
 function writesProtectedPath(segments: CommandSegment[]): boolean {
-  return segments.some((segment) => {
-    if (WRITES_TO_ARGUMENT.has(segment.verb)) return segment.words.some(isProtectedLocation)
-    // `cp /etc/passwd /tmp/copy` reads a protected file and writes an ordinary
-    // one, so a copy verb only counts when the protected path is where the bytes
-    // are going, which is its last argument.
-    if (MOVES_INTO_ARGUMENT.has(segment.verb))
-      return isProtectedLocation(segment.words.at(-1) ?? "")
-    return false
-  })
+  return segments.some((segment) => writesWhereVerbAims(segment, isProtectedLocation))
 }
 
-function isProtectedLocation(word: string): boolean {
-  return PROTECTED_WRITE_PREFIXES.some((prefix) => word.startsWith(prefix))
+/**
+ * True when this segment aims a write verb at a word `dangerous` accepts.
+ *
+ * Which argument counts is the verb's business, and the protected-path check, the
+ * block-device check and `isWriteTarget` all need the same answer, so it lives
+ * here once. A verb that writes every argument can hit the target anywhere, while
+ * a verb with a distinct destination only counts at its last argument, because
+ * `cp /etc/passwd /tmp/copy` reads a protected file and writes an ordinary one.
+ */
+function writesWhereVerbAims(
+  segment: CommandSegment,
+  dangerous: (word: string) => boolean,
+): boolean {
+  if (WRITES_EVERY_ARGUMENT.has(segment.verb)) return segment.words.some(dangerous)
+  if (WRITES_LAST_ARGUMENT.has(segment.verb)) return dangerous(segment.words.at(-1) ?? "")
+  return false
 }
 
 function hasDestructiveSql(command: string): boolean {
@@ -467,7 +559,20 @@ function hasForcedGitPush(segments: CommandSegment[]): boolean {
 function isForceSpelling(word: string): boolean {
   if (word.startsWith("--force")) return true
   if (word.startsWith("+") && word.length > 1) return true
-  return /^-[a-z]*f[a-z]*$/.test(word)
+  return isShortFlagClusterCarrying(word, "f")
+}
+
+/**
+ * True for a short flag cluster such as `-f` or `-fu` that carries this letter.
+ *
+ * Spelled as a shape test plus a search rather than as one regex, because
+ * `/^-[a-z]*f[a-z]*$/` makes the letter run ambiguous and backtracks over it,
+ * which is super-linear in the length of the word.
+ */
+function isShortFlagClusterCarrying(word: string, letter: string): boolean {
+  if (!word.startsWith("-") || word.startsWith("--")) return false
+  const cluster = word.slice(1)
+  return cluster.length > 0 && /^[a-z]+$/.test(cluster) && cluster.includes(letter)
 }
 
 /**
@@ -533,31 +638,43 @@ const DISK_VERBS = new Set([
 const DISK_SUBCOMMAND_VERBS: Record<string, Set<string>> = {
   nvme: new Set(["format", "sanitize"]),
   dmsetup: new Set(["remove", "remove_all", "wipe_table", "suspend"]),
-  losetup: new Set(["-d", "--detach", "-D", "--detach-all"]),
-}
-
-/** Flags whose presence makes the verb destructive rather than a query. */
-const DISK_DESTRUCTIVE_FLAGS: Record<string, RegExp> = {
-  hdparm: /^--(security-erase|security-erase-null|make-bad|fwdownload)/,
-  mdadm: /^--(zero-superblock|remove|stop|zero)/,
-  badblocks: /^-[a-z]*w/,
-  smartctl: /^--(security-erase|sanitize)/,
 }
 
 /**
- * Verbs whose every argument is a destination, so any of them can be the device.
+ * A word whose presence makes the verb destructive rather than a query.
+ *
+ * Predicates rather than patterns, because one of these needed a short-flag
+ * cluster test and `/^-[a-z]*d[a-z]*$/` backtracks over the letter run, which is
+ * super-linear in the length of the word. `isShortFlagClusterCarrying` answers the
+ * same question without the ambiguity, and a record that mixed the two shapes
+ * would have been harder to read than one that does not.
+ */
+const DISK_DESTRUCTIVE_FLAGS: Record<string, (word: string) => boolean> = {
+  hdparm: (word) => /^--(security-erase|security-erase-null|make-bad|fwdownload)/.test(word),
+  mdadm: (word) => /^--(zero-superblock|remove|stop|zero)/.test(word),
+  badblocks: (word) => /^-[a-z]*w/.test(word),
+  smartctl: (word) => /^--(security-erase|sanitize)/.test(word),
+  // `losetup` detaches with a flag rather than a subcommand, and `readSubcommand`
+  // steps over every word that starts with a dash, so listing `-d` and
+  // `--detach-all` as subcommands made them unreachable and a loop device detach
+  // classified as approval. `-D` is the same word once a segment is lowercased.
+  losetup: (word) => word.startsWith("--detach") || isShortFlagClusterCarrying(word, "d"),
+}
+
+/**
+ * Verbs whose every argument is a destination, so any of them can be the target.
  *
  * `cat` is not here. It reads its arguments, and `cat /dev/sda > backup.img` is a
  * read of a disk rather than a write to one, so counting it produced a false
  * positive on a command that destroys nothing. A write through `cat` needs a
- * redirect, and the protected-path rule already reads that.
+ * redirect, and `hasProtectedRedirect` already reads that.
  */
 const WRITES_EVERY_ARGUMENT = new Set(["tee", "truncate", "shred"])
 
 /**
  * Verbs whose destination is their last argument. `cp /dev/sda /tmp/backup` reads
- * the device and writes an ordinary file, so only the last word can be the
- * device that matters.
+ * the device and writes an ordinary file, so only the last word can be the target
+ * that matters.
  */
 const WRITES_LAST_ARGUMENT = new Set(["cp", "mv", "install"])
 
@@ -576,12 +693,13 @@ const POWER_VERBS = new Set(["shutdown", "reboot", "halt", "poweroff"])
 
 function hasDiskOrPowerVerb(segments: CommandSegment[]): boolean {
   return segments.some((segment) => {
+    if (redirectsOntoBlockDevice(segment)) return true
     if (segment.verb.startsWith("mkfs")) return true
     if (DISK_VERBS.has(segment.verb)) return true
     if (writesBlockDevice(segment)) return true
     if (DISK_SUBCOMMAND_VERBS[segment.verb]?.has(readSubcommand(segment))) return true
-    const flag = DISK_DESTRUCTIVE_FLAGS[segment.verb]
-    if (flag && segment.words.some((word) => flag.test(word))) return true
+    const destructiveFlag = DISK_DESTRUCTIVE_FLAGS[segment.verb]
+    if (destructiveFlag && segment.words.some(destructiveFlag)) return true
     if (segment.verb === "chmod" && segment.words.includes("777")) {
       return segment.words.some((word) => word === "/" || word.startsWith("/*"))
     }
@@ -605,9 +723,7 @@ function writesBlockDevice(segment: CommandSegment): boolean {
   if (segment.verb === "dd") {
     return segment.words.some((word) => word.startsWith("of=") && BLOCK_DEVICE.test(word.slice(3)))
   }
-  if (WRITES_EVERY_ARGUMENT.has(segment.verb)) return segment.words.some(isBlockDevice)
-  if (WRITES_LAST_ARGUMENT.has(segment.verb)) return isBlockDevice(segment.words.at(-1) ?? "")
-  return false
+  return writesWhereVerbAims(segment, isBlockDevice)
 }
 
 function isBlockDevice(word: string): boolean {
@@ -722,11 +838,13 @@ function hasCodeExecutionEnvAssignment(command: string, segments: CommandSegment
   // pipe and a value can contain one. `LESSOPEN='|/tmp/x.sh %s' less file` is a
   // real spelling and its assignment lands in a segment of its own, halved.
   const lower = command.toLowerCase()
-  for (const match of lower.matchAll(/([a-z_][\w.]*)=([^\s;]*)/g)) {
+  // The name class excludes `=` so there is exactly one way to reach the
+  // separator. `[\w.]*` before an `=` is ambiguous and backtracks.
+  for (const match of lower.matchAll(/([a-z_][^\s=]*)=([^\s;]*)/g)) {
     const [, name, value] = match
     if (name === undefined || value === undefined) continue
     if (!CODE_EXECUTION_ENV_VARS.has(name) && !NUMBERED_GIT_CONFIG.test(name)) continue
-    if (looksExecutable(value.replace(/["'`]/g, ""))) return true
+    if (looksExecutable(value.replaceAll(/["'`]/g, ""))) return true
   }
   return false
 }
@@ -852,7 +970,7 @@ export const DESTRUCTIVE_PATTERNS: CommandPattern[] = [
   },
   {
     id: "protected-path-overwrite",
-    test: (command, segments) => hasProtectedRedirect(command) || writesProtectedPath(segments),
+    test: (_command, segments) => hasProtectedRedirect(segments) || writesProtectedPath(segments),
     reason: "the command writes into a protected system directory",
   },
   {

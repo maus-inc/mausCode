@@ -127,8 +127,11 @@ file now allows them. That is a deliberate product decision by the owner, not a
 wiring gap, and it is recorded in the benchmark next to the numbers that show it.
 
 The tooltip copy in `src/renderer/features/agents/lib/mode-display.ts` says what
-turbo actually does now, including that destructive commands and network egress
-both run.
+turbo actually does now. It names destructive commands and network egress as
+things that run, and it names the two things that still ask, which are a removal
+on a critical path and a device reformat or a power verb. An earlier draft of that
+string said turbo takes no prompts at all, which the critical-path breaker above
+makes false.
 
 ## Decision 5: the tool-rule grammar has four spellings (revised 2026-09-18)
 
@@ -420,13 +423,15 @@ A second probe found the grouping spelling. `find . \( -name '*.log' \) -delete`
 
 This is not an exotic spelling. It has a Sigma rule of its own at critical level, a Wazuh custom rule, and it appears in every reverse-shell cheat sheet, usually wrapped in `bash -c` or url-encoded. Matching `/dev/tcp/` and `/dev/udp/` anywhere in a word catches the wrapped and encoded forms too, because quotes come off first.
 
-`/dev/tcp` is excluded from the protected-path redirect rule at the same time. `exec 196<>/dev/tcp/host/port` matched `>\s*/dev/` and reported as a write into a protected system directory, which denies the right command for the wrong reason and tells the user a file was overwritten when a socket was opened.
+`/dev/tcp` is excluded from the protected-path redirect rule at the same time. `exec 196<>/dev/tcp/host/port` matched the redirect rule's `/dev/` alternative and reported as a write into a protected system directory, which denies the right command for the wrong reason and tells the user a file was overwritten when a socket was opened. The exclusion no longer needs spelling out as a special case, because a later revision replaced that pattern with a check for a protected location or a block device, and a pseudo-device socket is neither.
 
 ## Decision 19: a container that mounts the host defeats containment, so the mount is what gets caught (added 2026-09-19)
 
 `docker run -v /:/host alpine rm -rf /host` deletes the host filesystem through a path the gate never sees. Nothing in `containment.ts` can help, because the delete happens in another mount namespace, and the command's own verb is `docker`.
 
-It also landed in a class turbo allows. `docker run` was a network rule for the pull it usually implies, and turbo permits network, so the escape ran with no prompt in the mode that is supposed to refuse everything but exfiltration.
+It also landed in the wrong class, and the first draft of this paragraph claimed more for the fix than the fix does. `docker run` was a network rule for the pull it usually implies. Moving the mount to destructive changes one mode's verdict and improves the reason in the others. Measured against the shipped floor with no policy file, `docker run -v /:/host alpine rm -rf /host` now answers deny `plan.read-only` in plan, ask `destructive.mode.ask` in ask, deny `destructive.policy` in edit and in agent, and allow `destructive.mode.turbo` in turbo.
+
+Agent is the mode that gained: it asked under the network class and it denies under destructive. Ask went the other way and that is worth stating plainly, because it asked for nothing before and it now puts the mount in front of a human, which is what ask mode promises for every destructive action. Plan and edit deny either way and only the reason improved. Turbo allows it before and after, because turbo allows both classes, and the escape this decision describes is still available there. That is the opt-out tier working as ratified rather than a hole this rule closed, and a reader who takes this paragraph as evidence that turbo refuses a host mount is reading it wrong.
 
 `run`, `create` and `exec` are no longer network for docker and podman, which also removes a card on every local container run, and a mount whose host side is `/`, `~`, `/etc`, `/home`, `/root`, `/var`, `/usr`, `/bin` or `/dev` is destructive instead. All three spellings count: `-v /:/host`, `--volume=/home:/h`, and `--mount=type=bind,source=/,target=/host`. A worktree-relative mount stays ordinary, because that is what a container is for here, and so does a named volume.
 
@@ -515,8 +520,19 @@ The capability manifest gained `security.permissionFloor`:
   rule per allow-list entry for edit/agent/turbo.
 
 Settings now shows the value, so a user can see which backends the floor really
-covers. Grok headless turbo cannot prompt, so an unlisted destructive action
-fails closed there rather than asking.
+covers. Grok headless turbo cannot prompt, so a destructive action its allow-list
+does not name fails closed there rather than asking.
+
+What "does not name" means in turbo is narrower than it reads, and the earlier
+draft of this paragraph left it ambiguous. `GROK_TURBO_ALLOW` is `Bash(*)`,
+`WebFetch` and `WebSearch`, so every shell command is named and the fail-closed
+gap is not a shell one. `acceptEdits` covers file edits on top of that. What fails
+closed is a destructive action that arrives as neither a shell command nor a file
+edit nor one of those two tools, an MCP tool that deletes a resource being the
+real example. The wider gap is exfiltration and it is recorded above where the
+turbo allow-list is introduced: a secret path reaching an egress channel is not
+expressible as a `Tool(pattern)` rule, so grok turbo has no exfiltration floor at
+all.
 
 ## Named follow-ups
 
@@ -543,9 +559,18 @@ unattended behaviours is defined by this floor.
 
 So a rollback is a **human decision, not an agent one**. An agent asked to
 "revert step 10" should refuse and escalate, because the thing being reverted to
-is a known critical security defect. Reverting the *policy* is different and is
-safe: deleting `~/.mauscode/permissions.toml` returns to the shipped floor, and
-the floor denies destructive, network and exfiltration in every mode.
+is a known critical security defect.
+
+Reverting the *policy* is different and needs no human, with one caveat that has
+to be stated rather than glossed. Deleting `~/.mauscode/permissions.toml` returns
+to the shipped floor. That floor denies destructive, network and exfiltration in
+plan, ask, edit and agent. It does not deny the first two in turbo, which ships
+`destructive = allow` and `network = allow` because turbo is the deliberate
+opt-out tier, and only exfiltration denies there. An earlier draft of this
+paragraph said the floor denies all three in every mode, which is false and would
+have told a reader that deleting the file narrows turbo. It does not. Deleting the
+file narrows a mode only where the file had widened it, and the turbo deviation
+from criterion 3 is the one recorded under Decision 4 above.
 
 Partial rollback that is safe and does not need a human:
 

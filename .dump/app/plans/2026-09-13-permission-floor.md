@@ -58,16 +58,25 @@ call in a scratch session.
 | Step | Check | Outcome |
 | --- | --- | --- |
 | 0 | mode not in the union | deny `mode.unknown` |
-| 1 | any path in the input fails containment | deny `path.<CODE>` |
+| 1 | any path in the input fails containment | deny `path.<CODE>`, unless the mode is turbo and the class is not exfiltration, where the run roams |
 | 2a | plan + `ExitPlanMode` | deny `plan.exit-plan-mode` |
 | 2b | plan + read-only class | fall through to step 4 |
 | 2c | plan + approval + shell command | deny `plan.no-shell` |
 | 2d | plan + approval + markdown path | allow `plan.markdown-edit` |
 | 2e | plan + approval + other | deny `plan.markdown-only` |
 | 2f | plan + any other class | deny `plan.read-only` |
-| 3 | class is not exfiltration and an allow-list entry matches | allow `allow-list.<index>` |
+| 2g | a command the critical-path breaker caught | step 3 is skipped, and an allow at step 4 becomes ask `critical-path.<id>` |
+| 3 | no breach, the class is not exfiltration, and an allow-list entry matches | allow `allow-list.<index>` |
 | 4 | per-mode verdict, else class verdict | `<class>.mode.<mode>` or `<class>.policy` |
 | 5 | anything threw | deny `evaluator.error` |
+
+Step 2g was added after this table was first written and it spans two rows rather
+than sitting in one place, which is why it reads oddly. The breach is computed
+before the allow-list so that no entry a user writes can approve it, and it is
+applied after `resolveVerdict` so that it only ever narrows. A verdict that
+already asks or denies keeps its own rule, which is why turbo is the only mode
+that sees the breaker fire: it is the only mode whose destructive verdict is
+allow. `evaluator.ts` carries the same note at the call site.
 
 A loader that throws gets `UNREADABLE_POLICY`, which denies every class
 including `read-only`, and reports `source: "invalid-file"`.

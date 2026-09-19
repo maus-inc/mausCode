@@ -183,6 +183,27 @@ describe("rejections", () => {
     expect(error('= "value"')).toContain("malformed key")
   })
 
+  it.each([
+    "[__proto__]\nx = 1",
+    "__proto__.x = 1",
+    "[a.__proto__]\ny = 2",
+    "constructor.prototype.polluted = true",
+    "[constructor]\n[constructor.prototype]\npolluted = true",
+    // A reserved leaf, which the walk never sees because the leaf is assigned
+    // rather than descended into. This parser allows arrays and an array is an
+    // object, so assigning one to `__proto__` reparents the table.
+    'x.__proto__ = ["polluted"]',
+    'x.prototype = ["polluted"]',
+    'x.constructor = ["polluted"]',
+  ])("refuses the reserved key segment in `%s`", (document) => {
+    const own = Object.getOwnPropertyNames(Object.prototype).length
+    const parsed = parseConstrainedToml(document)
+    expect(parsed.ok).toBe(false)
+    expect(Object.getOwnPropertyNames(Object.prototype)).toHaveLength(own)
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+    expect(({} as Record<string, unknown>).x).toBeUndefined()
+  })
+
   it("refuses a missing assignment", () => {
     expect(error("destructive")).toContain("expected key = value")
   })

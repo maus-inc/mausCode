@@ -196,6 +196,35 @@ describe("questionsFromToolInput", () => {
     ).toEqual([])
   })
 
+  it("reads whitespace alone as no text at all", () => {
+    // Whitespace passed the length check and reached the renderer, which showed a
+    // card with a blank question and a blank button and no way to answer it.
+    expect(
+      questionsFromToolInput({ questions: [{ question: "   ", options: [{ label: "A" }] }] }),
+    ).toEqual([])
+    expect(
+      questionsFromToolInput({ questions: [{ question: "Pick", options: [{ label: " \t " }] }] }),
+    ).toEqual([])
+  })
+
+  it("trims what it renders and falls back past a blank header", () => {
+    const questions = questionsFromToolInput({
+      questions: [
+        {
+          question: "  Deploy?  ",
+          header: "   ",
+          options: [{ label: " Yes ", description: "  ships it  " }],
+        },
+      ],
+    })
+    expect(questions[0]).toEqual({
+      question: "Deploy?",
+      header: "Deploy?",
+      options: [{ label: "Yes", description: "ships it" }],
+      multiSelect: false,
+    })
+  })
+
   it("drops a question with no usable options", () => {
     expect(questionsFromToolInput({ questions: [{ question: "Pick", options: [] }] })).toEqual([])
     expect(

@@ -153,26 +153,35 @@ export function questionsFromToolInput(toolInput: Record<string, unknown>): Tool
 
 function readQuestion(entry: unknown): ToolApprovalQuestion | null {
   if (!isRecord(entry)) return null
-  const question = typeof entry.question === "string" ? entry.question : ""
+  const question = readText(entry.question)
   const options = readOptions(entry.options)
   if (question.length === 0 || options.length === 0) return null
+  const header = readText(entry.header)
   return {
     question,
-    header: typeof entry.header === "string" ? entry.header : question,
+    header: header.length > 0 ? header : question,
     options,
     multiSelect: entry.multiSelect === true,
   }
+}
+
+/**
+ * Text a card can render. Whitespace alone is not text, because the renderer
+ * would show a card with a blank question or a blank button and no way to answer
+ * it, so it reads as absent and the entry is dropped instead.
+ */
+function readText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : ""
 }
 
 function readOptions(raw: unknown): Array<{ label: string; description: string }> {
   if (!Array.isArray(raw)) return []
   const options: Array<{ label: string; description: string }> = []
   for (const entry of raw) {
-    if (!isRecord(entry) || typeof entry.label !== "string" || entry.label.length === 0) continue
-    options.push({
-      label: entry.label,
-      description: typeof entry.description === "string" ? entry.description : "",
-    })
+    if (!isRecord(entry)) continue
+    const label = readText(entry.label)
+    if (label.length === 0) continue
+    options.push({ label, description: readText(entry.description) })
   }
   return options
 }

@@ -34,6 +34,7 @@ import {
   describeApprovalRequest,
   questionsFromToolInput,
   resolveToolApproval,
+  type ToolApprovalResponse,
 } from "../../claude/tool-approval"
 import {
   type ClaudeConfig,
@@ -2774,16 +2775,23 @@ ${prompt}
       }),
     )
     .mutation(({ input }) => {
-      const subChatId = resolveToolApproval(input.toolUseId, {
+      const response: ToolApprovalResponse = {
         approved: input.approved,
         ...(input.message === undefined ? {} : { message: input.message }),
         ...(input.updatedInput === undefined ? {} : { updatedInput: input.updatedInput }),
-      })
+      }
+      const subChatId = resolveToolApproval(input.toolUseId, response)
       if (subChatId === null) return { ok: false }
       // The user answered, so the run leaves waiting_approval either way. A card
       // that already timed out is gone from the registry, so a late answer
       // cannot settle a newer run for the same sub-chat.
-      getRunStore().resolveApprovalForSubChat(subChatId, input.approved)
+      //
+      // `approved` alone is not the answer. The card submits `approved: true`
+      // with the picked label in `answers`, so a Deny pick arrives approved and
+      // only `approvalWasDenied` reads it, which is what the gate above does.
+      // Settling the run on the raw flag recorded `approved: true` in the run
+      // history for a tool the user refused.
+      getRunStore().resolveApprovalForSubChat(subChatId, !approvalWasDenied(response))
       return { ok: true }
     }),
 

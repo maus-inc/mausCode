@@ -258,10 +258,36 @@ The mix is the same ten calls: 4 read-only, `Edit`, a non-markdown `Write`,
 | `evaluateAction`, turbo, mean | 186.6 to 195.1 µs | 201.4 to 223.2 µs |
 | `evaluateAction`, turbo, p50 | 17.4 to 19.6 µs | 18.8 to 19.1 µs |
 
-**The gate cost did not move.** The `evaluateAction` bands overlap completely, and the
-committed classifier's own mean swung from 36.8 to 48.2 µs on identical code, a wider
-band than the delta being measured. Classification costs about 0.4 µs more per call
-at the median, which is a second pass over a segment's words.
+**What this table does and does not show.** An earlier draft of this paragraph claimed
+the `evaluateAction` bands overlap completely. That was wrong and it is corrected here
+rather than left standing. The agent mean bands overlap, 225.7 to 238.8 µs against 195.9
+to 246.4 µs, and both p50 bands overlap, 17.4 to 19.6 µs against 18.8 to 19.1 µs. The
+turbo mean bands do not: 186.6 to 195.1 µs against 201.4 to 223.2 µs is a separation of
+about 6 µs with no shared ground.
+
+That turbo mean delta is unexplained and stays on the record as unexplained. The harness
+that produced the A/B was lost when the sandbox was reprovisioned, so it cannot be re-run
+here, and the machine it ran on has two CPUs, where a mean that moves while the median
+does not is usually a tail effect from garbage collection or scheduling. That reading is a
+hypothesis about a measurement nobody can repeat, so it is written as one and not as a
+result. What the table supports is narrower: the median cost of a gated call did not move.
+
+The part this PR actually changes was measured again on its own, interleaved so a drift in
+machine load lands on both sides instead of one. Harness `/home/user/bench4.mts`, 2000
+iterations of the same ten-call mix after a 20000-iteration warm-up, two passes, committed
+classifier read back out of `6222fb1`:
+
+| Measurement | Committed classifier | Revised classifier |
+| --- | --- | --- |
+| `classifyToolAction`, per call, mean | 1.33 to 1.49 µs | 1.59 to 1.78 µs |
+| `classifyToolAction`, per call, p50 | 1.16 to 1.25 µs | 1.39 to 1.54 µs |
+| Verdicts that differ over the mix | | 0 of 10 |
+
+Classification costs about 0.25 µs more per call, consistently across both passes, and it
+returns the same class and rule id for every call in the mix. These absolute figures are
+lower than the `evaluateAction` rows above because this harness classifies only: it does
+none of the path syscalls `evaluateAction` performs, which is where the other 190 µs goes.
+The two tables are not comparable to each other and are not meant to be.
 
 **The figures recorded earlier in this file are not comparable to these**, and the
 difference is the harness rather than the code. This one drives the wired gate in

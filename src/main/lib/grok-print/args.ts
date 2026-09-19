@@ -140,18 +140,25 @@ function allowRulesFor(mode: AgentMode, allowTools?: string[]): string[] {
 
 /**
  * Conservative retry argv when the CLI rejects a newer flag (older `grok`
- * builds): keep only the long-stable subset. `--prompt-file` is rewritten
- * to inline `-p` (argv risk accepted for ancient builds).
+ * builds): `--prompt-file` is rewritten to inline `-p` and `--no-auto-update` is
+ * dropped (argv risk accepted for ancient builds).
  *
- * `--permission-mode` and `--allow` go together: an old build that rejects one
- * rejects the other, and dropping only the allow rules would leave the retry
- * running under whatever the CLI defaults to.
+ * The permission posture is deliberately kept. `--allow` and `--permission-mode`
+ * are the whole posture for edit, agent and turbo, `--tools` is the whole posture
+ * for ask, and `--permission-mode plan` is the whole posture for plan, because
+ * headless grok streams output only and the app gate never sees a tool call
+ * there. Stripping them would retry the turn under whatever that build defaults
+ * to, which is an agent running with nothing left to refuse a tool. A build that
+ * rejects one of them rejects the retry too, so the run then stops with that
+ * error rather than executing ungated.
  */
 export function buildGrokPrintFallbackArgs(spawnedArgs: string[], prompt: string): string[] {
-  const dropSingle = new Set(["--no-auto-update"])
-  const dropPair = new Set(["--permission-mode", "--tools", "--allow"])
   const out: string[] = []
   const args = spawnedArgs
+  // The prompt sits at index 1 once the builder has inlined it with `-p`, so that
+  // word is the user's text and never a flag, whatever it spells. Without this a
+  // prompt of "--no-auto-update" was dropped from the retry.
+  const promptIndex = args[0] === "-p" ? 1 : -1
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     // Only index 0 can be the prompt flag (builder guarantee): a prompt
@@ -161,11 +168,11 @@ export function buildGrokPrintFallbackArgs(spawnedArgs: string[], prompt: string
       i++ // skip the spliced temp path
       continue
     }
-    if (dropSingle.has(arg)) continue
-    if (dropPair.has(arg)) {
-      i++ // skip the value too
+    if (i === promptIndex) {
+      out.push(arg)
       continue
     }
+    if (arg === "--no-auto-update") continue
     out.push(arg)
   }
   return out

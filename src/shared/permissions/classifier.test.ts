@@ -65,6 +65,16 @@ describe("destructive patterns", () => {
     ["protected-path-overwrite", "tee ~/.ssh/authorized_keys"],
     ["protected-path-overwrite", "cp payload /etc/cron.d/job"],
     ["protected-path-overwrite", "mv payload /usr/local/bin/tool"],
+    // An absolute home path, which is what a provider hands over. Matching only
+    // `~/.ssh/` left all of these matching nothing at all, so each landed in the
+    // approval class and Agent mode allowed a login key to be installed.
+    ["protected-path-overwrite", "tee /home/u/.ssh/authorized_keys"],
+    ["protected-path-overwrite", "echo key > /home/u/.ssh/authorized_keys"],
+    ["protected-path-overwrite", "echo key >> /home/u/.ssh/authorized_keys"],
+    ["protected-path-overwrite", "cp /tmp/k /home/u/.ssh/authorized_keys"],
+    ["protected-path-overwrite", "echo x > /root/.ssh/authorized_keys"],
+    // Glued to the operator, with no space for a word split to find.
+    ["protected-path-overwrite", "echo key>/home/u/.ssh/authorized_keys"],
     ["disk-or-power", "mkfs.ext4 /dev/sda1"],
     ["disk-or-power", "dd if=/dev/zero of=/dev/sda"],
     ["disk-or-power", "chmod 777 /"],
@@ -104,6 +114,18 @@ describe("destructive patterns", () => {
     ["disk-or-power", "cp backup.img /dev/sda"],
     ["disk-or-power", "mv image.iso /dev/sdb"],
     ["disk-or-power", "install payload /dev/sda1"],
+    // A redirect onto a device belongs to the disk rule rather than the
+    // protected-path one, because that rule's reason names a system directory and
+    // `/dev/sda` is not one.
+    ["disk-or-power", "echo x > /dev/sda"],
+    ["disk-or-power", "cat backup.img >/dev/sdb"],
+    // `losetup` detaches with a flag, and the flag reader steps over every word
+    // that starts with a dash, so listing these as subcommands made them
+    // unreachable and a loop device detach read as an ordinary command.
+    ["disk-or-power", "losetup -d /dev/loop0"],
+    ["disk-or-power", "losetup --detach /dev/loop0"],
+    ["disk-or-power", "losetup --detach-all"],
+    ["disk-or-power", "losetup -D /dev/loop0"],
     // `shred` names its own pattern, which sits earlier in the table. The
     // breaker still reports it as disk-or-power, because it reads the device.
     ["shred", "shred -u /dev/sda"],
@@ -200,6 +222,13 @@ describe("destructive patterns", () => {
     "cp /dev/sda /tmp/backup",
     "mv /dev/sda1 ./device-node",
     "head -c 512 /dev/sda",
+    // Redirecting away from a device is not writing to one, and a `losetup` that
+    // only lists or finds a free loop device destroys nothing.
+    "echo x > /dev/null",
+    "cat notes.md > /tmp/out.txt",
+    "losetup -a",
+    "losetup -f",
+    "losetup --list",
   ]
 
   it.each(nearMisses)("does not classify `%s` as destructive", (command) => {
@@ -356,6 +385,19 @@ describe("exfiltration", () => {
     const result = bash("echo key > ~/.ssh/authorized_keys")
     expect(result.ruleClass).toBe("destructive")
     expect(result.ruleId).toBe("protected-path-overwrite")
+  })
+
+  it.each([
+    // Both directions of a word glued to a redirect operator. The secret after
+    // the operator is being written, and the secret before it is being read.
+    ["protected-path-overwrite", "echo key>/home/u/.ssh/authorized_keys"],
+    ["secret-command", "echo ~/.ssh/id_rsa>/tmp/x"],
+    // A write verb's destination is a write, so a copy into the ssh directory is
+    // a protected-path overwrite rather than a read of a secret location.
+    ["protected-path-overwrite", "cp /tmp/k /home/u/.ssh/authorized_keys"],
+    ["secret-command", "cp ~/.ssh/id_ed25519 /tmp/leak"],
+  ])("reads the direction of `%s` as %s", (ruleId, command) => {
+    expect(bash(command).ruleId).toBe(ruleId)
   })
 
   it.each([

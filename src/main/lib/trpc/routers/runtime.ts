@@ -12,6 +12,7 @@ import { observable } from "@trpc/server/observable"
 import { and, eq } from "drizzle-orm"
 import { z } from "zod"
 import { type AgentMode, agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
+import { approvalWasDenied } from "../../claude/tool-approval"
 import type { UIMessageChunk } from "../../claude/types"
 import { getDatabase, subChats } from "../../db"
 import { getRunStore } from "../../runs"
@@ -88,6 +89,15 @@ type NativeFail = (errorText: string) => void
  * write with nothing enforcing read-only, so the floor is enforced by refusing
  * the mode. When the bridge grows that capability this is the step that starts
  * evaluating requests instead of refusing them.
+ *
+ * Plan is the mode refused here because read-only is its entire promise, so
+ * there is nothing left of it without a floor. The gap is wider than that and is
+ * recorded rather than hidden: no mode gets app-gate enforcement on this
+ * transport, so the classes the other four modes promise to block are unenforced
+ * here exactly as they are for the `engine-only` backends in
+ * `src/shared/provider-capabilities.ts`. `.dump/app/decisions/2026-09-13-permission-floor.md`
+ * names them. Refusing every mode would disable the engine outright, which is a
+ * product decision this step does not get to make on its own.
  *
  * Named step, same shape as the rest of this handler: it owns its own failure
  * handling so the handler stays flat and the complexity gate stays green.
@@ -417,6 +427,12 @@ export const runtimeRouter = router({
         subChatId: z.string(),
         requestId: z.string(),
         approved: z.boolean(),
+        /**
+         * The picked labels, forwarded so a Deny pick can be read. The card
+         * submits `approved: true` whichever option the user takes, so the
+         * boolean on its own would answer allow to a refusal.
+         */
+        updatedInput: z.unknown().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -428,15 +444,15 @@ export const runtimeRouter = router({
       } catch {
         return { ok: false, reason: "unavailable" as const }
       }
+      const approved = !approvalWasDenied({
+        approved: input.approved,
+        ...(input.updatedInput === undefined ? {} : { updatedInput: input.updatedInput }),
+      })
       try {
-        await client.respondToPermission(
-          sessionId,
-          input.requestId,
-          input.approved ? "allow" : "deny",
-        )
+        await client.respondToPermission(sessionId, input.requestId, approved ? "allow" : "deny")
         // The engine accepted the answer, so the run leaves waiting_approval.
         // A failed or stale answer must not clear the pending state.
-        getRunStore().resolveApprovalForSubChat(input.subChatId, input.approved)
+        getRunStore().resolveApprovalForSubChat(input.subChatId, approved)
         return { ok: true }
       } catch {
         // Stock bridge has no permissions capability yet; the call path is

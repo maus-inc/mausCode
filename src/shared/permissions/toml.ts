@@ -65,6 +65,21 @@ function skipString(text: string, start: number): number {
   return -1
 }
 
+/**
+ * Key segments that are never accepted, in a header, in a dotted key or as a
+ * leaf.
+ *
+ * `node["__proto__"]` returns `Object.prototype` rather than undefined, so
+ * walking that segment reached the shared prototype and then wrote through it.
+ * The leaf needs the same refusal for a different reason: this parser allows
+ * arrays, an array is an object, and `x.__proto__ = ["a"]` reparents the table
+ * the schema validator then reads. Rejecting the segment makes the document
+ * malformed, which is the fail-closed answer the rest of this parser gives, and
+ * it puts the rule in one place rather than in each of the three spots that walk
+ * or assign a key.
+ */
+const RESERVED_KEY_SEGMENTS = new Set(["__proto__", "constructor", "prototype"])
+
 /** Split a dotted table or key name into parts, honouring quoted segments. */
 function splitKeyPath(raw: string): string[] | null {
   const parts: string[] = []
@@ -73,6 +88,7 @@ function splitKeyPath(raw: string): string[] | null {
   while (index < raw.length) {
     const segment = readKeySegment(raw, index)
     if (segment === null || segment.text.length === 0) return null
+    if (RESERVED_KEY_SEGMENTS.has(segment.text)) return null
     parts.push(segment.text)
     index = segment.end
     if (index >= raw.length) return parts
@@ -195,7 +211,9 @@ function findAssignment(line: string): number {
 function descend(from: TomlTable, path: string[]): TomlTable | null {
   let node = from
   for (const part of path) {
-    const existing = node[part]
+    // `splitKeyPath` has already refused a reserved segment, so every part here
+    // is a plain key and reading it cannot reach the shared prototype.
+    const existing = Object.hasOwn(node, part) ? node[part] : undefined
     if (existing === undefined) {
       const created: TomlTable = {}
       node[part] = created

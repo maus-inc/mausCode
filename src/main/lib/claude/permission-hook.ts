@@ -78,6 +78,16 @@ export async function permissionFloorDecision(
   }
 
   if (decision.decision === "allow") return {}
+  // `ask` goes out as `ask` rather than being hardened into `deny`, and that rests
+  // on the pinned engine honouring the value. Checked against the bundled CLI in
+  // `@anthropic-ai/claude-agent-sdk` 0.2.45, which switches on it and sets
+  // `permissionBehavior` to `ask`, and throws on a value it does not know, so an
+  // unsupported spelling cannot slip through as an approval. Hardening it here
+  // would break the critical-path breaker's own contract, which is that Turbo asks
+  // before a removal on a critical path instead of refusing it outright.
+  //
+  // The type declaration listing `ask` is not evidence on its own, so this is
+  // worth re-reading in the bundled CLI before any SDK bump.
   return {
     hookSpecificOutput: {
       hookEventName: HOOK_EVENT,

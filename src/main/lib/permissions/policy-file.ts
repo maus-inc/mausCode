@@ -9,7 +9,7 @@
  */
 import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { dirname, join } from "node:path"
+import { join } from "node:path"
 import { APP_DATA_DIRNAME } from "../../../shared/app-identity"
 import {
   type PermissionPolicy,
@@ -75,7 +75,10 @@ async function loadPolicyFromDisk(path: string): Promise<LoadedPolicy> {
     text = await readFile(path, "utf-8")
   } catch (error) {
     if (isMissingFile(error)) return floor()
-    return floor(`cannot read ${dirname(path)}: ${describeError(error)}`)
+    // The whole path, not its directory. A user has to open this file to fix it,
+    // and the directory holds the worktrees and cloned repositories as well, so
+    // naming it points at the wrong thing.
+    return floor(`cannot read ${path}: ${describeError(error)}`)
   }
 
   const parsed = parseConstrainedToml(text)

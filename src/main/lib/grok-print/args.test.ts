@@ -9,6 +9,7 @@ import {
   GROK_ASK_TOOLS,
   GROK_PROMPT_FILE_CHARS,
   GROK_TURBO_ALLOW,
+  type GrokPrintMode,
   isGrokInvalidModelError,
   isGrokResumeError,
   isGrokUnknownFlagError,
@@ -157,22 +158,26 @@ it("keeps short prompts inline on -p", () => {
   assert.deepEqual(args.slice(0, 2), ["-p", "short"])
 })
 
-it("strips newer flags and rewrites prompt-file to -p on fallback", () => {
+it("keeps the permission posture and rewrites prompt-file to -p on fallback", () => {
+  const prompt = "y".repeat(GROK_PROMPT_FILE_CHARS + 1)
   const invocation = buildGrokPrintArgs({
     model: "grok-4.6",
-    mode: "plan",
+    mode: "turbo",
     resumeId: "ses-1",
     cwd: "/repo",
-    prompt: "y".repeat(GROK_PROMPT_FILE_CHARS + 1),
+    prompt,
+    allowTools: ["Read"],
   })
   assert.equal(invocation.args[0], "--prompt-file")
-  const prompt = "y".repeat(GROK_PROMPT_FILE_CHARS + 1)
   const spawned = [invocation.args[0], "/tmp/grok-prompt-1.txt", ...invocation.args.slice(1)]
   const fallback = buildGrokPrintFallbackArgs(spawned, prompt)
+
+  // Every rule survives. An earlier shape of the fallback dropped the posture
+  // with the newer flags, which retried the turn with nothing left to refuse a
+  // tool, because headless grok has no channel back to the app gate.
+  assert.equal(flagValue(fallback, "--permission-mode"), "acceptEdits")
+  assert.deepEqual(flagValues(fallback, "--allow"), [...GROK_TURBO_ALLOW, "Read"])
   assert.ok(!fallback.includes("--no-auto-update"))
-  assert.ok(!fallback.includes("--permission-mode"))
-  assert.ok(!fallback.includes("plan"))
-  assert.deepEqual(flagValues(fallback, "--allow"), [])
   assert.deepEqual(fallback.slice(0, 2), ["-p", prompt])
   for (const kept of [
     "-m",
@@ -188,6 +193,21 @@ it("strips newer flags and rewrites prompt-file to -p on fallback", () => {
   }
 })
 
+it("keeps the posture of every mode on fallback", () => {
+  const spellings: Array<[GrokPrintMode, string, string]> = [
+    ["plan", "--permission-mode", "plan"],
+    ["ask", "--tools", GROK_ASK_TOOLS],
+    ["edit", "--permission-mode", "acceptEdits"],
+    ["agent", "--permission-mode", "acceptEdits"],
+    ["turbo", "--permission-mode", "acceptEdits"],
+  ]
+  for (const [mode, flag, value] of spellings) {
+    const invocation = buildGrokPrintArgs({ mode, prompt: "hi" })
+    const fallback = buildGrokPrintFallbackArgs(invocation.args, "hi")
+    assert.equal(flagValue(fallback, flag), value, mode)
+  }
+})
+
 it("does not mistake prose for retryable errors", () => {
   assert.equal(isGrokResumeError("it is presumed complete"), false)
   assert.equal(isGrokResumeError("cannot resume session ses-1"), true)
@@ -200,6 +220,16 @@ it("leaves prompt text alone when it equals --prompt-file", () => {
     "--prompt-file",
   )
   assert.deepEqual(out, ["-p", "--prompt-file", "--cwd", "/tmp/x", "-m", "grok-4.6"])
+})
+
+it("leaves prompt text alone when it spells a flag the fallback drops", () => {
+  // Index 1 is the prompt once the builder has inlined it with `-p`, so the word
+  // is user text. Dropping it also ate the argument after it.
+  const out = buildGrokPrintFallbackArgs(
+    ["-p", "--no-auto-update", "--cwd", "/tmp/x"],
+    "--no-auto-update",
+  )
+  assert.deepEqual(out, ["-p", "--no-auto-update", "--cwd", "/tmp/x"])
 })
 
 it("matches resume, invalid-model, and unknown-flag errors", () => {

@@ -33,7 +33,7 @@ export function getModeTooltip(mode: AgentMode): string {
     case "agent":
       return "Runs edits and commands without asking. Web fetches and searches are allowed; outbound shell commands ask first. Destructive and exfiltrating actions stay blocked."
     case "turbo":
-      return "No prompts and no restrictions: destructive commands and network egress both run. Only exfiltrating a secret is still blocked."
+      return "Runs destructive commands and network egress without asking. Exfiltrating a secret stays blocked, and removing a critical path or reformatting a device still asks."
   }
 }
 

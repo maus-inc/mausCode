@@ -7,8 +7,9 @@
  * `~/.claude/settings.json`: mausCode policy lives in mausCode's file, and
  * reading a provider's config stays read-only.
  *
- * `os.homedir()` reads `$HOME` on POSIX, which is what the CI quality job runs
- * on, so pointing HOME at a temp directory is enough to isolate the reader.
+ * `os.homedir()` reads `$HOME` on POSIX and `USERPROFILE` on Windows, so the
+ * hooks point both at the temp directory and the reader never sees the real
+ * profile on either platform.
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -25,6 +26,7 @@ import {
 
 let home = ""
 let realHome: string | undefined
+let realProfile: string | undefined
 
 /** Write a policy file into the temporary HOME and drop the cache. */
 function writePolicy(text: string): string {
@@ -39,13 +41,20 @@ function writePolicy(text: string): string {
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "mauscode-policy-"))
   realHome = process.env.HOME
+  realProfile = process.env.USERPROFILE
   process.env.HOME = home
+  // `os.homedir()` reads USERPROFILE on Windows, so pointing only HOME at the
+  // temp directory would have left a Windows contributor's tests reading and
+  // writing their real profile.
+  process.env.USERPROFILE = home
   invalidatePolicyCache()
 })
 
 afterEach(() => {
   if (realHome === undefined) delete process.env.HOME
   else process.env.HOME = realHome
+  if (realProfile === undefined) delete process.env.USERPROFILE
+  else process.env.USERPROFILE = realProfile
   invalidatePolicyCache()
   // Deletes the directory `home` names, never a path derived from a value a
   // failed hook could leave empty. See RECOVERY.md: the containment test got
