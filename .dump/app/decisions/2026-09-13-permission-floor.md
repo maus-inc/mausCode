@@ -430,6 +430,8 @@ It also landed in a class turbo allows. `docker run` was a network rule for the 
 
 `run`, `create` and `exec` are no longer network for docker and podman, which also removes a card on every local container run, and a mount whose host side is `/`, `~`, `/etc`, `/home`, `/root`, `/var`, `/usr`, `/bin` or `/dev` is destructive instead. All three spellings count: `-v /:/host`, `--volume=/home:/h`, and `--mount=type=bind,source=/,target=/host`. A worktree-relative mount stays ordinary, because that is what a container is for here, and so does a named volume.
 
+The review bot found a fourth spelling this rule missed on the push that introduced it. `docker run -v/:/host` glues the specification onto the flag cluster with no space and no equals sign, and splitting on the colon first read the host side as `-v/`, which matches nothing. The cluster comes off before the split now, so `-v/:/host`, `-v~:/h`, `-v/etc:/h` and `-itv/home:/h` all count.
+
 ## Decision 20: the wrappers, the backslash and the field separator (added 2026-09-19)
 
 Decision 11 taught the classifier to skip wrappers and named the ones Claude Code strips. A probe of 45 spellings found the list was still short, and every gap classified as `approval`.
@@ -446,7 +448,9 @@ Decision 11's forced-push fix is now applied to the rest of git. `hasDiscardingG
 
 `dd` was the only write verb the disk rule knew, and it matched any `of=/dev/` prefix, which called `dd if=/dev/zero of=/dev/null` a reformat. That was a false positive in the safe direction, but it asked for a card on a benchmark idiom and it is the kind of over-block that teaches a user to approve without reading.
 
-A block-device pattern names the device families instead, so `/dev/null`, `/dev/zero`, `/dev/shm` and the pseudo-device sockets are out. `tee`, `truncate`, `cat`, `cp`, `shred` and `dd` all count when the target is a real device.
+A block-device pattern names the device families instead, so `/dev/null`, `/dev/zero`, `/dev/shm` and the pseudo-device sockets are out.
+
+Which verbs count, and against which argument, is the part that took two rounds. The review bot found that `cat` and `cp` had been added to the write set wholesale, so `cat /dev/sda` and `cp /dev/sda /tmp/backup` both reported as a reformat when neither writes to the device. `cat` is out entirely, because it reads its arguments and a write through it needs a redirect that the protected-path rule already reads. `cp`, `mv` and `install` count only against their last argument, which is where the bytes go, so `cp backup.img /dev/sda` is caught and `cp /dev/sda /tmp/backup` is not. `tee`, `truncate` and `shred` take every argument, and `dd` reads `of=`. Verifying the bot's two findings turned up a third it had not mentioned: `mv image.iso /dev/sdb` writes a device and was allowed.
 
 The tools that destroy a device only for some subcommands read the subcommand or the flag: `nvme format` and `nvme sanitize`, `dmsetup remove`, `wipe_table` and `suspend`, `hdparm --security-erase`, `mdadm --zero-superblock`, `badblocks -w`, `smartctl --sanitize`. Their query forms stay ordinary, because `nvme list`, `mdadm --detail`, `hdparm -I` and `dmsetup ls` are reads and a rule that asked for a card on every query would be turned off.
 

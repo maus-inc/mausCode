@@ -544,8 +544,22 @@ const DISK_DESTRUCTIVE_FLAGS: Record<string, RegExp> = {
   smartctl: /^--(security-erase|sanitize)/,
 }
 
-/** Verbs that write their input somewhere, so the target decides the danger. */
-const WRITE_VERBS = new Set(["dd", "tee", "truncate", "cat", "cp", "shred"])
+/**
+ * Verbs whose every argument is a destination, so any of them can be the device.
+ *
+ * `cat` is not here. It reads its arguments, and `cat /dev/sda > backup.img` is a
+ * read of a disk rather than a write to one, so counting it produced a false
+ * positive on a command that destroys nothing. A write through `cat` needs a
+ * redirect, and the protected-path rule already reads that.
+ */
+const WRITES_EVERY_ARGUMENT = new Set(["tee", "truncate", "shred"])
+
+/**
+ * Verbs whose destination is their last argument. `cp /dev/sda /tmp/backup` reads
+ * the device and writes an ordinary file, so only the last word can be the
+ * device that matters.
+ */
+const WRITES_LAST_ARGUMENT = new Set(["cp", "mv", "install"])
 
 /**
  * A block device rather than any `/dev` entry. `/dev/null`, `/dev/zero`,
@@ -586,11 +600,18 @@ function hasDiskOrPowerVerb(segments: CommandSegment[]): boolean {
  * and every other write verb takes the device as a positional argument.
  */
 function writesBlockDevice(segment: CommandSegment): boolean {
-  if (!WRITE_VERBS.has(segment.verb)) return false
+  // `dd` names its output with `of=`, which is why it reads that word rather
+  // than the segment's arguments.
   if (segment.verb === "dd") {
     return segment.words.some((word) => word.startsWith("of=") && BLOCK_DEVICE.test(word.slice(3)))
   }
-  return segment.words.some((word) => BLOCK_DEVICE.test(word))
+  if (WRITES_EVERY_ARGUMENT.has(segment.verb)) return segment.words.some(isBlockDevice)
+  if (WRITES_LAST_ARGUMENT.has(segment.verb)) return isBlockDevice(segment.words.at(-1) ?? "")
+  return false
+}
+
+function isBlockDevice(word: string): boolean {
+  return BLOCK_DEVICE.test(word)
 }
 
 /**
@@ -774,8 +795,13 @@ function mountHostOf(word: string): string | null {
     return source === undefined ? null : source.slice("source=".length)
   }
   if (word.startsWith("--volume=")) return word.slice("--volume=".length).split(":")[0] ?? null
-  const colon = word.indexOf(":")
-  return colon >= 0 ? word.slice(0, colon) : null
+  // `-v/:/host` glues the specification onto a short flag cluster, with no space
+  // and no equals sign, so the cluster comes off before the host side is read.
+  // Splitting on the colon first returned `-v/`, which matches no host path and
+  // let the mount through.
+  const spec = word.replace(/^-[a-z]*v[a-z]*/, "")
+  const colon = spec.indexOf(":")
+  return colon >= 0 ? spec.slice(0, colon) : null
 }
 
 function hasInitKill(segments: CommandSegment[]): boolean {

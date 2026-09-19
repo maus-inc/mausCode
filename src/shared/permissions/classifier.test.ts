@@ -94,6 +94,16 @@ describe("destructive patterns", () => {
     ["host-root-mount", "docker run --mount=type=bind,source=/,target=/host alpine sh"],
     ["host-root-mount", "podman run -v /etc:/h alpine sh"],
     ["host-root-mount", "docker exec -v /:/h app sh"],
+    // Glued onto a short flag cluster, with no space and no equals sign. The
+    // fallback used to split on the colon first and read the host as `-v/`.
+    ["host-root-mount", "docker run -v/:/host alpine sh"],
+    ["host-root-mount", "docker run -v~:/h alpine sh"],
+    ["host-root-mount", "docker run -v/etc:/h alpine sh"],
+    ["host-root-mount", "docker run -itv/home:/h alpine sh"],
+    // A copy or a move writes its last argument, so that is the one that counts.
+    ["disk-or-power", "cp backup.img /dev/sda"],
+    ["disk-or-power", "mv image.iso /dev/sdb"],
+    ["disk-or-power", "install payload /dev/sda1"],
     // `shred` names its own pattern, which sits earlier in the table. The
     // breaker still reports it as disk-or-power, because it reads the device.
     ["shred", "shred -u /dev/sda"],
@@ -183,6 +193,13 @@ describe("destructive patterns", () => {
     "docker run -v ./src:/app alpine npm test",
     "docker run -v myvolume:/data alpine sh",
     "git branch -f main other",
+    // `cat` reads its arguments and `cp` reads its first one, so neither is a
+    // write to a device just because a device is named.
+    "cat /dev/sda",
+    "cat /dev/sda > backup.img",
+    "cp /dev/sda /tmp/backup",
+    "mv /dev/sda1 ./device-node",
+    "head -c 512 /dev/sda",
   ]
 
   it.each(nearMisses)("does not classify `%s` as destructive", (command) => {
@@ -769,5 +786,61 @@ describe("find with grouped predicates", () => {
   it("does not treat an escaped paren as a delete on its own", () => {
     expect(bash("find . \\( -name '*.ts' \\) -print").ruleClass).not.toBe("destructive")
     expect(criticalPathBreach("find . \\( -name '*.ts' \\) -print", "/work/mausCode")).toBeNull()
+  })
+})
+describe("a device named as a source rather than a target", () => {
+  /**
+   * Both halves matter. A rule that flags every mention of a block device asks
+   * for a card on `cp /dev/sda /tmp/backup`, which destroys nothing, and a rule
+   * that flags nothing lets `cp backup.img /dev/sda` through. The distinction is
+   * which argument the bytes are going to.
+   */
+  const writes = [
+    ["cp backup.img /dev/sda", "disk-or-power"],
+    ["mv image.iso /dev/sdb", "disk-or-power"],
+    ["tee /dev/sda < /dev/zero", "disk-or-power"],
+    ["truncate -s0 /dev/sda", "disk-or-power"],
+    ["dd if=/dev/zero of=/dev/sda", "disk-or-power"],
+  ] as const
+
+  it.each(writes)("catches `%s` as %s", (command, ruleId) => {
+    const result = bash(command)
+    expect(result.ruleClass).toBe("destructive")
+    expect(result.ruleId).toBe(ruleId)
+  })
+
+  const reads = [
+    "cat /dev/sda",
+    "cat /dev/sda > backup.img",
+    "cp /dev/sda /tmp/backup",
+    "head -c 512 /dev/sda",
+  ]
+
+  it.each(reads)("does not catch `%s`, which only reads the device", (command) => {
+    expect(bash(command).ruleClass).not.toBe("destructive")
+  })
+
+  it("catches every mount spelling, glued to a flag or not", () => {
+    const spellings = [
+      "docker run -v /:/host alpine sh",
+      "docker run -v/:/host alpine sh",
+      "docker run -v~:/h alpine sh",
+      "docker run --volume=/home:/h alpine sh",
+      "docker run --mount=type=bind,source=/,target=/host alpine sh",
+    ]
+    for (const command of spellings) {
+      expect(bash(command).ruleId, command).toBe("host-root-mount")
+    }
+  })
+
+  it("leaves a container mount that is not the host alone", () => {
+    for (const command of [
+      "docker run -v ./src:/app alpine npm test",
+      "docker run -v myvolume:/data alpine sh",
+      "docker run --mount=type=volume,source=cache,target=/cache alpine sh",
+      "docker run -e FOO=bar:/baz alpine sh",
+    ]) {
+      expect(bash(command).ruleClass, command).not.toBe("destructive")
+    }
   })
 })
