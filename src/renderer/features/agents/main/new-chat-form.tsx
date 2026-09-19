@@ -5,6 +5,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import { AlignJustify, Plus } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { permissionFloorFor } from "../../../../shared/provider-capabilities"
 import { Button } from "../../../components/ui/button"
 import {
   DropdownMenu,
@@ -2112,9 +2113,14 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
                               >
                                 <div
                                   data-tooltip="true"
-                                  className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
+                                  className="relative rounded-xl bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
                                 >
-                                  <span>{getModeTooltip(modeTooltip.mode)}</span>
+                                  <span>
+                                    {getModeTooltip(
+                                      modeTooltip.mode,
+                                      permissionFloorFor(selectedAgent.id),
+                                    )}
+                                  </span>
                                 </div>
                               </div>,
                               document.body,

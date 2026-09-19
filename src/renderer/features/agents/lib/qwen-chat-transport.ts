@@ -2,8 +2,10 @@
  * mausCode QwenChatTransport: ChatTransport<UIMessage> over trpc.qwen.chat.
  * Mirrors CursorChatTransport (ours, NOT verbatim).
  */
+
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import { DEFAULT_QWEN_UI_MODEL } from "../../../../shared/qwen-model-id"
 import { qwenLoginModalOpenAtom, sessionInfoAtom } from "../../../lib/atoms"
@@ -20,7 +22,7 @@ type QwenChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
 }
 
 type ImageAttachment = {

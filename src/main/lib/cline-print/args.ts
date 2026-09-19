@@ -24,7 +24,10 @@
  *   approval prompts).
  */
 
-export type ClinePrintMode = "plan" | "ask" | "edit" | "agent" | "turbo"
+import type { AgentMode } from "../../../shared/agent-mode"
+
+/** One vocabulary for every provider: the union lives in shared. */
+export type ClinePrintMode = AgentMode
 
 export type BuildClinePrintArgsOptions = {
   prompt: string

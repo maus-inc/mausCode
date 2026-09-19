@@ -2,8 +2,10 @@
  * mausCode ClineChatTransport: ChatTransport<UIMessage> over trpc.cline.chat.
  * Mirrors QwenChatTransport (ours, NOT verbatim).
  */
+
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import { DEFAULT_CLINE_UI_MODEL } from "../../../../shared/cline-model-id"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import { clineLoginModalOpenAtom, sessionInfoAtom } from "../../../lib/atoms"
@@ -20,7 +22,7 @@ type ClineChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
 }
 
 type ImageAttachment = {

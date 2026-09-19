@@ -11,6 +11,9 @@ import type { JcodeClient } from "@maus-inc/runtime-client"
 import { observable } from "@trpc/server/observable"
 import { and, eq } from "drizzle-orm"
 import { z } from "zod"
+import { type AgentMode, agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
+import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
+import { approvalWasDenied } from "../../claude/tool-approval"
 import type { UIMessageChunk } from "../../claude/types"
 import { getDatabase, subChats } from "../../db"
 import { getRunStore } from "../../runs"
@@ -77,6 +80,35 @@ type NativeFail = (errorText: string) => void
 
 // The chat handler below stays a flat sequence of these steps so its shape is
 // readable at a glance; each step owns its own failure handling.
+
+/**
+ * The mode floor on the native transport.
+ *
+ * The stock bridge advertises no `permissions` capability, so it never issues a
+ * permission prompt and this app gets no per-action callback to route through the
+ * gate in `src/main/lib/permissions/`. Plan and ask both promise restraint that
+ * nothing here can deliver, so the floor is enforced by refusing them, and the
+ * reasoning and the refusal text live in
+ * `src/shared/permissions/native-mode-floor.ts` where a test can reach them. When
+ * the bridge grows that capability this is the step that starts evaluating
+ * requests instead of refusing them.
+ *
+ * The gap is wider than the two refusals and is recorded rather than hidden. No
+ * mode gets app-gate enforcement on this transport, so the classes edit, agent and
+ * turbo promise to block are unenforced here exactly as they are for the
+ * `engine-only` backends in `src/shared/provider-capabilities.ts`, and
+ * `.dump/app/decisions/2026-09-13-permission-floor.md` names them as decision 25.
+ * The transport picker in the chat input says so where a user chooses it.
+ *
+ * Named step, same shape as the rest of this handler: it owns its own failure
+ * handling so the handler stays flat and the complexity gate stays green.
+ */
+function enforceNativeModeFloor(mode: AgentMode, fail: NativeFail): boolean {
+  const refusal = nativeModeRefusal(mode)
+  if (refusal === null) return true
+  fail(refusal)
+  return false
+}
 
 async function acquireNativeClient(fail: NativeFail): Promise<JcodeClient | null> {
   try {
@@ -208,7 +240,7 @@ export const runtimeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(),
-        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
+        mode: agentModeSchema.default(DEFAULT_AGENT_MODE),
         model: z.string().optional(),
         customToken: z.string().optional(),
         customBaseUrl: z.string().optional(),
@@ -257,14 +289,7 @@ export const runtimeRouter = router({
         void (async () => {
           const streamId = crypto.randomUUID()
           try {
-            if (input.mode === "plan") {
-              fail(
-                "Plan mode is not enforced on the native runtime yet (read-only " +
-                  "execution arrives with the permission policy). Use the legacy " +
-                  "transport for plan mode.",
-              )
-              return
-            }
+            if (!enforceNativeModeFloor(input.mode, fail)) return
 
             runHandle = getRunStore().startRun({
               subChatId: input.subChatId,
@@ -400,6 +425,12 @@ export const runtimeRouter = router({
         subChatId: z.string(),
         requestId: z.string(),
         approved: z.boolean(),
+        /**
+         * The picked labels, forwarded so a Deny pick can be read. The card
+         * submits `approved: true` whichever option the user takes, so the
+         * boolean on its own would answer allow to a refusal.
+         */
+        updatedInput: z.unknown().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -411,15 +442,15 @@ export const runtimeRouter = router({
       } catch {
         return { ok: false, reason: "unavailable" as const }
       }
+      const approved = !approvalWasDenied({
+        approved: input.approved,
+        ...(input.updatedInput === undefined ? {} : { updatedInput: input.updatedInput }),
+      })
       try {
-        await client.respondToPermission(
-          sessionId,
-          input.requestId,
-          input.approved ? "allow" : "deny",
-        )
+        await client.respondToPermission(sessionId, input.requestId, approved ? "allow" : "deny")
         // The engine accepted the answer, so the run leaves waiting_approval.
         // A failed or stale answer must not clear the pending state.
-        getRunStore().resolveApprovalForSubChat(input.subChatId, input.approved)
+        getRunStore().resolveApprovalForSubChat(input.subChatId, approved)
         return { ok: true }
       } catch {
         // Stock bridge has no permissions capability yet; the call path is

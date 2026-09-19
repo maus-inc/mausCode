@@ -22,6 +22,7 @@ export {
 
 export {
   assertRegisteredWorktree,
+  assertToolPathInWorktree,
   assertValidGitPath,
   getRegisteredChat,
   PathValidationError,

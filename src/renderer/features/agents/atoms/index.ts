@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { atomFamily, atomWithStorage } from "jotai/utils"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import {
   DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_CODEX_UI_MODEL,
@@ -7,24 +8,11 @@ import {
 import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { FileMentionOption } from "../mentions/agents-mentions-editor"
 
-// Agent mode type - autonomy-ordered: plan < ask < edit < agent < turbo.
-// "agent" is canonical (legacy rows keep working); its semantics are "full
-// agent minus dangerous deletions", full bypass is "turbo".
-export type AgentMode = "plan" | "ask" | "edit" | "agent" | "turbo"
-
-// Ordered list of modes - Shift+Tab cycles through these (autonomy order)
-export const AGENT_MODES: AgentMode[] = ["plan", "ask", "edit", "agent", "turbo"]
-
-// Get next mode in cycle (for Shift+Tab toggle)
-export function getNextMode(current: AgentMode): AgentMode {
-  const idx = AGENT_MODES.indexOf(current)
-  return AGENT_MODES[(idx + 1) % AGENT_MODES.length]
-}
-
-// Type guard for validating mode strings (slash commands, stored values)
-export function isAgentMode(value: string): value is AgentMode {
-  return (AGENT_MODES as string[]).includes(value)
-}
+export type { AgentMode } from "../../../../shared/agent-mode"
+// The mode vocabulary lives in `src/shared/agent-mode.ts` so the main process
+// and the renderer cannot drift apart. The renderer has always imported it from
+// here, so this file re-exports it instead of redefining it.
+export { AGENT_MODES, getNextMode, isAgentMode } from "../../../../shared/agent-mode"
 
 // Selected agent chat ID - null means "new chat" view (persisted to restore on reload)
 // Uses window-scoped storage so each Electron window can have its own selected chat

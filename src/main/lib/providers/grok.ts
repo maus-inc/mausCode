@@ -33,13 +33,17 @@ export function getGrokCapability(): ProviderCapability {
     security: {
       auth: ["grok-login", "api-key-env"],
       storesCredentials: true,
-      // Headless turns run with --always-approve / bypassPermissions: no
-      // approval gate exists on this path (warns via no-approval-gate).
-      approvals: "none",
+      // Engine-enforced, not app-enforced: headless grok streams output only
+      // and gives the app no per-tool callback, so the gate is expressed as
+      // argv. acceptEdits auto-approves file edits; everything else needs an
+      // --allow rule from the policy file or the CLI refuses it, because
+      // there is nobody to ask. The bypass flags are never passed.
+      approvals: "configurable",
       sandbox: "none",
       egress: ["provider-configured"],
       retention: "local-session-files",
       requiresHostedService: false,
+      permissionFloor: "engine-only",
     },
     performance: {
       streaming: true,
@@ -71,7 +75,7 @@ export function getGrokCapability(): ProviderCapability {
     notes: [
       "Images travel as prompt path references the agent reads via tools.",
       "Sessions: client-chosen -s UUID on first turns, -r to resume.",
-      "Plan/ask map to permission-mode/--tools; edit/agent pass --always-approve, turbo adds bypassPermissions.",
+      "Plan maps to permission-mode plan and ask to a read-only --tools list; edit/agent/turbo map to acceptEdits plus the policy file's --allow rules.",
       "No `status` subcommand: auth is probed from ~/.grok/auth.json and XAI_API_KEY.",
     ],
   }

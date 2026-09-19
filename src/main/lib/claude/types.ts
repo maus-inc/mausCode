@@ -14,6 +14,20 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk"
 
 // AI SDK UIMessageChunk format
+/**
+ * One question on an in-chat approval card.
+ *
+ * The permission gate's ask tier and the AskUserQuestion tool both produce
+ * these, so the shape lives here rather than being spelled out twice in the
+ * router and once in the renderer.
+ */
+export interface ToolApprovalQuestion {
+  question: string
+  header: string
+  options: Array<{ label: string; description: string }>
+  multiSelect: boolean
+}
+
 export type UIMessageChunk =
   // Message lifecycle
   | { type: "start"; messageId?: string }
@@ -43,17 +57,9 @@ export type UIMessageChunk =
   | { type: "error"; errorText: string }
   | { type: "auth-error"; errorText: string }
   | { type: "retry-notification"; message: string }
-  | {
-      type: "ask-user-question"
-      toolUseId: string
-      questions: Array<{
-        question: string
-        header: string
-        options: Array<{ label: string; description: string }>
-        multiSelect: boolean
-      }>
-    }
+  | { type: "ask-user-question"; toolUseId: string; questions: ToolApprovalQuestion[] }
   | { type: "ask-user-question-timeout"; toolUseId: string }
+  | { type: "ask-user-question-result"; toolUseId: string; result: unknown }
   | { type: "message-metadata"; messageMetadata: MessageMetadata }
   // Session initialization (MCP servers, plugins, tools)
   | {

@@ -1,5 +1,6 @@
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import {
   DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_CODEX_UI_MODEL,
@@ -30,7 +31,7 @@ type ACPChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
   provider: "codex"
 }
 

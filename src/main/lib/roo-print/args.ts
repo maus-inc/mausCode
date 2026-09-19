@@ -39,8 +39,10 @@
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import type { AgentMode } from "../../../shared/agent-mode"
 
-export type RooPrintMode = "plan" | "ask" | "edit" | "agent" | "turbo"
+/** One vocabulary for every provider: the union lives in shared. */
+export type RooPrintMode = AgentMode
 
 /**
  * mausCode modes -> Roo built-in mode slugs (source: DEFAULT_MODES in

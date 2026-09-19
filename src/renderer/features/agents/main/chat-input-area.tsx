@@ -3,8 +3,8 @@
 /**
  * NOTE (transplant): Gemini/OpenRouter provider wiring (model atoms, auth
  * queries, selector props, placeholder names) was transplanted from
- * erenbertr/1code (Apache-2.0). Their engine-toggle removal was NOT taken —
- * this tree keeps the native/legacy switch (locked to legacy for the new
+ * erenbertr/1code (Apache-2.0). Their engine-toggle removal was NOT taken,
+ * and this tree keeps the native/legacy switch (locked to legacy for the new
  * providers, which the native runtime cannot serve).
  */
 
@@ -13,6 +13,8 @@ import { ChevronDown, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
+import { permissionFloorFor } from "../../../../shared/provider-capabilities"
 import { Button } from "../../../components/ui/button"
 import {
   DropdownMenu,
@@ -1963,37 +1965,49 @@ export const ChatInputArea = memo(function ChatInputArea({
                       })}
                     </DropdownMenuContent>
                     {modeTooltip?.visible &&
-                      createPortal(
-                        <div
-                          className="fixed z-[100000]"
-                          style={{
-                            top: modeTooltip.position.top + 14,
-                            left: modeTooltip.position.left,
-                            transform: "translateY(-50%)",
-                          }}
-                        >
+                      (() => {
+                        let text: string
+                        if (engine === "native") {
+                          text =
+                            nativeModeRefusal(modeTooltip.mode) ??
+                            getModeTooltip(modeTooltip.mode, "engine-only")
+                        } else {
+                          text = getModeTooltip(modeTooltip.mode, permissionFloorFor(provider))
+                        }
+                        return createPortal(
                           <div
-                            data-tooltip="true"
-                            className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
+                            className="fixed z-[100000]"
+                            style={{
+                              top: modeTooltip.position.top + 14,
+                              left: modeTooltip.position.left,
+                              transform: "translateY(-50%)",
+                            }}
                           >
-                            <span>{getModeTooltip(modeTooltip.mode)}</span>
-                          </div>
-                        </div>,
-                        document.body,
-                      )}
+                            <div
+                              data-tooltip="true"
+                              className="relative rounded-xl bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
+                            >
+                              <span>{text}</span>
+                            </div>
+                          </div>,
+                          document.body,
+                        )
+                      })()}
                   </DropdownMenu>
 
                   <button
                     type="button"
                     onClick={() => switchEngine(engine === "native" ? "legacy" : "native")}
                     disabled={!canSwitchEngine}
-                    title={
-                      provider === "codex"
-                        ? "Engine: Legacy — Codex chats are served by the Codex CLI adapter; the native runtime doesn't serve Codex (subscription OAuth can't be provisioned to it)."
-                        : engine === "native"
-                          ? "Engine: Native (mausCode runtime). Click to switch back to Legacy. Switchable on empty chats only."
-                          : "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
-                    }
+                    title={(() => {
+                      if (provider === "codex") {
+                        return "Engine: Legacy. Codex chats are served by the Codex CLI adapter, and the native runtime doesn't serve Codex, because subscription OAuth can't be provisioned to it."
+                      }
+                      if (engine === "native") {
+                        return "Engine: Native (mausCode runtime). This transport advertises no permissions capability, so no action reaches the permission gate and plan and ask modes are refused here. Click to switch back to Legacy. Switchable on empty chats only."
+                      }
+                      return "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
+                    })()}
                     className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Zap

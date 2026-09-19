@@ -13,6 +13,8 @@ import { observable } from "@trpc/server/observable"
 import { and, eq } from "drizzle-orm"
 import { app, BrowserWindow, safeStorage } from "electron"
 import { z } from "zod"
+import { agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
+import { describePermissionDecision } from "../../../../shared/permissions/decision"
 import { setConnectionMethod } from "../../analytics"
 import {
   buildClaudeEnv,
@@ -23,6 +25,17 @@ import {
   logRawClaudeMessage,
   type UIMessageChunk,
 } from "../../claude"
+import { createPermissionFloorHook } from "../../claude/permission-hook"
+import { sdkPermissionMode } from "../../claude/permission-mode"
+import {
+  approvalWasDenied,
+  askToolApproval,
+  clearPendingApprovals,
+  describeApprovalRequest,
+  questionsFromToolInput,
+  resolveToolApproval,
+  type ToolApprovalResponse,
+} from "../../claude/tool-approval"
 import {
   type ClaudeConfig,
   GLOBAL_MCP_PATH,
@@ -57,6 +70,7 @@ import {
   startMcpOAuth,
 } from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
+import { evaluateAction, permissionsPolicyPath } from "../../permissions"
 import { discoverPluginMcpServers } from "../../plugins"
 import { getRunStore } from "../../runs"
 import type { RunHandle } from "../../runs/run-state"
@@ -398,92 +412,6 @@ async function readProjectMcpJsonCached(
     return servers
   } catch {
     return {}
-  }
-}
-
-const pendingToolApprovals = new Map<
-  string,
-  {
-    subChatId: string
-    resolve: (decision: { approved: boolean; message?: string; updatedInput?: unknown }) => void
-  }
->()
-
-const PLAN_MODE_BLOCKED_TOOLS = new Set(["Bash", "NotebookEdit"])
-
-// Tools that trigger a user approval prompt in "ask" mode.
-const ASK_MODE_APPROVAL_TOOLS = new Set(["Edit", "Write", "NotebookEdit", "MultiEdit", "Bash"])
-
-// In "edit" / "agent" modes, allow almost everything except dangerous
-// deletions. Returns a denial reason if dangerous, null otherwise.
-// (Ported from the 5-mode reference implementation; messages reworded for
-// the mausCode Agent/Turbo naming.)
-function detectDangerousDeletion(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-  modeLabel: string,
-): string | null {
-  if (toolName !== "Bash") return null
-  const command = typeof toolInput.command === "string" ? toolInput.command : ""
-  if (!command) return null
-
-  // rm -rf style (any order of flags containing both r and f)
-  if (/\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/.test(command)) {
-    return `rm -rf is blocked in ${modeLabel} mode. Switch to Turbo to allow.`
-  }
-  // Split short flags (rm -r -f), -R variant, and long flags.
-  const rmFlags = command.match(/\brm\s+((?:-[a-zA-Z]+\s*)+)/)
-  if (rmFlags) {
-    const flags = rmFlags[1].replace(/-/g, "")
-    if ((flags.includes("r") || flags.includes("R")) && flags.includes("f")) {
-      return `rm -rf is blocked in ${modeLabel} mode. Switch to Turbo to allow.`
-    }
-  }
-  if (/\brm\b[^\n]*--recursive\b/.test(command) && /\brm\b[^\n]*--force\b/.test(command)) {
-    return `rm --recursive --force is blocked in ${modeLabel} mode. Switch to Turbo to allow.`
-  }
-
-  // SQL destructive
-  if (/\b(DROP|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i.test(command)) {
-    return `Destructive SQL (DROP/TRUNCATE) is blocked in ${modeLabel} mode.`
-  }
-
-  // git push --force / --force-with-lease
-  if (/\bgit\s+push\b[^\n]*--force\b/.test(command)) {
-    return `git push --force is blocked in ${modeLabel} mode.`
-  }
-
-  // git reset --hard
-  if (/\bgit\s+reset\s+--hard\b/.test(command)) {
-    return `git reset --hard is blocked in ${modeLabel} mode.`
-  }
-
-  // Overwriting sensitive system/user files
-  if (/>\s*(\/etc\/|~\/\.ssh\/|\/usr\/|\/bin\/|\/sbin\/)/.test(command)) {
-    return `Overwriting sensitive system files is blocked in ${modeLabel} mode.`
-  }
-
-  return null
-}
-
-// One-line description of a tool call for ask-mode approval prompts.
-function describeToolCallForApproval(toolName: string, toolInput: Record<string, unknown>): string {
-  if (toolName === "Bash") {
-    const command = typeof toolInput.command === "string" ? toolInput.command : ""
-    const desc = typeof toolInput.description === "string" ? toolInput.description : ""
-    const detail = (desc || command).slice(0, 200)
-    return detail ? `Run command: ${detail}` : "Run a shell command"
-  }
-  const filePath = typeof toolInput.file_path === "string" ? toolInput.file_path : ""
-  if (filePath) return `${toolName} ${filePath}`.slice(0, 200)
-  return `${toolName} (no file path)`
-}
-
-const clearPendingApprovals = (message: string, subChatId?: string) => {
-  for (const [toolUseId, pending] of pendingToolApprovals) {
-    if (subChatId && pending.subChatId !== subChatId) continue
-    pending.resolve({ approved: false, message })
-    pendingToolApprovals.delete(toolUseId)
   }
 }
 
@@ -908,7 +836,7 @@ export const claudeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(), // Original project path for MCP config lookup
-        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
+        mode: agentModeSchema.default(DEFAULT_AGENT_MODE),
         sessionId: z.string().optional(),
         model: z.string().optional(),
         customConfig: z
@@ -1799,11 +1727,20 @@ ${prompt}
                   !finalCustomConfig && {
                     getOAuthToken: async () => getValidExistingClaudeToken(),
                   }),
-                permissionMode:
-                  input.mode === "plan" ? ("plan" as const) : ("bypassPermissions" as const),
-                ...(input.mode !== "plan" && {
-                  allowDangerouslySkipPermissions: true,
-                }),
+                permissionMode: sdkPermissionMode(input.mode),
+                // The floor again, as a hook. `settingSources` below loads the
+                // workspace's own `.claude/settings.json`, and a call an allow
+                // rule in that file auto-approves never reaches `canUseTool`,
+                // which is where the gate lives. A repository ships its own
+                // settings file, so without this a cloned workspace could take
+                // every shell command out from under the floor. The hook only
+                // ever narrows: it answers deny or ask and never allow.
+                hooks: {
+                  PreToolUse: createPermissionFloorHook({
+                    mode: input.mode,
+                    worktreePath: input.cwd,
+                  }),
+                },
                 includePartialMessages: true,
                 // Load skills from project and user directories (skip for Ollama - not supported)
                 ...(!isUsingOllama && {
@@ -1869,149 +1806,65 @@ ${prompt}
                     }
                   }
 
-                  if (input.mode === "plan") {
-                    if (toolName === "Edit" || toolName === "Write") {
-                      const filePath =
-                        typeof toolInput.file_path === "string" ? toolInput.file_path : ""
-                      if (!/\.md$/i.test(filePath)) {
-                        return {
-                          behavior: "deny" as const,
-                          message: 'Only ".md" files can be modified in plan mode.',
-                        }
-                      }
-                    } else if (toolName === "ExitPlanMode") {
-                      return {
-                        behavior: "deny" as const,
-                        message: `IMPORTANT: DONT IMPLEMENT THE PLAN UNTIL THE EXPLIT COMMAND. THE PLAN WAS **ONLY** PRESENTED TO USER, FINISH CURRENT MESSAGE AS SOON AS POSSIBLE`,
-                      }
-                    } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
-                      return {
-                        behavior: "deny" as const,
-                        message: `Tool "${toolName}" blocked in plan mode.`,
-                      }
-                    }
-                  } else if (input.mode === "ask") {
-                    if (ASK_MODE_APPROVAL_TOOLS.has(toolName)) {
-                      const { toolUseID } = options
-                      // Reuse the AskUserQuestion UI as an Allow/Deny prompt
-                      // (same shape as the native runtime permission_request
-                      // translation; no toolUseId prefix routes the answer to
-                      // the legacy respondToolApproval mutation).
-                      safeEmit({
-                        type: "ask-user-question",
-                        toolUseId: toolUseID,
-                        questions: [
-                          {
-                            question: describeToolCallForApproval(toolName, toolInput),
-                            header: toolName,
-                            options: [
-                              {
-                                label: "Allow",
-                                description: `Allow ${toolName} this time`,
-                              },
-                              { label: "Deny", description: `Deny ${toolName}` },
-                            ],
-                            multiSelect: false,
-                          },
-                        ],
-                      } as UIMessageChunk)
+                  // Every side-effecting action reaches this gate. The SDK
+                  // posture above is "default" for all four acting modes, which
+                  // is the only posture where that is true, so the policy in
+                  // `src/main/lib/permissions/` decides, not the engine.
+                  const decision = await evaluateAction({
+                    toolName,
+                    toolInput,
+                    mode: input.mode,
+                    worktreePath: input.cwd,
+                  })
 
-                      // Wait for response (60s timeout denies)
-                      const approval = await new Promise<{
-                        approved: boolean
-                        message?: string
-                        updatedInput?: unknown
-                      }>((resolve) => {
-                        const timeoutId = setTimeout(() => {
-                          pendingToolApprovals.delete(toolUseID)
-                          safeEmit({
-                            type: "ask-user-question-timeout",
-                            toolUseId: toolUseID,
-                          } as UIMessageChunk)
-                          resolve({
-                            approved: false,
-                            message: "Timed out waiting for approval",
-                          })
-                        }, 60000)
-
-                        pendingToolApprovals.set(toolUseID, {
-                          subChatId: input.subChatId,
-                          resolve: (d) => {
-                            clearTimeout(timeoutId)
-                            resolve(d)
-                          },
-                        })
-                      })
-
-                      // The question dialog submits approved:true with the picked
-                      // option label in answers — a "Deny" pick is a denial.
-                      const approvalAnswers = (
-                        approval.updatedInput as { answers?: Record<string, string> } | undefined
-                      )?.answers
-                      const deniedByAnswer = approvalAnswers
-                        ? Object.values(approvalAnswers).some((a) =>
-                            a
-                              .split(",")
-                              .map((x) => x.trim())
-                              .includes("Deny"),
-                          )
-                        : false
-                      const denied = !approval.approved || deniedByAnswer
-                      safeEmit({
-                        type: "ask-user-question-result",
-                        toolUseId: toolUseID,
-                        result: denied ? approval.message || "Denied" : "Allowed",
-                      } as unknown as UIMessageChunk)
-                      if (denied) {
-                        return {
-                          behavior: "deny" as const,
-                          message: approval.message || `Tool "${toolName}" denied in ask mode.`,
-                        }
-                      }
-                    }
-                  } else if (input.mode === "edit" || input.mode === "agent") {
-                    // File edits (and everything else) auto-allowed except
-                    // dangerous deletions.
-                    const modeLabel = input.mode === "edit" ? "Edit" : "Agent"
-                    const reason = detectDangerousDeletion(toolName, toolInput, modeLabel)
-                    if (reason) {
-                      return { behavior: "deny" as const, message: reason }
+                  if (decision.decision === "deny") {
+                    return {
+                      behavior: "deny" as const,
+                      message: describePermissionDecision(decision, permissionsPolicyPath()),
                     }
                   }
-                  // "turbo" / legacy fall through to default allow.
+
+                  if (decision.decision === "ask") {
+                    const { toolUseID } = options
+                    const approval = await askToolApproval({
+                      toolUseId: toolUseID,
+                      subChatId: input.subChatId,
+                      questions: [describeApprovalRequest(toolName, toolInput, decision.rule)],
+                      emit: safeEmit,
+                    })
+                    const denied = approvalWasDenied(approval)
+                    safeEmit({
+                      type: "ask-user-question-result",
+                      toolUseId: toolUseID,
+                      result: denied ? (approval.message ?? "Denied") : "Allowed",
+                    })
+                    if (denied) {
+                      return {
+                        behavior: "deny" as const,
+                        message:
+                          approval.message ??
+                          describePermissionDecision(decision, permissionsPolicyPath()),
+                      }
+                    }
+                  }
+
                   if (toolName === "AskUserQuestion") {
                     const { toolUseID } = options
-                    // Emit to UI (safely in case observer is closed)
-                    safeEmit({
-                      type: "ask-user-question",
+                    // The questions are untrusted model output and the card is a
+                    // UI contract, so an input with nothing usable to show is
+                    // refused rather than rendered blank.
+                    const questions = questionsFromToolInput(toolInput)
+                    if (questions.length === 0) {
+                      return {
+                        behavior: "deny" as const,
+                        message: "AskUserQuestion produced no question the user could answer.",
+                      }
+                    }
+                    const response = await askToolApproval({
                       toolUseId: toolUseID,
-                      questions: toolInput.questions,
-                    } as UIMessageChunk)
-
-                    // Wait for response (60s timeout)
-                    const response = await new Promise<{
-                      approved: boolean
-                      message?: string
-                      updatedInput?: unknown
-                    }>((resolve) => {
-                      const timeoutId = setTimeout(() => {
-                        pendingToolApprovals.delete(toolUseID)
-                        // Emit chunk to notify UI that the question has timed out
-                        // This ensures the pending question dialog is cleared
-                        safeEmit({
-                          type: "ask-user-question-timeout",
-                          toolUseId: toolUseID,
-                        } as UIMessageChunk)
-                        resolve({ approved: false, message: "Timed out" })
-                      }, 60000)
-
-                      pendingToolApprovals.set(toolUseID, {
-                        subChatId: input.subChatId,
-                        resolve: (d) => {
-                          clearTimeout(timeoutId)
-                          resolve(d)
-                        },
-                      })
+                      subChatId: input.subChatId,
+                      questions,
+                      emit: safeEmit,
                     })
 
                     // Find the tool part in accumulated parts
@@ -2026,14 +1879,11 @@ ${prompt}
                         askToolPart.result = errorMessage
                         askToolPart.state = "result"
                       }
-                      // Emit result to frontend so it updates in real-time
-                      // Cast through unknown because ask-user-question-result is a custom
-                      // extension not in the UIMessageChunk union type
                       safeEmit({
                         type: "ask-user-question-result",
                         toolUseId: toolUseID,
                         result: errorMessage,
-                      } as unknown as UIMessageChunk)
+                      })
                       return {
                         behavior: "deny" as const,
                         message: errorMessage,
@@ -2048,14 +1898,11 @@ ${prompt}
                       askToolPart.result = answerResult
                       askToolPart.state = "result"
                     }
-                    // Emit result to frontend so it updates in real-time
-                    // Cast through unknown because ask-user-question-result is a custom
-                    // extension not in the UIMessageChunk union type
                     safeEmit({
                       type: "ask-user-question-result",
                       toolUseId: toolUseID,
                       result: answerResult,
-                    } as unknown as UIMessageChunk)
+                    })
                     return {
                       behavior: "allow" as const,
                       updatedInput: response.updatedInput as Record<string, unknown>,
@@ -2928,18 +2775,23 @@ ${prompt}
       }),
     )
     .mutation(({ input }) => {
-      const pending = pendingToolApprovals.get(input.toolUseId)
-      if (!pending) {
-        return { ok: false }
-      }
-      // The user answered, so the run leaves waiting_approval either way.
-      getRunStore().resolveApprovalForSubChat(pending.subChatId, input.approved)
-      pending.resolve({
+      const response: ToolApprovalResponse = {
         approved: input.approved,
-        message: input.message,
-        updatedInput: input.updatedInput,
-      })
-      pendingToolApprovals.delete(input.toolUseId)
+        ...(input.message === undefined ? {} : { message: input.message }),
+        ...(input.updatedInput === undefined ? {} : { updatedInput: input.updatedInput }),
+      }
+      const subChatId = resolveToolApproval(input.toolUseId, response)
+      if (subChatId === null) return { ok: false }
+      // The user answered, so the run leaves waiting_approval either way. A card
+      // that already timed out is gone from the registry, so a late answer
+      // cannot settle a newer run for the same sub-chat.
+      //
+      // `approved` alone is not the answer. The card submits `approved: true`
+      // with the picked label in `answers`, so a Deny pick arrives approved and
+      // only `approvalWasDenied` reads it, which is what the gate above does.
+      // Settling the run on the raw flag recorded `approved: true` in the run
+      // history for a tool the user refused.
+      getRunStore().resolveApprovalForSubChat(subChatId, !approvalWasDenied(response))
       return { ok: true }
     }),
 

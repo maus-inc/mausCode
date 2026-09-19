@@ -8,37 +8,94 @@ import {
   buildGrokPrintFallbackArgs,
   GROK_ASK_TOOLS,
   GROK_PROMPT_FILE_CHARS,
+  GROK_TURBO_ALLOW,
+  type GrokPrintMode,
   isGrokInvalidModelError,
   isGrokResumeError,
   isGrokUnknownFlagError,
 } from "./args"
 
-it("maps plan/ask to permission-mode/tools and edit/agent/turbo to approve", () => {
+/**
+ * The spellings grok documents as the same bypass. None of them may reach argv
+ * in any mode: a bypass the app cannot see defeats the permission gate.
+ */
+const BYPASS_SPELLINGS = ["--always-approve", "--yolo", "bypassPermissions"]
+
+/** The value that follows `flag`, or undefined when the flag is absent. */
+function flagValue(args: string[], flag: string): string | undefined {
+  const at = args.indexOf(flag)
+  return at === -1 ? undefined : args[at + 1]
+}
+
+/** Every value passed to `flag`, in order. */
+function flagValues(args: string[], flag: string): string[] {
+  return args.flatMap((arg, index) => {
+    const value = args[index + 1]
+    return arg === flag && value !== undefined ? [value] : []
+  })
+}
+
+it("maps plan/ask to permission-mode/tools and the writing modes to acceptEdits", () => {
   const plan = buildGrokPrintArgs({ mode: "plan", prompt: "hi" }).args
-  assert.deepEqual(
-    plan.slice(plan.indexOf("--permission-mode"), plan.indexOf("--permission-mode") + 2),
-    ["--permission-mode", "plan"],
-  )
-  assert.ok(!plan.includes("--always-approve"))
+  assert.equal(flagValue(plan, "--permission-mode"), "plan")
 
   const ask = buildGrokPrintArgs({ mode: "ask", prompt: "hi" }).args
-  assert.deepEqual(ask.slice(ask.indexOf("--tools"), ask.indexOf("--tools") + 2), [
-    "--tools",
-    GROK_ASK_TOOLS,
-  ])
-  assert.ok(!ask.includes("--always-approve"))
+  assert.equal(flagValue(ask, "--tools"), GROK_ASK_TOOLS)
 
   for (const mode of ["edit", "agent"] as const) {
     const { args } = buildGrokPrintArgs({ mode, prompt: "hi" })
-    assert.ok(args.includes("--always-approve"))
-    assert.ok(!args.includes("--permission-mode"))
+    assert.equal(flagValue(args, "--permission-mode"), "acceptEdits")
+    assert.deepEqual(flagValues(args, "--allow"), [])
   }
+
+  // Turbo is the opt-out tier, so the engine gets rules wide enough to match
+  // what the app gate permits there. Without them headless grok fails closed on
+  // every shell command and the two providers disagree about what turbo is.
   const turbo = buildGrokPrintArgs({ mode: "turbo", prompt: "hi" }).args
-  assert.ok(turbo.includes("--always-approve"))
-  assert.deepEqual(
-    turbo.slice(turbo.indexOf("--permission-mode"), turbo.indexOf("--permission-mode") + 2),
-    ["--permission-mode", "bypassPermissions"],
-  )
+  assert.equal(flagValue(turbo, "--permission-mode"), "acceptEdits")
+  assert.deepEqual(flagValues(turbo, "--allow"), [...GROK_TURBO_ALLOW])
+})
+
+it("never passes a bypass spelling, with or without an allow-list", () => {
+  for (const mode of ["plan", "ask", "edit", "agent", "turbo"] as const) {
+    for (const allowTools of [undefined, ["run_terminal_cmd(npm test)"]]) {
+      const { args } = buildGrokPrintArgs({ mode, prompt: "hi", allowTools })
+      for (const spelling of BYPASS_SPELLINGS) {
+        assert.ok(!args.includes(spelling), `${mode} passed ${spelling}`)
+      }
+    }
+  }
+})
+
+it("threads the policy allow-list as --allow rules for the writing modes only", () => {
+  const allowTools = ["run_terminal_cmd(npm test)", "read_file(*)"]
+
+  // Edit and agent pass only what the policy lists, so neither widens itself by
+  // omission.
+  for (const mode of ["edit", "agent"] as const) {
+    const scoped = buildGrokPrintArgs({ mode, prompt: "hi", allowTools }).args
+    assert.deepEqual(flagValues(scoped, "--allow"), allowTools)
+  }
+
+  // Turbo starts from the broad list and adds whatever the policy lists.
+  const { args } = buildGrokPrintArgs({ mode: "turbo", prompt: "hi", allowTools })
+  assert.deepEqual(flagValues(args, "--allow"), [...GROK_TURBO_ALLOW, ...allowTools])
+
+  // Plan and ask take their posture from the CLI, so an allow-list cannot
+  // widen either of them from this path.
+  for (const mode of ["plan", "ask"] as const) {
+    const scoped = buildGrokPrintArgs({ mode, prompt: "hi", allowTools }).args
+    assert.deepEqual(flagValues(scoped, "--allow"), [])
+  }
+})
+
+it("does not put a turbo rule on argv twice", () => {
+  const { args } = buildGrokPrintArgs({
+    mode: "turbo",
+    prompt: "hi",
+    allowTools: ["WebFetch", "Bash(git *)"],
+  })
+  assert.deepEqual(flagValues(args, "--allow"), ["Bash(*)", "WebFetch", "WebSearch", "Bash(git *)"])
 })
 
 it("always passes streaming-json + no-auto-update and threads model/resume/cwd", () => {
@@ -101,21 +158,26 @@ it("keeps short prompts inline on -p", () => {
   assert.deepEqual(args.slice(0, 2), ["-p", "short"])
 })
 
-it("strips newer flags and rewrites prompt-file to -p on fallback", () => {
+it("keeps the permission posture and rewrites prompt-file to -p on fallback", () => {
+  const prompt = "y".repeat(GROK_PROMPT_FILE_CHARS + 1)
   const invocation = buildGrokPrintArgs({
     model: "grok-4.6",
-    mode: "plan",
+    mode: "turbo",
     resumeId: "ses-1",
     cwd: "/repo",
-    prompt: "y".repeat(GROK_PROMPT_FILE_CHARS + 1),
+    prompt,
+    allowTools: ["Read"],
   })
   assert.equal(invocation.args[0], "--prompt-file")
-  const prompt = "y".repeat(GROK_PROMPT_FILE_CHARS + 1)
   const spawned = [invocation.args[0], "/tmp/grok-prompt-1.txt", ...invocation.args.slice(1)]
   const fallback = buildGrokPrintFallbackArgs(spawned, prompt)
+
+  // Every rule survives. An earlier shape of the fallback dropped the posture
+  // with the newer flags, which retried the turn with nothing left to refuse a
+  // tool, because headless grok has no channel back to the app gate.
+  assert.equal(flagValue(fallback, "--permission-mode"), "acceptEdits")
+  assert.deepEqual(flagValues(fallback, "--allow"), [...GROK_TURBO_ALLOW, "Read"])
   assert.ok(!fallback.includes("--no-auto-update"))
-  assert.ok(!fallback.includes("--permission-mode"))
-  assert.ok(!fallback.includes("plan"))
   assert.deepEqual(fallback.slice(0, 2), ["-p", prompt])
   for (const kept of [
     "-m",
@@ -131,6 +193,21 @@ it("strips newer flags and rewrites prompt-file to -p on fallback", () => {
   }
 })
 
+it("keeps the posture of every mode on fallback", () => {
+  const spellings: Array<[GrokPrintMode, string, string]> = [
+    ["plan", "--permission-mode", "plan"],
+    ["ask", "--tools", GROK_ASK_TOOLS],
+    ["edit", "--permission-mode", "acceptEdits"],
+    ["agent", "--permission-mode", "acceptEdits"],
+    ["turbo", "--permission-mode", "acceptEdits"],
+  ]
+  for (const [mode, flag, value] of spellings) {
+    const invocation = buildGrokPrintArgs({ mode, prompt: "hi" })
+    const fallback = buildGrokPrintFallbackArgs(invocation.args, "hi")
+    assert.equal(flagValue(fallback, flag), value, mode)
+  }
+})
+
 it("does not mistake prose for retryable errors", () => {
   assert.equal(isGrokResumeError("it is presumed complete"), false)
   assert.equal(isGrokResumeError("cannot resume session ses-1"), true)
@@ -139,10 +216,20 @@ it("does not mistake prose for retryable errors", () => {
 
 it("leaves prompt text alone when it equals --prompt-file", () => {
   const out = buildGrokPrintFallbackArgs(
-    ["-p", "--prompt-file", "--cwd", "/tmp/x", "--always-approve"],
+    ["-p", "--prompt-file", "--cwd", "/tmp/x", "-m", "grok-4.6"],
     "--prompt-file",
   )
-  assert.deepEqual(out, ["-p", "--prompt-file", "--cwd", "/tmp/x", "--always-approve"])
+  assert.deepEqual(out, ["-p", "--prompt-file", "--cwd", "/tmp/x", "-m", "grok-4.6"])
+})
+
+it("leaves prompt text alone when it spells a flag the fallback drops", () => {
+  // Index 1 is the prompt once the builder has inlined it with `-p`, so the word
+  // is user text. Dropping it also ate the argument after it.
+  const out = buildGrokPrintFallbackArgs(
+    ["-p", "--no-auto-update", "--cwd", "/tmp/x"],
+    "--no-auto-update",
+  )
+  assert.deepEqual(out, ["-p", "--no-auto-update", "--cwd", "/tmp/x"])
 })
 
 it("matches resume, invalid-model, and unknown-flag errors", () => {
