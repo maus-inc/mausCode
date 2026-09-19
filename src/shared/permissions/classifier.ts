@@ -789,7 +789,8 @@ const SQL_CLIENT_VERBS = new Set([
  * identifier rather than a fixed keyword, and DROP reaches every object type a
  * client can drop, a column among them, because a dropped column is gone too.
  */
-const DESTRUCTIVE_SQL_TEXT = /\bDROP\s+(TABLE|DATABASE|SCHEMA|VIEW|INDEX|SEQUENCE|FUNCTION|TRIGGER|EXTENSION|ROLE|USER|SERVER|COLUMN)\b|\bTRUNCATE\s+(?:TABLE\s+)?[A-Za-z_][A-Za-z0-9_$.]*/i
+const DESTRUCTIVE_SQL_TEXT =
+  /\bDROP\s+(TABLE|DATABASE|SCHEMA|VIEW|INDEX|SEQUENCE|FUNCTION|TRIGGER|EXTENSION|ROLE|USER|SERVER|COLUMN)\b|\bTRUNCATE\s+(?:TABLE\s+)?[A-Za-z_][A-Za-z0-9_$.]*/i
 
 /**
  * A DROP or TRUNCATE typed into a database client's command line. Read from
