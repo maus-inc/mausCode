@@ -90,6 +90,24 @@ export const providerCapabilitySchema = z.object({
 
 export type ProviderCapability = z.infer<typeof providerCapabilitySchema>
 
+/** The two answers to "who enforces the permission floor of roadmap step 10". */
+export type PermissionFloor = ProviderCapability["security"]["permissionFloor"]
+
+/**
+ * The floor behind a sub-chat provider id, which is the vocabulary the chat UI
+ * holds. The manifests are keyed by backend id and live in main, so the renderer
+ * cannot read one for the id it has, and two ids it does hold, `gemini` and
+ * `openrouter`, name a path no backend manifest carries at all.
+ *
+ * Only the Claude path routes a tool call through `evaluateAction`, so it is the
+ * only id with an app gate. `src/main/lib/providers/permission-floor.test.ts`
+ * asserts this agrees with every manifest that has a sub-chat binding, so the two
+ * vocabularies cannot drift apart silently.
+ */
+export function permissionFloorFor(provider: string): PermissionFloor {
+  return provider === "claude-code" ? "app-gate" : "engine-only"
+}
+
 export type ViolationSeverity = "block" | "warn"
 
 export type CapabilityViolation = {

@@ -23,6 +23,14 @@ interface CommandSegment {
   verb: string
   /** Every word of the segment, lowercased. */
   words: string[]
+  /**
+   * True when the segment carries GNU's `--no-target-directory`, which says the
+   * last operand is a plain file rather than a directory to write into. Its short
+   * spelling `-T` differs from the target-directory flag `-t` by case alone, and
+   * lowercasing the words erases that, so the one flag whose case carries meaning
+   * is remembered here instead.
+   */
+  noTargetDirectory: boolean
 }
 
 /**
@@ -108,10 +116,16 @@ const NETWORK_VERBS = new Set([
  * Verbs that only open a channel for some subcommands, so the subcommand is
  * read before the segment counts as network. `docker ps` and `gh --version` are
  * local; `docker push` and `gh release upload` are not.
+ *
+ * A container that starts gets the default bridge network, and an image the host
+ * does not have is pulled before it starts, so `run`, `create` and `start` open a
+ * channel, and `exec` runs code in a container that already has one. `build` stays
+ * out because a build on a base image the host already holds opens nothing, and a
+ * test pins that.
  */
 const NETWORK_SUBCOMMAND_VERBS: Record<string, Set<string>> = {
-  docker: new Set(["push", "pull", "login"]),
-  podman: new Set(["push", "pull", "login"]),
+  docker: new Set(["push", "pull", "login", "run", "create", "start", "exec"]),
+  podman: new Set(["push", "pull", "login", "run", "create", "start", "exec"]),
   gh: new Set(["api", "release", "gist"]),
   openssl: new Set(["s_client", "s_server"]),
 }
@@ -227,11 +241,12 @@ function readsSecretHere(segment: CommandSegment, word: string, index: number): 
  */
 function isWriteTarget(segment: CommandSegment, index: number): boolean {
   // A write verb's destination is a write, so `cp /tmp/k ~/.ssh/authorized_keys`
-  // is a protected-path overwrite rather than a read of a secret location. This
-  // reads the same two verb sets as `writesWhereVerbAims`, and answers a question
-  // about one index rather than about the segment, which is why it cannot call it.
+  // is a protected-path overwrite rather than a read of a secret location. A
+  // target-directory flag moves the destination off the last word and turns every
+  // other operand into a source, so `cp -t /tmp/x ~/.ssh/id_rsa` reads the key
+  // exactly as `cp ~/.ssh/id_rsa /tmp/x` does.
   if (WRITES_EVERY_ARGUMENT.has(segment.verb)) return true
-  if (WRITES_LAST_ARGUMENT.has(segment.verb)) return index === segment.words.length - 1
+  if (WRITES_LAST_ARGUMENT.has(segment.verb)) return index === writeTargetIndex(segment)
   const word = segment.words[index] ?? ""
   if (word.startsWith(">")) return true
   const previous = segment.words[index - 1] ?? ""
@@ -417,12 +432,17 @@ export function splitCommandSegments(command: string): CommandSegment[] {
       .map((raw) => raw.trim())
       .filter((text) => text.length > 0)
       .map((text) => {
-        const words = text
+        const split = text
           .split(/\s+/)
           .filter((word) => word.length > 0)
-          .map((word) => unquote(word).toLowerCase())
+          .map((word) => unquote(word))
           .filter((word) => word.length > 0)
-        return { verb: readVerb(words), words }
+        const words = split.map((word) => word.toLowerCase())
+        return {
+          verb: readVerb(words),
+          words,
+          noTargetDirectory: split.some(isNoTargetDirectoryFlag),
+        }
       })
   )
 }
@@ -533,16 +553,96 @@ function writesProtectedPath(segments: CommandSegment[]): boolean {
  * Which argument counts is the verb's business, and the protected-path check, the
  * block-device check and `isWriteTarget` all need the same answer, so it lives
  * here once. A verb that writes every argument can hit the target anywhere, while
- * a verb with a distinct destination only counts at its last argument, because
- * `cp /etc/passwd /tmp/copy` reads a protected file and writes an ordinary one.
+ * a verb with a distinct destination writes where `writeDestinations` says.
  */
 function writesWhereVerbAims(
   segment: CommandSegment,
   dangerous: (word: string) => boolean,
 ): boolean {
   if (WRITES_EVERY_ARGUMENT.has(segment.verb)) return segment.words.some(dangerous)
-  if (WRITES_LAST_ARGUMENT.has(segment.verb)) return dangerous(segment.words.at(-1) ?? "")
-  return false
+  return writeDestinations(segment).some(dangerous)
+}
+
+/** The two spellings of GNU's `--no-target-directory`, in the case they were written. */
+function isNoTargetDirectoryFlag(word: string): boolean {
+  return word === "-T" || word === "--no-target-directory"
+}
+
+/** GNU's spellings of "the destination is this directory". */
+const TARGET_DIRECTORY_FLAGS = new Set(["-t", "--target-directory"])
+const TARGET_DIRECTORY_PREFIX = "--target-directory="
+
+/** A target-directory flag's value, and the word it was read from. */
+type TargetDirectory = { directory: string; index: number }
+
+/**
+ * The directory a target-directory flag names in this segment, or null when it
+ * carries none.
+ *
+ * `-t DIR`, `--target-directory DIR` and `--target-directory=DIR` are the
+ * spellings, and GNU also reads a value glued to a short cluster as that flag's
+ * argument, so `-tDIR` names a directory as well.
+ */
+function readTargetDirectory(segment: CommandSegment): TargetDirectory | null {
+  // `-T` says the last operand is the destination file itself, and GNU refuses it
+  // beside `-t`, so a segment carrying one has no target directory to read. Without
+  // this the lowercased `-T` reads as `-t` and names the source as the destination.
+  if (segment.noTargetDirectory) return null
+  for (let index = 0; index < segment.words.length; index += 1) {
+    const word = segment.words[index] ?? ""
+    if (TARGET_DIRECTORY_FLAGS.has(word)) {
+      const next = segment.words[index + 1]
+      if (next === undefined) continue
+      return { directory: next, index: index + 1 }
+    }
+    if (word.startsWith(TARGET_DIRECTORY_PREFIX)) {
+      return { directory: word.slice(TARGET_DIRECTORY_PREFIX.length), index }
+    }
+    if (word.startsWith("-t") && !word.startsWith("--") && word.length > 2) {
+      return { directory: word.slice(2), index }
+    }
+  }
+  return null
+}
+
+/**
+ * Every path a write verb with a distinct destination writes to.
+ *
+ * Without a target-directory flag that is the last word alone, because
+ * `cp /etc/passwd /tmp/copy` reads a protected file and writes an ordinary one.
+ * With the flag the directory is the destination and every other operand is a
+ * source, so `cp -t /home/u/.ssh /tmp/authorized_keys` writes inside a protected
+ * directory and reads an ordinary file, which is the reverse of what reading the
+ * last word says. Each source also lands in that directory under its own
+ * basename, so `cp -t /etc /tmp/passwd` is checked as a write to `/etc/passwd`.
+ */
+function writeDestinations(segment: CommandSegment): string[] {
+  if (!WRITES_LAST_ARGUMENT.has(segment.verb)) return []
+  const target = readTargetDirectory(segment)
+  if (target === null) return [segment.words.at(-1) ?? ""]
+  const found = [target.directory]
+  segment.words.forEach((word, index) => {
+    if (index === target.index || word === segment.verb || word === "sudo") return
+    if (word.startsWith("-")) return
+    const joined = joinUnderDirectory(target.directory, word)
+    if (joined !== null) found.push(joined)
+  })
+  return found
+}
+
+/** `directory` with the basename of `source` under it, or null when either names no file. */
+function joinUnderDirectory(directory: string, source: string): string | null {
+  if (directory.length === 0 || source.length === 0) return null
+  const slash = source.lastIndexOf("/")
+  const base = slash === -1 ? source : source.slice(slash + 1)
+  if (base.length === 0) return null
+  return `${directory.replace(/\/+$/, "")}/${base}`
+}
+
+/** The word this segment's destination is read from, which a flag can move. */
+function writeTargetIndex(segment: CommandSegment): number {
+  const target = readTargetDirectory(segment)
+  return target === null ? segment.words.length - 1 : target.index
 }
 
 function hasDestructiveSql(command: string): boolean {
@@ -685,8 +785,14 @@ const WRITES_EVERY_ARGUMENT = new Set(["tee", "truncate", "shred"])
  * Verbs whose destination is their last argument. `cp /dev/sda /tmp/backup` reads
  * the device and writes an ordinary file, so only the last word can be the target
  * that matters.
+ *
+ * `ln` belongs here because the link it names last is a file it writes, and a link
+ * is a way to put attacker-chosen content in a protected directory with no copy
+ * verb on the line. The GNU coreutils manual groups these four, `cp`, `install`,
+ * `ln` and `mv`, as the commands that take `--target-directory`, so the flag
+ * parser below serves all of them.
  */
-const WRITES_LAST_ARGUMENT = new Set(["cp", "mv", "install"])
+const WRITES_LAST_ARGUMENT = new Set(["cp", "mv", "install", "ln"])
 
 /**
  * A block device rather than any `/dev` entry. `/dev/null`, `/dev/zero`,
@@ -848,21 +954,64 @@ function hasCodeExecutionEnvAssignment(command: string, segments: CommandSegment
   // pipe and a value can contain one. `LESSOPEN='|/tmp/x.sh %s' less file` is a
   // real spelling and its assignment lands in a segment of its own, halved.
   const lower = command.toLowerCase()
-  // The name class excludes `=` so there is exactly one way to reach the
-  // separator. `[\w.]*` before an `=` is ambiguous and backtracks.
-  for (const match of lower.matchAll(/([a-z_][^\s=]*)=([^\s;]*)/g)) {
-    const [, name, value] = match
-    if (name === undefined || value === undefined) continue
-    // The name class excludes `=` but not quotes, so a quoted name arrives with
-    // its closing quote attached and `"LESSOPEN"=/tmp/x.sh` read as a variable
-    // called `lessopen"`. The segment scan strips quotes from whole words and
-    // catches the spellings it can see, but this scan is the one that survives a
-    // pipe inside the value, so it has to strip them too.
-    const bare = name.replaceAll(/["'`]/g, "")
+  // A pattern would have to name the variable and the value in one expression,
+  // and the two classes overlap, so a token with no separator in it gets retried
+  // at every length. That is super-linear on input this gate reads from a model.
+  // Neither the name nor the value spans whitespace in the pattern this replaces,
+  // so walking the tokens reads the same assignments in one pass each.
+  return lower.split(/\s+/).some((token) => tokenCarriesCodeExecution(token))
+}
+
+/**
+ * True when one whitespace-delimited token assigns a variable that runs code to a
+ * value that could be loaded or executed.
+ *
+ * Quotes are not excluded from a name, so a quoted one arrives with its closing
+ * quote attached and `"LESSOPEN"=/tmp/x.sh` read as a variable called `lessopen"`.
+ * The segment scan strips quotes from whole words and catches the spellings it can
+ * see, but this scan is the one that survives a pipe inside a value, so it strips
+ * them too.
+ */
+function tokenCarriesCodeExecution(token: string): boolean {
+  let from = 0
+  for (;;) {
+    const assignment = readRawAssignment(token, from)
+    if (assignment === null) return false
+    from = assignment.next
+    const bare = assignment.name.replaceAll(/["'`]/g, "")
     if (!CODE_EXECUTION_ENV_VARS.has(bare) && !NUMBERED_GIT_CONFIG.test(bare)) continue
-    if (looksExecutable(value.replaceAll(/["'`]/g, ""))) return true
+    if (looksExecutable(assignment.value.replaceAll(/["'`]/g, ""))) return true
   }
-  return false
+}
+
+/** One assignment read out of a token, plus the index a search resumes at. */
+type RawAssignment = { name: string; value: string; next: number }
+
+/**
+ * The next assignment in `token` at or after `from`, or null when it carries none.
+ *
+ * A name starts at the first letter or underscore the search reaches and runs to
+ * the first `=` after it, which is what the pattern this replaced matched, and
+ * which is why `--env=LESSOPEN=/tmp/x.sh` reads `env` as the name and everything
+ * past it as the value. The value stops at a `;` for the same reason, and `next`
+ * lands past it, so a token holding two assignments separated by a `;` yields
+ * both, as the pattern did when it resumed at the end of a match.
+ */
+function readRawAssignment(token: string, from: number): RawAssignment | null {
+  let nameStart = -1
+  for (let index = from; index < token.length; index += 1) {
+    const char = token[index]
+    if (nameStart === -1 && ((char >= "a" && char <= "z") || char === "_")) {
+      nameStart = index
+      continue
+    }
+    if (char !== "=" || nameStart === -1) continue
+    const rest = token.slice(index + 1)
+    const terminator = rest.indexOf(";")
+    const value = terminator === -1 ? rest : rest.slice(0, terminator)
+    return { name: token.slice(nameStart, index), value, next: index + 1 + value.length }
+  }
+  return null
 }
 
 function isCodeExecutionAssignment(word: string): boolean {
@@ -946,6 +1095,246 @@ function hasInitKill(segments: CommandSegment[]): boolean {
 }
 
 /** Destructive patterns, checked in order. The first match names the rule. */
+/**
+ * Interpreters that take code on the command line, and the flags that carry it.
+ *
+ * A payload is where the shell rules stop seeing. `python -c "import os;
+ * os.remove('/etc/hosts')"` names no shell verb, so the delete rules read an
+ * ordinary command, and Agent mode allows that class. What the payload cannot hide
+ * is the call it makes and the path it names, so both are read here instead. The
+ * residual is stated rather than claimed away: a payload that reaches the same call
+ * through a name built at runtime, `getattr(os, "rem" + "ove")`, still reads as
+ * ordinary, and no amount of pattern work closes that.
+ */
+const INLINE_INTERPRETER_FLAGS: Record<string, Set<string>> = {
+  python: new Set(["-c"]),
+  python2: new Set(["-c"]),
+  python3: new Set(["-c"]),
+  node: new Set(["-e", "-p", "--eval", "--print"]),
+  perl: new Set(["-e"]),
+  ruby: new Set(["-e"]),
+  php: new Set(["-r"]),
+}
+
+/** True when this segment hands code to an interpreter on the command line. */
+function isInlineInterpreter(segment: CommandSegment): boolean {
+  const flags = INLINE_INTERPRETER_FLAGS[segment.verb]
+  if (flags === undefined) return false
+  return segment.words.some((word) => flags.has(word))
+}
+
+/**
+ * Filesystem calls that delete, overwrite or move what they name, in the case a
+ * lowercased command carries.
+ *
+ * Read as substrings of the raw command rather than as words, because the segment
+ * splitter breaks a payload on its parentheses and `os.remove('/etc/hosts')`
+ * reaches the word list in pieces.
+ */
+const DESTRUCTIVE_INTERPRETER_CALLS = [
+  "os.remove",
+  "os.unlink",
+  "os.rmdir",
+  "os.removedirs",
+  "os.rename",
+  "os.replace",
+  "os.truncate",
+  "shutil.rmtree",
+  "shutil.move",
+  "shutil.copy",
+  "rmsync",
+  "unlinksync",
+  "rmdirsync",
+  "truncatesync",
+  "renamesync",
+  "writefilesync",
+  "appendfilesync",
+  "copyfilesync",
+  "movesync",
+  "fs.rm",
+  "fs.unlink",
+  "fs.rmdir",
+  "fs.truncate",
+  "fs.rename",
+  "fs.writefile",
+  "fs.copyfile",
+  "promises.rm",
+  "promises.unlink",
+  "promises.rmdir",
+  "promises.writefile",
+  "file.delete",
+  "file.unlink",
+  "file.rename",
+  "file.write",
+  "fileutils.rm",
+  "dir.delete",
+  "unlink",
+]
+
+/** The mode literals that turn an interpreter `open` into a write rather than a read. */
+const WRITE_MODE_LITERAL = /["'](w|a|x|r\+)(\+?b?t?)?["']/
+
+/**
+ * Network calls an interpreter payload can make, which is what the egress rule
+ * reads in place of a network verb on the command line.
+ */
+const INTERPRETER_NETWORK_CALLS = [
+  "socket.create_connection",
+  "socket.connect",
+  "socket.socket",
+  "urlopen",
+  "urllib.request",
+  "requests.",
+  "httpx.",
+  "http.client",
+  "aiohttp",
+  "fetch(",
+  "http.request",
+  "https.request",
+  "http.get",
+  "https.get",
+  "axios",
+  "net.connect",
+  "net.createconnection",
+  "dgram.create",
+  "xmlhttprequest",
+  "websocket",
+  "net::http",
+  "tcpsocket",
+  "uri.open",
+  "lwp::useragent",
+  "io::socket",
+  "http::tiny",
+]
+
+/**
+ * A host a payload names. A dotted identifier is not enough on its own, because
+ * every member access in a payload looks like one, so the name has to be quoted,
+ * carry a scheme, or be an address.
+ */
+const PAYLOAD_HOST_LITERAL =
+  /:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}\b|["'`][a-z0-9-]+(?:\.[a-z0-9-]+)+["'`]/
+
+/**
+ * Every absolute or home-relative path a payload names, quoted or not.
+ *
+ * A bare `/` is kept, because the filesystem root is one character long and is the
+ * one target the critical-path breaker cares about most. A bare `~` is not, since
+ * no interpreter expands one in a string literal the way a shell expands it on a
+ * command line.
+ */
+function payloadPaths(command: string): string[] {
+  const found: string[] = []
+  for (const match of command.matchAll(/(?:~\/|\/)[^\s'"`()|;,&<>]*/g)) {
+    const path = match[0].replace(/[,}\]]+$/, "")
+    if (path.length > 0) found.push(path)
+  }
+  return found
+}
+
+/**
+ * True when a path is one the shell rules would refuse a write to. The protected
+ * prefixes all end in a slash, so a recursive delete of `/etc` itself matches none
+ * of them and is checked here as the root it is.
+ */
+function isProtectedTarget(path: string): boolean {
+  if (isProtectedLocation(path)) return true
+  return PROTECTED_WRITE_PREFIXES.some((prefix) => `${path}/` === prefix)
+}
+
+/**
+ * True when an inline interpreter payload deletes or overwrites a protected path.
+ *
+ * `open` is left out of the call list because it reads as often as it writes, so it
+ * counts only beside a mode literal that writes.
+ */
+function hasDestructiveInterpreterPayload(command: string, segments: CommandSegment[]): boolean {
+  if (!segments.some(isInlineInterpreter)) return false
+  const lower = command.toLowerCase()
+  const calls = DESTRUCTIVE_INTERPRETER_CALLS.some((call) => lower.includes(call))
+  const opensForWrite = lower.includes("open(") && WRITE_MODE_LITERAL.test(lower)
+  if (!calls && !opensForWrite) return false
+  return payloadPaths(lower).some(isProtectedTarget)
+}
+
+/** True when an inline interpreter payload opens a channel to a host it names. */
+function hasInterpreterEgress(command: string, segments: CommandSegment[]): boolean {
+  if (!segments.some(isInlineInterpreter)) return false
+  const lower = command.toLowerCase()
+  if (!INTERPRETER_NETWORK_CALLS.some((call) => lower.includes(call))) return false
+  return PAYLOAD_HOST_LITERAL.test(lower)
+}
+
+/**
+ * The calls that hand an argv list to a subprocess, where the verb is not a word
+ * any rule can read.
+ */
+const SUBPROCESS_SPAWN_CALLS = [
+  "subprocess.run",
+  "subprocess.call",
+  "subprocess.popen",
+  "subprocess.check_call",
+  "subprocess.check_output",
+  "os.exec",
+  "os.spawn",
+  "os.posix_spawn",
+  "pty.spawn",
+  "child_process.spawn",
+  "child_process.exec",
+  "child_process.execfile",
+  "execsync",
+  "spawnsync",
+]
+
+/**
+ * An inline interpreter payload's argv list flattened into the command line it
+ * becomes, or null when the payload spawns nothing.
+ *
+ * `subprocess.run(['rm','-rf','/etc'])` has no whitespace between the verb and its
+ * flags, so the splitter hands the rules one token and every word-reading rule
+ * reads an ordinary command. The string form of the same call needs none of this,
+ * because a shell string keeps its spaces and the verb arrives as a word.
+ *
+ * Flattening runs only when a spawn call is present. A payload that merely prints
+ * a delete verb, `python -c "print('rm -rf /')"`, names no spawn and stays
+ * ordinary, which is the same line the rules already draw for
+ * `echo "do not run rm -rf /"`.
+ */
+function spawnedArgvCommand(command: string, segments: CommandSegment[]): string | null {
+  if (!segments.some(isInlineInterpreter)) return null
+  const lower = command.toLowerCase()
+  if (!SUBPROCESS_SPAWN_CALLS.some((call) => lower.includes(call))) return null
+  return lower.replaceAll(/["'`[\],]/g, " ")
+}
+
+/**
+ * The verdict hidden in a spawned argv list, or null when it holds an ordinary
+ * command. Destructive is read before network here for the reason the tables are
+ * ordered that way at all, so a delete that also talks to a remote is named as the
+ * delete.
+ */
+function spawnedArgvVerdict(command: string, segments: CommandSegment[]): ClassifiedAction | null {
+  const spawned = spawnedArgvCommand(command, segments)
+  if (spawned === null) return null
+  const flattened = splitCommandSegments(spawned)
+  return (
+    firstMatch(DESTRUCTIVE_PATTERNS, spawned, flattened, "destructive") ??
+    firstMatch(NETWORK_PATTERNS, spawned, flattened, "network")
+  )
+}
+
+/**
+ * The paths an inline interpreter payload deletes, which is what the critical-path
+ * breaker reads when the payload names the worktree or a root instead of a
+ * protected file.
+ */
+function interpreterDeleteTargets(command: string, segments: CommandSegment[]): string[] {
+  if (!segments.some(isInlineInterpreter)) return []
+  const lower = command.toLowerCase()
+  if (!DESTRUCTIVE_INTERPRETER_CALLS.some((call) => lower.includes(call))) return []
+  return payloadPaths(lower)
+}
+
 export const DESTRUCTIVE_PATTERNS: CommandPattern[] = [
   {
     id: "recursive-force-delete",
@@ -988,6 +1377,12 @@ export const DESTRUCTIVE_PATTERNS: CommandPattern[] = [
     id: "protected-path-overwrite",
     test: (_command, segments) => hasProtectedRedirect(segments) || writesProtectedPath(segments),
     reason: "the command writes into a protected system directory",
+  },
+  {
+    id: "interpreter-payload",
+    test: (command, segments) => hasDestructiveInterpreterPayload(command, segments),
+    reason:
+      "an interpreter payload deletes or overwrites a protected path, with no shell verb on the line for the other rules to read",
   },
   {
     id: "disk-or-power",
@@ -1039,7 +1434,25 @@ export function criticalPathBreach(
     }
   }
 
-  for (const segment of segments) {
+  // A payload reaches the same filesystem calls with no delete verb on the line,
+  // so the targets are read out of the raw command rather than out of a segment.
+  for (const target of interpreterDeleteTargets(command, segments)) {
+    const kind = criticalTargetKind(target, worktreeRoot)
+    if (kind === null) continue
+    return {
+      id: "critical-delete",
+      reason: `the command deletes ${kind}, and nothing recovers that`,
+    }
+  }
+
+  // A spawned argv list is read flattened as well, so a delete of the worktree or
+  // of a root through `subprocess.run` breaches the same way the shell spelling
+  // does. This does not call back into the flattening, which would find a payload
+  // in its own output and never stop.
+  const spawned = spawnedArgvCommand(command, segments)
+  const deleting = spawned === null ? segments : [...segments, ...splitCommandSegments(spawned)]
+
+  for (const segment of deleting) {
     if (!segmentDeletes(segment)) continue
     // Every target, not just the first. `rm -rf /tmp/build /` names an ordinary
     // path before the filesystem root, and a scan that stopped at the first
@@ -1169,6 +1582,12 @@ export const NETWORK_PATTERNS: CommandPattern[] = [
     test: (_command, segments) => hasNetworkVerb(segments),
     reason: "the command opens a network channel out of this machine",
   },
+  {
+    id: "interpreter-egress",
+    test: (command, segments) => hasInterpreterEgress(command, segments),
+    reason:
+      "an interpreter payload opens a channel to a host it names, with no network verb on the line for the other rule to read",
+  },
 ]
 
 /** What the classifier decided, and why. */
@@ -1230,6 +1649,13 @@ function classifyCommand(command: string): ClassifiedAction {
 
   const destructive = firstMatch(DESTRUCTIVE_PATTERNS, command, segments, "destructive")
   if (destructive) return destructive
+
+  // A payload that spawns an argv list hides its verb from every word-reading rule,
+  // so the list is read as the command line it becomes. This sits after the
+  // command's own destructive table and before its network table, which keeps a
+  // delete ahead of an egress whichever of the two spellings carries it.
+  const spawned = spawnedArgvVerdict(command, segments)
+  if (spawned) return spawned
 
   const network = firstMatch(NETWORK_PATTERNS, command, segments, "network")
   if (network) return network

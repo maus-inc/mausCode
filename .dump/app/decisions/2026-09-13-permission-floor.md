@@ -461,6 +461,166 @@ The tools that destroy a device only for some subcommands read the subcommand or
 
 Writes into a protected directory are caught without a redirect operator as well. `tee ~/.ssh/authorized_keys` installs a key and would otherwise have landed in `approval`. `cp` and `mv` only count when the protected path is the destination, so `cp /etc/passwd /tmp/copy` reads a protected file and stays ordinary.
 
+## Decision 22: a write verb's destination is where its flags put it (added 2026-09-19)
+
+GNU's `cp`, `install`, `ln` and `mv` take `--target-directory` (`-t`), and the
+coreutils manual is explicit about what it does: the directory becomes "the
+directory component of each destination file name", so every other operand is a
+source and each one lands under that directory with its own basename. The
+classifier read the destination as the last word, which made
+`cp -t /home/u/.ssh /tmp/authorized_keys` an ordinary command in the approval
+class, and Agent mode allows that class, so a login key could be copied into
+place. All four spellings are now read, `-t DIR`, `-tDIR`,
+`--target-directory DIR` and `--target-directory=DIR`, and each source is also
+checked as `DIR/basename`, so `cp -t /etc /tmp/passwd` is the write to
+`/etc/passwd` that it is.
+
+Three details decided on the way:
+
+- **`-T` is the opposite flag and differs only by case.** `--no-target-directory`
+  says the last operand is a plain file, and GNU refuses it beside `-t`. Every
+  word in a segment is lowercased, which erases the difference, so a segment now
+  carries `noTargetDirectory` and the flag parser returns nothing when it is set.
+  Without that, `mv -T /etc/passwd /tmp/x` named the source as the destination
+  and denied a move that writes an ordinary file.
+- **`ln` joins the write verbs.** The link it names last is a file it writes, and
+  a link puts attacker-chosen content in a protected directory with no copy verb
+  on the line. `ln -s /tmp/payload /home/u/.ssh/authorized_keys` was approval
+  class before this and is a protected-path overwrite now.
+- **The direction of a protected operand follows the destination.** With `-t`,
+  the remaining operands are reads, so `cp -t /tmp/x /home/u/.ssh/id_rsa` is the
+  exfiltration that `cp /home/u/.ssh/id_rsa /tmp/x` is, and
+  `mv -t /tmp/backup /etc/passwd` is the approval that `mv /etc/passwd /tmp/backup`
+  is. Two spellings of one action get one verdict, and a test asserts exactly
+  that pairing rather than asserting each verdict on its own.
+
+CodeRabbit found this on the pushed head. It is the same shape as the reported
+bypasses against a shipped agent in claude-code#13371, where the defeats were
+command options rather than command verbs, `git -C /path commit` and
+`rm --force --recursive /home` among them.
+
+## Decision 23: a container that starts opens a channel (added 2026-09-19)
+
+`docker run`, `create`, `start` and `exec`, and the same four for `podman`, are
+network subcommands now. A container that starts gets the default bridge network,
+and an image the host does not have is pulled before it starts, so the channel
+opens whether or not the command inside the container names a network verb.
+`exec` is there because it runs code in a container that already has one.
+
+`build` stays out. A build on a base image the host already holds opens nothing,
+and a test pins `docker build -t app .` as not network, so widening it would have
+to be a deliberate reversal rather than a side effect of this one. `ps`, `logs`
+and `images` stay local for the reason the subcommand table exists at all.
+
+The consequence in Agent mode is a card on a container start, because network is
+the class the owner set to ask there. CodeAnt asked for `docker run` alone;
+`create` and `start` are the same action in two steps and `exec` is the same
+capability in a running container, so leaving them out would have been a rule
+that a model could walk around by spelling it differently.
+
+## Decision 24: the mode picker says when Maus has no gate (added 2026-09-19)
+
+The five mode tooltips describe what the app gate does, and only the Claude path
+has one. On the other nine backends a picker that reads "Destructive, network and
+exfiltrating actions are blocked" promises something this app cannot deliver,
+which is what CodeAnt found on the plan tooltip and OpenClaw, where plan mode is
+a read-only request in the prompt with no flag behind it.
+
+`getModeTooltip` takes the floor as a second parameter with no default, so a call
+site has to say which backend it is describing, and both pickers pass
+`permissionFloorFor(provider)`. An engine-only backend's tooltip keeps the mode
+description and adds one sentence: Maus has no gate on this backend, so it cannot
+block what the backend allows.
+
+The sentence claims nothing about what the backend refuses, because the nine
+differ and one answer cannot cover them. Cline maps plan and ask to `-p`, Roo
+maps the modes to its own slugs, Grok takes an allow list, and OpenClaw has no
+mode flag at all. Each manifest already says which of those it is, in the note
+line Settings renders.
+
+The two vocabularies are guarded rather than trusted. The manifests are keyed by
+backend id and the chat UI holds sub-chat provider ids, where `claude` is
+`claude-code` and `gemini` and `openrouter` have no manifest at all, so
+`permission-floor.test.ts` reads the manifests as source text and fails if a
+backend declares one floor while the tooltip says another. It reads text rather
+than importing the modules because a provider import reaches electron through
+`src/main/lib/claude/env.ts` and the vitest config here is node-only by design,
+which is also how `no-bypass.test.ts` guards its criterion.
+
+## Decision 25: the native transport refuses the two modes that promise restraint (added 2026-09-19)
+
+The native bridge advertises no `permissions` capability, so it never issues a
+permission prompt and no action on it reaches the gate. The transport already
+refused plan mode, and CodeAnt rated the gap Critical: ask, edit, agent and turbo
+all run there with no floor at all.
+
+The owner decided on 2026-09-19 to refuse **plan and ask**, and to keep
+**edit, agent and turbo** running.
+
+- Plan promises a turn that only reads, and ask promises a card before each
+  action. Neither promise can be kept on a transport with no per-action callback,
+  so running either would be a promise the app broke silently. The refusal names
+  the missing capability and the way out, which is the legacy transport.
+- The other three promise that actions happen. The classes they promise to block
+  are unenforced on that transport exactly as they are for the `engine-only`
+  backends in `src/shared/provider-capabilities.ts`, and refusing them too would
+  disable the engine outright, which is a step larger than this one.
+- The gap is disclosed where a user picks the transport: the engine button in the
+  chat input says the bridge has no permissions capability, and the mode picker's
+  tooltip carries the caveat decision 24 adds.
+
+The refusal text and the decision live in
+`src/shared/permissions/native-mode-floor.ts` with its own test, because a router
+test would import the router, which reaches electron, and this repo's vitest config
+is node-only by design.
+
+## Decision 26: an interpreter payload is read as the calls it makes (added 2026-09-19)
+
+An inline interpreter, `python -c`, `node -e`, `perl -e`, `ruby -e`, `php -r`,
+was the named residual of this step: the payload names no shell verb, so every
+word-reading rule read an ordinary command, and Agent mode allows that class.
+CodeAnt rated it Critical and the owner chose on 2026-09-19 to catch destructive
+filesystem and network payloads.
+
+Measured on the build before the rule, every one of these was
+`approval.shell-command`:
+
+- `python -c "import os; os.remove('/etc/hosts')"`
+- `python -c "import shutil; shutil.rmtree('/etc')"`
+- `node -e "require('fs').rmSync('/etc', {recursive:true})"`
+- `node -e "require('fs').unlinkSync('/usr/local/bin/tool')"`
+- `perl -e "unlink '/etc/hosts'"`
+- `ruby -e "File.delete('/etc/hosts')"`
+- `python -c "import socket; socket.create_connection(('evil.test',443))"`
+
+The rule has three parts:
+
+- **`interpreter-payload` (destructive).** The segment hands code to an
+  interpreter, the payload names a destructive filesystem call, or an `open(`
+  beside a write-mode literal, and the payload names a protected target. Both
+  halves are required, so a delete of an ordinary path stays ordinary and a
+  payload that merely prints a delete verb stays ordinary, which is the line the
+  rules already draw for `echo "do not run rm -rf /"`.
+- **`interpreter-egress` (network).** The payload names a network call and a
+  host: a quoted domain, an address, or a scheme. A member access in a payload
+  looks like a domain, which is why the name has to be quoted or carry one of the
+  other two.
+- **The critical-path breaker reads the same targets**, so a payload that deletes
+  the root, the home, the worktree, the working directory or its parent breaches
+  the same way the shell spelling does.
+
+A spawned argv list is read flattened as the command line it becomes,
+`subprocess.run(['rm','-rf','/etc'])` and friends, but only when a spawn call is
+present. A payload that prints the verb spawns nothing and is left to the rules
+that already read it, so the flattening cannot turn a string literal into a
+command.
+
+The calls are read as substrings of the lowercased command rather than as words,
+because the segment splitter breaks a payload on its parentheses and the words
+reach the rules in pieces. The residual, stated in the section below, is a name
+the payload builds at runtime, which is dataflow, and the embedded-shell case the
+old text credited stays caught the way it always was.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
@@ -472,16 +632,13 @@ Still evading, verified:
 
 - **A script written to disk and then run.** `python /tmp/evil.py`, `bash /tmp/x.sh`.
   The behaviour is in the file, and reading it to decide would mean executing it.
-- **An interpreter payload that calls the interpreter's own API.** This bullet
-  used to say "no parentheses to split on", which is not the line between caught
-  and missed and read as a guarantee the classifier does not give. What gets caught
-  below is an embedded *shell* command inside the payload, and the parentheses are
-  only how the splitter happens to reach it. `python -c "import os;
-  os.remove('/etc/hosts')"` and `node -e "require('fs').rmSync('/etc',
-  {recursive:true})"` both have parentheses, name no shell verb anywhere on the
-  line, and classify as `approval.shell-command`, which Agent mode allows. Measured
-  rather than assumed, both of them, on the build this record ships with. Closing
-  that needs a payload parser per language, which is the denylist race the last
+- **An interpreter payload that builds its call's name at runtime.** The
+  interpreter rules added by decision 26 read the calls a payload makes, and every
+  literal call is caught, so the miss is a name the payload constructs:
+  `python -c "getattr(os, 'rem'+'ove')('/etc/hosts')"` and `node -e
+  "const f=require('fs')['rm'+'Sync']; f('/etc')"` both still classify as
+  `approval.shell-command`, measured on the build this record ships with. Reading
+  a constructed name is dataflow, and closing that is the denylist race the last
   bullet describes.
 - **A secret named across two segments.** `cd ~/.aws && cat credentials` puts the
   directory in one segment and the bare filename in the next, so no single word
@@ -501,6 +658,12 @@ Still evading, verified:
 No longer evading, which the earlier text of this section claimed and was wrong
 about:
 
+- `python -c "import os; os.remove('/etc/hosts')"` and `node -e
+  "require('fs').rmSync('/etc', {recursive:true})"` are caught, by decision 26.
+  The rule reads the call a payload makes and the path it names, and it needs both,
+  so a payload that deletes an ordinary path stays in the approval class. A spawned
+  argv list, `subprocess.run(['rm','-rf','/etc'])`, is read flattened as the command
+  line it becomes, and a socket call that names a host is network.
 - `c"h"m"o"d 777 /` is caught. Quotes come off every word before the verb is read,
   so quoted-substring reconstruction resolves to `chmod`. `c$()url` is caught the
   same way, because the splitter breaks on `$(`.
@@ -608,3 +771,10 @@ user asked and the reason recorded.
 Measured in `.dump/app/benchmarks/2026-09-18-permission-gate-cost.md`: 9.5 to 21 µs
 median per tool call, dominated by the filesystem path check, with the policy
 read cached at sub-microsecond.
+
+Decisions 22 and 23 add work to the classifier, so the same ten-call mix was
+measured again against the commit before them, nine interleaved batches of 20000
+calls per variant: 4.045 µs per call before, 4.106 µs after, a delta of 0.061 µs
+that sits inside the run-to-run spread of either variant. The section in the
+benchmark file carries the per-batch numbers and the two verdict changes the same
+run reports.

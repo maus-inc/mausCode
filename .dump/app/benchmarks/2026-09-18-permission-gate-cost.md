@@ -317,3 +317,51 @@ numbered `GIT_CONFIG` injection, a `--mount=type=bind` container escape, a group
 A heavy command costs two to three times an ordinary one, because the strings are
 longer and more patterns run. At the turbo p50 that is still under twenty
 microseconds, and turbo is the mode that runs the most calls without stopping.
+
+### The third review round, measured against the commit before it
+
+Decisions 22 to 26 in `.dump/app/decisions/2026-09-13-permission-floor.md` add a
+flag scan to every write-verb segment, one more pass over the words of every
+segment, and an interpreter check to every command, so the classifier was measured
+again rather than assumed unchanged. The comparison is against `f2b74b4`, the
+commit the review round landed on, with both variants imported into one process
+and timed in interleaved blocks so a thermal or GC trend lands on both equally.
+
+The mix is ten calls: an ordinary listing, a recursive delete, a git push, the
+`cp -t` spelling this round closes, a curl, a secret read, a Read and a Write with
+ordinary paths, a container start, and `npm test`.
+
+| Measurement | `f2b74b4` | This round | Delta |
+| --- | --- | --- | --- |
+| `classifyToolAction`, batch of 20000 calls, median of 9 batches | 4.027 µs per call | 4.057 µs per call | +0.030 µs, so +0.8% |
+| Per-batch spread, min to max | 3.863 to 8.707 µs | 3.978 to 7.716 µs | Overlapping |
+| Per-call p50, timed one call at a time | 4.825 µs | 6.057 µs | +1.232 µs |
+| Per-call p90, timed one call at a time | 9.300 µs | 12.045 µs | +2.745 µs |
+
+The batch numbers are the ones to read. Timing a single call costs microseconds of
+its own on this box, so the one-at-a-time rows carry a floor several times the size
+of the thing being measured, and their delta is that floor moving rather than the
+gate. In batches of 20000 the timer runs twice per batch, the delta is 0.030 µs per
+call, and both variants' spreads cover it. The per-batch rows run 8.707, 4.093,
+4.054, 3.932, 3.946, 4.027, 4.008, 3.863, 4.029 before, and 7.716, 4.134, 4.035,
+4.355, 4.057, 3.998, 3.978, 4.015, 4.811 after.
+
+The check that covers the new rules runs in three places per classification, and
+each of them pays a hash lookup per segment before any payload work starts, so a
+command that names no interpreter costs a lookup rather than a scan. The payload
+path parsing and the argv flattening run only for a segment that hands code to an
+interpreter.
+
+Four verdicts changed in the same run, and all four are the point of the round:
+`cp -t /home/u/.ssh /tmp/authorized_keys` went from `shell-command` in the approval
+class to `protected-path-overwrite` in the destructive one, `docker run alpine
+echo hi` went from `shell-command` to `egress-command` in the network one,
+`python -c "import os; os.remove('/etc/hosts')"` went from `shell-command` to
+`interpreter-payload` in the destructive one, and
+`python -c "import socket; socket.create_connection(('evil.test',443))"` went from
+`shell-command` to `interpreter-egress` in the network one. The other six calls in
+the mix are byte-identical.
+
+The harness for this round timed two imports of the same module, one from the
+commit under test and one from the working tree, which is why the numbers are
+comparable without a second machine or a second checkout.

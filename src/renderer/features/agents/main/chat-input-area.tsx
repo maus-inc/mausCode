@@ -13,6 +13,7 @@ import { ChevronDown, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import { permissionFloorFor } from "../../../../shared/provider-capabilities"
 import { Button } from "../../../components/ui/button"
 import {
   DropdownMenu,
@@ -1976,7 +1977,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                             data-tooltip="true"
                             className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
                           >
-                            <span>{getModeTooltip(modeTooltip.mode)}</span>
+                            <span>
+                              {getModeTooltip(modeTooltip.mode, permissionFloorFor(provider))}
+                            </span>
                           </div>
                         </div>,
                         document.body,
@@ -1991,7 +1994,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                       provider === "codex"
                         ? "Engine: Legacy — Codex chats are served by the Codex CLI adapter; the native runtime doesn't serve Codex (subscription OAuth can't be provisioned to it)."
                         : engine === "native"
-                          ? "Engine: Native (mausCode runtime). Click to switch back to Legacy. Switchable on empty chats only."
+                          ? "Engine: Native (mausCode runtime). This transport advertises no permissions capability, so no action reaches the permission gate and plan mode is refused here. Click to switch back to Legacy. Switchable on empty chats only."
                           : "Engine: Legacy (Claude SDK). Click to try the Native runtime. Switchable on empty chats only."
                     }
                     className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:opacity-40 disabled:cursor-not-allowed"

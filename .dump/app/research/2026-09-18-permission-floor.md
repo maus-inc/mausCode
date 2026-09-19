@@ -512,3 +512,98 @@ both are tests now.
   ordinary.
 - The residual gap was rewritten from probe output. Two claims in it were wrong:
   `c"h"m"o"d` is caught, and so is a parenthesised `python -c` payload.
+
+## Fifth research pass, 2026-09-19, grounding the third review round
+
+Three reviewers moved the code this round rather than the design. SonarCloud's
+second analysis of the pull request opened two issues on new code, CodeRabbit
+found a protected-path bypass in an option spelling, and CodeAnt found a mode
+picker that promises more than nine of the ten backends can deliver. Two of the
+three needed a source outside the repository to settle.
+
+### Queries
+
+- `GNU coreutils cp install "-t" "--target-directory" option semantics glued value -tDIR BSD cp no -t`
+- The SonarCloud issues API for this pull request, read as a source in its own
+  right, because the rule text and the flow locations say what the analyzer
+  measured rather than what a reviewer guessed.
+
+### Sources, and what each settled
+
+**GNU Coreutils manual, section 2.6 "Target directory", with 11.1, 11.3 and 11.4.**
+Settled four things the classifier had to get right.
+
+- `-t directory` and `--target-directory=directory` "use directory as the
+  directory component of each destination file name". That is the joining rule, so
+  a source is written as `directory/basename` and checking the directory alone
+  would miss `cp -t /etc /tmp/passwd`.
+- The family is `cp`, `install`, `ln` and `mv`. `ln` was absent from the write
+  verbs here, and a link is a way to put content in a protected directory with no
+  copy verb on the line.
+- `install [option]... -t directory source...` is a documented synopsis, so the
+  flag is not a GNU extension of one command that a classifier could treat as rare.
+- `-T` and `--no-target-directory` "cannot be combined" with `-t`, and mean the
+  last operand is not treated specially. It is the opposite rule, it differs from
+  `-t` by case alone, and every word in a segment here is lowercased. That is a
+  trap no amount of reading the flag list would have surfaced, and it was found by
+  probing the fixed code rather than by reading the manual.
+
+**SonarCloud issues for pull request 65, analysis `d7c69be1`.** Two issues on new
+code, both code smells, both real.
+
+- `typescript:S8786` on the environment-assignment scan, "super-linear performance
+  due to backtracking". The name class and the value class overlap, so a token
+  carrying no separator is retried at every length. The fix is a token walk rather
+  than a pattern, and the manual's own reasoning about `[^\s=]*` from the last
+  round was not wrong, only incomplete: one way to reach the separator is not the
+  same as one way to fail.
+- `typescript:S3776` on the TOML array parser, cognitive complexity 17 against an
+  allowed 15, which is what the comma contract from the CodeAnt round cost. The
+  whitespace and comment skip moved into a helper and the `commaDue` state machine
+  became a read-element-then-read-separator loop.
+
+**claude-code#13371, already in the third pass, read again for this one.** The
+defeats listed there were command options rather than command verbs, `git -C /path
+commit`, `git --no-pager push`, `rm --force --recursive /home`,
+`docker --host tcp://x rm`. CodeRabbit's `-t` finding is the same class one layer
+down, which is the reason to treat the whole option grammar as in scope rather
+than the finding as a one-off.
+
+### What changed as a result
+
+- Decisions 22, 23 and 24 in the decision record, which is where the reasoning
+  lives rather than in a commit message.
+- A target-directory parser serving the protected-path check, the block-device
+  check and the read-versus-write direction at once, so the three cannot disagree
+  about where a verb aims.
+- `noTargetDirectory` on the segment, because case is meaning here and the
+  lowercasing that every other rule depends on destroys it.
+- `ln` added to the write verbs.
+- `docker run`, `create`, `start` and `exec`, and the same four for `podman`, as
+  network subcommands.
+- The mode tooltips take the floor with no default, and `permission-floor.test.ts`
+  reads the manifests as source text so the two vocabularies cannot drift.
+
+### Edge cases, and what the disproof attempts caught
+
+- Twenty spellings measured after the parser landed, in both directions. The
+  bypasses closed are `cp -t`, `cp -tDIR`, `cp --target-directory DIR`,
+  `cp --target-directory=DIR`, `install -t`, `install -D -t`, `sudo cp -t` and
+  `ln -t`. The false positives removed are `cp -t /tmp/dest /etc/passwd` and
+  `mv -t /tmp/backup /etc/passwd`, which the last-word rule called protected
+  overwrites of files that were only being read.
+- The `-T` trap: `mv -T /etc/passwd /tmp/x` classified as a protected overwrite
+  for one build of this round, between the parser landing and the segment field
+  landing. It is denial rather than a bypass, so it failed safe, and it is the
+  reason the case-sensitivity is recorded as a decision rather than left in a
+  comment on one line.
+- 400,000 generated commands, alphabet weighted with `=`, `;`, quotes and
+  separators, comparing the pattern scan with the token walk that replaced it.
+  One divergence appeared at 200,000, `x=;LESSOPEN=/tmp/x.sh`, where the pattern
+  resumed after a value that ended at a separator and found a second assignment in
+  the same token. The walk resumes at the same index now and the second run of
+  400,000 found nothing.
+- `replaceAll` with a non-global pattern throws rather than replacing, and the
+  first build of the joining helper did exactly that. No test covered the join yet,
+  which is the second time this round that a probe caught what the suite had not,
+  and the rows that pin it are in the same commit as the helper.

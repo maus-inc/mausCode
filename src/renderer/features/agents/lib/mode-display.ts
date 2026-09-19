@@ -1,6 +1,7 @@
 import { HelpCircle, Pencil, Zap } from "lucide-react"
 import type { ComponentType, SVGProps } from "react"
 import type { AgentMode } from "../../../../shared/agent-mode"
+import type { PermissionFloor } from "../../../../shared/provider-capabilities"
 import { AgentIcon, PlanIcon } from "../../../components/ui/icons"
 
 type IconComponent = ComponentType<{ className?: string } & Partial<SVGProps<SVGSVGElement>>>
@@ -21,8 +22,36 @@ export function getModeLabel(mode: AgentMode): string {
   }
 }
 
-/** Short tooltip describing what the mode does. Must match canUseTool behavior. */
-export function getModeTooltip(mode: AgentMode): string {
+/**
+ * What a tooltip adds when Maus has no gate on the backend.
+ *
+ * It says what Maus cannot do and claims nothing for the backend, because the
+ * nine differ. Cline and Roo take a mode flag, Grok takes an allow list, and
+ * OpenClaw has no mode flag at all, so its plan turn carries a read-only request
+ * in the prompt and nothing enforces it.
+ *
+ * The five descriptions below are what the app gate does, and only the Claude
+ * path has one. A mode picker that promises a blocked action on a backend that
+ * auto-approves everything is the overclaim this sentence closes.
+ */
+const ENGINE_ONLY_SUFFIX =
+  "Maus has no gate on this backend, so it cannot block what the backend allows."
+
+/**
+ * Short tooltip describing what the mode does. Must match what the gate does on
+ * the Claude path, and must say when a backend has no gate to match.
+ *
+ * `floor` has no default. A caller that has not looked the floor up would
+ * otherwise get the unqualified promise, which is the overclaim this exists to
+ * stop, so both mode pickers have to say which backend they are describing.
+ */
+export function getModeTooltip(mode: AgentMode, floor: PermissionFloor): string {
+  const gated = modeTooltipText(mode)
+  return floor === "app-gate" ? gated : `${gated} ${ENGINE_ONLY_SUFFIX}`
+}
+
+/** The five mode descriptions, which assume an app gate is running. */
+function modeTooltipText(mode: AgentMode): string {
   switch (mode) {
     case "plan":
       return "Read-only, and writes only the plan's own markdown."

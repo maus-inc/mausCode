@@ -185,27 +185,33 @@ function readString(text: string, start: number): { value: string; end: number }
  */
 function parseStringArray(body: string): string[] | null {
   const values: string[] = []
-  let index = 0
-  let commaDue = false
+  let index = startOfElement(body, 0)
   while (index < body.length) {
-    while (index < body.length && /\s/.test(body[index])) index += 1
-    if (index >= body.length) break
-    if (body[index] === "#") break
-    if (body[index] === ",") {
-      // A leading comma or a doubled one is not a list of strings.
-      if (!commaDue) return null
-      commaDue = false
-      index += 1
-      continue
-    }
-    if (commaDue) return null
     const parsed = readString(body, index)
     if (parsed === null) return null
     values.push(parsed.value)
-    index = parsed.end
-    commaDue = true
+    index = startOfElement(body, parsed.end)
+    if (index >= body.length) break
+    // A second string with nothing between it and the last one is the malformed
+    // document this refuses, which is the case the comma check exists for.
+    if (body[index] !== ",") return null
+    index = startOfElement(body, index + 1)
+    if (index >= body.length) break
+    // Two commas in a row have no element between them.
+    if (body[index] === ",") return null
   }
   return values
+}
+
+/**
+ * Index of the next element in an array body, which is the length of `body` when
+ * a comment ends the list first, so the caller stops reading.
+ */
+function startOfElement(body: string, from: number): number {
+  let index = from
+  while (index < body.length && /\s/.test(body[index])) index += 1
+  if (body[index] === "#") return body.length
+  return index
 }
 
 /** Index of the `=` that separates key from value, ignoring quoted keys. */

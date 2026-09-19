@@ -12,6 +12,7 @@ import { observable } from "@trpc/server/observable"
 import { and, eq } from "drizzle-orm"
 import { z } from "zod"
 import { type AgentMode, agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
+import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
 import { approvalWasDenied } from "../../claude/tool-approval"
 import type { UIMessageChunk } from "../../claude/types"
 import { getDatabase, subChats } from "../../db"
@@ -81,34 +82,31 @@ type NativeFail = (errorText: string) => void
 // readable at a glance; each step owns its own failure handling.
 
 /**
- * The plan-mode floor on the native transport.
+ * The mode floor on the native transport.
  *
  * The stock bridge advertises no `permissions` capability, so it never issues a
- * permission prompt and this app gets no per-action callback to route through
- * the gate in `src/main/lib/permissions/`. A plan-mode turn it accepted would
- * write with nothing enforcing read-only, so the floor is enforced by refusing
- * the mode. When the bridge grows that capability this is the step that starts
- * evaluating requests instead of refusing them.
+ * permission prompt and this app gets no per-action callback to route through the
+ * gate in `src/main/lib/permissions/`. Plan and ask both promise restraint that
+ * nothing here can deliver, so the floor is enforced by refusing them, and the
+ * reasoning and the refusal text live in
+ * `src/shared/permissions/native-mode-floor.ts` where a test can reach them. When
+ * the bridge grows that capability this is the step that starts evaluating
+ * requests instead of refusing them.
  *
- * Plan is the mode refused here because read-only is its entire promise, so
- * there is nothing left of it without a floor. The gap is wider than that and is
- * recorded rather than hidden: no mode gets app-gate enforcement on this
- * transport, so the classes the other four modes promise to block are unenforced
- * here exactly as they are for the `engine-only` backends in
- * `src/shared/provider-capabilities.ts`. `.dump/app/decisions/2026-09-13-permission-floor.md`
- * names them. Refusing every mode would disable the engine outright, which is a
- * product decision this step does not get to make on its own.
+ * The gap is wider than the two refusals and is recorded rather than hidden. No
+ * mode gets app-gate enforcement on this transport, so the classes edit, agent and
+ * turbo promise to block are unenforced here exactly as they are for the
+ * `engine-only` backends in `src/shared/provider-capabilities.ts`, and
+ * `.dump/app/decisions/2026-09-13-permission-floor.md` names them as decision 25.
+ * The transport picker in the chat input says so where a user chooses it.
  *
  * Named step, same shape as the rest of this handler: it owns its own failure
  * handling so the handler stays flat and the complexity gate stays green.
  */
-function enforceNativePlanMode(mode: AgentMode, fail: NativeFail): boolean {
-  if (mode !== "plan") return true
-  fail(
-    "Plan mode needs a read-only floor this transport cannot enforce yet: the " +
-      "bridge advertises no permissions capability, so no action reaches the " +
-      "permission gate. Use the legacy transport for plan mode.",
-  )
+function enforceNativeModeFloor(mode: AgentMode, fail: NativeFail): boolean {
+  const refusal = nativeModeRefusal(mode)
+  if (refusal === null) return true
+  fail(refusal)
   return false
 }
 
@@ -291,7 +289,7 @@ export const runtimeRouter = router({
         void (async () => {
           const streamId = crypto.randomUUID()
           try {
-            if (!enforceNativePlanMode(input.mode, fail)) return
+            if (!enforceNativeModeFloor(input.mode, fail)) return
 
             runHandle = getRunStore().startRun({
               subChatId: input.subChatId,
