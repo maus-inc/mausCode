@@ -80,15 +80,51 @@ export function askToolApproval(card: ToolApprovalCard): Promise<ToolApprovalRes
  */
 export function approvalWasDenied(response: ToolApprovalResponse): boolean {
   if (!response.approved) return true
-  const answers = (response.updatedInput as { answers?: Record<string, string> } | undefined)
-    ?.answers
-  if (!answers) return false
-  return Object.values(answers).some((answer) =>
+  const read = readAnswers(response.updatedInput)
+  if (read.kind === "absent") return false
+  // An answer set that is present but not readable is refused rather than
+  // approved. Nobody can tell Allow from Deny in it, and the card only ever
+  // submits string labels, so something else wrote this and the safe reading of
+  // "cannot tell" is the one that does not run the tool.
+  if (read.kind === "unreadable") return true
+  return read.labels.some((answer) =>
     answer
       .split(",")
       .map((picked) => picked.trim())
       .includes(DENY_OPTION_LABEL),
   )
+}
+
+/** The picked labels, or the reason there are none to read. */
+type AnswerRead = { kind: "absent" } | { kind: "unreadable" } | { kind: "labels"; labels: string[] }
+
+/**
+ * Read the picked labels off an untrusted `updatedInput`.
+ *
+ * Absent means no answer set was submitted at all, which is what the plan
+ * approval path sends, so the caller trusts `approved` on its own. Unreadable
+ * means an answer set was submitted and could not be read: the value is not an
+ * object, or `answers` holds something other than strings. Casting `unknown`
+ * straight to a record of strings and calling `split` on the values threw on
+ * that input, which would have taken down the approval mutation, and the gate's
+ * own catch would have turned it into a denial nobody could read a reason for.
+ */
+function readAnswers(value: unknown): AnswerRead {
+  if (typeof value !== "object" || value === null) return { kind: "absent" }
+  const record = value as Record<string, unknown>
+  if (!("answers" in record)) return { kind: "absent" }
+  const answers = record.answers
+  if (typeof answers !== "object" || answers === null || Array.isArray(answers)) {
+    return { kind: "unreadable" }
+  }
+  const values = Object.values(answers as Record<string, unknown>)
+  if (values.length === 0) return { kind: "absent" }
+  const labels: string[] = []
+  for (const entry of values) {
+    if (typeof entry !== "string") return { kind: "unreadable" }
+    labels.push(entry)
+  }
+  return { kind: "labels", labels }
 }
 
 /**

@@ -819,6 +819,17 @@ describe("environment assignments that carry code", () => {
     expect(bash("LESSOPEN='|/tmp/x.sh %s' less file").ruleId).toBe("env-injection")
   })
 
+  it.each([
+    '"LESSOPEN"=/tmp/x.sh less file',
+    "'LESSOPEN'=/tmp/x.sh less file",
+    "`LESSOPEN`=/tmp/x.sh less file",
+    '"GIT_SSH_COMMAND"=/tmp/hook.sh git push',
+  ])("catches a quoted variable name in `%s`", (command) => {
+    // The raw scan's name class excludes `=` but not quotes, so a quoted name
+    // arrived with its closing quote attached and matched no variable in the set.
+    expect(bash(command).ruleId).toBe("env-injection")
+  })
+
   it("catches an assignment after `export` and inside a wrapper chain", () => {
     expect(bash("export LD_PRELOAD=/tmp/x.so; git status").ruleId).toBe("env-injection")
     expect(bash("sudo -u root env LD_PRELOAD=/tmp/x.so git log").ruleId).toBe("env-injection")

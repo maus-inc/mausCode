@@ -853,7 +853,13 @@ function hasCodeExecutionEnvAssignment(command: string, segments: CommandSegment
   for (const match of lower.matchAll(/([a-z_][^\s=]*)=([^\s;]*)/g)) {
     const [, name, value] = match
     if (name === undefined || value === undefined) continue
-    if (!CODE_EXECUTION_ENV_VARS.has(name) && !NUMBERED_GIT_CONFIG.test(name)) continue
+    // The name class excludes `=` but not quotes, so a quoted name arrives with
+    // its closing quote attached and `"LESSOPEN"=/tmp/x.sh` read as a variable
+    // called `lessopen"`. The segment scan strips quotes from whole words and
+    // catches the spellings it can see, but this scan is the one that survives a
+    // pipe inside the value, so it has to strip them too.
+    const bare = name.replaceAll(/["'`]/g, "")
+    if (!CODE_EXECUTION_ENV_VARS.has(bare) && !NUMBERED_GIT_CONFIG.test(bare)) continue
     if (looksExecutable(value.replaceAll(/["'`]/g, ""))) return true
   }
   return false

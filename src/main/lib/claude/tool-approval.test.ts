@@ -59,6 +59,30 @@ describe("approvalWasDenied", () => {
   it("is false for a bare approval with no answers", () => {
     expect(approvalWasDenied({ approved: true })).toBe(false)
   })
+
+  it.each([
+    ["a string instead of an object", "yes"],
+    ["no answers key", { questions: [] }],
+    ["an empty answer set", { answers: {} }],
+    ["a null updated input", null],
+  ])("is false for %s, which submits no labels to read", (_label, updatedInput) => {
+    // The plan approval path sends `approved` on its own, so an absent answer set
+    // has to keep trusting it rather than refusing.
+    expect(approvalWasDenied({ approved: true, updatedInput })).toBe(false)
+  })
+
+  it.each([
+    ["answers that are not an object", { answers: "Deny" }],
+    ["answers as an array", { answers: ["Deny"] }],
+    ["a non-string label", { answers: { Bash: 5 } }],
+    ["one string beside a null", { answers: { a: "Allow", b: null } }],
+  ])("is true for %s, because an unreadable answer set is refused", (_label, updatedInput) => {
+    // Nobody can tell Allow from Deny in it, and the card only ever submits string
+    // labels, so something else wrote this. Casting `unknown` straight to a record
+    // of strings and splitting the values threw on this input, which would have
+    // taken down the approval mutation.
+    expect(approvalWasDenied({ approved: true, updatedInput })).toBe(true)
+  })
 })
 
 describe("askToolApproval", () => {
