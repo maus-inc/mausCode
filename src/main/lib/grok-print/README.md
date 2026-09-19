@@ -109,11 +109,14 @@ retries happen before any turn side effects complete):
 
 - stale `-r` id → fresh run with a new `-s` uuid;
 - invalid `-m` slug → drop `-m` (CLI default model);
-- unknown flag → stable subset (`-p`, `--output-format`, `-m`,
-  `-r`/`-s`, `--cwd`; `--prompt-file` rewritten to inline `-p`,
-  `--permission-mode`, `--tools` and `--allow` dropped as a set).
-  Only index 0 is treated as the prompt flag, so a prompt *text* equal
-  to `--prompt-file` passes through.
+- unknown flag → `--prompt-file` rewritten to inline `-p` and
+  `--no-auto-update` dropped. The permission posture is kept:
+  `--permission-mode`, `--tools` and `--allow` are the only thing that
+  refuses a tool in a headless run, so a build that rejects one of them
+  rejects the retry too and the run stops with that error rather than
+  executing ungated. Index 0 is the prompt flag and index 1 is the prompt
+  text once `-p` has inlined it, so a prompt *text* equal to
+  `--prompt-file` or to `--no-auto-update` passes through.
 
 ## Auth
 

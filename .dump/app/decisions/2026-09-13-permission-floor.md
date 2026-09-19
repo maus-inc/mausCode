@@ -472,9 +472,17 @@ Still evading, verified:
 
 - **A script written to disk and then run.** `python /tmp/evil.py`, `bash /tmp/x.sh`.
   The behaviour is in the file, and reading it to decide would mean executing it.
-- **An interpreter payload with no parentheses to split on.** The parenthesised
-  forms are caught now, see below, and the ones that are not reach the same place
-  through a different spelling.
+- **An interpreter payload that calls the interpreter's own API.** This bullet
+  used to say "no parentheses to split on", which is not the line between caught
+  and missed and read as a guarantee the classifier does not give. What gets caught
+  below is an embedded *shell* command inside the payload, and the parentheses are
+  only how the splitter happens to reach it. `python -c "import os;
+  os.remove('/etc/hosts')"` and `node -e "require('fs').rmSync('/etc',
+  {recursive:true})"` both have parentheses, name no shell verb anywhere on the
+  line, and classify as `approval.shell-command`, which Agent mode allows. Measured
+  rather than assumed, both of them, on the build this record ships with. Closing
+  that needs a payload parser per language, which is the denylist race the last
+  bullet describes.
 - **A secret named across two segments.** `cd ~/.aws && cat credentials` puts the
   directory in one segment and the bare filename in the next, so no single word
   carries a full secret path. Following a value from one segment into the next is

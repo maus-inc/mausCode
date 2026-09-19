@@ -179,6 +179,28 @@ describe("rejections", () => {
     expect(error('a = "1"\n[a.b]\nc = "2"')).toContain("collides")
   })
 
+  it.each([
+    'allow_tools = ["a" "b"]',
+    'allow_tools = [, "a"]',
+    'allow_tools = ["a",, "b"]',
+    // A comment inside the brackets swallows the closing one, which the array
+    // reader already refuses rather than guessing where the list ended.
+    'allow_tools = ["a" # trailing comment]',
+  ])("refuses an array whose elements are not comma separated: %s", (document) => {
+    expect(parseConstrainedToml(document).ok).toBe(false)
+  })
+
+  it.each([
+    ['allow_tools = ["a", "b"]', ["a", "b"]],
+    ['allow_tools = ["a",]', ["a"]],
+    ["allow_tools = []", []],
+    ['allow_tools = ["a"] # trailing comment', ["a"]],
+  ])("still reads a well formed array in %s", (document, expected) => {
+    const parsed = parseConstrainedToml(document)
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) expect(parsed.value.allow_tools).toEqual(expected)
+  })
+
   it("refuses a malformed key", () => {
     expect(error('= "value"')).toContain("malformed key")
   })

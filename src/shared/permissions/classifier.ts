@@ -162,13 +162,23 @@ function isDotenvPath(candidate: string): boolean {
   return !DOTENV_SAFE_SUFFIXES.has(name.slice(".env.".length).toLowerCase())
 }
 
-/** The secret location this tool input names, when it names one. */
+/**
+ * The secret location this tool input names, when it names one.
+ *
+ * The path is matched with its separators normalised and reported as the caller
+ * wrote it. Every pattern here reads a forward slash, and a provider on Windows
+ * hands over `C:\Users\me\.ssh\id_rsa`. Command words reach this file through
+ * `unquote`, which already makes that substitution, but a tool input path does
+ * not, so the same secret was exfiltration on POSIX and an ordinary read on
+ * Windows, where every mode allows it.
+ */
 export function findSecretPath(
   toolInput: Record<string, unknown>,
 ): { id: string; path: string } | null {
   for (const candidate of toolPathCandidates(toolInput)) {
+    const normalized = candidate.replaceAll("\\", "/")
     for (const pattern of SECRET_PATH_PATTERNS) {
-      if (pattern.test(candidate)) return { id: pattern.id, path: candidate }
+      if (pattern.test(normalized)) return { id: pattern.id, path: candidate }
     }
   }
   return null

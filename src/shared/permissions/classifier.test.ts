@@ -334,6 +334,26 @@ describe("exfiltration", () => {
     ["dotenv", "/work/app/.env.production"],
   ]
 
+  it.each([
+    // A provider on Windows hands over backslashes. `unquote` normalises a
+    // command word but nothing normalised a tool input path, so each of these
+    // read as an ordinary file and every mode allowed it.
+    ["ssh-directory", "C:\\Users\\me\\.ssh\\id_rsa"],
+    ["netrc", "C:\\Users\\me\\.netrc"],
+    ["aws-credentials", "C:\\Users\\me\\.aws\\credentials"],
+    ["private-key", "C:\\Users\\me\\keys\\id_ed25519"],
+    ["github-cli-hosts", "C:\\Users\\me\\.config\\gh\\hosts.yml"],
+    ["dotenv", "C:\\repo\\.env"],
+  ])("names %s for the Windows spelling %s", (id, path) => {
+    expect(findSecretPath({ file_path: path })?.id).toBe(id)
+  })
+
+  it("reports a Windows path as the caller wrote it", () => {
+    expect(findSecretPath({ file_path: "C:\\Users\\me\\.ssh\\id_rsa" })?.path).toBe(
+      "C:\\Users\\me\\.ssh\\id_rsa",
+    )
+  })
+
   it.each(secretPaths)("names %s for %s", (id, path) => {
     expect(findSecretPath({ file_path: path })?.id).toBe(id)
   })
