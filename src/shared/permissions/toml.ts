@@ -231,16 +231,23 @@ function findAssignment(line: string): number {
   return -1
 }
 
-/** Walk or create nested tables. Null means a value already holds that key. */
-function descend(from: TomlTable, path: string[]): TomlTable | null {
+/**
+ * Walk or create nested tables, marking every table it creates in `defined`.
+ * Null means a value already holds that key. The mark is what keeps a second
+ * header from naming a table that already exists, explicit or not.
+ */
+function descend(from: TomlTable, path: string[], defined: Set<string>): TomlTable | null {
   let node = from
+  const walked: string[] = []
   for (const part of path) {
+    walked.push(part)
     // `splitKeyPath` has already refused a reserved segment, so every part here
     // is a plain key and reading it cannot reach the shared prototype.
     const existing = Object.hasOwn(node, part) ? node[part] : undefined
     if (existing === undefined) {
       const created: TomlTable = {}
       node[part] = created
+      defined.add(walked.join("\u0000"))
       node = created
       continue
     }
@@ -261,6 +268,7 @@ type ValueResult =
 /** Parse a document into a plain object. */
 export function parseConstrainedToml(text: string): TomlParseResult {
   const root: TomlTable = {}
+  const defined = new Set<string>()
   let current: TomlTable = root
   const physical = text.split(/\r?\n/)
   // The first line still to read. An array that spans several lines moves this
@@ -277,13 +285,13 @@ export function parseConstrainedToml(text: string): TomlParseResult {
     if (line.length === 0) continue
 
     if (line.startsWith("[")) {
-      const header = readTableHeader(root, line)
+      const header = readTableHeader(root, line, defined)
       if ("error" in header) return fail(lineNumber, header.error)
       current = header.table
       continue
     }
 
-    const applied = applyAssignment(current, line, lineNumber, physical, index)
+    const applied = applyAssignment(current, line, lineNumber, physical, index, defined)
     if (!applied.ok) return applied.error
     resumeAt = applied.resumeAt
   }
@@ -291,14 +299,26 @@ export function parseConstrainedToml(text: string): TomlParseResult {
   return { ok: true, value: root }
 }
 
-/** Read a `[table]` header and walk or create the table it names. */
-function readTableHeader(root: TomlTable, line: string): { table: TomlTable } | { error: string } {
+/**
+ * Read a `[table]` header and walk or create the table it names.
+ *
+ * TOML defines a table at most once, whether the definition came from a header
+ * or from the key that created it, so a second header for the same table is a
+ * parse error rather than a merge. Merging would let a file this parser claims
+ * to read change the settings it says it changes.
+ */
+function readTableHeader(
+  root: TomlTable,
+  line: string,
+  defined: Set<string>,
+): { table: TomlTable } | { error: string } {
   if (line.startsWith("[[") || !line.endsWith("]")) {
     return { error: "only [table] headers are supported" }
   }
   const path = splitKeyPath(line.slice(1, -1))
   if (path === null) return { error: "malformed table header" }
-  const table = descend(root, path)
+  if (defined.has(path.join("\u0000"))) return { error: "duplicate table header" }
+  const table = descend(root, path, defined)
   if (table === null) return { error: "table header collides with a value" }
   return { table }
 }
@@ -310,6 +330,7 @@ function applyAssignment(
   lineNumber: number,
   physical: string[],
   start: number,
+  defined: Set<string>,
 ): StepResult {
   const equals = findAssignment(line)
   if (equals === -1) return { ok: false, error: fail(lineNumber, "expected key = value") }
@@ -322,7 +343,7 @@ function applyAssignment(
   const read = readValue(line.slice(equals + 1).trim(), lineNumber, physical, start)
   if (!read.ok) return read
 
-  const parent = descend(current, keyPath.slice(0, -1))
+  const parent = descend(current, keyPath.slice(0, -1), defined)
   if (parent === null) return { ok: false, error: fail(lineNumber, "key collides with a table") }
   if (Object.hasOwn(parent, leaf)) {
     return { ok: false, error: fail(lineNumber, `duplicate key ${leaf}`) }

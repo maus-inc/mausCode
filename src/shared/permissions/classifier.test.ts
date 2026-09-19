@@ -75,6 +75,15 @@ describe("destructive patterns", () => {
     ],
     ["interpreter-payload", "python -c \"import os; os.rename('/tmp/x', '/etc/cron.d/job')\""],
     ["interpreter-payload", "node -e \"require('fs').copyFileSync('/tmp/x', '/etc/cron.d/job')\""],
+    // A later call in the same payload cannot hide an earlier protected write,
+    // so each call's destination is read rather than only the final path.
+    [
+      "interpreter-payload",
+      "python -c \"import shutil; shutil.copy('/tmp/a', '/etc/passwd'); shutil.copy('/tmp/b', '/tmp/c')\"",
+    ],
+    // And a call whose arguments the check cannot read falls back to every
+    // path the payload names, the conservative reading.
+    ["interpreter-payload", "python -c \"import shutil; shutil.copy(src, '/etc/passwd')\""],
     // `open` reads as often as it writes, so it counts beside a mode literal.
     ["interpreter-payload", "python -c \"open('/etc/hosts','w').write('x')\""],
     // A spawned argv list carries no spaces, so the verb reaches the rules as one
@@ -279,10 +288,12 @@ describe("destructive patterns", () => {
     "python -c \"import os; os.rename('/etc/passwd', '/tmp/x')\"",
     "python -c \"import shutil; shutil.move('/etc/hosts', '/tmp/x')\"",
     "node -e \"require('fs').copyFileSync('/etc/hosts', '/tmp/x')\"",
-    // A local rsync, including a Windows path whose drive letter carries a
-    // colon, transfers nothing.
+    "python -c \"import shutil; shutil.copy('/tmp/a', '/tmp/c'); shutil.copy('/tmp/b', '/tmp/d')\"",
+    // A local rsync, including a Windows path whose one-letter drive letter is
+    // the only host that keeps a colon and a slash, transfers nothing.
     "rsync /tmp/a /tmp/b",
     "rsync C:/Users/x /tmp/backup",
+    "rsync D:/Users/x /tmp/backup",
     // An interpreter that names an ordinary path, or a spawn whose list holds no
     // dangerous command, deletes nothing.
     "python -c \"print('hello world')\"",
@@ -437,10 +448,11 @@ describe("network patterns", () => {
     // image is cached, so a cached base changes nothing about the channel.
     "docker build -t app .",
     "podman build -t app .",
-    // The remote spelling [user@]host:/path requires neither the @ nor a scheme,
-    // so a dotted host before a colon and a slash is remote.
+    // The remote spelling [user@]host:/path requires neither the @, a scheme
+    // nor a dot, so a plain label before a colon and a slash is remote.
     "rsync myhost.com:/var/www /tmp/backup",
     "rsync 10.0.0.5:/data /tmp/backup",
+    "rsync server:/data /tmp/backup",
   ]
 
   it.each(positives)("classifies `%s` as network", (command) => {
@@ -533,6 +545,13 @@ describe("exfiltration", () => {
     ["private-key", "C:\\Users\\me\\keys\\id_ed25519"],
     ["github-cli-hosts", "C:\\Users\\me\\.config\\gh\\hosts.yml"],
     ["dotenv", "C:\\repo\\.env"],
+    // The same locations in the case a case-insensitive filesystem hands over,
+    // which the command path already matches because its words arrive
+    // lowercased.
+    ["ssh-directory", "C:\\Users\\me\\.SSH\\authorized_keys"],
+    ["aws-credentials", "C:\\Users\\me\\.AWS\\credentials"],
+    ["private-key", "C:\\Users\\me\\keys\\ID_ED25519"],
+    ["dotenv", "C:\\repo\\.ENV"],
   ])("names %s for the Windows spelling %s", (id, path) => {
     expect(findSecretPath({ file_path: path })?.id).toBe(id)
   })
@@ -804,6 +823,10 @@ describe("criticalPathBreach", () => {
     ["rm -rf ~", "critical-delete"],
     ["rm -rf $HOME", "critical-delete"],
     ["rm -rf .", "critical-delete"],
+    ["rm -rf $PWD", "critical-delete"],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the shell variable spelling, not interpolation
+    ["rm -rf ${PWD}", "critical-delete"],
+    ["rm -rf $PWD/", "critical-delete"],
     ["rmdir ..", "critical-delete"],
     ["sudo rm -rf /", "critical-delete"],
     ["rm -rf /work/mauscode", "critical-delete"],

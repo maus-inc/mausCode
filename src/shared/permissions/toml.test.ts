@@ -171,6 +171,17 @@ describe("rejections", () => {
     expect(error('a = "1"\na = "2"')).toContain("duplicate key a")
   })
 
+  it("refuses a table a second header names, explicit or created by a key", () => {
+    expect(error('[a]\nx = "1"\n[a]\ny = "2"')).toContain("duplicate table header")
+    expect(error('[a.b]\nx = "1"\n[a]\ny = "2"')).toContain("duplicate table header")
+    expect(error('a.b = "1"\n[a]\nc = "2"')).toContain("duplicate table header")
+  })
+
+  it("lets a deeper header define a table its parent header left unnamed", () => {
+    const result = parseConstrainedToml('[a]\nx = "1"\n[a.b]\ny = "2"')
+    expect(result.ok).toBe(true)
+  })
+
   it("refuses a key that collides with a table", () => {
     expect(error('[a]\nb = "1"\n[a.b]\nc = "2"')).toContain("collides")
   })

@@ -180,18 +180,25 @@ function isDotenvPath(candidate: string): boolean {
 /**
  * The secret location this tool input names, when it names one.
  *
- * The path is matched with its separators normalised and reported as the caller
- * wrote it. Every pattern here reads a forward slash, and a provider on Windows
- * hands over `C:\Users\me\.ssh\id_rsa`. Command words reach this file through
- * `unquote`, which already makes that substitution, but a tool input path does
- * not, so the same secret was exfiltration on POSIX and an ordinary read on
- * Windows, where every mode allows it.
+ * The path is matched with its separators normalised and its case dropped, and
+ * reported as the caller wrote it. Every pattern here reads a forward slash
+ * and a lowercase name, and a provider on Windows hands over
+ * `C:\Users\me\.SSH\id_rsa` on a case-insensitive filesystem. Command words
+ * reach this file through `unquote` with the same normalisation and lowercasing
+ * already done, but a tool input path does not get either, so the same secret
+ * was exfiltration on POSIX and an ordinary read on Windows, where every mode
+ * allows it.
  */
 export function findSecretPath(
   toolInput: Record<string, unknown>,
 ): { id: string; path: string } | null {
   for (const candidate of toolPathCandidates(toolInput)) {
-    const normalized = candidate.replaceAll("\\", "/")
+    // The match lowercases the path as well as normalising the separators: a
+    // provider on Windows hands over `C:\Users\me\.SSH\id_rsa` and the
+    // filesystem there is case-insensitive, and the command path reaches the
+    // same patterns with every word lowercased already. The reported path stays
+    // as the caller wrote it.
+    const normalized = candidate.replaceAll("\\", "/").toLowerCase()
     for (const pattern of SECRET_PATH_PATTERNS) {
       if (pattern.test(normalized)) return { id: pattern.id, path: candidate }
     }
@@ -1316,16 +1323,52 @@ function hasDestructiveInterpreterPayload(command: string, segments: CommandSegm
   if (!calls && !opensForWrite) return false
   const paths = payloadPaths(lower)
   // A copy or move writes only its destination, so a payload of nothing but
-  // such calls is judged by the last named path. A delete or a write mode in
-  // the same payload keeps every path in play.
+  // such calls is judged by the destinations it names. A delete or a write
+  // mode in the same payload keeps every path in play.
   const copyMoveOnly =
     !opensForWrite &&
     COPY_MOVE_INTERPRETER_CALLS.some((call) => lower.includes(call)) &&
     !DESTRUCTIVE_INTERPRETER_CALLS.some(
       (call) => !COPY_MOVE_INTERPRETER_CALLS.includes(call) && lower.includes(call),
     )
-  const targets = copyMoveOnly ? paths.slice(-1) : paths
-  return targets.some(isProtectedTarget)
+  if (!copyMoveOnly) return paths.some(isProtectedTarget)
+  // Every call writes the path it names, and a later call can hide an earlier
+  // protected write, so the check reads the destination of each call. A call
+  // whose arguments it cannot read falls back to every path the payload names.
+  const destinations = copyMoveDestinations(lower)
+  return (destinations ?? paths).some(isProtectedTarget)
+}
+
+/**
+ * The destination each copy or move call in a payload names, or null when a
+ * call names fewer than two quoted paths and the check cannot tell which
+ * argument is the destination.
+ *
+ * The destination is the second quoted path because every call in the list
+ * takes it second, source then destination, with optional trailing arguments
+ * after it. A name is a call only when its own open paren follows it, which is
+ * what keeps `shutil.copyfile` from reading as `shutil.copy` and a leftover.
+ */
+function copyMoveDestinations(payload: string): string[] | null {
+  const starts: number[] = []
+  for (const call of COPY_MOVE_INTERPRETER_CALLS) {
+    let index = payload.indexOf(call)
+    while (index !== -1) {
+      if (payload[index + call.length] === "(") starts.push(index)
+      index = payload.indexOf(call, index + 1)
+    }
+  }
+  if (starts.length === 0) return null
+  starts.sort((a, b) => a - b)
+  const destinations: string[] = []
+  for (let i = 0; i < starts.length; i++) {
+    const end = i + 1 < starts.length ? starts[i + 1] : payload.length
+    const quoted = payload.slice(starts[i] + 1, end).match(/"[^"]*"|'[^']*'/g) ?? []
+    const destination = quoted[1]
+    if (destination === undefined) return null
+    destinations.push(destination.slice(1, -1))
+  }
+  return destinations
 }
 
 /** True when an inline interpreter payload opens a channel to a host it names. */
@@ -1574,8 +1617,9 @@ function deleteTargets(segment: CommandSegment): string[] {
  * Words arrive lowercased from `splitCommandSegments`, so `$HOME` is compared as
  * `$home`. `.` and `..` count as critical because this repository has a real
  * incident on record where an empty path variable turned a cleanup call into a
- * delete of the parent directory. A longer target such as `./node_modules` is
- * ordinary.
+ * delete of the parent directory, and `$PWD` and `${PWD}` are the working
+ * directory by another name, so they count the way `.` does. A longer target
+ * such as `./node_modules` is ordinary.
  */
 function criticalTargetKind(target: string, worktreeRoot?: string): string | null {
   // `/work/mausCode/..` is the parent of the worktree and `/tmp/..` is the root,
@@ -1585,7 +1629,18 @@ function criticalTargetKind(target: string, worktreeRoot?: string): string | nul
   if (target === "~" || target === "~/" || target === "$home" || target === "$home/") {
     return "the home directory"
   }
-  if (target === "." || target === "./") return "the whole working directory"
+  if (
+    target === "." ||
+    target === "./" ||
+    target === "$pwd" ||
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the shell variable spelling, not an interpolation
+    target === "${pwd}" ||
+    target === "$pwd/" ||
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the shell variable spelling, not an interpolation
+    target === "${pwd}/"
+  ) {
+    return "the whole working directory"
+  }
   if (target === ".." || target === "../") return "the parent of the working directory"
   if (worktreeRoot !== undefined) {
     const root = worktreeRoot.toLowerCase()
@@ -1602,17 +1657,18 @@ function hasRemoteRsync(segment: CommandSegment): boolean {
  * True when a word names a remote rsync target.
  *
  * The documented remote spellings are `[user@]host:/path` and
- * `rsync://host/module`, and neither `@` nor a scheme is required, so
- * `myhost.com:/var/www` is remote as well. A dot in the host keeps the rule off
- * local spellings, `C:/Users` among them, and a slash in the host keeps it off a
- * path that merely contains a colon.
+ * `rsync://host/module`, and neither `@`, a scheme nor a dot is required, so
+ * `server:/data` is remote as well. The only local spelling that keeps a colon
+ * and a slash is a drive letter, which is one letter, and a slash in the host
+ * keeps the rule off a path that merely contains a colon.
  */
 function namesRemoteHost(word: string): boolean {
   if (word.includes("@") || word.includes("://")) return true
   const colon = word.indexOf(":")
   if (colon <= 0 || word[colon + 1] !== "/") return false
   const host = word.slice(0, colon)
-  return host.includes(".") && !host.includes("/")
+  if (host.includes("/")) return false
+  return host.length > 1
 }
 
 /**

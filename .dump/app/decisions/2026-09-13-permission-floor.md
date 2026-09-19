@@ -652,15 +652,16 @@ because a path that is merely named is not a write.
 
 The remote-rsync rule required an `@` or a `://` in a word, so
 `rsync myhost.com:/var/www /tmp/backup` classified as `approval.shell-command`.
-rsync's manual spells the remote form `[user@]host:path`, and neither the `@` nor
-a scheme is part of it. The check now also accepts a word whose host part carries
-a dot and ends in `:/`, which keeps the local spellings off the rule: a drive
-letter has no dot, so `C:/Users` stays local, and a host part that carries a
-slash is a path, not a host.
+rsync's manual spells the remote form `[user@]host:path`, and neither the `@`,
+a scheme nor a dot is part of it, so a plain label such as `server:/data` is
+remote as well. The check now also accepts a word whose host part ends in `:/`
+and is longer than one letter, which keeps the local spellings off the rule:
+the only local spelling that keeps a colon and a slash is a drive letter, and
+a host part that carries a slash is a path, not a host.
 
 Measured on the build this record ships with, `rsync myhost.com:/var/www
-/tmp/backup` and `rsync 10.0.0.5:/data /tmp/backup` classify
-`network.egress-command`, and `rsync /tmp/a /tmp/b` and
+/tmp/backup`, `rsync 10.0.0.5:/data /tmp/backup` and `rsync server:/data
+/tmp/backup` classify `network.egress-command`, and `rsync /tmp/a /tmp/b` and
 `rsync C:/Users/x /tmp/backup` stay `approval`.
 
 ## Decision 29: an interpreter copy or move is judged by its destination (added 2026-09-19)
@@ -670,11 +671,15 @@ The check decision 26 added counted every path a payload names, so
 `destructive.interpreter-payload` although the source is read and the
 destination is what gets overwritten. That is the false positive the shell rule
 does not have, where a protected operand of `cp` and `mv` is a source. The check
-now judges a payload of nothing but copy and move calls by its last named path:
-`shutil.copy` and its friends, `copyfile` and `copyfilesync` in their `fs` and
-`promises` spellings, `shutil.move`, `os.rename`, `os.replace`, `fs.rename`,
-`file.rename`, `renamesync` and `movesync`, read as substrings the way decision 26
-reads every other call.
+now judges a payload of nothing but copy and move calls by the destination each
+call names: `shutil.copy` and its friends, `copyfile` and `copyfilesync` in
+their `fs` and `promises` spellings, `shutil.move`, `os.rename`, `os.replace`,
+`fs.rename`, `file.rename`, `renamesync` and `movesync`, read as substrings the
+way decision 26 reads every other call. Every call in the list takes its
+destination second, source then destination, so the check reads the second
+quoted path of each call, which is what keeps a later call from hiding an
+earlier protected write. A call whose arguments it cannot read falls back to
+every path the payload names, the conservative reading.
 
 A delete call, or an `open(` with a write mode, in the same payload keeps every
 path in play, and the critical-path breaker reads the source of a payload
@@ -686,10 +691,47 @@ source and an ordinary destination,
 `os.rename('/etc/passwd', '/tmp/x')`,
 `shutil.move('/etc/hosts', '/tmp/x')` and
 `fs.copyFileSync('/etc/hosts', '/tmp/x')`, all classified `destructive`. On the
-build this record ships with they classify `approval`, and the same calls with a
+build this record ships with they classify `approval`, the same calls with a
 protected destination, `shutil.copy('/tmp/x', '/etc/cron.d/job')` and
 `os.rename('/tmp/x', '/etc/cron.d/job')`, classify `destructive` under
-`interpreter-payload`.
+`interpreter-payload`, and a two-call payload whose first write is protected,
+`shutil.copy('/tmp/a', '/etc/passwd'); shutil.copy('/tmp/b', '/tmp/c')`,
+classifies `destructive` as well.
+
+## Decision 30: the working directory by another name, a secret in any case, a table defined once (added 2026-09-19)
+
+Three edges the review round measured on the pushed head, each verified open
+before the change and closed after it.
+
+**`$PWD` is the working directory by another name.** Decision 9's breaker names
+`.` and `..` as critical because an empty path variable once turned a cleanup
+call into a delete of the parent, but `$PWD` and `${PWD}` spelled the same
+working directory out, and `rm -rf $PWD` passed the breaker. The target check
+now reads the two variable spellings, with or without a trailing slash, the way
+it reads `.`, so the delete of the working directory asks rather than runs, in
+turbo among the rest. Measured: `rm -rf $PWD`, `rm -rf ${PWD}` and
+`rm -rf $PWD/` breach `critical-delete` on the build this record ships with,
+and `rm -rf .` still does.
+
+**A tool input path is read the way a command word is.** The secret check
+normalised a tool input path's separators and nothing else, so on a
+case-insensitive filesystem `C:\Users\me\.AWS\credentials` was an ordinary
+read while `cat C:\Users\me\.aws\credentials` was exfiltration, because the
+command path lowercases every word before the same patterns read it. The tool
+input path is lowercased for the match now, and reported as the caller wrote
+it. Measured: `.SSH\authorized_keys`, `.AWS\credentials`, `keys\ID_ED25519`
+and `.ENV` name their secrets on the build this record ships with, the lowercase
+spellings still do, and an ordinary path still names nothing.
+
+**A table is defined once.** The policy parser walked a repeated `[table]`
+header into the table the first one made and merged the keys, although TOML
+v1.0 forbids the second header and decision 6 says a file the parser cannot read
+fails closed rather than widens. The parser now marks every table a header or a
+dotted key creates, and a header that names a marked table is a parse error the
+policy loader turns into the deny-by-default floor. Measured:
+`[a]` after `[a]`, `[a]` after `[a.b]`, and `[a]` after `a.b = "1"` each fail
+with `duplicate table header`, and `[a]` followed by `[a.b]` still parses,
+which is the spelling the supported subset exists to read.
 
 ## The residual gap, stated rather than closed
 
