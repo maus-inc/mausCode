@@ -42,6 +42,9 @@ describe("destructive patterns", () => {
     // chroot is a wrapper that also carries a required root operand before
     // the command. Without consuming it, the verb read lands on the root.
     ["recursive-force-delete", "chroot /mnt rm -rf /"],
+    // Unquoted backticks are the shell's command substitution, and the
+    // substituted command reaches the rules as its own segment.
+    ["recursive-force-delete", "echo `rm -rf /`"],
     ["recursive-force-delete", "chroot --skip-chdir /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --userspec root:root /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --groups root /mnt rm -rf /"],
@@ -51,6 +54,9 @@ describe("destructive patterns", () => {
     ["destructive-sql", 'psql -c "TRUNCATE users"'],
     ["destructive-sql", 'mysql -e "DROP VIEW customer_export"'],
     ["destructive-sql", 'sqlcmd -Q "ALTER TABLE t DROP COLUMN c"'],
+    // A backtick inside quotes is a literal the way MySQL quotes an
+    // identifier, and the statement must reach the rule unsplit.
+    ["destructive-sql", 'mysql -e "DROP TABLE `users`"'],
     // The type is any word, which is what keeps these inside the rule.
     ["destructive-sql", 'psql -c "DROP TYPE money"'],
     ["destructive-sql", 'psql -c "DROP TABLESPACE fast"'],
@@ -462,6 +468,10 @@ describe("destructive patterns", () => {
 
   it("does not call a drop with no target destructive", () => {
     expect(bash('psql -c "DROP TABLE"').ruleClass).toBe("approval")
+  })
+
+  it("does not call a materialized view drop with no target destructive", () => {
+    expect(bash('psql -c "DROP MATERIALIZED VIEW"').ruleClass).toBe("approval")
   })
 
   it("reads a plain sed as the file read it is, not an overwrite of the file it prints", () => {

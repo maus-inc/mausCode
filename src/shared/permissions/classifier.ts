@@ -487,8 +487,42 @@ function wordsConsumed(word: string, words: string[], index: number): number {
  * over here, because the research on agent shell filters is unanimous that a
  * pattern list cannot win against a shell grammar and only an OS sandbox can.
  */
+/**
+ * Backticks outside quotes split the command, because that is the shell's
+ * command substitution, and a substituted command has to reach the rules as
+ * its own segment. Inside quotes a backtick is literal, which is how MySQL
+ * quotes an identifier, and a literal must not split the statement in two.
+ * This pass drops the quoted ones before the split, and leaves the unquoted
+ * ones where the substitution split needs them.
+ */
+function dropQuotedBackticks(text: string): string {
+  let out = ""
+  let quote: string | null = null
+  let escaped = false
+  for (const ch of text) {
+    if (escaped) {
+      escaped = false
+      out += ch
+      continue
+    }
+    if (ch === "\\") {
+      escaped = true
+      out += ch
+      continue
+    }
+    if (quote !== null) {
+      if (ch === quote) quote = null
+      else if (ch !== "`") out += ch
+      continue
+    }
+    if (ch === '"' || ch === "'") quote = ch
+    out += ch
+  }
+  return out
+}
+
 export function splitCommandSegments(command: string): CommandSegment[] {
-  return (
+  return dropQuotedBackticks(
     command
       .replaceAll(/\$\{?ifs\}?/gi, " ")
       // `find . \( -name x \) -delete` groups its predicates with escaped
@@ -498,24 +532,24 @@ export function splitCommandSegments(command: string): CommandSegment[] {
       // the same way, `find . -exec echo {} \; -exec rm {} +`, and a split on the
       // escaped terminator put the second predicate in a segment of its own,
       // away from the `find` that carries it.
-      .replaceAll(/\\\(|\\\)|\\;|\\&/g, " ")
-      .split(/&&|\|\||[|;\n`()]|\$\(/)
-      .map((raw) => raw.trim())
-      .filter((text) => text.length > 0)
-      .map((text) => {
-        const split = text
-          .split(/\s+/)
-          .filter((word) => word.length > 0)
-          .map((word) => unquote(word))
-          .filter((word) => word.length > 0)
-        const words = split.map((word) => word.toLowerCase())
-        return {
-          verb: readVerb(words),
-          words,
-          noTargetDirectory: split.some(isNoTargetDirectoryFlag),
-        }
-      })
+      .replaceAll(/\\\(|\\\)|\\;|\\&/g, " "),
   )
+    .split(/&&|\|\||[|;\n`()]|\$\(/)
+    .map((raw) => raw.trim())
+    .filter((text) => text.length > 0)
+    .map((text) => {
+      const split = text
+        .split(/\s+/)
+        .filter((word) => word.length > 0)
+        .map((word) => unquote(word))
+        .filter((word) => word.length > 0)
+      const words = split.map((word) => word.toLowerCase())
+      return {
+        verb: readVerb(words),
+        words,
+        noTargetDirectory: split.some(isNoTargetDirectoryFlag),
+      }
+    })
 }
 
 function hasRecursiveForceRm(segments: CommandSegment[]): boolean {
@@ -784,12 +818,15 @@ const SQL_CLIENT_VERBS = new Set([
 ])
 
 // A target-bearing DROP: the object type and the target it removes. The type
-// is any word, which is what keeps TYPE, TABLESPACE, and MATERIALIZED VIEW
-// inside the rule without a list to maintain, and a DROP without a target is
-// incomplete SQL that errors, so it stays a near-miss. The patterns take one
-// case of each letter and the `i` flag, which keeps the character classes
+// is any word, which is what keeps TYPE and TABLESPACE inside the rule
+// without a list to maintain, and a DROP without a target is incomplete SQL
+// that errors, so it stays a near-miss. MATERIALIZED VIEW is the one
+// two-word type: the negative lookahead keeps its words together, so a DROP
+// without a target after them is still incomplete. The patterns take one case
+// of each letter and the `i` flag, which keeps the character classes
 // duplicate-free to the analyzer.
-const DROP_SQL = /\bDROP\s+[A-Z_][A-Z0-9_$]*\s+[A-Z_][A-Z0-9_$]*/i
+const DROP_MATVIEW_SQL = /\bDROP\s+MATERIALIZED\s+VIEW\s+[A-Z_][A-Z0-9_$]*/i
+const DROP_OBJECT_SQL = /\bDROP\s+(?!MATERIALIZED\s+VIEW\b)[A-Z_][A-Z0-9_$]*\s+[A-Z_][A-Z0-9_$]*/i
 const TRUNCATE_SQL = /\bTRUNCATE\s+(?:TABLE\s+)?[A-Z_][A-Z0-9_$]*/i
 
 /**
@@ -803,7 +840,7 @@ function hasDestructiveSql(segments: CommandSegment[]): boolean {
   return segments.some((segment) => {
     if (!SQL_CLIENT_VERBS.has(segment.verb)) return false
     const text = segment.words.join(" ")
-    return DROP_SQL.test(text) || TRUNCATE_SQL.test(text)
+    return DROP_MATVIEW_SQL.test(text) || DROP_OBJECT_SQL.test(text) || TRUNCATE_SQL.test(text)
   })
 }
 

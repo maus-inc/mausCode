@@ -936,6 +936,29 @@ that errors, so it stays a near-miss. The list is gone, which leaves nothing
 to maintain under the analyzer's complexity limit, and the TRUNCATE read of
 decision 36 is unchanged.
 
+## Decision 38: a quoted backtick is literal, and the two-word type keeps its target (added 2026-09-20)
+
+Two findings on the head that closed decision 37, each verified before and
+closed after.
+
+**Backticks inside quotes split the statement.** The segment split treats a
+backtick as a boundary, which is the shell's command substitution, and a
+substituted command has to reach the rules as its own segment. But inside
+quotes a backtick is literal, which is how MySQL quotes an identifier, so
+`mysql -e "DROP TABLE \`users\`"` split into a DROP without a target and a
+stray word, and fell to the residual approval class. The split now drops
+backticks inside quotes before it splits, with the escapes and the quote
+state kept honest as it walks, and leaves the unquoted ones where the
+substitution split needs them, so a command that runs a delete through
+unquoted backticks is still read as the delete it is.
+
+**MATERIALIZED VIEW is the one two-word type.** The structural read of
+decision 37 parsed its words as the type and the target, so `DROP
+MATERIALIZED VIEW` without a target was still classified destructive. The
+read now takes the two words as the type, with a target required after them,
+and a DROP without a target is incomplete SQL that errors, so it stays a
+near-miss, the same reading as a `DROP TABLE` with no name.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
