@@ -497,36 +497,42 @@ function wordsConsumed(word: string, words: string[], index: number): number {
  * drops the literal backticks before the split, and leaves the active ones
  * where the substitution split needs them.
  */
+interface BacktickScan {
+  quote: string | null
+  escaped: boolean
+}
+
+/**
+ * Advances the scan over one character, and returns false for the backtick
+ * the shell does not run, so that it loses its boundary before the split. A
+ * quote opens only when nothing is open, and closes only its own kind, so a
+ * single quote inside double quotes stays an ordinary character.
+ */
+function stepBacktickScan(ch: string, scan: BacktickScan): boolean {
+  if (scan.escaped) {
+    scan.escaped = false
+    return ch !== "`"
+  }
+  if (ch === "\\") {
+    scan.escaped = true
+    return true
+  }
+  if (ch === "'" || ch === '"') {
+    if (scan.quote === ch) {
+      scan.quote = null
+    } else if (scan.quote === null) {
+      scan.quote = ch
+    }
+    return true
+  }
+  return ch !== "`" || scan.quote !== "'"
+}
+
 function dropLiteralBackticks(text: string): string {
   let out = ""
-  let quote: string | null = null
-  let escaped = false
+  const scan: BacktickScan = { quote: null, escaped: false }
   for (const ch of text) {
-    if (escaped) {
-      escaped = false
-      if (ch !== "`") out += ch
-      continue
-    }
-    if (ch === "\\") {
-      escaped = true
-      out += ch
-      continue
-    }
-    if (quote === "'") {
-      if (ch === "'") {
-        quote = null
-      } else if (ch !== "`") {
-        out += ch
-      }
-      continue
-    }
-    if (quote === '"') {
-      if (ch === '"') quote = null
-      out += ch
-      continue
-    }
-    if (ch === '"' || ch === "'") quote = ch
-    out += ch
+    if (stepBacktickScan(ch, scan)) out += ch
   }
   return out
 }
