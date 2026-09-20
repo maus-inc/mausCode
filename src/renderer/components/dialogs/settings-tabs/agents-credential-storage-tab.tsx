@@ -141,13 +141,13 @@ function ProtectionCard({
   onEnable,
   onDisable,
 }: {
-  isLoading: boolean
-  protectedByOs: boolean
-  consentOn: boolean
-  data: StatusData | undefined
-  pending: boolean
-  onEnable: () => void
-  onDisable: () => void
+  readonly isLoading: boolean
+  readonly protectedByOs: boolean
+  readonly consentOn: boolean
+  readonly data: StatusData | undefined
+  readonly pending: boolean
+  readonly onEnable: () => void
+  readonly onDisable: () => void
 }) {
   const headline = protectionHeadline(isLoading, protectedByOs, consentOn)
   const detail = protectedByOs
@@ -227,16 +227,12 @@ function InventoryCard({
   consentOn,
   data,
 }: {
-  protectedByOs: boolean
-  consentOn: boolean
-  data: StatusData | undefined
+  readonly protectedByOs: boolean
+  readonly consentOn: boolean
+  readonly data: StatusData | undefined
 }) {
   const stored = data?.rendererKeysStored?.length ?? 0
-  const rendererDetail = data?.rendererError
-    ? data.rendererError
-    : stored > 0
-      ? `${stored} value(s) moved out of browser storage into this app's store`
-      : "No provider key is kept in browser storage"
+  const rendererDetail = describeRendererStorage(data?.rendererError ?? null, stored)
 
   return (
     <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -285,6 +281,12 @@ function InventoryCard({
   )
 }
 
+function describeRendererStorage(error: string | null, stored: number): string {
+  if (error) return error
+  if (stored > 0) return `${stored} value(s) moved out of browser storage into this app's store`
+  return "No provider key is kept in browser storage"
+}
+
 function storedDetail(
   protectedByOs: boolean,
   consentOn: boolean,
@@ -317,7 +319,15 @@ function describeRefusal(
   }
 }
 
-function StorageRow({ label, detail, ok }: { label: string; detail: string; ok: boolean }) {
+function StorageRow({
+  label,
+  detail,
+  ok,
+}: {
+  readonly label: string
+  readonly detail: string
+  readonly ok: boolean
+}) {
   return (
     <li className="flex items-start justify-between gap-4 p-4">
       <div className="flex flex-col space-y-1">

@@ -10,9 +10,7 @@ import type { Keychain } from "./types"
 let store: SecretStore | null = null
 
 export function getSecretStore(): SecretStore {
-  if (!store) {
-    store = new SecretStore(app.getPath("userData"), electronKeychain)
-  }
+  store ??= new SecretStore(app.getPath("userData"), electronKeychain)
   return store
 }
 

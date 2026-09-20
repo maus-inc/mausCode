@@ -11,7 +11,6 @@
  */
 import { readFileSync, renameSync } from "node:fs"
 import {
-  EMPTY_METADATA,
   type Keychain,
   type PrepareResult,
   type SecretProtection,
@@ -20,8 +19,10 @@ import {
   type SecretStorageStatus,
 } from "./types"
 
+export { EMPTY_METADATA } from "./types"
+
 /** Electron writes these prefixes in the clear, before the ciphertext. */
-const CIPHER_PREFIXES = ["v10", "v11"]
+const CIPHER_PREFIXES = new Set(["v10", "v11"])
 
 export type DecodeResult = {
   value: string
@@ -30,7 +31,7 @@ export type DecodeResult = {
 
 function startsWithCipherPrefix(payload: Buffer): boolean {
   if (payload.length < 3) return false
-  return CIPHER_PREFIXES.includes(payload.subarray(0, 3).toString("latin1"))
+  return CIPHER_PREFIXES.has(payload.subarray(0, 3).toString("latin1"))
 }
 
 /**
@@ -254,5 +255,3 @@ export function buildStatus(input: {
     reason,
   }
 }
-
-export { EMPTY_METADATA }
