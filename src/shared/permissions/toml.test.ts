@@ -10,6 +10,9 @@
 import { describe, expect, it } from "vitest"
 import { parseConstrainedToml } from "./toml"
 
+const TOOLS_LINES = `  "Bash(git *)",
+  "Bash(npm test)",`
+
 function ok(text: string): Record<string, unknown> {
   const result = parseConstrainedToml(text)
   expect(result.ok, JSON.stringify(result)).toBe(true)
@@ -83,15 +86,10 @@ destructive = "ask"   # a trailing comment
     ["\\b", "\b"],
     ['\\"', '"'],
     ["\\\\", "\\"],
-  ])("unescapes %s in a basic string", (written, expected) => {
-    expect(ok(`value = "a${written}b"`)).toEqual({ value: `a${expected}b` })
-  })
-
-  it.each([
     ["\\u00e9", "\u00e9"],
     ["\\u00E9", "\u00e9"],
     ["\\U0001F600", "\u{1F600}"],
-  ])("unescapes the unicode escape %s in a basic string", (written, expected) => {
+  ])("unescapes %s in a basic string", (written, expected) => {
     expect(ok(`value = "a${written}b"`)).toEqual({ value: `a${expected}b` })
   })
 
@@ -116,9 +114,7 @@ destructive = "ask"   # a trailing comment
 
   it("reads a multi-line array", () => {
     const text = `allow_tools = [
-  "Bash(git *)",
-  "Bash(npm test)",
-]`
+${TOOLS_LINES}]`
     expect(ok(text)).toEqual({ allow_tools: ["Bash(git *)", "Bash(npm test)"] })
   })
 
@@ -131,9 +127,7 @@ destructive = "ask"
 [modes.turbo]
 approval = "allow"
 allow_tools = [
-  "Bash(git *)",
-  "Bash(npm test)",
-]
+${TOOLS_LINES}]
 `
     expect(ok(text)).toEqual({
       classes: { destructive: "ask" },
@@ -158,34 +152,25 @@ describe("rejections", () => {
     expect(error(text)).toContain("only string and string-array values are supported")
   })
 
-  it("refuses a value with no key at all", () => {
-    // No `=` on the line, so this is a missing assignment rather than a bad
-    // value type. The message says which, because the fix is different.
-    expect(error('"ask"')).toContain("expected key = value")
-  })
-
-  it("refuses an array of tables", () => {
-    expect(error("[[rules]]")).toContain("only [table] headers are supported")
-  })
-
-  it("refuses an unterminated table header", () => {
-    expect(error("[classes")).toContain("only [table] headers are supported")
-  })
-
-  it("refuses an unterminated string", () => {
-    expect(error('value = "open')).toContain("unterminated string")
-  })
-
-  it("refuses an unterminated array", () => {
-    expect(error('allow_tools = ["a"')).toContain("unterminated array")
-  })
-
-  it("refuses an array of integers", () => {
-    expect(error("allow_tools = [1, 2]")).toContain("only arrays of strings are supported")
-  })
-
-  it("refuses a duplicate key", () => {
-    expect(error('a = "1"\na = "2"')).toContain("duplicate key a")
+  // Each row is a document the reader must refuse, and the message a user
+  // would need to fix it. A line with no `=` is a missing assignment rather
+  // than a bad value type, and the message says which, because the fix is
+  // different.
+  it.each([
+    ["a value with no key at all", '"ask"', "expected key = value"],
+    ["an array of tables", "[[rules]]", "only [table] headers are supported"],
+    ["an unterminated table header", "[classes", "only [table] headers are supported"],
+    ["an unterminated string", 'value = "open', "unterminated string"],
+    ["an unterminated array", 'allow_tools = ["a"', "unterminated array"],
+    ["an array of integers", "allow_tools = [1, 2]", "only arrays of strings are supported"],
+    ["a duplicate key", 'a = "1"\na = "2"', "duplicate key a"],
+    ["a key that collides with a table", '[a]\nb = "1"\n[a.b]\nc = "2"', "collides"],
+    ["a table header that collides with a value", 'a = "1"\n[a.b]\nc = "2"', "collides"],
+    ["a malformed key", '= "value"', "malformed key"],
+    ["a missing assignment", "destructive", "expected key = value"],
+    ["an invalid escape in a basic string", String.raw`value = "a\qb"`, "malformed string value"],
+  ])("refuses %s", (_label, text, message) => {
+    expect(error(text)).toContain(message)
   })
 
   it("refuses a table a second header names, explicit or created by a key", () => {
@@ -202,21 +187,11 @@ describe("rejections", () => {
   })
 
   it("lets a deeper header define a table its parent header left unnamed", () => {
-    const result = parseConstrainedToml('[a]\nx = "1"\n[a.b]\ny = "2"')
-    expect(result.ok).toBe(true)
+    ok('[a]\nx = "1"\n[a.b]\ny = "2"')
   })
 
   it("lets a sibling header stand beside a table a dotted key created", () => {
-    const result = parseConstrainedToml('[a]\nb.c = "1"\n[a.c]\nd = "2"')
-    expect(result.ok).toBe(true)
-  })
-
-  it("refuses a key that collides with a table", () => {
-    expect(error('[a]\nb = "1"\n[a.b]\nc = "2"')).toContain("collides")
-  })
-
-  it("refuses a table header that collides with a value", () => {
-    expect(error('a = "1"\n[a.b]\nc = "2"')).toContain("collides")
+    ok('[a]\nb.c = "1"\n[a.c]\nd = "2"')
   })
 
   it.each([
@@ -241,10 +216,6 @@ describe("rejections", () => {
     if (parsed.ok) expect(parsed.value.allow_tools).toEqual(expected)
   })
 
-  it("refuses a malformed key", () => {
-    expect(error('= "value"')).toContain("malformed key")
-  })
-
   it.each([
     "[__proto__]\nx = 1",
     "__proto__.x = 1",
@@ -264,13 +235,5 @@ describe("rejections", () => {
     expect(Object.getOwnPropertyNames(Object.prototype)).toHaveLength(own)
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()
     expect(({} as Record<string, unknown>).x).toBeUndefined()
-  })
-
-  it("refuses a missing assignment", () => {
-    expect(error("destructive")).toContain("expected key = value")
-  })
-
-  it("refuses an invalid escape in a basic string", () => {
-    expect(error(String.raw`value = "a\qb"`)).toContain("malformed string value")
   })
 })

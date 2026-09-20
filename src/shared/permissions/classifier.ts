@@ -520,8 +520,8 @@ function stepBacktickScan(ch: string, scan: BacktickScan): boolean {
   if (ch === "'" || ch === '"') {
     if (scan.quote === ch) {
       scan.quote = null
-    } else if (scan.quote === null) {
-      scan.quote = ch
+    } else {
+      scan.quote ??= ch
     }
     return true
   }
