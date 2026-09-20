@@ -564,7 +564,7 @@ function stepSegmentScan(command: string, i: number, scan: SegmentScan): number 
  */
 function closeParen(scan: SegmentScan): number {
   const top = scan.subst.at(-1)
-  if (top !== undefined && top.kind === "$") {
+  if (top?.kind === "$") {
     top.depth -= 1
     if (top.depth === 0) {
       scan.subst.pop()
@@ -577,7 +577,7 @@ function closeParen(scan: SegmentScan): number {
 /** A backtick closes the context it opened, or opens one of its own. */
 function stepBacktick(scan: SegmentScan): number {
   const top = scan.subst.at(-1)
-  if (top !== undefined && top.kind === "`") {
+  if (top?.kind === "`") {
     scan.subst.pop()
     scan.quote = top.outerQuote
   } else {
@@ -590,7 +590,7 @@ function stepBacktick(scan: SegmentScan): number {
 /** An opening paren deepens the active `$()` context, so its real closer is the matching one. */
 function deepenSubstitution(scan: SegmentScan, ch: string): void {
   const top = scan.subst.at(-1)
-  if (ch === "(" && top !== undefined && top.kind === "$") top.depth += 1
+  if (ch === "(" && top?.kind === "$") top.depth += 1
 }
 
 function unquotedBoundary(command: string, i: number, scan: SegmentScan): number {
