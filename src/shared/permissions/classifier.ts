@@ -596,7 +596,11 @@ function deepenSubstitution(scan: SegmentScan, ch: string): void {
 function unquotedBoundary(command: string, i: number, scan: SegmentScan): number {
   if (scan.quote === "'") return 0
   const ch = command[i]
-  if (ch === ")") return closeParen(scan)
+  // A `)` the shell prints, not runs: inside a live double quote the paren
+  // is an ordinary character, even inside a substitution opened within the
+  // same quotes. The substitution's own closer is always unquoted, because
+  // `$(` resets the quote state when it opens.
+  if (ch === ")" && scan.quote !== '"') return closeParen(scan)
   if (ch === "`") return stepBacktick(scan)
   if (ch === "$" && command[i + 1] === "(") {
     scan.subst.push({ kind: "$", outerQuote: scan.quote, depth: 1 })

@@ -118,6 +118,10 @@ describe("destructive patterns", () => {
     // subshell still reaches the rule.
     ["recursive-force-delete", 'echo "$( (echo ok); rm -rf / )"'],
     ["recursive-force-delete", 'echo "$( (echo ok); rm -rf /etc )"'],
+    // A paren the shell prints is not the substitution's closer: the inner
+    // quote is still live, the closer is the paren after it, and the delete
+    // that follows the span still reaches the rule.
+    ["recursive-force-delete", 'x=$(echo ")hi"); rm -rf /'],
     // The substitution's closing paren ends its context and hands the quote
     // state back, so an operator after the span still delimits.
     ["recursive-force-delete", 'echo "a$(b)" ; rm -rf /'],
@@ -371,6 +375,10 @@ describe("destructive patterns", () => {
     'echo "example; rm -rf /"',
     "echo 'it; ls'",
     'echo "(rm -rf /)"',
+    // The `)` the shell prints, not runs: inside double quotes it is an
+    // ordinary character, so the delete it stands before is still the
+    // argument to echo.
+    'echo ")rm -rf /"',
     'echo "$(whoami)"',
     // A quoted argument that spells a delete is the argument it is, not the
     // command it reads as.
