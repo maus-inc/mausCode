@@ -1116,6 +1116,18 @@ Agent mode allows without a card. A quoted hex-and-colon name now counts in
 the argument position the connect calls take it, before the comma or the
 closing paren, loopback and non-loopback alike.
 
+## Decision 44: a quoted paren stays literal (added 2026-09-20)
+
+Kilo found, while decision 43 was being fixed, that the rewrite moved the
+`)` read ahead of the double-quote guard: a `)` inside a live double quote
+split the segment, so `echo ")rm -rf /"` read the printed text as a
+destructive segment of its own, which Agent mode would have denied for a
+string the shell only prints. The guard is back: a `)` the shell would print
+is an ordinary character even inside a substitution opened within the same
+quotes. The substitution's own closer stays reachable, because opening `$(`
+resets the quote state, so a `)` that closes the context is always
+unquoted.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
