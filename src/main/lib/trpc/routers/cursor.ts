@@ -10,6 +10,7 @@ import { createHash } from "node:crypto"
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { z } from "zod"
+import { agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
 import {
   normalizeCodexAssistantMessage,
   normalizeCodexStreamChunk,
@@ -584,7 +585,7 @@ export const cursorRouter = router({
         model: z.string().optional(),
         cwd: z.string(),
         projectPath: z.string().optional(),
-        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
+        mode: agentModeSchema.default(DEFAULT_AGENT_MODE),
         sessionId: z.string().optional(),
         forceNewSession: z.boolean().optional(),
         images: z.array(imageAttachmentSchema).optional(),

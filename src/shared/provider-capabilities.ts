@@ -30,6 +30,20 @@ export const securityPostureSchema = z.object({
    * BYOK) do NOT count — local-only mode leaves those untouched.
    */
   requiresHostedService: z.boolean(),
+  /**
+   * Who enforces the permission floor of roadmap step 10 for the modes that
+   * write, per `.dump/app/decisions/2026-09-13-permission-floor.md`.
+   *
+   * - `app-gate`: every side-effecting action reaches the evaluator in
+   *   `src/main/lib/permissions/`, so all five rule classes are enforced in
+   *   this app and a denial names the rule that produced it.
+   * - `engine-only`: the backend is a subprocess or an extension host that
+   *   gives this app no per-action callback, so the floor can only be
+   *   expressed as engine flags. A class the engine has no flag for is not
+   *   enforced at all, and the decision record names those classes per
+   *   backend rather than this field pretending otherwise.
+   */
+  permissionFloor: z.enum(["app-gate", "engine-only"]),
 })
 
 export const performanceProfileSchema = z.object({
@@ -75,6 +89,24 @@ export const providerCapabilitySchema = z.object({
 })
 
 export type ProviderCapability = z.infer<typeof providerCapabilitySchema>
+
+/** The two answers to "who enforces the permission floor of roadmap step 10". */
+export type PermissionFloor = ProviderCapability["security"]["permissionFloor"]
+
+/**
+ * The floor behind a sub-chat provider id, which is the vocabulary the chat UI
+ * holds. The manifests are keyed by backend id and live in main, so the renderer
+ * cannot read one for the id it has, and two ids it does hold, `gemini` and
+ * `openrouter`, name a path no backend manifest carries at all.
+ *
+ * Only the Claude path routes a tool call through `evaluateAction`, so it is the
+ * only id with an app gate. `src/main/lib/providers/permission-floor.test.ts`
+ * asserts this agrees with every manifest that has a sub-chat binding, so the two
+ * vocabularies cannot drift apart silently.
+ */
+export function permissionFloorFor(provider: string): PermissionFloor {
+  return provider === "claude-code" ? "app-gate" : "engine-only"
+}
 
 export type ViolationSeverity = "block" | "warn"
 

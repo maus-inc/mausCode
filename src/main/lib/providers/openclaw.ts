@@ -40,6 +40,7 @@ export function getOpenclawCapability(): ProviderCapability {
       egress: ["provider-configured"],
       retention: "local-session-files",
       requiresHostedService: false,
+      permissionFloor: "engine-only",
     },
     performance: {
       // Exec prints ONE envelope at settle time: no streaming

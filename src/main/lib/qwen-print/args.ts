@@ -24,7 +24,11 @@
  * - First turns carry a client-chosen `--session-id` UUID (persisted by
  *   the CLI); later turns pass `--resume <id>`.
  */
-export type QwenPrintMode = "plan" | "ask" | "edit" | "agent" | "turbo"
+
+import type { AgentMode } from "../../../shared/agent-mode"
+
+/** One vocabulary for every provider: the union lives in shared. */
+export type QwenPrintMode = AgentMode
 
 export type QwenAuthType =
   | "openai"

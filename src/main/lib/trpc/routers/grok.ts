@@ -9,6 +9,7 @@ import { createHash } from "node:crypto"
 import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { z } from "zod"
+import { agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
 import {
   normalizeCodexAssistantMessage,
   normalizeCodexStreamChunk,
@@ -30,6 +31,7 @@ import {
 } from "../../grok-print/args"
 import { runGrokPrintTurn } from "../../grok-print/session"
 import { writeImageTempFiles } from "../../image-staging"
+import { readPolicyFile } from "../../permissions/policy-file"
 import { probeGrok, probeGrokAuthHome } from "../../providers/grok"
 import { publicProcedure, router } from "../index"
 
@@ -681,7 +683,7 @@ export const grokRouter = router({
         model: z.string().optional(),
         cwd: z.string(),
         projectPath: z.string().optional(),
-        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
+        mode: agentModeSchema.default(DEFAULT_AGENT_MODE),
         sessionId: z.string().optional(),
         forceNewSession: z.boolean().optional(),
         images: z.array(imageAttachmentSchema).optional(),
@@ -921,6 +923,11 @@ export const grokRouter = router({
             // when the run is interrupted before `end` (the only event
             // carrying the server-side id), so cancel-resume keeps working.
             const freshSessionId = () => crypto.randomUUID()
+            // Headless grok streams output only, so the permission gate cannot
+            // see a tool call here. The policy file's allow-list for this mode
+            // travels as `--allow` argv instead, and anything it does not name
+            // is refused by the CLI rather than approved by nobody.
+            const allowTools = (await readPolicyFile()).policy.modes[input.mode].allow_tools ?? []
             const buildInvocation = (sessionId: string | undefined) =>
               buildGrokPrintArgs({
                 model: selectedModel,
@@ -929,6 +936,7 @@ export const grokRouter = router({
                 newSessionId: sessionId ? undefined : freshSessionId(),
                 cwd: input.cwd,
                 prompt: promptWithImages,
+                allowTools,
               })
 
             let invocation = buildInvocation(latestSessionId)
@@ -1011,6 +1019,7 @@ export const grokRouter = router({
                     newSessionId: latestSessionId ? undefined : freshSessionId(),
                     cwd: input.cwd,
                     prompt: promptWithImages,
+                    allowTools,
                   })
                   attemptArgs = invocation.args
                   attemptPromptFileText = invocation.promptFileText

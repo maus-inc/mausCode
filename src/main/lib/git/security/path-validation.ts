@@ -1,6 +1,18 @@
-import { isAbsolute, normalize, resolve, sep } from "node:path"
 import { eq } from "drizzle-orm"
 import { chats, getDatabase, projects } from "../../db"
+import { PathValidationError } from "./errors"
+
+export {
+  assertToolPathInWorktree,
+  assertValidGitPath,
+  resolvePathInWorktree,
+  type ValidatePathOptions,
+  validateRelativePath,
+} from "./containment"
+// The error type and the containment checks live in dependency-free modules so
+// a test can import them without loading the database. Re-exported here because
+// this file is where callers have always found them.
+export { PathValidationError, type PathValidationErrorCode } from "./errors"
 
 /**
  * Security model for desktop app filesystem access:
@@ -24,30 +36,6 @@ import { chats, getDatabase, projects } from "../../db"
  * - Writes: Block if realpath escapes worktree (prevents accidental overwrites)
  * - Reads: Caller can check isSymlinkEscaping() to warn users
  */
-
-/**
- * Security error codes for path validation failures.
- */
-export type PathValidationErrorCode =
-  | "ABSOLUTE_PATH"
-  | "PATH_TRAVERSAL"
-  | "UNREGISTERED_WORKTREE"
-  | "INVALID_TARGET"
-  | "SYMLINK_ESCAPE"
-
-/**
- * Error thrown when path validation fails.
- * Includes a code for programmatic handling.
- */
-export class PathValidationError extends Error {
-  constructor(
-    message: string,
-    public readonly code: PathValidationErrorCode,
-  ) {
-    super(message)
-    this.name = "PathValidationError"
-  }
-}
 
 /**
  * Validates that a workspace path is registered in database.
@@ -96,71 +84,4 @@ export function getRegisteredChat(worktreePath: string): typeof chats.$inferSele
   }
 
   return chat
-}
-
-/**
- * Options for path validation.
- */
-export interface ValidatePathOptions {
-  /**
-   * Allow empty/root path (resolves to worktree itself).
-   * Default: false (prevents accidental worktree deletion)
-   */
-  allowRoot?: boolean
-}
-
-/**
- * Validates a relative file path for safety.
- * Rejects absolute paths and path traversal attempts.
- *
- * @throws PathValidationError if path is invalid
- */
-export function validateRelativePath(filePath: string, options: ValidatePathOptions = {}): void {
-  const { allowRoot = false } = options
-
-  // Reject absolute paths
-  if (isAbsolute(filePath)) {
-    throw new PathValidationError("Absolute paths are not allowed", "ABSOLUTE_PATH")
-  }
-
-  const normalized = normalize(filePath)
-  const segments = normalized.split(sep)
-
-  // Reject ".." as a path segment (allows "..foo" directories)
-  if (segments.includes("..")) {
-    throw new PathValidationError("Path traversal not allowed", "PATH_TRAVERSAL")
-  }
-
-  // Reject root path unless explicitly allowed
-  if (!allowRoot && (normalized === "" || normalized === ".")) {
-    throw new PathValidationError("Cannot target worktree root", "INVALID_TARGET")
-  }
-}
-
-/**
- * Validates and resolves a path within a worktree. Sync, simple.
- *
- * @param worktreePath - The worktree base path
- * @param filePath - The relative file path to validate
- * @param options - Validation options
- * @returns The resolved full path
- * @throws PathValidationError if path is invalid
- */
-export function resolvePathInWorktree(
-  worktreePath: string,
-  filePath: string,
-  options: ValidatePathOptions = {},
-): string {
-  validateRelativePath(filePath, options)
-  // Use resolve to handle any worktreePath (relative or absolute)
-  return resolve(worktreePath, normalize(filePath))
-}
-
-/**
- * Validates a path for git commands. Lighter check that allows root.
- *
- * @throws PathValidationError if path is invalid
- */
-export function assertValidGitPath(filePath: string): void {
-  validateRelativePath(filePath, { allowRoot: true })
 }

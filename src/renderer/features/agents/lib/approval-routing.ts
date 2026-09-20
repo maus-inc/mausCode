@@ -15,7 +15,7 @@ export interface ApprovalAnswer {
   approved: boolean
   /** Legacy-only: free-text message attached to the decision. */
   message?: string
-  /** Legacy-only: modified tool input. */
+  /** Modified tool input, and where the picked labels travel. */
   updatedInput?: unknown
 }
 
@@ -25,6 +25,10 @@ export async function respondToApproval(subChatId: string, answer: ApprovalAnswe
       subChatId,
       requestId: answer.toolUseId.slice(NATIVE_QUESTION_PREFIX.length),
       approved: answer.approved,
+      // Forwarded so the router can read a Deny pick. The card submits
+      // `approved: true` whichever option the user takes, so dropping the labels
+      // here would have answered allow to a refusal.
+      ...(answer.updatedInput === undefined ? {} : { updatedInput: answer.updatedInput }),
     })
     return
   }

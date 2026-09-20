@@ -39,6 +39,7 @@ export function getClineCapability(): ProviderCapability {
       egress: ["provider-configured"],
       retention: "local-session-files",
       requiresHostedService: false,
+      permissionFloor: "engine-only",
     },
     performance: {
       streaming: true,

@@ -16,7 +16,10 @@
  *   carrier and a CLI without stdin support fails visibly instead.
  */
 
-export type CursorPrintMode = "plan" | "ask" | "edit" | "agent" | "turbo"
+import type { AgentMode } from "../../../shared/agent-mode"
+
+/** One vocabulary for every provider: the union lives in shared. */
+export type CursorPrintMode = AgentMode
 
 /** Prompts longer than this are additionally piped on stdin. */
 export const CURSOR_STDIN_PROMPT_CHARS = 8000

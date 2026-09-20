@@ -3,7 +3,13 @@ import type { ProviderCapability } from "../../../../shared/provider-capabilitie
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 
-function Pill({ tone, children }: { tone: "ok" | "warn" | "bad" | "mute"; children: ReactNode }) {
+function Pill({
+  tone,
+  children,
+}: {
+  readonly tone: "ok" | "warn" | "bad" | "mute"
+  readonly children: ReactNode
+}) {
   return (
     <span
       className={cn(
@@ -19,7 +25,7 @@ function Pill({ tone, children }: { tone: "ok" | "warn" | "bad" | "mute"; childr
   )
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 py-1 text-sm">
       <span className="shrink-0 text-muted-foreground">{label}</span>
@@ -28,9 +34,104 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+/**
+ * The probe fields this card renders. Declared structurally because
+ * `BackendProbe` lives in the main process, and the renderer must not import
+ * from it. Every field is optional: the query carries no data until it settles.
+ */
+type ProbeFacts = {
+  available?: boolean
+  version?: string
+  authenticated?: boolean
+  detail?: string
+}
+
+/** The auth suffix a probe pill carries, when the probe settled on an answer. */
+function authSuffix(authenticated: boolean | undefined): string {
+  if (authenticated === true) return " · authenticated"
+  if (authenticated === false) return " · not authenticated"
+  return ""
+}
+
+function ProbePill({
+  probe,
+  loading,
+}: {
+  readonly probe: ProbeFacts | null | undefined
+  readonly loading: boolean
+}) {
+  if (loading) return <Pill tone="mute">probing…</Pill>
+  if (!probe?.available) {
+    return <Pill tone="bad">unavailable{probe?.detail ? ` · ${probe.detail}` : ""}</Pill>
+  }
+  return (
+    <Pill tone="ok">
+      available{probe.version ? ` · ${probe.version}` : ""}
+      {authSuffix(probe.authenticated)}
+    </Pill>
+  )
+}
+
+function FactHeading({ children }: { readonly children: ReactNode }) {
+  return (
+    <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </div>
+  )
+}
+
+/** A joined list, or the placeholder this card already used for an empty one. */
+function joinedOrDash(values: string[]): string {
+  return values.join(", ") || "—"
+}
+
+function permissionFloorLabel(floor: ProviderCapability["security"]["permissionFloor"]): string {
+  return floor === "app-gate" ? "app gate" : "engine only"
+}
+
+function streamingLabel(performance: ProviderCapability["performance"]): string {
+  if (!performance.streaming) return "no"
+  return performance.partialStreaming ? "partial" : "yes"
+}
+
+function contextLabel(contextWindow: number | null): string {
+  if (contextWindow === null) return "model-dependent"
+  return `${contextWindow.toLocaleString()} tokens`
+}
+
+function SecurityFacts({ security }: { readonly security: ProviderCapability["security"] }) {
+  return (
+    <div>
+      <FactHeading>Security</FactHeading>
+      <Row label="Auth">{joinedOrDash(security.auth)}</Row>
+      <Row label="Approvals">{security.approvals}</Row>
+      <Row label="Sandbox">{security.sandbox}</Row>
+      <Row label="Egress">{joinedOrDash(security.egress)}</Row>
+      <Row label="Retention">{security.retention}</Row>
+      <Row label="Permission floor">{permissionFloorLabel(security.permissionFloor)}</Row>
+    </div>
+  )
+}
+
+function PerformanceFacts({
+  performance,
+}: {
+  readonly performance: ProviderCapability["performance"]
+}) {
+  return (
+    <div>
+      <FactHeading>Performance</FactHeading>
+      <Row label="Streaming">{streamingLabel(performance)}</Row>
+      <Row label="Parallel tools">{performance.parallelTools ? "yes" : "no"}</Row>
+      <Row label="Context">{contextLabel(performance.contextWindow)}</Row>
+      <Row label="Latency">{performance.latencyClass}</Row>
+      <Row label="Usage">{performance.usageSurface}</Row>
+    </div>
+  )
+}
+
 function BackendCard({ capability }: { capability: ProviderCapability }) {
   const probeQuery = trpc.providers.probe.useQuery({ id: capability.id })
-  const probe = probeQuery.data
 
   const enabledFeatures = Object.entries(capability.features)
     .filter(([, enabled]) => enabled)
@@ -41,20 +142,7 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="text-base font-semibold text-foreground">{capability.displayName}</h3>
         <Pill tone="mute">{capability.kind}</Pill>
-        {probeQuery.isLoading ? (
-          <Pill tone="mute">probing…</Pill>
-        ) : probe?.available ? (
-          <Pill tone="ok">
-            available{probe.version ? ` · ${probe.version}` : ""}
-            {probe.authenticated === true
-              ? " · authenticated"
-              : probe.authenticated === false
-                ? " · not authenticated"
-                : ""}
-          </Pill>
-        ) : (
-          <Pill tone="bad">unavailable{probe?.detail ? ` · ${probe.detail}` : ""}</Pill>
-        )}
+        <ProbePill probe={probeQuery.data} loading={probeQuery.isLoading} />
       </div>
 
       <div className="text-sm text-muted-foreground">{capability.transport}</div>
@@ -63,36 +151,8 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
       </div>
 
       <div className="grid grid-cols-1 gap-x-6 md:grid-cols-2">
-        <div>
-          <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Security
-          </div>
-          <Row label="Auth">{capability.security.auth.join(", ") || "—"}</Row>
-          <Row label="Approvals">{capability.security.approvals}</Row>
-          <Row label="Sandbox">{capability.security.sandbox}</Row>
-          <Row label="Egress">{capability.security.egress.join(", ") || "—"}</Row>
-          <Row label="Retention">{capability.security.retention}</Row>
-        </div>
-        <div>
-          <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Performance
-          </div>
-          <Row label="Streaming">
-            {capability.performance.streaming
-              ? capability.performance.partialStreaming
-                ? "partial"
-                : "yes"
-              : "no"}
-          </Row>
-          <Row label="Parallel tools">{capability.performance.parallelTools ? "yes" : "no"}</Row>
-          <Row label="Context">
-            {capability.performance.contextWindow
-              ? `${capability.performance.contextWindow.toLocaleString()} tokens`
-              : "model-dependent"}
-          </Row>
-          <Row label="Latency">{capability.performance.latencyClass}</Row>
-          <Row label="Usage">{capability.performance.usageSurface}</Row>
-        </div>
+        <SecurityFacts security={capability.security} />
+        <PerformanceFacts performance={capability.performance} />
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5">

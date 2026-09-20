@@ -26,7 +26,10 @@
  *   prefix in the prompt (built by the router, not here).
  */
 
-export type OpenclawPrintMode = "plan" | "ask" | "edit" | "agent" | "turbo"
+import type { AgentMode } from "../../../shared/agent-mode"
+
+/** One vocabulary for every provider: the union lives in shared. */
+export type OpenclawPrintMode = AgentMode
 
 export type BuildOpenclawPrintArgsOptions = {
   /** Working directory for `--cwd` (spawn cwd is set regardless). */

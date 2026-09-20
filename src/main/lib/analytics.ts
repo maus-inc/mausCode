@@ -7,6 +7,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { app } from "electron"
 import { PostHog } from "posthog-node"
+import type { AgentMode } from "../../shared/agent-mode"
 import { isLocalOnlyMode } from "./local-only"
 
 // PostHog configuration - hardcoded key for opensource users, env var override for internal builds
@@ -294,7 +295,7 @@ export function trackWorkspaceDeleted(workspaceId: string) {
 export function trackMessageSent(data: {
   workspaceId: string
   subChatId?: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
 }) {
   capture("message_sent", {
     workspace_id: data.workspaceId,

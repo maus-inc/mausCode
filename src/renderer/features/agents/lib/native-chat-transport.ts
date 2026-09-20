@@ -6,9 +6,11 @@
  * IPC transport (see chat-chunk-atoms.ts); only credential handling and error
  * categorization differ.
  */
+
 import * as Sentry from "@sentry/electron/renderer"
 import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { AgentMode } from "../../../../shared/agent-mode"
 import { NATIVE_ERROR_PREFIX } from "../../../../shared/runtime-protocol"
 import {
   autoOfflineModeAtom,
@@ -36,7 +38,7 @@ type NativeChatTransportConfig = {
   subChatId: string
   cwd: string
   projectPath?: string
-  mode: "plan" | "ask" | "edit" | "agent" | "turbo"
+  mode: AgentMode
   model?: string
 }
 

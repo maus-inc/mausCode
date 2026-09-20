@@ -11,6 +11,9 @@ import type { JcodeClient } from "@maus-inc/runtime-client"
 import { observable } from "@trpc/server/observable"
 import { and, eq } from "drizzle-orm"
 import { z } from "zod"
+import { type AgentMode, agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
+import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
+import { approvalWasDenied } from "../../claude/tool-approval"
 import type { UIMessageChunk } from "../../claude/types"
 import { getDatabase, subChats } from "../../db"
 import { getRunStore } from "../../runs"
@@ -20,6 +23,7 @@ import {
   ensureNativeSession,
   getMappedNativeSession,
   getRuntimeManager,
+  NATIVE_QUESTION_PREFIX,
   NativeCredentialError,
   type NativeEndpoints,
   NativeTranslator,
@@ -49,6 +53,16 @@ const activeTurns = new Map<
   { cancelled: boolean; completed: boolean; cancelRemote: () => void }
 >()
 
+/**
+ * The permission request id each native sub-chat is awaiting, so a response
+ * settles only the run that is actually waiting on it. The legacy registry in
+ * `tool-approval.ts` holds the same invariant for the SDK path: a card that is
+ * already gone cannot settle a newer run for the same sub-chat. The native
+ * engine call carries the id too, but the engine accepting a stale or
+ * duplicated id must not flip a different approval out of waiting_approval.
+ */
+const pendingNativeApprovals = new Map<string, string>()
+
 function registerTurn(subChatId: string): {
   cancelled: boolean
   completed: boolean
@@ -59,12 +73,7 @@ function registerTurn(subChatId: string): {
     // Only mark the replaced turn cancelled while it is still producing; a
     // completed turn keeps its real outcome through the finally block.
     if (!existing.completed) {
-      existing.cancelled = true
-      try {
-        existing.cancelRemote()
-      } catch {
-        // Superseded turn already gone; the new turn proceeds.
-      }
+      cancelTurn(existing)
     }
   }
   const turn = { cancelled: false, completed: false, cancelRemote: () => {} }
@@ -72,11 +81,55 @@ function registerTurn(subChatId: string): {
   return turn
 }
 
+/**
+ * Mark a turn cancelled and ask the remote to stop. The callers check
+ * `completed` first, because a turn the daemon already ended keeps its real
+ * outcome, and the remote call is best-effort: a turn that is already gone
+ * leaves nothing to ask.
+ */
+function cancelTurn(turn: { cancelled: boolean; cancelRemote: () => void }): void {
+  turn.cancelled = true
+  try {
+    turn.cancelRemote()
+  } catch {
+    // The remote is already gone.
+  }
+}
+
 type NativeEmit = (chunk: UIMessageChunk) => void
 type NativeFail = (errorText: string) => void
 
 // The chat handler below stays a flat sequence of these steps so its shape is
 // readable at a glance; each step owns its own failure handling.
+
+/**
+ * The mode floor on the native transport.
+ *
+ * The stock bridge advertises no `permissions` capability, so it never issues a
+ * permission prompt and this app gets no per-action callback to route through the
+ * gate in `src/main/lib/permissions/`. Plan and ask both promise restraint that
+ * nothing here can deliver, so the floor is enforced by refusing them, and the
+ * reasoning and the refusal text live in
+ * `src/shared/permissions/native-mode-floor.ts` where a test can reach them. When
+ * the bridge grows that capability this is the step that starts evaluating
+ * requests instead of refusing them.
+ *
+ * The gap is wider than the two refusals and is recorded rather than hidden. No
+ * mode gets app-gate enforcement on this transport, so the classes edit, agent and
+ * turbo promise to block are unenforced here exactly as they are for the
+ * `engine-only` backends in `src/shared/provider-capabilities.ts`, and
+ * `.dump/app/decisions/2026-09-13-permission-floor.md` names them as decision 25.
+ * The transport picker in the chat input says so where a user chooses it.
+ *
+ * Named step, same shape as the rest of this handler: it owns its own failure
+ * handling so the handler stays flat and the complexity gate stays green.
+ */
+function enforceNativeModeFloor(mode: AgentMode, fail: NativeFail): boolean {
+  const refusal = nativeModeRefusal(mode)
+  if (refusal === null) return true
+  fail(refusal)
+  return false
+}
 
 async function acquireNativeClient(fail: NativeFail): Promise<JcodeClient | null> {
   try {
@@ -185,6 +238,8 @@ function finishNativeTurnBookkeeping(
   runHandle?.settle(turn.cancelled && !turn.completed ? "cancelled" : undefined)
   if (activeTurns.get(subChatId) === turn) {
     activeTurns.delete(subChatId)
+    // This turn's card is over: a late answer to it must not settle anything.
+    pendingNativeApprovals.delete(subChatId)
   }
   try {
     // Clear the marker only when it is still this turn's: a replacement turn
@@ -208,7 +263,7 @@ export const runtimeRouter = router({
         prompt: z.string(),
         cwd: z.string(),
         projectPath: z.string().optional(),
-        mode: z.enum(["plan", "ask", "edit", "agent", "turbo"]).default("agent"),
+        mode: agentModeSchema.default(DEFAULT_AGENT_MODE),
         model: z.string().optional(),
         customToken: z.string().optional(),
         customBaseUrl: z.string().optional(),
@@ -217,9 +272,23 @@ export const runtimeRouter = router({
     )
     .subscription(({ input }) => {
       return observable<UIMessageChunk>((emit) => {
+        const subId = input.subChatId.slice(-8)
+        // The mode floor runs before registerTurn: a refused plan or ask
+        // request must not cancel the native turn it replaces, and the refusal
+        // emits directly because nothing else of this turn exists yet to tear
+        // down.
+        const refuse = (errorText: string) => {
+          try {
+            emit.next({ type: "error", errorText })
+            emit.complete()
+          } catch {
+            // The subscriber is already gone; there is nothing to deliver.
+          }
+        }
+        if (!enforceNativeModeFloor(input.mode, refuse)) return () => {}
+
         const turn = registerTurn(input.subChatId)
         const translator = new NativeTranslator()
-        const subId = input.subChatId.slice(-8)
         let isActive = true
         // Run record for this turn (roadmap step 07). Created once the turn
         // is accepted, observed on every emitted chunk, settled in the finally.
@@ -227,6 +296,17 @@ export const runtimeRouter = router({
 
         const safeEmit = (chunk: UIMessageChunk) => {
           if (!isActive || turn.cancelled) return
+          // A native permission card is the run's wait, keyed on its request id,
+          // so respondApproval settles only the approval it actually answers.
+          if (
+            chunk.type === "ask-user-question" &&
+            chunk.toolUseId.startsWith(NATIVE_QUESTION_PREFIX)
+          ) {
+            pendingNativeApprovals.set(
+              input.subChatId,
+              chunk.toolUseId.slice(NATIVE_QUESTION_PREFIX.length),
+            )
+          }
           if (runHandle) runHandle.observeChunk(chunk)
           try {
             emit.next(chunk)
@@ -257,15 +337,6 @@ export const runtimeRouter = router({
         void (async () => {
           const streamId = crypto.randomUUID()
           try {
-            if (input.mode === "plan") {
-              fail(
-                "Plan mode is not enforced on the native runtime yet (read-only " +
-                  "execution arrives with the permission policy). Use the legacy " +
-                  "transport for plan mode.",
-              )
-              return
-            }
-
             runHandle = getRunStore().startRun({
               subChatId: input.subChatId,
               engine: "native",
@@ -357,12 +428,7 @@ export const runtimeRouter = router({
           // daemon has ended the turn, the finally block preserves the real
           // outcome and there is nothing left to cancel remotely either.
           if (!turn.completed) {
-            turn.cancelled = true
-            try {
-              turn.cancelRemote()
-            } catch {
-              // Client already gone.
-            }
+            cancelTurn(turn)
           }
         }
       })
@@ -376,12 +442,7 @@ export const runtimeRouter = router({
       return { cancelled: false }
     }
     if (turn) {
-      turn.cancelled = true
-      try {
-        turn.cancelRemote()
-      } catch {
-        // Remote already gone.
-      }
+      cancelTurn(turn)
       activeTurns.delete(input.subChatId)
     }
     // Settling the persisted run counts as a cancel too, so a caller after a
@@ -400,6 +461,12 @@ export const runtimeRouter = router({
         subChatId: z.string(),
         requestId: z.string(),
         approved: z.boolean(),
+        /**
+         * The picked labels, forwarded so a Deny pick can be read. The card
+         * submits `approved: true` whichever option the user takes, so the
+         * boolean on its own would answer allow to a refusal.
+         */
+        updatedInput: z.unknown().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -411,15 +478,20 @@ export const runtimeRouter = router({
       } catch {
         return { ok: false, reason: "unavailable" as const }
       }
+      const approved = !approvalWasDenied({
+        approved: input.approved,
+        ...(input.updatedInput === undefined ? {} : { updatedInput: input.updatedInput }),
+      })
       try {
-        await client.respondToPermission(
-          sessionId,
-          input.requestId,
-          input.approved ? "allow" : "deny",
-        )
-        // The engine accepted the answer, so the run leaves waiting_approval.
-        // A failed or stale answer must not clear the pending state.
-        getRunStore().resolveApprovalForSubChat(input.subChatId, input.approved)
+        await client.respondToPermission(sessionId, input.requestId, approved ? "allow" : "deny")
+        // Settle the run only for the approval it actually answered. The
+        // engine accepting a stale or duplicated id must not flip a different
+        // approval out of waiting_approval, which the legacy registry already
+        // forbids for the SDK path.
+        if (pendingNativeApprovals.get(input.subChatId) === input.requestId) {
+          pendingNativeApprovals.delete(input.subChatId)
+          getRunStore().resolveApprovalForSubChat(input.subChatId, approved)
+        }
         return { ok: true }
       } catch {
         // Stock bridge has no permissions capability yet; the call path is
