@@ -538,6 +538,20 @@ describe("destructive patterns", () => {
     )
   })
 
+  it("ignores a paren a list argument carries in a string", () => {
+    // The literal `(` is data the call passes, not syntax of the call, so it
+    // must not stop the search for the paren that closes `run(`.
+    expect(
+      bash("python -c \"import subprocess; subprocess.run(['rm','-rf','/etc','('])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    expect(bash("python -c \"import subprocess; subprocess.run(['echo','a)b'])\"").ruleId).toBe(
+      "shell-command",
+    )
+    expect(
+      bash("python -c \"import subprocess; subprocess.run(['rm', '-rf', '/etc', '\\''])\"").ruleId,
+    ).toBe("recursive-force-delete")
+  })
+
   it("reads a delete out of an interpreter payload for the critical-path breaker", () => {
     expect(critical("python -c \"import shutil; shutil.rmtree('/')\"")?.id).toBe("critical-delete")
     expect(
@@ -782,6 +796,26 @@ describe("exfiltration", () => {
     expect(classify("Read", { file_path: "/home/u/keys/id_ed25519" }).ruleId).toBe(
       "secret-read.private-key",
     )
+  })
+
+  it("treats a write to a secret path as an overwrite, not a read", () => {
+    // The write replaces the file's content with what the model already holds
+    // and reads nothing back, so it is the destructive protected overwrite the
+    // shell redirect carries, which stays allow-listable.
+    const result = classify("Write", { file_path: "/home/u/.env" })
+    expect(result.ruleClass).toBe("destructive")
+    expect(result.ruleId).toBe("protected-path-overwrite")
+    expect(classify("Write", { file_path: "/work/mausCode/.env" }).ruleClass).toBe("destructive")
+  })
+
+  it("keeps an edit to a secret path a read, because its old string is in the context", () => {
+    const result = classify("Edit", {
+      file_path: "/home/u/.ssh/config",
+      old_string: "a",
+      new_string: "b",
+    })
+    expect(result.ruleClass).toBe("exfiltration")
+    expect(result.ruleId).toBe("secret-read.ssh-directory")
   })
 
   const secretCommands: Array<[string, string]> = [

@@ -1825,10 +1825,37 @@ function spawnedArgvCommand(command: string, segments: CommandSegment[]): string
 }
 
 /** The index of the paren that closes the one at `open`, or -1 when it never does. */
+/**
+ * The index of the paren that closes the one at `open`, or -1 when it never
+ * does. A paren inside a quoted literal is the character the string carries,
+ * not the syntax the call is made of, so the depth only counts where the
+ * payload's own grammar counts it: outside quotes, past escapes. A `(` inside
+ * a list argument used to deepen the count, so the call's real closer was
+ * never found, its argv was never read, and the delete it runs hid behind
+ * approval.
+ */
 function matchParen(text: string, open: number): number {
   let depth = 0
+  let quote: string | null = null
+  let escaped = false
   for (let i = open; i < text.length; i++) {
     const ch = text[i]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (ch === "\\") {
+      escaped = true
+      continue
+    }
+    if (quote !== null) {
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === "`") {
+      quote = ch
+      continue
+    }
     if (ch === "(") depth += 1
     else if (ch === ")") {
       depth -= 1
@@ -2221,6 +2248,19 @@ export function classifyToolAction(
 ): ClassifiedAction {
   const secret = findSecretPath(toolInput)
   if (secret) {
+    // A write replaces the file's content with what the model already holds
+    // and reads nothing back, so it is the protected overwrite decision 15
+    // keeps for shell redirects, not a leak, and it stays allow-listable the
+    // way a project .env edit has to be. An edit, by contrast, can only match
+    // its old string if the file's content already sits in the context, so it
+    // denies the leak that already happened, the way the read does.
+    if (toolName === "Write") {
+      return {
+        ruleClass: "destructive",
+        ruleId: "protected-path-overwrite",
+        reason: `${toolName} overwrites ${secret.path}, which holds a secret`,
+      }
+    }
     return {
       ruleClass: "exfiltration",
       ruleId: `secret-read.${secret.id}`,

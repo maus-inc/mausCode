@@ -1128,6 +1128,36 @@ quotes. The substitution's own closer stays reachable, because opening `$(`
 resets the quote state, so a `)` that closes the context is always
 unquoted.
 
+## Decision 45: a paren inside a string is data, and a write is not a read (added 2026-09-20)
+
+The review round that read decisions 43 and 44 found two more, each verified
+against the built classifier.
+
+**The argv matcher now knows which parens are syntax.** Decision 42 taught the
+spawned-argv reader to take only the list between the call's own parens, but
+the matcher that finds the closer counted a `(` it met anywhere, so a literal
+paren carried in a list argument, `subprocess.run(['rm','-rf','/etc','('])`,
+deepened the count and the real closer was never found. With no list, the argv
+was never read, and the delete it runs read as an ordinary shell command. The
+matcher now tracks the quote and the backslash the way the payload's own
+grammar does: a paren the string carries is an ordinary character, and only an
+unquoted one moves the depth. The same guard reads a backslash-escaped quote,
+so a `'` inside a string does not open a quote the payload never opened.
+
+**A write to a secret path is an overwrite, and an edit is still a read.**
+The tool path denied every tool that named a secret with the exfiltration
+class, read and write alike, under the rule `secret-read`. But decision 15
+already said, for the shell path, that a write to a secret is not a read: the
+write replaces the file's content with what the model already holds and reads
+nothing back, so `echo key > ~/.ssh/authorized_keys` is a protected overwrite,
+not a leak. The tool path had not kept that distinction. `Write` now carries
+the destructive `protected-path-overwrite` the shell redirect carries, which
+denies in Agent mode and stays allow-listable, so a project `.env` the agent is
+meant to manage is not locked behind the one class no allow-list can open.
+`Edit` stays exfiltration, because its old string can only match if the file's
+content already sits in the model's context, and that is the leak the rule
+denies. `Read` is unchanged.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
