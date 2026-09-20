@@ -1087,6 +1087,35 @@ a secret out without naming the backend, while the same document's checklist
 says every backend but Claude is engine-only; the row now says the rows are
 the Claude backend and points at the item that names the reach.
 
+## Decision 43: the paren closes what it opened, and the wrapper takes its operand (added 2026-09-20)
+
+The review round that read decision 42 found three more, each verified
+against the built classifier.
+
+**A nested subshell closes its own paren.** The `$()` context closed at the
+first `)` it saw, so in `echo "$( (echo ok); rm -rf / )"` the subshell's
+`)` restored the outer double quote, and the `; rm -rf /` after it read as
+a quoted stretch of the segment that starts at `echo`. The context now
+carries the paren depth inside it: the `$(` opens at depth one, an unquoted
+`(` deepens it, and only the `)` that brings the depth back to zero closes
+the context and hands the quote state back.
+
+**The wrapper's operand goes with the wrapper.** The carried-executable
+finder skipped a wrapper but left its operand standing, so in
+`find . -exec chroot mnt /tmp/run.sh {} +` the relative root `mnt` read as
+the executable, and neither the path check nor the script-suffix check saw
+the script the predicate runs per matched file. The finder now consumes the
+operand with the wrapper the way the verb finder does, so `chroot mnt` and
+`su root` step over their operands and the check reaches `/tmp/run.sh`.
+
+**A quoted IPv6 literal is a host in the same argument position.** The
+quoted-name forms knew the dotted label and the single label, so
+`socket.create_connection(('::1', 443))` and
+`socket.create_connection(('2001:db8::1', 443))` fell to approval, which
+Agent mode allows without a card. A quoted hex-and-colon name now counts in
+the argument position the connect calls take it, before the comma or the
+closing paren, loopback and non-loopback alike.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

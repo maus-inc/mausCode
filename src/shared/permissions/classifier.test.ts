@@ -113,6 +113,11 @@ describe("destructive patterns", () => {
     ["recursive-force-delete", 'echo "$(echo ok && rm -rf /)"'],
     ["recursive-force-delete", "echo `echo ok; rm -rf /`"],
     ["recursive-force-delete", 'echo "`echo ok; rm -rf /`"'],
+    // A subshell inside the substitution closes its own paren, and only the
+    // paren that matches the $() ends the context, so the delete after the
+    // subshell still reaches the rule.
+    ["recursive-force-delete", 'echo "$( (echo ok); rm -rf / )"'],
+    ["recursive-force-delete", 'echo "$( (echo ok); rm -rf /etc )"'],
     // The substitution's closing paren ends its context and hands the quote
     // state back, so an operator after the span still delimits.
     ["recursive-force-delete", 'echo "a$(b)" ; rm -rf /'],
@@ -128,6 +133,10 @@ describe("destructive patterns", () => {
     // the path and the script suffix included.
     ["bulk-find-delete", "find . -exec env FOO=1 /tmp/run.sh {} +"],
     ["bulk-find-delete", "find . -exec env FOO=1 run.sh {} +"],
+    // The wrapper's operand goes with the wrapper, so the executable it
+    // carries is the word the operand stands before.
+    ["bulk-find-delete", "find . -exec chroot mnt /tmp/run.sh {} +"],
+    ["bulk-find-delete", "find . -exec su root /tmp/run.sh {} +"],
     ["destructive-sql", 'psql -c "DROP TABLE users"'],
     ["destructive-sql", 'sqlite3 db "TRUNCATE DATABASE prod"'],
     ["destructive-sql", 'psql -c "TRUNCATE users"'],
@@ -644,6 +653,10 @@ describe("network patterns", () => {
     // name is as reachable a target as a dotted one.
     "python3 -c \"import socket; socket.create_connection(('evil',443))\"",
     "python -c \"import http.client; http.client.HTTPConnection('localhost')\"",
+    // A quoted IPv6 literal is a host in the same argument position, loopback
+    // and non-loopback alike.
+    "python3 -c \"import socket; socket.create_connection(('::1',443))\"",
+    "python3 -c \"import socket; socket.create_connection(('2001:db8::1',443))\"",
   ])(
     "classifies an interpreter egress payload `%s` as network",
     // A payload opens a channel with no network verb on the line, so the rule

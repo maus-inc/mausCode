@@ -505,9 +505,12 @@ interface SegmentScan {
    * The substitution contexts open at this point, innermost last. The double
    * quote that opened a substitution does not shield the operators inside
    * it, and the operators inside delimit the commands the substitution runs.
-   * The closer hands back the quote state the context interrupted.
+   * The closer hands back the quote state the context interrupted. A `$(`
+   * context also carries the paren depth inside it, because a nested subshell
+   * closes its own `)` and only the `)` that brings the depth back to zero
+   * closes the substitution.
    */
-  subst: Array<{ kind: "$" | "`"; outerQuote: string | null }>
+  subst: Array<{ kind: "$" | "`"; outerQuote: string | null; depth: number }>
 }
 
 const SEGMENT_BREAKERS = new Set([";", "\n", "(", ")"])
@@ -552,36 +555,55 @@ function stepSegmentScan(command: string, i: number, scan: SegmentScan): number 
  * a `)` with no `$(` open is the ordinary syntax it always was, and a backtick
  * never closes a `$(` context or vice versa.
  */
-function closeSubstitution(scan: SegmentScan, ch: string): number {
+/**
+ * A closing paren. One it brings the active `$()` context's paren depth back
+ * to zero ends the context and hands back the quote state it interrupted,
+ * because that is the `)` that matches the `$(`. Any other `)` is the closer
+ * of a nested subshell, or of no subshell at all, and is the boundary it
+ * always was without touching the context.
+ */
+function closeParen(scan: SegmentScan): number {
   const top = scan.subst.at(-1)
-  if (ch === ")" && top?.kind === "$") {
+  if (top !== undefined && top.kind === "$") {
+    top.depth -= 1
+    if (top.depth === 0) {
+      scan.subst.pop()
+      scan.quote = top.outerQuote
+    }
+  }
+  return 1
+}
+
+/** A backtick closes the context it opened, or opens one of its own. */
+function stepBacktick(scan: SegmentScan): number {
+  const top = scan.subst.at(-1)
+  if (top !== undefined && top.kind === "`") {
     scan.subst.pop()
     scan.quote = top.outerQuote
-    return 1
+  } else {
+    scan.subst.push({ kind: "`", outerQuote: scan.quote, depth: 0 })
+    scan.quote = null
   }
-  if (ch === "`" && top?.kind === "`") {
-    scan.subst.pop()
-    scan.quote = top.outerQuote
-    return 1
-  }
-  return 0
+  return 1
+}
+
+/** An opening paren deepens the active `$()` context, so its real closer is the matching one. */
+function deepenSubstitution(scan: SegmentScan, ch: string): void {
+  const top = scan.subst.at(-1)
+  if (ch === "(" && top !== undefined && top.kind === "$") top.depth += 1
 }
 
 function unquotedBoundary(command: string, i: number, scan: SegmentScan): number {
   if (scan.quote === "'") return 0
   const ch = command[i]
-  const closed = closeSubstitution(scan, ch)
-  if (closed) return closed
-  if (ch === "`") {
-    scan.subst.push({ kind: "`", outerQuote: scan.quote })
-    scan.quote = null
-    return 1
-  }
+  if (ch === ")") return closeParen(scan)
+  if (ch === "`") return stepBacktick(scan)
   if (ch === "$" && command[i + 1] === "(") {
-    scan.subst.push({ kind: "$", outerQuote: scan.quote })
+    scan.subst.push({ kind: "$", outerQuote: scan.quote, depth: 1 })
     scan.quote = null
     return 2
   }
+  deepenSubstitution(scan, ch)
   // Inside double quotes the shell runs the substitutions, and only them.
   if (scan.quote === '"') return 0
   if (SEGMENT_BREAKERS.has(ch)) return 1
@@ -1235,7 +1257,13 @@ function carriedExecutable(predicate: string[]): string | null {
     }
     const base = word.split("/").pop() ?? word
     if (DURATION_WORD.test(base)) continue
-    if (WRAPPER_VERBS.has(resolveBracketedWord(base))) continue
+    // A wrapper carries an operand the shell consumes with it, `chroot mnt`
+    // or `su root`, so the operand goes with the wrapper rather than reading
+    // as the executable.
+    if (WRAPPER_VERBS.has(resolveBracketedWord(base))) {
+      index += wordsConsumed(word, predicate, index)
+      continue
+    }
     return word
   }
   return null
@@ -1612,7 +1640,7 @@ const INTERPRETER_NETWORK_CALLS = [
 /**
  * A host a payload names. A dotted identifier is not enough on its own, because
  * every member access in a payload looks like one, so the name has to be quoted,
- * carry a scheme, or be an address. A quoted single label counts only in the
+ * carry a scheme, or be an address. A quoted name counts only in the
  * argument position the connect calls take it, before a `,` or a `)`:
  * create_connection reads a (host, port) pair and HTTPConnection a lone host,
  * and a local service name is as reachable a target as a dotted one. The trade
@@ -1624,13 +1652,15 @@ const INTERPRETER_NETWORK_CALLS = [
 const PAYLOAD_HOST_ADDRESS = /:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}\b/
 const PAYLOAD_HOST_DOTTED = /["'`][a-z0-9-]+(?:\.[a-z0-9-]+)+["'`]/
 const PAYLOAD_HOST_LABEL = /["'`][a-z0-9-]+["'`]\s*[,)]/
+const PAYLOAD_HOST_V6 = /["'`][0-9a-f]*:[0-9a-f:.]*["'`]\s*[,)]/
 
 /** True when a payload names a host by a scheme, an address, or a quoted name. */
 function payloadNamesHost(lower: string): boolean {
   return (
     PAYLOAD_HOST_ADDRESS.test(lower) ||
     PAYLOAD_HOST_DOTTED.test(lower) ||
-    PAYLOAD_HOST_LABEL.test(lower)
+    PAYLOAD_HOST_LABEL.test(lower) ||
+    PAYLOAD_HOST_V6.test(lower)
   )
 }
 
