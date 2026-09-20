@@ -306,6 +306,11 @@ describe("destructive patterns", () => {
     ["host-root-mount", "docker run -v~:/h alpine sh"],
     ["host-root-mount", "docker run -v/etc:/h alpine sh"],
     ["host-root-mount", "docker run -itv/home:/h alpine sh"],
+    // A `dir/..` pair in the source is the same mount, so the prefix read
+    // resolves the path the way the redirect read does.
+    ["host-root-mount", "docker run -v /tmp/../:/host alpine rm -rf /host"],
+    ["host-root-mount", "docker run -v /tmp/../../:/host alpine rm -rf /host"],
+    ["host-root-mount", "docker run --mount=type=bind,source=/tmp/../,target=/host alpine sh"],
     // A copy or a move writes its last argument, so that is the one that counts.
     ["disk-or-power", "cp backup.img /dev/sda"],
     ["disk-or-power", "mv image.iso /dev/sdb"],
@@ -1387,6 +1392,9 @@ describe("a device named as a source rather than a target", () => {
       "docker run --mount=type=volume,source=cache,target=/cache alpine sh",
       "docker run --mount type=bind,source=./src,target=/app alpine sh",
       "docker run -e FOO=bar:/baz alpine sh",
+      // Dot segments that resolve to an ordinary directory stay ordinary.
+      "docker run -v /tmp/./:/app alpine sh",
+      "docker run -v /tmp/../tmp:/app alpine sh",
     ]) {
       expect(bash(command).ruleClass, command).not.toBe("destructive")
     }

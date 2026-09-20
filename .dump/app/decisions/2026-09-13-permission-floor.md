@@ -1203,6 +1203,24 @@ direction, and the cost of the text boundary decision 15 already accepted:
 the gate reads the payload as text, and a mention it cannot separate from a
 call is denied rather than let through.
 
+## Decision 47: a mount source reached through a dot pair is the same mount (added 2026-09-20)
+
+The review round that read decision 46 found a spelling the host mount check
+did not know. `docker run -v /tmp/../:/host alpine rm -rf /host` bind-mounts
+the host's root, because `/tmp/../` is `/`, but the source is compared as
+written, and `/tmp/../` neither equals a listed host path nor starts with
+one of them. The container's pull is a network rule that turbo allows, so the
+mount is the only thing that catches the delete it carries, and the dot pair
+walked past it.
+
+The prefix read now resolves the path before it compares, the way
+`isProtectedLocation` already does for a redirect into a protected location:
+`/tmp/../` and `/tmp/../../` resolve to `/` and name the root, and the
+`--mount` spelling carries the same source through the same read. A dot pair
+that resolves to an ordinary directory, `/tmp/../tmp`, stays where it was,
+and a relative source the classifier cannot resolve from one command string
+stays with the residual gap.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

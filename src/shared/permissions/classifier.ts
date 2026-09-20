@@ -1464,7 +1464,11 @@ function hasHostRootMount(segments: CommandSegment[]): boolean {
 function isHostMountSpec(word: string): boolean {
   const host = mountHostOf(word)
   if (host === null || host.length === 0) return false
-  return HOST_MOUNT_PATHS.some((path) => host === path || host.startsWith(`${path}/`))
+  // A host path reached through a `dir/..` pair is the same mount, so the
+  // check resolves the path before it reads the prefix, the way
+  // isProtectedLocation does for a redirect.
+  const path = resolveDotSegments(host)
+  return HOST_MOUNT_PATHS.some((p) => path === p || path.startsWith(`${p}/`))
 }
 
 /**
