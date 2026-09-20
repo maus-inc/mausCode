@@ -99,6 +99,36 @@ export function getAuthManager(): AuthManager {
 }
 
 // Handle auth code from deep link (exported for IPC handlers)
+/**
+ * Writes the control-plane token cookie for this run.
+ *
+ * With no `expirationDate` Electron keeps this a session cookie, so the token
+ * is never written to the cookie store on disk. The app re-issues it at
+ * startup from the encrypted session and again whenever the token refreshes,
+ * so nothing needs to survive a restart. A token that has already expired is
+ * not written at all.
+ */
+async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<void> {
+  const apiBase = getBaseUrl()
+  if (!apiBase) return
+  const expiry = new Date(expiresAt).getTime()
+  if (Number.isFinite(expiry) && expiry <= Date.now()) return
+  try {
+    await session.fromPartition("persist:main").cookies.set({
+      url: apiBase,
+      name: "x-desktop-token",
+      value: token,
+      httpOnly: false,
+      secure: apiBase.startsWith("https"),
+      sameSite: "lax" as const,
+    })
+  } catch (error) {
+    // The cookie carries control-plane requests; the session itself is already
+    // saved in the store, and the next refresh retries this.
+    console.warn("[Auth] Desktop token cookie could not be set:", error)
+  }
+}
+
 export async function handleAuthCode(code: string): Promise<void> {
   console.log("[Auth] Handling auth code:", `${code.slice(0, 8)}...`)
 
@@ -119,27 +149,17 @@ export async function handleAuthCode(code: string): Promise<void> {
       console.warn("[Auth] Failed to fetch user plan for analytics:", e)
     }
 
-    // Set desktop token cookie using persist:main partition (control plane only)
+    // Control-plane token for this run, in the persist:main partition. Remove
+    // any cookie an earlier version wrote with an expiry first, so no stale
+    // token stays behind in the on-disk cookie store.
     const apiBase = getBaseUrl()
     if (apiBase) {
-      const ses = session.fromPartition("persist:main")
-      try {
-        // First remove any existing cookie to avoid HttpOnly conflict
-        await ses.cookies.remove(apiBase, "x-desktop-token")
-        await ses.cookies.set({
-          url: apiBase,
-          name: "x-desktop-token",
-          value: authData.token,
-          expirationDate: Math.floor(new Date(authData.expiresAt).getTime() / 1000),
-          httpOnly: false,
-          secure: apiBase.startsWith("https"),
-          sameSite: "lax" as const,
-        })
-        console.log("[Auth] Desktop token cookie set")
-      } catch (cookieError) {
-        // Cookie setting is optional - auth data is already saved to disk
-        console.warn("[Auth] Cookie set failed (non-critical):", cookieError)
-      }
+      await session
+        .fromPartition("persist:main")
+        .cookies.remove(apiBase, "x-desktop-token")
+        .catch(() => {})
+      await setDesktopTokenCookie(authData.token, authData.expiresAt)
+      console.log("[Auth] Desktop token cookie set")
     }
 
     // Notify all windows and reload them to show app
@@ -914,24 +934,25 @@ if (gotTheLock) {
     // Set up callback to update cookie when token is refreshed
     authManager.setOnTokenRefresh(async (authData) => {
       console.log("[Auth] Token refreshed, updating cookie...")
-      const apiBase = getBaseUrl()
-      if (!apiBase) return
-      const ses = session.fromPartition("persist:main")
-      try {
-        await ses.cookies.set({
-          url: apiBase,
-          name: "x-desktop-token",
-          value: authData.token,
-          expirationDate: Math.floor(new Date(authData.expiresAt).getTime() / 1000),
-          httpOnly: false,
-          secure: apiBase.startsWith("https"),
-          sameSite: "lax" as const,
-        })
-        console.log("[Auth] Desktop token cookie updated after refresh")
-      } catch (err) {
-        console.error("[Auth] Failed to update cookie:", err)
-      }
+      await setDesktopTokenCookie(authData.token, authData.expiresAt)
     })
+
+    // A session cookie from the previous run is gone, so issue this run's
+    // cookie from the saved session as the app starts. When the saved token is
+    // already near expiry this refreshes it and the callback above writes the
+    // new value.
+    if (authManager.isAuthenticated()) {
+      void authManager
+        .getValidToken()
+        .then((token) => {
+          const expiresAt = authManager.getTokenExpiry()
+          if (token && expiresAt) return setDesktopTokenCookie(token, expiresAt)
+          return undefined
+        })
+        .catch((error) => {
+          console.warn("[Auth] Could not restore the desktop token cookie:", error)
+        })
+    }
 
     // Initialize database
     try {

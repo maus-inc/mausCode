@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronLeft, Server as ServerIcon } from "lucide-react"
+import { ChevronLeft, KeyRound as KeyFilledIcon, Server as ServerIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
   BrainFilledIcon,
@@ -93,6 +93,11 @@ const ADVANCED_TABS_BASE = [
     id: "plugins" as SettingsTab,
     label: "Plugins",
     icon: PluginFilledIcon,
+  },
+  {
+    id: "credentials" as SettingsTab,
+    label: "Credential storage",
+    icon: KeyFilledIcon,
   },
 ]
 

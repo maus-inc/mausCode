@@ -27,6 +27,8 @@ export interface NativeCredentialRequest {
 
 export interface NativeCredentialResult {
   providers: string[]
+  /** Providers whose key was held in the runtime's memory, not on disk. */
+  ephemeralProviders: string[]
 }
 
 /** Typed credential failure so the router maps it to an honest chunk. */
@@ -65,7 +67,12 @@ export function getActiveAnthropicToken(): string | null {
 export async function applyNativeCredentials(
   client: JcodeClient,
   request: NativeCredentialRequest,
+  sessionId?: string,
 ): Promise<NativeCredentialResult> {
+  // The runtime's own provider store is plaintext on disk. When the daemon
+  // advertises the memory-only handoff, the key stays in its memory instead and
+  // nothing is written at all.
+  const inMemory = sessionId !== undefined && client.supports("ephemeral_api_key")
   if (request.customBaseUrl) {
     // Daemon-level endpoints only (see endpoints.ts): accept the chat's custom
     // endpoint when the daemon will actually honor it — an explicitly
@@ -83,19 +90,45 @@ export async function applyNativeCredentials(
     }
   }
   const providers: string[] = []
+  const ephemeralProviders: string[] = []
   const anthropicToken = getActiveAnthropicToken()
   if (anthropicToken) {
-    await client.setApiKey("anthropic-api", anthropicToken)
+    if (inMemory && sessionId) {
+      await client.setEphemeralApiKey(sessionId, "anthropic-api", anthropicToken)
+      ephemeralProviders.push("anthropic-api")
+    } else {
+      await client.setApiKey("anthropic-api", anthropicToken)
+    }
     providers.push("anthropic-api")
   } else if (process.env.ANTHROPIC_API_KEY) {
     // The daemon inherits process env and resolves ANTHROPIC_API_KEY itself.
     providers.push("anthropic-api (env)")
   }
   if (request.customToken) {
-    await client.setApiKey("openai-api", request.customToken)
+    if (inMemory && sessionId) {
+      await client.setEphemeralApiKey(sessionId, "openai-api", request.customToken)
+      ephemeralProviders.push("openai-api")
+    } else {
+      await client.setApiKey("openai-api", request.customToken)
+    }
     providers.push("openai-api")
   } else if (process.env.OPENAI_API_KEY) {
     providers.push("openai-api (env)")
   }
-  return { providers }
+  return { providers, ephemeralProviders }
+}
+
+/**
+ * Release keys that were held in the runtime's memory for one session. A
+ * failure is harmless: the key never reached disk, and the process drops it
+ * when the daemon exits. Never deletes a stored credential.
+ */
+export async function clearNativeEphemeralCredentials(
+  client: JcodeClient,
+  sessionId: string,
+  providers: readonly string[],
+): Promise<void> {
+  await Promise.all(
+    providers.map((provider) => client.clearEphemeralApiKey(sessionId, provider).catch(() => {})),
+  )
 }

@@ -3,6 +3,7 @@ import { useEffect } from "react"
 import { AgentsAppearanceTab } from "../../components/dialogs/settings-tabs/agents-appearance-tab"
 import { AgentsBackendsTab } from "../../components/dialogs/settings-tabs/agents-backends-tab"
 import { AgentsBetaTab } from "../../components/dialogs/settings-tabs/agents-beta-tab"
+import { AgentsCredentialStorageTab } from "../../components/dialogs/settings-tabs/agents-credential-storage-tab"
 import { AgentsCustomAgentsTab } from "../../components/dialogs/settings-tabs/agents-custom-agents-tab"
 import { AgentsDebugTab } from "../../components/dialogs/settings-tabs/agents-debug-tab"
 import { AgentsKeyboardTab } from "../../components/dialogs/settings-tabs/agents-keyboard-tab"
@@ -51,6 +52,8 @@ export function SettingsContent() {
         return <AgentsModelsTab />
       case "backends":
         return <AgentsBackendsTab />
+      case "credentials":
+        return <AgentsCredentialStorageTab />
       case "skills":
         return <AgentsSkillsTab />
       case "agents":

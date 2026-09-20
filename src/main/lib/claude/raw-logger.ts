@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises"
 import { join } from "node:path"
 import { app } from "electron"
+import { redactRecord } from "../secret-storage/redact"
 
 // Check if logging is enabled (lazy check after app is ready)
 function isEnabled(): boolean {
@@ -105,9 +106,10 @@ export async function logRawClaudeMessage(sessionId: string, msg: unknown): Prom
       }
     }
 
+    // A raw message can carry a credential, and this file outlives the run.
     const entry = {
       timestamp: new Date().toISOString(),
-      data: msg,
+      data: redactRecord(msg),
     }
 
     if (!currentLogFile) {

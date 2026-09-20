@@ -2,6 +2,8 @@ use std::sync::{LazyLock, RwLock};
 
 use jcode_provider_metadata::{is_safe_env_file_name, is_safe_env_key_name};
 
+pub mod ephemeral;
+
 /// Fallback resolvers consulted by [`load_api_key_from_env_or_config`] after the
 /// environment and config-file lookups fail. Higher-level crates register
 /// resolvers at startup so this leaf crate does not need to depend on auth.
@@ -101,6 +103,12 @@ pub fn load_api_key_from_env_or_config(env_key: &str, file_name: &str) -> Option
     if let Ok(key) = std::env::var(env_key)
         && let Some(key) = clean_loaded_value(&key, env_key)
     {
+        return Some(key);
+    }
+
+    // A key held for one session in memory wins over the provider file, so a
+    // value left there by an earlier run cannot shadow what the client supplied.
+    if let Some(key) = ephemeral::lookup(env_key) {
         return Some(key);
     }
 

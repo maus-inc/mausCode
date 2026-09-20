@@ -104,7 +104,7 @@ export const subChatsRelations = relations(subChats, ({ one }) => ({
 // DEPRECATED: Use anthropicAccounts for multi-account support
 export const claudeCodeCredentials = sqliteTable("claude_code_credentials", {
   id: text("id").primaryKey().default("default"), // Single row, always "default"
-  oauthToken: text("oauth_token").notNull(), // Encrypted with safeStorage
+  oauthToken: text("oauth_token").notNull(), // Encrypted by src/main/lib/secret-storage
   connectedAt: integer("connected_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   userId: text("user_id"), // Desktop auth user ID (for reference)
 })
@@ -116,7 +116,7 @@ export const claudeCodeCredentials = sqliteTable("claude_code_credentials", {
 export const qwenCredentials = sqliteTable("qwen_credentials", {
   id: text("id").primaryKey().default("default"), // Single row, always "default"
   authType: text("auth_type").notNull().default("openai"),
-  apiKey: text("api_key").notNull(), // Encrypted with safeStorage (token-crypto)
+  apiKey: text("api_key").notNull(), // Encrypted by src/main/lib/secret-storage
   baseUrl: text("base_url"), // OpenAI-compatible endpoint override
   model: text("model"), // Default model id for this credential
   label: text("label"), // User-visible preset label (e.g. "Coding Plan (intl)")
@@ -279,7 +279,7 @@ export const anthropicAccounts = sqliteTable("anthropic_accounts", {
     .$defaultFn(() => createId()),
   email: text("email"), // User's email from OAuth (if available)
   displayName: text("display_name"), // User-editable label
-  oauthToken: text("oauth_token").notNull(), // Encrypted with safeStorage
+  oauthToken: text("oauth_token").notNull(), // Encrypted by src/main/lib/secret-storage
   connectedAt: integer("connected_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
   desktopUserId: text("desktop_user_id"), // Reference to mausCode control-plane user

@@ -10,12 +10,15 @@
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { app } from "electron"
+import { clearPrivateCredentialFilesQuietly } from "./credential-files"
 import { buildDaemonEndpointEnv, readEndpointSettings } from "./endpoints"
 import { RuntimeManager } from "./manager"
 
+export { clearPrivateCredentialFiles, privateCredentialDir } from "./credential-files"
 export type { NativeCredentialRequest, NativeCredentialResult } from "./credentials"
 export {
   applyNativeCredentials,
+  clearNativeEphemeralCredentials,
   getActiveAnthropicToken,
   NativeCredentialError,
 } from "./credentials"
@@ -47,8 +50,13 @@ function resolvePackagedBinary(): string | undefined {
 
 export function getRuntimeManager(): RuntimeManager {
   if (!manager) {
+    const jcodeHome = join(app.getPath("userData"), "maus-runtime")
+    // The runtime writes a key it is handed as a plaintext file in this home.
+    // Clear anything a previous run left before the daemon can read it; the app
+    // applies the credential again for every turn, so nothing needs to survive.
+    clearPrivateCredentialFilesQuietly(jcodeHome, "before starting the runtime")
     manager = new RuntimeManager({
-      jcodeHome: join(app.getPath("userData"), "maus-runtime"),
+      jcodeHome,
       packagedBinary: resolvePackagedBinary(),
       env: buildDaemonEndpointEnv(readEndpointSettings()),
     })
@@ -62,7 +70,9 @@ export function getRuntimeManager(): RuntimeManager {
 /** Best-effort daemon shutdown for app quit. */
 export async function shutdownRuntime(): Promise<void> {
   if (manager) {
+    const home = manager.jcodeHome
     await manager.shutdown()
+    clearPrivateCredentialFilesQuietly(home, "after stopping the runtime")
     manager = null
   }
 }

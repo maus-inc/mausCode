@@ -662,6 +662,28 @@ export class JcodeClient extends EventEmitter {
     await this.expectReply({ req: "clear_api_key", provider }, "credential_updated")
   }
 
+  /**
+   * Hold an API key for one session in memory only.
+   *
+   * Only meaningful when the server advertises the `ephemeral_api_key`
+   * capability; a runtime without it answers `unknown_request`. Unlike
+   * {@link setApiKey}, nothing is written to the provider store.
+   */
+  async setEphemeralApiKey(sessionId: string, provider: string, apiKey: string): Promise<void> {
+    await this.expectReply(
+      { req: "set_ephemeral_api_key", session_id: sessionId, provider, api_key: apiKey },
+      "credential_updated",
+    )
+  }
+
+  /** Drop an in-memory key. Never deletes a persisted credential. */
+  async clearEphemeralApiKey(sessionId: string, provider: string): Promise<void> {
+    await this.expectReply(
+      { req: "clear_ephemeral_api_key", session_id: sessionId, provider },
+      "credential_updated",
+    )
+  }
+
   async readFile(sessionId: string, path: string, maxBytes?: number): Promise<FileContent> {
     const frame = await this.expectReply(
       { req: "read_file", session_id: sessionId, path, max_bytes: maxBytes },

@@ -52,6 +52,31 @@ v0 reserves these names without defining payloads (each gets a follow-up change)
 - `maus.taskgraph` — subscribe/patch task DAG.
 - `maus.doctor` — structured diagnostics; secrets redacted by construction.
 
+### 3.1 Memory-only credentials (reserved)
+
+`set_api_key` persists a key into the runtime's owner-only provider store. A
+client that holds a key for one session only needs the value kept in memory:
+
+- `set_ephemeral_api_key` — `{session_id, provider, api_key}`. The runtime holds
+  the key in process memory, attributed to that session, and never writes it to
+  the provider store. It replies with `credential_updated`. It is advertised as
+  the `ephemeral_api_key` capability in `hello`, so a client that does not see
+  the capability never sends it.
+- `clear_ephemeral_api_key` — `{session_id, provider}`. Drops an in-memory key.
+  It never deletes a persisted credential, and a key set by another session is
+  left alone.
+
+A runtime that does not implement these answers `unknown_request` with the
+request name and keeps the connection open, which is how a client detects
+support when it has not read the `hello` capability list.
+
+The runtime's credential registry (`jcode-provider-env::ephemeral`) prefers a
+held key over the provider file, so a value written by an earlier run cannot
+shadow what the current session supplied. Wiring the harness API path through
+to that registry in the daemon process is the remaining runtime work; until a
+release carries it, mausCode clears the plaintext provider files around the
+daemon lifecycle instead (see `.dump/app/research/2026-09-13-secret-owners.md`).
+
 ## 4. Transports
 
 - Local: NDJSON over a Unix socket (named pipe on Windows). Socket paths are resolved

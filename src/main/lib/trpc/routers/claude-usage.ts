@@ -4,7 +4,7 @@
  * Transplanted from aadivar/1code (Apache-2.0, © the 1Code contributors) —
  * file/hunk-level port, not a merge. Adaptations for our tree:
  * - Credential source is the app's own Anthropic account store
- *   (`getActiveAnthropicToken`, safeStorage-backed) instead of shelling out
+ *   (`getActiveAnthropicToken`, secret-store-backed) instead of shelling out
  *   to the macOS `security` CLI for the Claude CLI keychain entry. Users
  *   without a stored app token get "Not connected" (honest; no silent
  *   keychain reach-around, no macOS-only shell-out).

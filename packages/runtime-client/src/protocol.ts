@@ -109,6 +109,8 @@ export type ApiRequest =
   | { req: "list_models"; session_id: string }
   | { req: "get_runtime_info"; session_id: string }
   | { req: "set_api_key"; provider: string; api_key: string }
+  | { req: "set_ephemeral_api_key"; session_id: string; provider: string; api_key: string }
+  | { req: "clear_ephemeral_api_key"; session_id: string; provider: string }
   | { req: "clear_api_key"; provider: string }
   | { req: "read_file"; session_id: string; path: string; max_bytes?: number }
   | { req: "find_files"; session_id: string; query: string; limit?: number }
@@ -313,6 +315,8 @@ export const KNOWN_REQUEST_KINDS = [
   "list_models",
   "get_runtime_info",
   "set_api_key",
+  "set_ephemeral_api_key",
+  "clear_ephemeral_api_key",
   "clear_api_key",
   "read_file",
   "find_files",

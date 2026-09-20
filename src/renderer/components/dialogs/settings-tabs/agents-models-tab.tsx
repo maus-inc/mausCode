@@ -425,7 +425,7 @@ export function AgentsModelsTab() {
   const codexLogoutMutation = trpc.codex.logout.useMutation()
   const trpcUtils = trpc.useUtils()
 
-  // Gemini API key state (encrypted via Electron safeStorage; never touches localStorage)
+  // Gemini API key state (encrypted by the app secret store; never touches localStorage)
   const { data: geminiAuth, isLoading: isGeminiAuthLoading } = trpc.gemini.getAuthStatus.useQuery()
   const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
   const setGeminiKeyMutation = trpc.gemini.setApiKey.useMutation()

@@ -2,6 +2,7 @@ import { app, type BrowserWindow } from "electron"
 import { type AuthData, AuthStore, type AuthUser } from "./auth-store"
 import { AUTH_SERVER_PORT, PROTOCOL } from "./constants"
 import { getApiUrl, isControlPlaneConfigured } from "./lib/config"
+import { getSecretStore } from "./lib/secret-storage"
 
 // API base URL comes from lib/config.ts (single source of truth).
 // Empty = local-only mode: sign-in is unavailable until the mausCode
@@ -14,7 +15,7 @@ export class AuthManager {
   private onTokenRefresh?: (authData: AuthData) => void
 
   constructor(isDev: boolean = false) {
-    this.store = new AuthStore(app.getPath("userData"))
+    this.store = new AuthStore(app.getPath("userData"), getSecretStore())
     this.isDev = isDev
 
     // Schedule refresh if already authenticated
@@ -169,6 +170,19 @@ export class AuthManager {
    */
   isAuthenticated(): boolean {
     return this.store.isAuthenticated()
+  }
+
+  /** When the current token stops being valid, or null when there is none. */
+  getTokenExpiry(): string | null {
+    return this.store.getTokenExpiry()
+  }
+
+  /**
+   * Concrete reason the saved session could not be read or written, if any.
+   * The text never contains a token.
+   */
+  lastError(): string | null {
+    return this.store.lastError()
   }
 
   /**
