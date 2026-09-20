@@ -992,6 +992,24 @@ run, the fully single-quoted one and the double-quoted one that holds no
 substitution, and it checks every occurrence, because the first can sit in a
 literal while a real one follows on the same line.
 
+**The substitution is a nested context, and the literal stretch respects it.**
+The next review round found the mirror pair of those mistakes, and both were
+real. A substitution inside double quotes left the outer quote state live
+across the `$(`, so the `;`, `&&` and `|` inside read as ordinary characters
+of the segment that starts at `echo`, and `echo "$(echo ok; rm -rf /)"` hid
+the delete the substitution runs. The walk now opens a context at each `$(`
+and backtick it runs, parks the interrupted quote state on the context, and
+hands it back at the closer, so the operators inside a substitution delimit
+the commands it runs the way the shell runs them, and an operator after the
+closed span still delimits. The mirror image was the raw check's literal
+stretch, which treated a double-quoted span that carried a substitution as
+entirely executable, so `echo "git branch -D docs $(date)"` — where the delete
+is the argument to echo and `date` is the only thing that runs — denied as the
+delete it prints. The stretch is now read per character from the same walk: a
+character is literal where the shell would print it without running it, inside
+single quotes or inside double quotes while no substitution is open, and a
+match is skipped only where every character of it is.
+
 ## Decision 40: a key is one spelling, and the reader says no to the rest (added 2026-09-20)
 
 The key segment reader concatenated whatever followed a quoted fragment, so
@@ -1003,6 +1021,37 @@ is not a dot or the end of the line is a malformed key. The spaces a key may
 sit in, at the line edges and around the dots, are skipped where they are
 legal and nowhere else, and a trailing dot with no segment after it is still
 the malformed path it is.
+
+## Decision 41: a host is a quoted label in argument position, and the predicate is tested on the word it runs (added 2026-09-20)
+
+Two review findings, each verified against the built classifier before and
+closed after.
+
+**The interpreter-egress host takes a single label in argument position.**
+The host literal required the dotted quoted host, so
+`socket.create_connection(('evil', 443))` and
+`http.client.HTTPConnection('localhost')` — the host a local service name,
+which is as reachable a target as a dotted one — fell to approval, which Agent
+mode allows without a card. A quoted single label now counts where the
+connect calls take the host, before the `,` or the `)`. The trade is stated
+rather than hidden: a payload that names a network call and a quoted word in
+argument position that is data rather than a host now reads as egress and asks
+for a card instead of running. The floor's direction when the two cannot be
+told apart is the ask, and a host the payload builds at runtime,
+`create_connection((host, 443))`, stays in the residual below, with no
+literal to read.
+
+**The find exec predicate is tested on the word it runs.** The predicate
+check read the executable from the first word only, so
+`find . -exec env FOO=1 /tmp/run.sh {} +` — a wrapper and an assignment
+between the exec flag and the script the shell runs per matched file — fell to
+approval while the same script with nothing in front of it was destructive.
+The delete test now also runs on the word the verb finder resolves past the
+wrapper and the assignment, with the same path and script-suffix tests the
+first word gets. Bare script execution outside a find, `env FOO=1
+/tmp/run.sh` and `bash /tmp/run.sh`, stays approval, the on-disk-script
+residual in the section below, where the behaviour is in a file the
+classifier does not read.
 
 ## The residual gap, stated rather than closed
 

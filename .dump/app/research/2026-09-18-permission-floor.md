@@ -80,7 +80,7 @@ built Electron binary, so the app cannot be launched. Roadmap acceptance criteri
 2 asks for a screenshot; that box is left unchecked in the PR with this reason.
 The substitute is a table of real gate output in
 `.dump/app/research/2026-09-18-permission-floor-verification.md`, produced by
-running the wired gate rather than written by hand, plus a 25-step manual
+running the wired gate rather than written by hand, plus a 39-step manual
 checklist beside it. An earlier revision of this step also carried a generated
 HTML prototype of nine decisions; it was deleted on 2026-09-18 because the table
 says the same thing in a file a reviewer can diff.

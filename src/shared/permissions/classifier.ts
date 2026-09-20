@@ -490,19 +490,27 @@ function wordsConsumed(word: string, words: string[], index: number): number {
 /**
  * The shell runs a second command only when an operator sits outside quotes,
  * so a `;`, `|`, `(`, `)` or a newline inside a quoted stretch is an ordinary
- * character that must not split the statement. A backtick runs a command
- * substitution only where the shell runs it, unquoted and inside double
- * quotes; inside single quotes every backslash and backtick is literal, and
- * a substituted command has to reach the rules as its own segment. The step
+ * character that must not split the statement. A backtick or `$(` runs a
+ * command substitution only where the shell runs it, unquoted and inside
+ * double quotes, and the substituted command has to reach the rules as its
+ * own segment, so the substitution opens a context with its own quoting.
+ * Inside single quotes every backslash and backtick is literal. The step
  * reports how many characters at `i` start a boundary, or zero when the
  * character stays in the segment it is in.
  */
 interface SegmentScan {
   quote: string | null
   escaped: boolean
+  /**
+   * The substitution contexts open at this point, innermost last. The double
+   * quote that opened a substitution does not shield the operators inside
+   * it, and the operators inside delimit the commands the substitution runs.
+   * The closer hands back the quote state the context interrupted.
+   */
+  subst: Array<{ kind: "$" | "`"; outerQuote: string | null }>
 }
 
-const SEGMENT_BREAKERS = new Set([";", "\n", "(", ")", "`"])
+const SEGMENT_BREAKERS = new Set([";", "\n", "(", ")"])
 
 function stepSegmentScan(command: string, i: number, scan: SegmentScan): number {
   if (scan.escaped) {
@@ -526,29 +534,69 @@ function stepSegmentScan(command: string, i: number, scan: SegmentScan): number 
   return unquotedBoundary(command, i, scan)
 }
 
-function startsSubstitution(command: string, i: number): boolean {
-  return command[i] === "`" || (command[i] === "$" && command[i + 1] === "(")
-}
-
+/**
+ * The operators that start a new command, and how many characters each one
+ * spans, or zero when the character stays in the segment it is in.
+ *
+ * A `$(` or a backtick is one of them wherever the shell runs it, and it opens
+ * a substitution context. The quote state the context interrupts is parked on
+ * the context rather than left live, because the shell stops reading the outer
+ * double quote as a quote while the substitution runs: `echo "$(echo ok;
+ * rm -rf /)"` is where the live state lost the delete, the quote stayed active
+ * across the `$(`, and the `;` inside read as an ordinary character of the
+ * segment that starts at `echo`.
+ */
 function unquotedBoundary(command: string, i: number, scan: SegmentScan): number {
   if (scan.quote === "'") return 0
-  // Inside double quotes the shell runs the substitutions, and only them.
-  if (scan.quote === '"') {
-    if (command[i] === "`") return 1
-    return command[i] === "$" && command[i + 1] === "(" ? 2 : 0
-  }
   const ch = command[i]
+  const top = scan.subst[scan.subst.length - 1]
+  // The closer of an open context ends the context and hands back the quote
+  // state it interrupted. A `)` with no `$(` open is the ordinary syntax it
+  // always was, and a backtick never closes a `$(` context or vice versa.
+  if (ch === ")" && top !== undefined && top.kind === "$") {
+    scan.subst.pop()
+    scan.quote = top.outerQuote
+    return 1
+  }
+  if (ch === "`") {
+    if (top !== undefined && top.kind === "`") {
+      scan.subst.pop()
+      scan.quote = top.outerQuote
+    } else {
+      scan.subst.push({ kind: "`", outerQuote: scan.quote })
+      scan.quote = null
+    }
+    return 1
+  }
+  if (ch === "$" && command[i + 1] === "(") {
+    scan.subst.push({ kind: "$", outerQuote: scan.quote })
+    scan.quote = null
+    return 2
+  }
+  // Inside double quotes the shell runs the substitutions, and only them.
+  if (scan.quote === '"') return 0
   if (SEGMENT_BREAKERS.has(ch)) return 1
   if (ch === "&" && command[i + 1] === "&") return 2
   if (ch === "|") return command[i + 1] === "|" ? 2 : 1
-  return ch === "$" && command[i + 1] === "(" ? 2 : 0
+  return 0
 }
 
-function splitCommandText(command: string): string[] {
+/**
+ * One walk of the command with the quote and substitution state the shell
+ * carries. `parts` is the statement between the operators that start a new
+ * command, and `literal` reads 1 at every character the shell would print
+ * without running it: inside single quotes, or inside double quotes while no
+ * substitution is open. Every character the shell runs, and every operator,
+ * reads 0.
+ */
+function scanCommandText(command: string): { parts: string[]; literal: Uint8Array } {
   const parts: string[] = []
+  const literal = new Uint8Array(command.length)
   let current = ""
-  const scan: SegmentScan = { quote: null, escaped: false }
+  const scan: SegmentScan = { quote: null, escaped: false, subst: [] }
   for (let i = 0; i < command.length; i++) {
+    const quoteBefore = scan.quote
+    const substBefore = scan.subst.length
     const length = stepSegmentScan(command, i, scan)
     if (length > 0) {
       parts.push(current)
@@ -557,9 +605,14 @@ function splitCommandText(command: string): string[] {
       continue
     }
     current += command[i]
+    literal[i] = quoteBefore === "'" || (quoteBefore === '"' && substBefore === 0) ? 1 : 0
   }
   parts.push(current)
-  return parts
+  return { parts, literal }
+}
+
+function splitCommandText(command: string): string[] {
+  return scanCommandText(command).parts
 }
 
 export function splitCommandSegments(command: string): CommandSegment[] {
@@ -958,41 +1011,26 @@ function hasDiscardingGitCommand(segments: CommandSegment[]): boolean {
 const FORCED_BRANCH_DELETE = /\bgit\b[^|;&\n]*\bbranch\b[^|;&\n]*(?:-[a-z]*D|--delete)/g
 
 /**
- * Whether the range sits in a stretch the shell would not run: fully inside
- * single quotes, or inside double quotes that hold no substitution, where a
- * `$(` or a backtick would run what it names even though it is quoted.
+ * Whether a match sits in a stretch the shell would not run: every character
+ * of it inside single quotes, or inside double quotes the shell is not
+ * currently substituting. A span that also carries a substitution is literal
+ * only where the substitution is not, because `echo "git branch -D docs
+ * $(date)"` prints the delete and runs only `date`, while
+ * `echo "$(git branch -D)"` runs the delete it names.
  */
-function literalRange(command: string, start: number, length: number): boolean {
-  const end = start + length
-  let quote: string | null = null
-  let escaped = false
-  let spanStart = -1
-  let substitution = false
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i]
-    if (escaped) {
-      escaped = false
-    } else if (ch === "\\" && quote !== "'") {
-      escaped = true
-    } else if (quote === ch) {
-      if (spanStart <= start && i >= end && !substitution) return true
-      quote = null
-    } else if (quote === null && (ch === "'" || ch === '"')) {
-      quote = ch
-      spanStart = i
-      substitution = false
-    } else if (quote === '"' && startsSubstitution(command, i)) {
-      substitution = true
-    }
+function literalRange(literal: Uint8Array, start: number, length: number): boolean {
+  for (let i = start; i < start + length; i++) {
+    if (literal[i] === 0) return false
   }
-  return false
+  return true
 }
 
 function hasForcedBranchDelete(command: string): boolean {
   // Any occurrence outside a literal stretch is the delete. The first match
   // can sit in a quoted argument while a real one follows on the same line.
+  const { literal } = scanCommandText(command)
   for (const match of command.matchAll(FORCED_BRANCH_DELETE)) {
-    if (!literalRange(command, match.index, match[0].length)) return true
+    if (!literalRange(literal, match.index, match[0].length)) return true
   }
   return false
 }
@@ -1157,7 +1195,41 @@ function predicateExecutesDelete(predicate: string[]): boolean {
       return true
     }
   }
+  // A wrapper or an assignment can stand between the exec flag and the
+  // executable it carries, so the same test runs on the word the verb finder
+  // resolves rather than only on the first word, which the wrapper is.
+  const carried = carriedExecutable(predicate)
+  if (carried !== null) {
+    const carriedVerb = resolveBracketedWord(carried.split("/").pop() ?? carried)
+    if (DELETE_VERBS.has(carriedVerb)) return true
+    if (carried.startsWith("/") || carried.startsWith("./") || SCRIPT_SUFFIX.test(carried)) {
+      return true
+    }
+  }
   return DELETE_VERBS.has(readVerb(predicate))
+}
+
+/**
+ * The executable a predicate carries when a wrapper or an assignment stands
+ * between the exec flag and it, or null when no word past them resolves. The
+ * shell reads `env FOO=1 /tmp/run.sh` as the run of `/tmp/run.sh` with an
+ * environment, the wrapper-and-assignment shape CVE-2026-55743 made famous one
+ * level up, so the predicate must be tested on the word it actually runs.
+ */
+function carriedExecutable(predicate: string[]): string | null {
+  for (let index = 0; index < predicate.length; index += 1) {
+    const word = predicate[index]
+    if (word === undefined) return null
+    if (word.includes("=") || word.startsWith("-")) {
+      index += wordsConsumed(word, predicate, index)
+      continue
+    }
+    const base = word.split("/").pop() ?? word
+    if (DURATION_WORD.test(base)) continue
+    if (WRAPPER_VERBS.has(resolveBracketedWord(base))) continue
+    return word
+  }
+  return null
 }
 
 /** The `find` predicates that run a command per matched file. */
@@ -1523,10 +1595,17 @@ const INTERPRETER_NETWORK_CALLS = [
 /**
  * A host a payload names. A dotted identifier is not enough on its own, because
  * every member access in a payload looks like one, so the name has to be quoted,
- * carry a scheme, or be an address.
+ * carry a scheme, or be an address. A quoted single label counts only in the
+ * argument position the connect calls take it, before a `,` or a `)`:
+ * create_connection reads a (host, port) pair and HTTPConnection a lone host,
+ * and a local service name is as reachable a target as a dotted one. The trade
+ * is an ask where a payload names a network call and a quoted word in argument
+ * position that is data rather than a host, which then reads as egress and
+ * asks for a card instead of running, the floor's direction when the two
+ * cannot be told apart.
  */
 const PAYLOAD_HOST_LITERAL =
-  /:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}\b|["'`][a-z0-9-]+(?:\.[a-z0-9-]+)+["'`]/
+  /:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}\b|["'`][a-z0-9-]+(?:\.[a-z0-9-]+)+["'`]|["'`][a-z0-9-]+["'`]\s*[,)]/
 
 /**
  * Every absolute or home-relative path a payload names, quoted or not.

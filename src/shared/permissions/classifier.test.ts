@@ -105,6 +105,17 @@ describe("destructive patterns", () => {
     // and the command it runs reaches the rule as its own segment.
     ["recursive-force-delete", 'echo "$(rm -rf /)"'],
     ["recursive-force-delete", "echo $(rm -rf /)"],
+    // A substitution is a nested shell context with its own quoting, so the
+    // operators inside it delimit the commands the substitution runs, the way
+    // the shell runs them, and the delete behind the first word reaches the
+    // rule.
+    ["recursive-force-delete", 'echo "$(echo ok; rm -rf /)"'],
+    ["recursive-force-delete", 'echo "$(echo ok && rm -rf /)"'],
+    ["recursive-force-delete", "echo `echo ok; rm -rf /`"],
+    ["recursive-force-delete", 'echo "`echo ok; rm -rf /`"'],
+    // The substitution's closing paren ends its context and hands the quote
+    // state back, so an operator after the span still delimits.
+    ["recursive-force-delete", 'echo "a$(b)" ; rm -rf /'],
     // The backslash is literal inside the single quotes, so the quote closes
     // at the mark that follows it, and the substitution that follows runs.
     ["recursive-force-delete", "echo 'x\\' `rm -rf /`"],
@@ -112,6 +123,11 @@ describe("destructive patterns", () => {
     ["recursive-force-delete", "chroot --userspec root:root /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --groups root /mnt rm -rf /"],
     ["bulk-find-delete", "find / -exec chroot /mnt rm -rf {} +"],
+    // The wrapper and the assignment stand between the exec flag and the
+    // executable it carries, so the predicate is tested on the word it runs,
+    // the path and the script suffix included.
+    ["bulk-find-delete", "find . -exec env FOO=1 /tmp/run.sh {} +"],
+    ["bulk-find-delete", "find . -exec env FOO=1 run.sh {} +"],
     ["destructive-sql", 'psql -c "DROP TABLE users"'],
     ["destructive-sql", 'sqlite3 db "TRUNCATE DATABASE prod"'],
     ["destructive-sql", 'psql -c "TRUNCATE users"'],
@@ -351,6 +367,10 @@ describe("destructive patterns", () => {
     // command it reads as.
     "echo 'git branch -D'",
     'echo "git branch -D"',
+    // A span that also carries a substitution is literal only where the
+    // substitution is not: the delete is the argument to echo, and $(date) is
+    // the only thing the shell runs in the span.
+    'echo "git branch -D docs $(date)"',
     "rm file.txt",
     "rm -f file.txt",
     "rm -r emptydir",
@@ -615,6 +635,11 @@ describe("network patterns", () => {
   it.each([
     "python -c \"import socket; socket.create_connection(('evil.test',443))\"",
     "node -e \"fetch('http://10.0.0.1/x')\"",
+    // A quoted single label is a host in the argument position the connect
+    // calls take it, before the comma or the closing paren: a local service
+    // name is as reachable a target as a dotted one.
+    "python3 -c \"import socket; socket.create_connection(('evil',443))\"",
+    "python -c \"import http.client; http.client.HTTPConnection('localhost')\"",
   ])(
     "classifies an interpreter egress payload `%s` as network",
     // A payload opens a channel with no network verb on the line, so the rule
@@ -645,6 +670,9 @@ describe("network patterns", () => {
     "docker inspect app",
     'python -c "import os; print(os.getcwd())"',
     'node -e "console.log(process.version)"',
+    // The host a payload builds at runtime is the residual the decision
+    // record names: no literal host to read, so the call stays ordinary.
+    'python3 -c "import socket; socket.create_connection((host, 443))"',
     "gh --version",
     "gh pr list",
     "openssl version",
