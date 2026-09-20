@@ -11,7 +11,7 @@ import path from "node:path"
 import type { Query, SDKUserMessage, Options as SdkOptions } from "@anthropic-ai/claude-agent-sdk"
 import { observable } from "@trpc/server/observable"
 import { and, eq } from "drizzle-orm"
-import { app, BrowserWindow, safeStorage } from "electron"
+import { app, BrowserWindow } from "electron"
 import { z } from "zod"
 import { agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
 import { describePermissionDecision } from "../../../../shared/permissions/decision"
@@ -74,6 +74,8 @@ import { evaluateAction, permissionsPolicyPath } from "../../permissions"
 import { discoverPluginMcpServers } from "../../plugins"
 import { getRunStore } from "../../runs"
 import type { RunHandle } from "../../runs/run-state"
+import { stringifyCredentialRecord } from "../../secret-redaction"
+import { decryptToken } from "../../token-crypto"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 import { getApprovedPluginMcpServers, getEnabledPlugins } from "./claude-settings"
@@ -176,17 +178,6 @@ function parseMentions(prompt: string): {
 }
 
 /**
- * Decrypt token using Electron's safeStorage
- */
-function decryptToken(encrypted: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    return Buffer.from(encrypted, "base64").toString("utf-8")
-  }
-  const buffer = Buffer.from(encrypted, "base64")
-  return safeStorage.decryptString(buffer)
-}
-
-/**
  * Get Claude Code OAuth token.
  * Order: local Claude Code keychain → in-app multi-account DB → legacy DB table
  * (`~/.claude/.credentials.json` or OS keychain entry "Claude Code-credentials").
@@ -203,8 +194,6 @@ async function getClaudeCodeToken(): Promise<string | null> {
     const localToken = await getValidExistingClaudeToken()
     if (localToken) {
       console.log("[claude-auth] Using local Claude Code credentials from system")
-      console.log("[claude-auth] Token preview:", `${localToken.slice(0, 4)}...`)
-      console.log("[claude-auth] Token total length:", localToken.length)
       console.log("[claude-auth] ============================================")
       return localToken
     }
@@ -231,8 +220,6 @@ async function getClaudeCodeToken(): Promise<string | null> {
         try {
           const decrypted = decryptToken(account.oauthToken)
           console.log("[claude-auth] Token decrypted successfully")
-          console.log("[claude-auth] Token preview:", `${decrypted.slice(0, 4)}...`)
-          console.log("[claude-auth] Token total length:", decrypted.length)
           console.log("[claude-auth] ============================================")
           return decrypted
         } catch (error) {
@@ -256,13 +243,12 @@ async function getClaudeCodeToken(): Promise<string | null> {
     console.log(
       "[claude-auth] Legacy credential record:",
       cred
-        ? {
+        ? stringifyCredentialRecord({
             id: cred.id,
-            hasOauthToken: !!cred.oauthToken,
-            encryptedTokenLength: cred.oauthToken?.length ?? 0,
+            oauthToken: cred.oauthToken,
             connectedAt: cred.connectedAt,
             userId: cred.userId,
-          }
+          })
         : null,
     )
 
@@ -270,8 +256,6 @@ async function getClaudeCodeToken(): Promise<string | null> {
       try {
         const decrypted = decryptToken(cred.oauthToken)
         console.log("[claude-auth] Token decrypted successfully (legacy)")
-        console.log("[claude-auth] Token preview:", `${decrypted.slice(0, 4)}...`)
-        console.log("[claude-auth] Token total length:", decrypted.length)
         console.log("[claude-auth] ============================================")
 
         return decrypted

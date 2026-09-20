@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { safeStorage } from "electron"
+import { app, safeStorage } from "electron"
 
 export interface AuthUser {
   id: string
@@ -17,93 +17,163 @@ export interface AuthData {
   user: AuthUser
 }
 
-/**
- * Storage for desktop authentication tokens
- * Uses Electron's safeStorage API to encrypt sensitive data using OS keychain
- * Falls back to plaintext only if encryption is unavailable (rare edge case)
- */
+export interface SecretStorageStatus {
+  encryptionAvailable: boolean
+  plaintextConsent: boolean
+  lastWriteUsedPlaintext: boolean
+}
+
+interface SecretStorageSettings {
+  consentedToPlaintextSecrets: boolean
+  lastWriteUsedPlaintext: boolean
+}
+
+const DEFAULT_SECRET_STORAGE_SETTINGS: SecretStorageSettings = {
+  consentedToPlaintextSecrets: false,
+  lastWriteUsedPlaintext: false,
+}
+
+export class PlaintextSecretConsentRequiredError extends Error {
+  readonly code = "PLAINTEXT_SECRET_CONSENT_REQUIRED"
+
+  constructor() {
+    super(
+      "Secure storage is unavailable. Allow plaintext secret storage in Settings before saving.",
+    )
+    this.name = "PlaintextSecretConsentRequiredError"
+  }
+}
+
+function settingsPath(): string {
+  return join(app.getPath("userData"), "secret-storage-settings.json")
+}
+
+function readSettings(): SecretStorageSettings {
+  try {
+    const raw = JSON.parse(readFileSync(settingsPath(), "utf-8")) as Partial<SecretStorageSettings>
+    return {
+      consentedToPlaintextSecrets: raw.consentedToPlaintextSecrets === true,
+      lastWriteUsedPlaintext: raw.lastWriteUsedPlaintext === true,
+    }
+  } catch {
+    return DEFAULT_SECRET_STORAGE_SETTINGS
+  }
+}
+
+function writeSettings(settings: SecretStorageSettings): void {
+  const filePath = settingsPath()
+  mkdirSync(dirname(filePath), { recursive: true })
+  writeFileSync(filePath, JSON.stringify(settings, null, 2), { encoding: "utf-8", mode: 0o600 })
+}
+
+export function isEncryptionAvailable(): boolean {
+  return safeStorage.isEncryptionAvailable()
+}
+
+export function getSecretStorageStatus(): SecretStorageStatus {
+  const settings = readSettings()
+  return {
+    encryptionAvailable: isEncryptionAvailable(),
+    plaintextConsent: settings.consentedToPlaintextSecrets,
+    lastWriteUsedPlaintext: settings.lastWriteUsedPlaintext,
+  }
+}
+
+export function setPlaintextSecretConsent(consent: boolean): SecretStorageStatus {
+  const current = readSettings()
+  writeSettings({ ...current, consentedToPlaintextSecrets: consent })
+  return getSecretStorageStatus()
+}
+
+function markWriteUsedPlaintext(): void {
+  const current = readSettings()
+  writeSettings({ ...current, lastWriteUsedPlaintext: true })
+}
+
+function markWriteUsedEncryption(): void {
+  const current = readSettings()
+  if (current.lastWriteUsedPlaintext) {
+    writeSettings({ ...current, lastWriteUsedPlaintext: false })
+  }
+}
+
+export function encryptToken(token: string, options: { secret?: boolean } = {}): string {
+  const secret = options.secret !== false
+  if (isEncryptionAvailable()) {
+    markWriteUsedEncryption()
+    return safeStorage.encryptString(token).toString("base64")
+  }
+  if (secret && !readSettings().consentedToPlaintextSecrets) {
+    throw new PlaintextSecretConsentRequiredError()
+  }
+  markWriteUsedPlaintext()
+  console.warn(JSON.stringify({ event: "secret_storage_write", storage: "plaintext" }))
+  return Buffer.from(token, "utf-8").toString("base64")
+}
+
+export function decryptToken(encoded: string | Buffer): string {
+  const base64 = Buffer.isBuffer(encoded) ? encoded.toString("base64") : encoded
+  if (isEncryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(Buffer.from(base64, "base64"))
+    } catch {
+      return Buffer.from(base64, "base64").toString("utf-8")
+    }
+  }
+  return Buffer.from(base64, "base64").toString("utf-8")
+}
+
 export class AuthStore {
   private filePath: string
 
   constructor(userDataPath: string) {
-    this.filePath = join(userDataPath, "auth.dat") // .dat for encrypted data
+    this.filePath = join(userDataPath, "auth.dat")
   }
 
-  /**
-   * Check if encryption is available on this system
-   */
-  private isEncryptionAvailable(): boolean {
-    return safeStorage.isEncryptionAvailable()
-  }
-
-  /**
-   * Save authentication data (encrypted if possible)
-   */
   save(data: AuthData): void {
-    try {
-      const dir = dirname(this.filePath)
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true })
-      }
+    const dir = dirname(this.filePath)
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    const jsonData = JSON.stringify(data)
 
-      const jsonData = JSON.stringify(data)
-
-      if (this.isEncryptionAvailable()) {
-        // Encrypt using OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
-        const encrypted = safeStorage.encryptString(jsonData)
-        writeFileSync(this.filePath, encrypted)
-      } else {
-        // Fallback: store with warning (should rarely happen)
-        console.warn("safeStorage not available - storing auth data without encryption")
-        writeFileSync(`${this.filePath}.json`, jsonData, "utf-8")
-      }
-    } catch (error) {
-      console.error("Failed to save auth data:", error)
-      throw error
+    if (isEncryptionAvailable()) {
+      writeFileSync(this.filePath, safeStorage.encryptString(jsonData))
+      markWriteUsedEncryption()
+      return
     }
+
+    if (!readSettings().consentedToPlaintextSecrets) {
+      throw new PlaintextSecretConsentRequiredError()
+    }
+    writeFileSync(`${this.filePath}.json`, jsonData, "utf-8")
+    markWriteUsedPlaintext()
+    console.warn(JSON.stringify({ event: "secret_storage_write", storage: "plaintext" }))
   }
 
-  /**
-   * Load authentication data (decrypts if encrypted)
-   */
   load(): AuthData | null {
     try {
-      // Try encrypted file first
-      if (existsSync(this.filePath) && this.isEncryptionAvailable()) {
-        const encrypted = readFileSync(this.filePath)
-        const decrypted = safeStorage.decryptString(encrypted)
-        return JSON.parse(decrypted)
+      if (existsSync(this.filePath) && isEncryptionAvailable()) {
+        return JSON.parse(safeStorage.decryptString(readFileSync(this.filePath))) as AuthData
       }
 
-      // Fallback: try unencrypted file (for migration or when encryption unavailable)
       const fallbackPath = `${this.filePath}.json`
       if (existsSync(fallbackPath)) {
-        const content = readFileSync(fallbackPath, "utf-8")
-        const data = JSON.parse(content)
-
-        // Migrate to encrypted storage if now available
-        if (this.isEncryptionAvailable()) {
+        const data = JSON.parse(readFileSync(fallbackPath, "utf-8")) as AuthData
+        if (isEncryptionAvailable()) {
           this.save(data)
-          unlinkSync(fallbackPath) // Remove unencrypted file after migration
+          unlinkSync(fallbackPath)
         }
-
         return data
       }
 
-      // Legacy: check for old auth.json file and migrate
       const legacyPath = join(dirname(this.filePath), "auth.json")
       if (existsSync(legacyPath)) {
-        const content = readFileSync(legacyPath, "utf-8")
-        const data = JSON.parse(content)
-
-        // Migrate to encrypted storage
-        this.save(data)
-        unlinkSync(legacyPath) // Remove legacy unencrypted file
-        console.log("Migrated auth data from plaintext to encrypted storage")
-
+        const data = JSON.parse(readFileSync(legacyPath, "utf-8")) as AuthData
+        if (isEncryptionAvailable()) {
+          this.save(data)
+          unlinkSync(legacyPath)
+        }
         return data
       }
-
       return null
     } catch {
       console.error("Failed to load auth data")
@@ -111,90 +181,46 @@ export class AuthStore {
     }
   }
 
-  /**
-   * Clear all stored authentication data (both encrypted and fallback files)
-   */
   clear(): void {
     try {
-      // Remove encrypted file
-      if (existsSync(this.filePath)) {
-        unlinkSync(this.filePath)
-      }
-      // Remove fallback unencrypted file if exists
-      const fallbackPath = `${this.filePath}.json`
-      if (existsSync(fallbackPath)) {
-        unlinkSync(fallbackPath)
-      }
-      // Remove legacy file if exists
-      const legacyPath = join(dirname(this.filePath), "auth.json")
-      if (existsSync(legacyPath)) {
-        unlinkSync(legacyPath)
+      for (const filePath of [
+        this.filePath,
+        `${this.filePath}.json`,
+        join(dirname(this.filePath), "auth.json"),
+      ]) {
+        if (existsSync(filePath)) unlinkSync(filePath)
       }
     } catch (error) {
       console.error("Failed to clear auth data:", error)
     }
   }
 
-  /**
-   * Check if user is authenticated
-   */
   isAuthenticated(): boolean {
     const data = this.load()
-    if (!data) return false
-
-    // Check if token is expired
-    const expiresAt = new Date(data.expiresAt).getTime()
-    return expiresAt > Date.now()
+    return data ? new Date(data.expiresAt).getTime() > Date.now() : false
   }
 
-  /**
-   * Get current user if authenticated
-   */
   getUser(): AuthUser | null {
-    const data = this.load()
-    return data?.user ?? null
+    return this.load()?.user ?? null
   }
 
-  /**
-   * Get current token if valid
-   */
   getToken(): string | null {
     const data = this.load()
-    if (!data) return null
-
-    const expiresAt = new Date(data.expiresAt).getTime()
-    if (expiresAt <= Date.now()) return null
-
-    return data.token
+    return data && new Date(data.expiresAt).getTime() > Date.now() ? data.token : null
   }
 
-  /**
-   * Get refresh token
-   */
   getRefreshToken(): string | null {
-    const data = this.load()
-    return data?.refreshToken ?? null
+    return this.load()?.refreshToken ?? null
   }
 
-  /**
-   * Check if token needs refresh (expires in less than 5 minutes)
-   */
   needsRefresh(): boolean {
     const data = this.load()
-    if (!data) return false
-
-    const expiresAt = new Date(data.expiresAt).getTime()
-    const fiveMinutes = 5 * 60 * 1000
-    return expiresAt - Date.now() < fiveMinutes
+    return data ? new Date(data.expiresAt).getTime() - Date.now() < 5 * 60 * 1000 : false
   }
 
-  /**
-   * Update user data (e.g., after profile update)
-   */
   updateUser(updates: Partial<AuthUser>): AuthUser | null {
     const data = this.load()
     if (!data) return null
-
     data.user = { ...data.user, ...updates }
     this.save(data)
     return data.user

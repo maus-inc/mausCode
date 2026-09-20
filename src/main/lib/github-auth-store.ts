@@ -4,7 +4,8 @@
  */
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { app, safeStorage } from "electron"
+import { app } from "electron"
+import { decryptToken, encryptToken } from "../auth-store"
 
 const FILE_NAME = "github-auth.dat"
 const FALLBACK_FILE_NAME = "github-auth.json"
@@ -45,31 +46,24 @@ export function saveGithubToken(token: string): void {
   const filePath = getAuthFilePath()
   ensureDir(filePath)
 
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(trimmed)
-    writeFileSync(filePath, encrypted)
-    const fallbackPath = getFallbackFilePath()
-    if (existsSync(fallbackPath)) {
-      try {
-        unlinkSync(fallbackPath)
-      } catch {
-        // ignore
-      }
-    }
-    return
-  }
-
+  const encrypted = encryptToken(trimmed)
+  writeFileSync(filePath, encrypted, "utf-8")
   const fallbackPath = getFallbackFilePath()
-  ensureDir(fallbackPath)
-  writeFileSync(fallbackPath, JSON.stringify({ token: trimmed }), "utf-8")
+  if (existsSync(fallbackPath)) {
+    try {
+      unlinkSync(fallbackPath)
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export function loadGithubToken(): string | null {
   const filePath = getAuthFilePath()
   try {
-    if (existsSync(filePath) && safeStorage.isEncryptionAvailable()) {
+    if (existsSync(filePath)) {
       const encrypted = readFileSync(filePath)
-      return safeStorage.decryptString(encrypted)
+      return decryptToken(encrypted)
     }
 
     const fallbackPath = getFallbackFilePath()

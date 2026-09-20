@@ -34,6 +34,7 @@ import { rooRouter } from "./roo"
 import { runsRouter } from "./runs"
 import { runtimeRouter } from "./runtime"
 import { sandboxImportRouter } from "./sandbox-import"
+import { secretStorageRouter } from "./secret-storage"
 import { skillsRouter } from "./skills"
 import { terminalRouter } from "./terminal"
 import { usageRouter } from "./usage"
@@ -70,6 +71,7 @@ export function createAppRouter(_getWindow: () => BrowserWindow | null) {
     files: filesRouter,
     debug: debugRouter,
     skills: skillsRouter,
+    secretStorage: secretStorageRouter,
     agents: agentsRouter,
     worktreeConfig: worktreeConfigRouter,
     sandboxImport: sandboxImportRouter,

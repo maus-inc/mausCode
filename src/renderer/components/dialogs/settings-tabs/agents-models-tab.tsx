@@ -50,6 +50,16 @@ const OpenRouterIcon = ({ className }: { className?: string }) => (
 )
 
 import { trpc } from "../../../lib/trpc"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
 import { Badge } from "../../ui/badge"
 import { Button } from "../../ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../../ui/collapsible"
@@ -94,6 +104,7 @@ function AccountRow({
   onRename,
   onRemove,
   isLoading,
+  storedWithoutEncryption,
 }: {
   account: {
     id: string
@@ -107,6 +118,7 @@ function AccountRow({
   onRename: () => void
   onRemove: () => void
   isLoading: boolean
+  storedWithoutEncryption: boolean
 }) {
   const isSystemManaged = account.source === "system"
   const subtitle = isSystemManaged
@@ -127,6 +139,11 @@ function AccountRow({
       </div>
 
       <div className="flex items-center gap-2">
+        {storedWithoutEncryption && !isSystemManaged && (
+          <Badge variant="secondary" className="text-xs text-amber-600 dark:text-amber-400">
+            Stored without encryption
+          </Badge>
+        )}
         {!isActive && !isSystemManaged && (
           <Button size="sm" variant="ghost" onClick={onSetActive} disabled={isLoading}>
             Switch
@@ -178,7 +195,17 @@ function AnthropicAccountsSection() {
     },
   )
   const { data: claudeCodeIntegration } = trpc.claudeCode.getIntegration.useQuery()
+  const { data: secretStorageStatus } = trpc.secretStorage.getStatus.useQuery()
   const trpcUtils = trpc.useUtils()
+  const setPlaintextConsent = trpc.secretStorage.setPlaintextConsent.useMutation({
+    onSuccess: () => {
+      void trpcUtils.secretStorage.getStatus.invalidate()
+      setConsentDialogOpen(false)
+      toast.success("Plaintext secret storage allowed")
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false)
 
   // Auto-migrate legacy account if needed
   const migrateLegacy = trpc.anthropicAccounts.migrateLegacy.useMutation({
@@ -259,28 +286,68 @@ function AnthropicAccountsSection() {
     setActiveMutation.isPending || renameMutation.isPending || removeMutation.isPending
 
   // Don't show section if no accounts
-  if (!isAccountsLoading && (!accounts || accounts.length === 0)) {
+  if (
+    !isAccountsLoading &&
+    (!accounts || accounts.length === 0) &&
+    secretStorageStatus?.encryptionAvailable !== false
+  ) {
     return null
   }
 
   return (
-    <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
-      {isAccountsLoading ? (
-        <div className="p-4 text-center text-sm text-muted-foreground">Loading accounts...</div>
-      ) : (
-        accounts?.map((account) => (
-          <AccountRow
-            key={account.id}
-            account={account}
-            isActive={activeAccount?.id === account.id}
-            onSetActive={() => setActiveMutation.mutate({ accountId: account.id })}
-            onRename={() => handleRename(account.id, account.displayName)}
-            onRemove={() => handleRemove(account.id, account.displayName)}
-            isLoading={isLoading}
-          />
-        ))
+    <>
+      {secretStorageStatus && !secretStorageStatus.encryptionAvailable && (
+        <div className="mb-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">Secure storage is unavailable</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                New credentials stay blocked until you allow plaintext storage. Existing credentials
+                remain available.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setConsentDialogOpen(true)}>
+              Review
+            </Button>
+          </div>
+        </div>
       )}
-    </div>
+      <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
+        {isAccountsLoading ? (
+          <div className="p-4 text-center text-sm text-muted-foreground">Loading accounts...</div>
+        ) : (
+          accounts?.map((account) => (
+            <AccountRow
+              key={account.id}
+              account={account}
+              isActive={activeAccount?.id === account.id}
+              onSetActive={() => setActiveMutation.mutate({ accountId: account.id })}
+              onRename={() => handleRename(account.id, account.displayName)}
+              onRemove={() => handleRemove(account.id, account.displayName)}
+              isLoading={isLoading}
+              storedWithoutEncryption={secretStorageStatus?.lastWriteUsedPlaintext === true}
+            />
+          ))
+        )}
+      </div>
+      <AlertDialog open={consentDialogOpen} onOpenChange={setConsentDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Allow plaintext secret storage?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your operating system keyring is unavailable. mausCode will store new credentials
+              without encryption on this device.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setPlaintextConsent.mutate({ consent: true })}>
+              Allow
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
