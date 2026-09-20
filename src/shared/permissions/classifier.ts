@@ -526,9 +526,17 @@ function stepSegmentScan(command: string, i: number, scan: SegmentScan): number 
   return unquotedBoundary(command, i, scan)
 }
 
+function startsSubstitution(command: string, i: number): boolean {
+  return command[i] === "`" || (command[i] === "$" && command[i + 1] === "(")
+}
+
 function unquotedBoundary(command: string, i: number, scan: SegmentScan): number {
   if (scan.quote === "'") return 0
-  if (scan.quote === '"') return command[i] === "`" ? 1 : 0
+  // Inside double quotes the shell runs the substitutions, and only them.
+  if (scan.quote === '"') {
+    if (command[i] === "`") return 1
+    return command[i] === "$" && command[i + 1] === "(" ? 2 : 0
+  }
   const ch = command[i]
   if (SEGMENT_BREAKERS.has(ch)) return 1
   if (ch === "&" && command[i + 1] === "&") return 2
@@ -947,10 +955,46 @@ function hasDiscardingGitCommand(segments: CommandSegment[]): boolean {
  * global options between `git` and `branch` do not defeat the match, which is
  * the same adjacency problem the segment-based checks above exist to avoid.
  */
-const FORCED_BRANCH_DELETE = /\bgit\b[^|;&\n]*\bbranch\b[^|;&\n]*(?:-[a-z]*D|--delete)/
+const FORCED_BRANCH_DELETE = /\bgit\b[^|;&\n]*\bbranch\b[^|;&\n]*(?:-[a-z]*D|--delete)/g
+
+/**
+ * Whether the range sits in a stretch the shell would not run: fully inside
+ * single quotes, or inside double quotes that hold no substitution, where a
+ * `$(` or a backtick would run what it names even though it is quoted.
+ */
+function literalRange(command: string, start: number, length: number): boolean {
+  const end = start + length
+  let quote: string | null = null
+  let escaped = false
+  let spanStart = -1
+  let substitution = false
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]
+    if (escaped) {
+      escaped = false
+    } else if (ch === "\\" && quote !== "'") {
+      escaped = true
+    } else if (quote === ch) {
+      if (spanStart <= start && i >= end && !substitution) return true
+      quote = null
+    } else if (quote === null && (ch === "'" || ch === '"')) {
+      quote = ch
+      spanStart = i
+      substitution = false
+    } else if (quote === '"' && startsSubstitution(command, i)) {
+      substitution = true
+    }
+  }
+  return false
+}
 
 function hasForcedBranchDelete(command: string): boolean {
-  return FORCED_BRANCH_DELETE.test(command)
+  // Any occurrence outside a literal stretch is the delete. The first match
+  // can sit in a quoted argument while a real one follows on the same line.
+  for (const match of command.matchAll(FORCED_BRANCH_DELETE)) {
+    if (!literalRange(command, match.index, match[0].length)) return true
+  }
+  return false
 }
 
 /** Partition and filesystem tools, which destroy data whatever their args. */

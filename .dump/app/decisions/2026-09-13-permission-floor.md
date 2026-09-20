@@ -979,10 +979,18 @@ single quotes, and the quote closes where the shell closes it.
 `(`, `)` and newlines wherever they sat, so `echo "example; rm -rf /"`
 split into a `rm` segment and the harmless echo was denied as a delete. The
 split is now a walk that keeps the quote state, and only an operator the
-shell would run starts a segment: outside quotes, and for the backtick also
-inside double quotes, where the substitution is active. One pass does what
-the backtick pass and the split regex did, and the two-word state stays on a
-small object the step advances.
+shell would run starts a segment: outside quotes, and for the substitutions,
+the backtick and `$(`, also inside double quotes, where they are active. One
+pass does what the backtick pass and the split regex did, and the two-word
+state stays on a small object the step advances.
+
+The walk's first head lost `$(` inside double quotes, and a delete in
+`echo "$(rm -rf /)"` hid behind the echo until the review round caught it.
+The raw forced-branch-delete check made the mirror-image mistake, reading a
+delete out of a quoted argument: it now skips the stretch the shell would not
+run, the fully single-quoted one and the double-quoted one that holds no
+substitution, and it checks every occurrence, because the first can sit in a
+literal while a real one follows on the same line.
 
 ## Decision 40: a key is one spelling, and the reader says no to the rest (added 2026-09-20)
 

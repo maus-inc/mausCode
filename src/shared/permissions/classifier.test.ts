@@ -101,6 +101,10 @@ describe("destructive patterns", () => {
     // The substitution is still active inside double quotes, so the embedded
     // delete is read the same way.
     ["recursive-force-delete", 'echo "`rm -rf /`"'],
+    // The substitution is active inside double quotes as well as unquoted,
+    // and the command it runs reaches the rule as its own segment.
+    ["recursive-force-delete", 'echo "$(rm -rf /)"'],
+    ["recursive-force-delete", "echo $(rm -rf /)"],
     // The backslash is literal inside the single quotes, so the quote closes
     // at the mark that follows it, and the substitution that follows runs.
     ["recursive-force-delete", "echo 'x\\' `rm -rf /`"],
@@ -143,6 +147,11 @@ describe("destructive patterns", () => {
     ["discarding-git-command", "git tag -d v1.0.0"],
     ["discarding-git-command", "git branch -D unmerged"],
     ["discarding-git-command", "git -C /repo branch --delete unmerged"],
+    // The delete is a word on the line, so a quoted argument around it, or a
+    // substitution that runs it, is still the delete.
+    ["discarding-git-command", 'git "branch" -D unmerged'],
+    ["discarding-git-command", 'echo "$(git branch -D unmerged)"'],
+    ["discarding-git-command", 'echo "git branch -D" | git branch -D unmerged'],
     // A payload names the call and the path, and neither is a shell word any
     // other rule can read. Every one of these was in the approval class Agent
     // mode allows before this.
@@ -337,6 +346,11 @@ describe("destructive patterns", () => {
     'echo "example; rm -rf /"',
     "echo 'it; ls'",
     'echo "(rm -rf /)"',
+    'echo "$(whoami)"',
+    // A quoted argument that spells a delete is the argument it is, not the
+    // command it reads as.
+    "echo 'git branch -D'",
+    'echo "git branch -D"',
     "rm file.txt",
     "rm -f file.txt",
     "rm -r emptydir",
