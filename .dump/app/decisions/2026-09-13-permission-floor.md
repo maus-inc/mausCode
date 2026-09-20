@@ -962,6 +962,40 @@ read now takes the two words as the type, with a target required after them,
 and a DROP without a target is incomplete SQL that errors, so it stays a
 near-miss, the same reading as a `DROP TABLE` with no name.
 
+## Decision 39: the segment split runs the command the way the shell runs it (added 2026-09-20)
+
+Two findings on the head that closed decision 38, each verified before and
+closed after, and both the same mistake: the split treated text inside quotes
+the way it treats text outside them.
+
+**A backslash is literal inside single quotes.** The scan started an escape
+on a backslash wherever it sat, so in `echo 'x\' ` + "`rm -rf /`" the
+closing quote was consumed by the escape, the quote stayed open, and the
+substitution that follows the closed string read as literal and fell to
+approval. The shell runs that `rm -rf /`. The scan now opens no escape inside
+single quotes, and the quote closes where the shell closes it.
+
+**An operator inside quotes is not a boundary.** The split cut on `;`, `|`,
+`(`, `)` and newlines wherever they sat, so `echo "example; rm -rf /"`
+split into a `rm` segment and the harmless echo was denied as a delete. The
+split is now a walk that keeps the quote state, and only an operator the
+shell would run starts a segment: outside quotes, and for the backtick also
+inside double quotes, where the substitution is active. One pass does what
+the backtick pass and the split regex did, and the two-word state stays on a
+small object the step advances.
+
+## Decision 40: a key is one spelling, and the reader says no to the rest (added 2026-09-20)
+
+The key segment reader concatenated whatever followed a quoted fragment, so
+`"appro"val = "allow"`, which the spec rejects, became the valid key
+`approval`. A typo could then stand in for a policy key the reader honours,
+which is the widening direction this parser exists to prevent. A segment is
+now one spelling, a bare key or a string, and anything after the string that
+is not a dot or the end of the line is a malformed key. The spaces a key may
+sit in, at the line edges and around the dots, are skipped where they are
+legal and nowhere else, and a trailing dot with no segment after it is still
+the malformed path it is.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

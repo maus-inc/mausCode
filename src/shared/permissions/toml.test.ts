@@ -169,6 +169,10 @@ describe("rejections", () => {
     ["a malformed key", '= "value"', "malformed key"],
     ["a missing assignment", "destructive", "expected key = value"],
     ["an invalid escape in a basic string", String.raw`value = "a\qb"`, "malformed string value"],
+    // A key is one spelling, bare or quoted; the spec rejects a fragment of
+    // each, and accepting it would let a typo stand in for a policy key.
+    ["a key that mixes a quoted and a bare fragment", '"appro"val = "allow"', "malformed key"],
+    ["a key that mixes a literal and a bare fragment", "'li'teral = \"x\"", "malformed key"],
   ])("refuses %s", (_label, text, message) => {
     expect(error(text)).toContain(message)
   })

@@ -82,24 +82,32 @@ function skipString(text: string, start: number): number {
  */
 const RESERVED_KEY_SEGMENTS = new Set(["__proto__", "constructor", "prototype"])
 
+/** The spaces a key may sit in, at the line edges and around the dots. */
+function skipSpaces(raw: string, index: number): number {
+  while (index < raw.length && (raw[index] === " " || raw[index] === "\t")) index += 1
+  return index
+}
+
 /** Split a dotted table or key name into parts, honouring quoted segments. */
 function splitKeyPath(raw: string): string[] | null {
   const parts: string[] = []
-  let index = 0
+  let index = skipSpaces(raw, 0)
 
   while (index < raw.length) {
     const segment = readKeySegment(raw, index)
     if (segment === null || segment.text.length === 0) return null
     if (RESERVED_KEY_SEGMENTS.has(segment.text)) return null
     parts.push(segment.text)
-    index = segment.end
+    index = skipSpaces(raw, segment.end)
     if (index >= raw.length) return parts
     // Anything other than a dot between segments is a malformed key path.
     if (raw[index] !== ".") return null
-    index += 1
+    index = skipSpaces(raw, index + 1)
+    // A trailing dot with no segment after it.
+    if (index >= raw.length) return null
   }
 
-  // An empty raw, or a trailing dot with no segment after it.
+  // An empty raw.
   return null
 }
 
@@ -109,24 +117,21 @@ function splitKeyPath(raw: string): string[] | null {
  * separating two of them, and escape handling stays in one place.
  */
 function readKeySegment(raw: string, start: number): { text: string; end: number } | null {
-  let index = start
-  let text = ""
-
-  while (index < raw.length) {
-    const char = raw[index]
-    if (char === ".") break
-    if (char !== '"' && char !== "'") {
-      text += char
-      index += 1
-      continue
-    }
-    const quoted = readString(raw, index)
-    if (quoted === null) return null
-    text += quoted.value
-    index = quoted.end
+  const first = raw[start]
+  if (first === undefined) return null
+  // A segment is one spelling, a bare key or a string, never a quoted and a
+  // bare fragment together. Accepting `"appro"val` as the key `approval`
+  // would let a typo the spec rejects stand in for a policy key.
+  if (first === '"' || first === "'") {
+    const quoted = readString(raw, start)
+    return quoted === null ? null : { text: quoted.value, end: quoted.end }
   }
-
-  return { text: text.trim(), end: index }
+  let index = start
+  while (index < raw.length && raw[index] !== "." && raw[index] !== '"' && raw[index] !== "'") {
+    index += 1
+  }
+  const text = raw.slice(start, index).trim()
+  return text.length === 0 ? null : { text, end: index }
 }
 
 /** The one-character basic-string escapes. Anything else is not valid TOML. */

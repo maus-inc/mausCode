@@ -101,6 +101,9 @@ describe("destructive patterns", () => {
     // The substitution is still active inside double quotes, so the embedded
     // delete is read the same way.
     ["recursive-force-delete", 'echo "`rm -rf /`"'],
+    // The backslash is literal inside the single quotes, so the quote closes
+    // at the mark that follows it, and the substitution that follows runs.
+    ["recursive-force-delete", "echo 'x\\' `rm -rf /`"],
     ["recursive-force-delete", "chroot --skip-chdir /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --userspec root:root /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --groups root /mnt rm -rf /"],
@@ -329,6 +332,11 @@ describe("destructive patterns", () => {
   })
 
   const nearMisses = [
+    // Operators the shell does not run because they sit in quotes are not
+    // command boundaries, and the text after them is the argument it is.
+    'echo "example; rm -rf /"',
+    "echo 'it; ls'",
+    'echo "(rm -rf /)"',
     "rm file.txt",
     "rm -f file.txt",
     "rm -r emptydir",
@@ -1133,10 +1141,9 @@ describe("environment assignments that carry code", () => {
     isEnvInjection(command)
   })
 
-  it("catches an assignment whose value the segment splitter cuts in half", () => {
-    // LESSOPEN's value begins with a pipe, so the splitter breaks the word and
-    // the assignment lands in a segment of its own. The raw-command scan is what
-    // still sees it.
+  it("catches an assignment whose value opens with a pipe", () => {
+    // The pipe is quoted, so the assignment stays one segment, and the
+    // env-injection read of a value that can run is what names it.
     expect(bash("LESSOPEN='|/tmp/x.sh %s' less file").ruleId).toBe("env-injection")
   })
 

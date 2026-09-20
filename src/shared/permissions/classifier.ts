@@ -488,57 +488,70 @@ function wordsConsumed(word: string, words: string[], index: number): number {
  * pattern list cannot win against a shell grammar and only an OS sandbox can.
  */
 /**
- * Backticks split the command when they are the shell's command substitution,
- * and a substituted command has to reach the rules as its own segment. They
- * are literal, and must not split, in the spellings where the shell does not
- * run them: inside single quotes, which is the spelling that carries a
- * backtick-quoted SQL identifier, and after an escape. Inside double quotes
- * the substitution is still active, so those keep their boundary. This pass
- * drops the literal backticks before the split, and leaves the active ones
- * where the substitution split needs them.
+ * The shell runs a second command only when an operator sits outside quotes,
+ * so a `;`, `|`, `(`, `)` or a newline inside a quoted stretch is an ordinary
+ * character that must not split the statement. A backtick runs a command
+ * substitution only where the shell runs it, unquoted and inside double
+ * quotes; inside single quotes every backslash and backtick is literal, and
+ * a substituted command has to reach the rules as its own segment. The step
+ * reports how many characters at `i` start a boundary, or zero when the
+ * character stays in the segment it is in.
  */
-interface BacktickScan {
+interface SegmentScan {
   quote: string | null
   escaped: boolean
 }
 
-/**
- * Advances the scan over one character, and returns false for the backtick
- * the shell does not run, so that it loses its boundary before the split. A
- * quote opens only when nothing is open, and closes only its own kind, so a
- * single quote inside double quotes stays an ordinary character.
- */
-function stepBacktickScan(ch: string, scan: BacktickScan): boolean {
+const SEGMENT_BREAKERS = new Set([";", "\n", "(", ")", "`"])
+
+function stepSegmentScan(command: string, i: number, scan: SegmentScan): number {
   if (scan.escaped) {
     scan.escaped = false
-    return ch !== "`"
+    return 0
   }
-  if (ch === "\\") {
+  const ch = command[i]
+  // A backslash is literal inside single quotes, so it opens no escape there.
+  if (ch === "\\" && scan.quote !== "'") {
     scan.escaped = true
-    return true
+    return 0
   }
   if (ch === "'" || ch === '"') {
-    if (scan.quote === ch) {
-      scan.quote = null
-    } else {
-      scan.quote ??= ch
-    }
-    return true
+    scan.quote = scan.quote === ch ? null : scan.quote === null ? ch : scan.quote
+    return 0
   }
-  return ch !== "`" || scan.quote !== "'"
+  return unquotedBoundary(command, i, scan)
 }
 
-function dropLiteralBackticks(text: string): string {
-  let out = ""
-  const scan: BacktickScan = { quote: null, escaped: false }
-  for (const ch of text) {
-    if (stepBacktickScan(ch, scan)) out += ch
+function unquotedBoundary(command: string, i: number, scan: SegmentScan): number {
+  if (scan.quote === "'") return 0
+  if (scan.quote === '"') return command[i] === "`" ? 1 : 0
+  const ch = command[i]
+  if (SEGMENT_BREAKERS.has(ch)) return 1
+  if (ch === "&" && command[i + 1] === "&") return 2
+  if (ch === "|") return command[i + 1] === "|" ? 2 : 1
+  return ch === "$" && command[i + 1] === "(" ? 2 : 0
+}
+
+function splitCommandText(command: string): string[] {
+  const parts: string[] = []
+  let current = ""
+  const scan: SegmentScan = { quote: null, escaped: false }
+  for (let i = 0; i < command.length; i++) {
+    const length = stepSegmentScan(command, i, scan)
+    if (length > 0) {
+      parts.push(current)
+      current = ""
+      i += length - 1
+      continue
+    }
+    current += command[i]
   }
-  return out
+  parts.push(current)
+  return parts
 }
 
 export function splitCommandSegments(command: string): CommandSegment[] {
-  return dropLiteralBackticks(
+  return splitCommandText(
     command
       .replaceAll(/\$\{?ifs\}?/gi, " ")
       // `find . \( -name x \) -delete` groups its predicates with escaped
@@ -550,7 +563,6 @@ export function splitCommandSegments(command: string): CommandSegment[] {
       // away from the `find` that carries it.
       .replaceAll(/\\\(|\\\)|\\;|\\&/g, " "),
   )
-    .split(/&&|\|\||[|;\n`()]|\$\(/)
     .map((raw) => raw.trim())
     .filter((text) => text.length > 0)
     .map((text) => {
