@@ -552,6 +552,32 @@ describe("destructive patterns", () => {
     ).toBe("recursive-force-delete")
   })
 
+  it("skips a comment when matching a spawn call's closer", () => {
+    // A `)` inside a comment is an annotation, not the call's closer, so the
+    // list after it is read with the comment dropped and the delete it carries
+    // is named.
+    expect(
+      bash("node -e \"require('child_process').spawn('rm', /* ) */ ['-rf', '/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    expect(
+      bash("python -c \"import subprocess\nsubprocess.run(['rm', # )\n'-rf', '/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    expect(bash("node -e \"require('child_process').spawn('ls', /* ) */ ['-la'])\"").ruleId).toBe(
+      "shell-command",
+    )
+  })
+
+  it("reads the require form of a spawn call", () => {
+    // A quote sits between the module name and the call, so the attribute
+    // form `child_process.spawn` cannot see it, and the bare name reads it.
+    expect(bash("node -e \"require('child_process').spawn('rm', ['-rf', '/etc'])\"").ruleId).toBe(
+      "recursive-force-delete",
+    )
+    expect(
+      bash("node -e \"require('child_process').execFile('rm', ['-rf', '/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+  })
+
   it("reads a delete out of an interpreter payload for the critical-path breaker", () => {
     expect(critical("python -c \"import shutil; shutil.rmtree('/')\"")?.id).toBe("critical-delete")
     expect(

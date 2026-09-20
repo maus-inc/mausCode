@@ -1158,6 +1158,51 @@ meant to manage is not locked behind the one class no allow-list can open.
 content already sits in the model's context, and that is the leak the rule
 denies. `Read` is unchanged.
 
+## Decision 46: a comment is an annotation, and the require form names its call (added 2026-09-20)
+
+The review round that read decision 45 found a bypass it fixed, and two
+findings it answered rather than changed. The fix was verified against the
+built classifier before a line moved.
+
+**The closer matcher now knows which parens a comment carries.** A `)` inside
+a comment closed the spawn call early, so `spawn('rm', /* ) */ ['-rf',
+'/etc'])` read only the comment prefix and never inspected the argv after
+it, and the delete it runs hid behind approval. The matcher counts a paren
+only where the payload's own grammar counts one: outside a quoted literal,
+past a backslash, and outside a comment. A `#` or `//` runs to the end of
+its line, and a slash-star pair is a block, a quote wins over the rest
+because a `#` in a string is data the string carries. The argv list is read
+with its comments dropped and its newlines folded, so the list is one command
+line even when the payload wraps it. A `//` inside the list is left alone
+because it is also a scheme in a url a list argument may carry.
+
+**The require form names its call.** The list knew `child_process.spawn`,
+`child_process.exec`, and `child_process.execfile`, but the require form
+sits a quote between the module name and the call, so
+`require('child_process').spawn('rm', ['-rf', '/etc'])` matched none of them
+and read as an ordinary shell command. The bare names `spawn`, `exec`, and
+`execfile` now read the require form the way the bare `spawnsync` and
+`execsync` already did.
+
+**A one-letter rsync host stays a drive letter.** The finding said
+`a:/data` is a valid remote and reads as local. It is a real tension, but
+`a:/data` and a Windows drive letter `C:/Users/x` are the same spelling, and
+the drive letter is the common case and is locked in the near-miss tests.
+Reading a remote as local is the dangerous direction, so this is surfaced
+as a product decision rather than flipped silently: if the owner wants the
+one-letter host read as remote, the drive-letter near-misses move to network
+with it, and that is a call this record does not make.
+
+**A call a payload only mentions in a comment or string stays denied.** The
+finding said a harmless string or comment mentioning
+`os.remove('/etc/hosts')` is denied. A comment the destructive check reads is
+the raw payload text, and a string that spells a call plus a protected path
+is the same text as a real call, so the classifier cannot tell the mention
+from the call, and it denies both. That is a false positive in the safe
+direction, and the cost of the text boundary decision 15 already accepted:
+the gate reads the payload as text, and a mention it cannot separate from a
+call is denied rather than let through.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19

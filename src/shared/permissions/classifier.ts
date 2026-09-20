@@ -1761,6 +1761,37 @@ function copyMoveDestinations(payload: string): string[] | null {
 }
 
 /** True when an inline interpreter payload opens a channel to a host it names. */
+/** The index of the last character of the line comment that starts at `i`. */
+function lineCommentEnd(text: string, i: number): number {
+  const newline = text.indexOf("\n", i)
+  return newline === -1 ? text.length - 1 : newline
+}
+
+/** The index of the last character of the block comment that starts at `i`. */
+function blockCommentEnd(text: string, i: number): number {
+  const close = text.indexOf("*/", i + 2)
+  return close === -1 ? text.length - 1 : close + 1
+}
+
+/**
+ * The index of the last character of the quoted literal or comment that starts
+ * at `i`, or `i - 1` when `i` starts neither. A comment is what the payload's
+ * own grammar makes of the character: `#` or `//` runs to the end of the line,
+ * a slash-star pair is a block. A quote wins over the rest, because a `#` in a
+ * string literal is data the string carries, not a comment.
+ */
+function spanEnd(text: string, i: number): number {
+  const ch = text[i]
+  if (isQuoteChar(ch)) return quoteEnd(text, i)
+  if (ch === "#") return lineCommentEnd(text, i)
+  if (ch === "/") {
+    const next = text[i + 1]
+    if (next === "*") return blockCommentEnd(text, i)
+    if (next === "/") return lineCommentEnd(text, i)
+  }
+  return i - 1
+}
+
 function hasInterpreterEgress(command: string, segments: CommandSegment[]): boolean {
   if (!segments.some(isInlineInterpreter)) return false
   const lower = command.toLowerCase()
@@ -1787,6 +1818,11 @@ const SUBPROCESS_SPAWN_CALLS = [
   "child_process.execfile",
   "execsync",
   "spawnsync",
+  // The bare names catch the require form, where a quote sits between the
+  // module name and the call, so `child_process.spawn` cannot see it.
+  "spawn",
+  "exec",
+  "execfile",
 ]
 
 /**
@@ -1821,39 +1857,63 @@ function spawnedArgvCommand(command: string, segments: CommandSegment[]): string
     }
   }
   if (lists.length === 0) return null
-  return lists.map((list) => list.replaceAll(/["'`[\],]/g, " ")).join(" ")
+  return (
+    lists
+      // A block comment, and a `#` comment that runs to the end of its line,
+      // are the payload's own annotations, not argv, so they are dropped before
+      // the list is read as a command line. A `//` is left alone, because it is
+      // also a scheme in a url a list argument may carry. A newline is folded,
+      // because the list is one command line even when the payload wraps it.
+      .map((list) => list.replaceAll(/\*[\s\S]*?\*\//g, " "))
+      .map((list) => list.replaceAll(/#[^\n]*/g, " "))
+      .map((list) => list.replaceAll(/\n/g, " "))
+      .map((list) => list.replaceAll(/["'`[\],]/g, " "))
+      .join(" ")
+  )
 }
 
-/** The index of the paren that closes the one at `open`, or -1 when it never does. */
+/** True for the characters that open a quoted literal in a payload. */
+function isQuoteChar(ch: string): boolean {
+  return ch === "'" || ch === '"' || ch === "`"
+}
+
+/**
+ * The index of the quote that closes the one at `i`, or the end of the text
+ * when the literal never closes. A backslash swallows the character after it,
+ * the way the payload's own grammar does, so an escaped quote does not close
+ * the literal.
+ */
+function quoteEnd(text: string, i: number): number {
+  const quote = text[i]
+  for (let j = i + 1; j < text.length; j++) {
+    if (text[j] === "\\") {
+      j += 1
+      continue
+    }
+    if (text[j] === quote) return j
+  }
+  return text.length
+}
+
 /**
  * The index of the paren that closes the one at `open`, or -1 when it never
- * does. A paren inside a quoted literal is the character the string carries,
- * not the syntax the call is made of, so the depth only counts where the
- * payload's own grammar counts it: outside quotes, past escapes. A `(` inside
- * a list argument used to deepen the count, so the call's real closer was
- * never found, its argv was never read, and the delete it runs hid behind
- * approval.
+ * does. The depth only counts where the payload's own grammar counts a paren:
+ * outside a quoted literal, past a backslash, and outside a comment. A paren
+ * inside a list argument or a comment used to close the count early, so the
+ * call's real closer was never found, its argv was never read, and the delete
+ * it runs hid behind approval.
  */
 function matchParen(text: string, open: number): number {
   let depth = 0
-  let quote: string | null = null
-  let escaped = false
   for (let i = open; i < text.length; i++) {
     const ch = text[i]
-    if (escaped) {
-      escaped = false
-      continue
-    }
     if (ch === "\\") {
-      escaped = true
+      i += 1
       continue
     }
-    if (quote !== null) {
-      if (ch === quote) quote = null
-      continue
-    }
-    if (ch === "'" || ch === '"' || ch === "`") {
-      quote = ch
+    const end = spanEnd(text, i)
+    if (end >= i) {
+      i = end
       continue
     }
     if (ch === "(") depth += 1
