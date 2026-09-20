@@ -488,21 +488,23 @@ function wordsConsumed(word: string, words: string[], index: number): number {
  * pattern list cannot win against a shell grammar and only an OS sandbox can.
  */
 /**
- * Backticks outside quotes split the command, because that is the shell's
- * command substitution, and a substituted command has to reach the rules as
- * its own segment. Inside quotes a backtick is literal, which is how MySQL
- * quotes an identifier, and a literal must not split the statement in two.
- * This pass drops the quoted ones before the split, and leaves the unquoted
- * ones where the substitution split needs them.
+ * Backticks split the command when they are the shell's command substitution,
+ * and a substituted command has to reach the rules as its own segment. They
+ * are literal, and must not split, in the spellings where the shell does not
+ * run them: inside single quotes, which is the spelling that carries a
+ * backtick-quoted SQL identifier, and after an escape. Inside double quotes
+ * the substitution is still active, so those keep their boundary. This pass
+ * drops the literal backticks before the split, and leaves the active ones
+ * where the substitution split needs them.
  */
-function dropQuotedBackticks(text: string): string {
+function dropLiteralBackticks(text: string): string {
   let out = ""
   let quote: string | null = null
   let escaped = false
   for (const ch of text) {
     if (escaped) {
       escaped = false
-      out += ch
+      if (ch !== "`") out += ch
       continue
     }
     if (ch === "\\") {
@@ -510,9 +512,17 @@ function dropQuotedBackticks(text: string): string {
       out += ch
       continue
     }
-    if (quote !== null) {
-      if (ch === quote) quote = null
-      else if (ch !== "`") out += ch
+    if (quote === "'") {
+      if (ch === "'") {
+        quote = null
+      } else if (ch !== "`") {
+        out += ch
+      }
+      continue
+    }
+    if (quote === '"') {
+      if (ch === '"') quote = null
+      out += ch
       continue
     }
     if (ch === '"' || ch === "'") quote = ch
@@ -522,7 +532,7 @@ function dropQuotedBackticks(text: string): string {
 }
 
 export function splitCommandSegments(command: string): CommandSegment[] {
-  return dropQuotedBackticks(
+  return dropLiteralBackticks(
     command
       .replaceAll(/\$\{?ifs\}?/gi, " ")
       // `find . \( -name x \) -delete` groups its predicates with escaped

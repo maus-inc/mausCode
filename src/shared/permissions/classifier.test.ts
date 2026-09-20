@@ -45,6 +45,9 @@ describe("destructive patterns", () => {
     // Unquoted backticks are the shell's command substitution, and the
     // substituted command reaches the rules as its own segment.
     ["recursive-force-delete", "echo `rm -rf /`"],
+    // The substitution is still active inside double quotes, so the embedded
+    // delete is read the same way.
+    ["recursive-force-delete", 'echo "`rm -rf /`"'],
     ["recursive-force-delete", "chroot --skip-chdir /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --userspec root:root /mnt rm -rf /"],
     ["recursive-force-delete", "chroot --groups root /mnt rm -rf /"],
@@ -54,9 +57,9 @@ describe("destructive patterns", () => {
     ["destructive-sql", 'psql -c "TRUNCATE users"'],
     ["destructive-sql", 'mysql -e "DROP VIEW customer_export"'],
     ["destructive-sql", 'sqlcmd -Q "ALTER TABLE t DROP COLUMN c"'],
-    // A backtick inside quotes is a literal the way MySQL quotes an
+    // Single quotes are the spelling that carries a backtick-quoted SQL
     // identifier, and the statement must reach the rule unsplit.
-    ["destructive-sql", 'mysql -e "DROP TABLE `users`"'],
+    ["destructive-sql", "mysql -e 'DROP TABLE `users`'"],
     // The type is any word, which is what keeps these inside the rule.
     ["destructive-sql", 'psql -c "DROP TYPE money"'],
     ["destructive-sql", 'psql -c "DROP TABLESPACE fast"'],

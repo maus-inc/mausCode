@@ -941,16 +941,19 @@ decision 36 is unchanged.
 Two findings on the head that closed decision 37, each verified before and
 closed after.
 
-**Backticks inside quotes split the statement.** The segment split treats a
-backtick as a boundary, which is the shell's command substitution, and a
-substituted command has to reach the rules as its own segment. But inside
-quotes a backtick is literal, which is how MySQL quotes an identifier, so
-`mysql -e "DROP TABLE \`users\`"` split into a DROP without a target and a
-stray word, and fell to the residual approval class. The split now drops
-backticks inside quotes before it splits, with the escapes and the quote
-state kept honest as it walks, and leaves the unquoted ones where the
-substitution split needs them, so a command that runs a delete through
-unquoted backticks is still read as the delete it is.
+**Backticks split the statement where the shell runs them, and nowhere
+else.** The segment split treats a backtick as a boundary, which is the
+shell's command substitution, and a substituted command has to reach the
+rules as its own segment. The shell runs that substitution inside double
+quotes as well as unquoted, so `echo "\`rm -rf /\`"` splits, and the delete
+is read, while the substitution is literal inside single quotes and after an
+escape, and a literal must not split the statement in two. Single quotes are
+the spelling that carries a backtick-quoted SQL identifier, and without the
+distinction `mysql -e 'DROP TABLE \`users\`'` split into a DROP without a
+target and a stray word, and fell to the residual approval class. The split
+now drops the literal backticks before it splits, with the escapes and the
+quote state kept honest as it walks, and leaves the active ones where the
+substitution split needs them.
 
 **MATERIALIZED VIEW is the one two-word type.** The structural read of
 decision 37 parsed its words as the type and the target, so `DROP
