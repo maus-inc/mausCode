@@ -546,26 +546,35 @@ function stepSegmentScan(command: string, i: number, scan: SegmentScan): number 
  * across the `$(`, and the `;` inside read as an ordinary character of the
  * segment that starts at `echo`.
  */
-function unquotedBoundary(command: string, i: number, scan: SegmentScan): number {
-  if (scan.quote === "'") return 0
-  const ch = command[i]
-  const top = scan.subst[scan.subst.length - 1]
-  // The closer of an open context ends the context and hands back the quote
-  // state it interrupted. A `)` with no `$(` open is the ordinary syntax it
-  // always was, and a backtick never closes a `$(` context or vice versa.
-  if (ch === ")" && top !== undefined && top.kind === "$") {
+/**
+ * The closer of an open context ends the context and hands back the quote
+ * state it interrupted. Zero when `ch` is not the closer of the open context:
+ * a `)` with no `$(` open is the ordinary syntax it always was, and a backtick
+ * never closes a `$(` context or vice versa.
+ */
+function closeSubstitution(scan: SegmentScan, ch: string): number {
+  const top = scan.subst.at(-1)
+  if (ch === ")" && top?.kind === "$") {
     scan.subst.pop()
     scan.quote = top.outerQuote
     return 1
   }
+  if (ch === "`" && top?.kind === "`") {
+    scan.subst.pop()
+    scan.quote = top.outerQuote
+    return 1
+  }
+  return 0
+}
+
+function unquotedBoundary(command: string, i: number, scan: SegmentScan): number {
+  if (scan.quote === "'") return 0
+  const ch = command[i]
+  const closed = closeSubstitution(scan, ch)
+  if (closed) return closed
   if (ch === "`") {
-    if (top !== undefined && top.kind === "`") {
-      scan.subst.pop()
-      scan.quote = top.outerQuote
-    } else {
-      scan.subst.push({ kind: "`", outerQuote: scan.quote })
-      scan.quote = null
-    }
+    scan.subst.push({ kind: "`", outerQuote: scan.quote })
+    scan.quote = null
     return 1
   }
   if (ch === "$" && command[i + 1] === "(") {
@@ -1612,8 +1621,18 @@ const INTERPRETER_NETWORK_CALLS = [
  * asks for a card instead of running, the floor's direction when the two
  * cannot be told apart.
  */
-const PAYLOAD_HOST_LITERAL =
-  /:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}\b|["'`][a-z0-9-]+(?:\.[a-z0-9-]+)+["'`]|["'`][a-z0-9-]+["'`]\s*[,)]/
+const PAYLOAD_HOST_ADDRESS = /:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}\b/
+const PAYLOAD_HOST_DOTTED = /["'`][a-z0-9-]+(?:\.[a-z0-9-]+)+["'`]/
+const PAYLOAD_HOST_LABEL = /["'`][a-z0-9-]+["'`]\s*[,)]/
+
+/** True when a payload names a host by a scheme, an address, or a quoted name. */
+function payloadNamesHost(lower: string): boolean {
+  return (
+    PAYLOAD_HOST_ADDRESS.test(lower) ||
+    PAYLOAD_HOST_DOTTED.test(lower) ||
+    PAYLOAD_HOST_LABEL.test(lower)
+  )
+}
 
 /**
  * Every absolute or home-relative path a payload names, quoted or not.
@@ -1712,7 +1731,7 @@ function hasInterpreterEgress(command: string, segments: CommandSegment[]): bool
   if (!segments.some(isInlineInterpreter)) return false
   const lower = command.toLowerCase()
   if (!INTERPRETER_NETWORK_CALLS.some((call) => lower.includes(call))) return false
-  return PAYLOAD_HOST_LITERAL.test(lower)
+  return payloadNamesHost(lower)
 }
 
 /**
