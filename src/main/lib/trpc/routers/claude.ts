@@ -184,8 +184,6 @@ function parseMentions(prompt: string): {
  */
 async function getClaudeCodeToken(): Promise<string | null> {
   try {
-    const db = getDatabase()
-
     console.log("[claude-auth] ========== CLAUDE CODE AUTH DEBUG ==========")
 
     // Prefer the token maintained by the local Claude Code CLI. The CLI refreshes
@@ -197,87 +195,101 @@ async function getClaudeCodeToken(): Promise<string | null> {
       return localToken
     }
 
-    // First try multi-account system
-    const settings = db
-      .select()
-      .from(anthropicSettings)
-      .where(eq(anthropicSettings.id, "singleton"))
-      .get()
+    const activeToken = readActiveAccountToken()
+    if (activeToken) return activeToken
 
-    if (settings?.activeAccountId) {
-      const account = db
-        .select()
-        .from(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, settings.activeAccountId))
-        .get()
-
-      if (account?.oauthToken) {
-        console.log(
-          "[claude-auth] Using multi-account system, activeAccountId:",
-          settings.activeAccountId,
-        )
-        try {
-          const decrypted = getSecretStore().decodeFromDatabase(
-            "The active Claude account token",
-            account.oauthToken,
-          )
-          console.log("[claude-auth] Active account token read from the secret store")
-          console.log("[claude-auth] ============================================")
-          return decrypted
-        } catch (error) {
-          console.warn(
-            "[claude-auth] Active account token could not be read; falling back:",
-            error instanceof Error ? error.message : error,
-          )
-        }
-      }
-
-      console.log("[claude-auth] Active account not found or has no token, falling back to legacy")
-    }
-
-    // Fallback to legacy table
-    const cred = db
-      .select()
-      .from(claudeCodeCredentials)
-      .where(eq(claudeCodeCredentials.id, "default"))
-      .get()
-
-    console.log(
-      "[claude-auth] Legacy credential record:",
-      cred
-        ? {
-            id: cred.id,
-            hasOauthToken: !!cred.oauthToken,
-            storedTokenLength: cred.oauthToken?.length ?? 0,
-            connectedAt: cred.connectedAt,
-            userId: cred.userId,
-          }
-        : null,
-    )
-
-    if (cred?.oauthToken) {
-      try {
-        const decrypted = getSecretStore().decodeFromDatabase(
-          "The legacy Claude credential token",
-          cred.oauthToken,
-        )
-        console.log("[claude-auth] Legacy token read from the secret store")
-        console.log("[claude-auth] ============================================")
-
-        return decrypted
-      } catch (error) {
-        console.warn(
-          "[claude-auth] Legacy token could not be read; falling back:",
-          error instanceof Error ? error.message : error,
-        )
-      }
-    }
+    const legacyToken = readLegacyClaudeToken()
+    if (legacyToken) return legacyToken
 
     console.log("[claude-auth] No Claude Code credentials found")
     console.log("[claude-auth] ============================================")
     return null
   } catch (error) {
     console.error("[claude-auth] Error getting Claude Code token:", error)
+    return null
+  }
+}
+
+/** Token of the account selected in the in-app multi-account settings. */
+function readActiveAccountToken(): string | null {
+  const db = getDatabase()
+  const settings = db
+    .select()
+    .from(anthropicSettings)
+    .where(eq(anthropicSettings.id, "singleton"))
+    .get()
+
+  if (!settings?.activeAccountId) return null
+
+  const account = db
+    .select()
+    .from(anthropicAccounts)
+    .where(eq(anthropicAccounts.id, settings.activeAccountId))
+    .get()
+
+  if (!account?.oauthToken) {
+    console.log("[claude-auth] Active account not found or has no token, falling back to legacy")
+    return null
+  }
+
+  console.log(
+    "[claude-auth] Using multi-account system, activeAccountId:",
+    settings.activeAccountId,
+  )
+  try {
+    const decrypted = getSecretStore().decodeFromDatabase(
+      "The active Claude account token",
+      account.oauthToken,
+    )
+    console.log("[claude-auth] Active account token read from the secret store")
+    console.log("[claude-auth] ============================================")
+    return decrypted
+  } catch (error) {
+    console.warn(
+      "[claude-auth] Active account token could not be read; falling back:",
+      error instanceof Error ? error.message : error,
+    )
+    console.log("[claude-auth] Active account not found or has no token, falling back to legacy")
+    return null
+  }
+}
+
+/** Token in the older single-credential table. */
+function readLegacyClaudeToken(): string | null {
+  const db = getDatabase()
+  const cred = db
+    .select()
+    .from(claudeCodeCredentials)
+    .where(eq(claudeCodeCredentials.id, "default"))
+    .get()
+
+  console.log(
+    "[claude-auth] Legacy credential record:",
+    cred
+      ? {
+          id: cred.id,
+          hasOauthToken: !!cred.oauthToken,
+          storedTokenLength: cred.oauthToken?.length ?? 0,
+          connectedAt: cred.connectedAt,
+          userId: cred.userId,
+        }
+      : null,
+  )
+
+  if (!cred?.oauthToken) return null
+  try {
+    const decrypted = getSecretStore().decodeFromDatabase(
+      "The legacy Claude credential token",
+      cred.oauthToken,
+    )
+    console.log("[claude-auth] Legacy token read from the secret store")
+    console.log("[claude-auth] ============================================")
+    return decrypted
+  } catch (error) {
+    console.warn(
+      "[claude-auth] Legacy token could not be read; falling back:",
+      error instanceof Error ? error.message : error,
+    )
     return null
   }
 }

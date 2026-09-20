@@ -108,19 +108,23 @@ export function writeKeyedSecret(store: KeyedStore, key: string, value: string):
   writeFile(store.filePath, next)
 
   const written = readFile(store.filePath)
-  const stored = written.file.entries[key]
-  const readBack =
-    stored === undefined
-      ? null
-      : stored.protection === "os-encryption"
-        ? store.store.readStoredBytes(
-            Buffer.from(stored.payload, "base64"),
-            `The saved value for ${key}`,
-          )
-        : stored.payload
+  const readBack = readBackValue(store, key, written.file.entries[key])
   if (readBack !== value) {
     throw new Error(`The saved value for ${key} could not be read back after it was written.`)
   }
+}
+
+function readBackValue(
+  store: KeyedStore,
+  key: string,
+  stored: StoredEntry | undefined,
+): string | null {
+  if (stored === undefined) return null
+  if (stored.protection !== "os-encryption") return stored.payload
+  return store.store.readStoredBytes(
+    Buffer.from(stored.payload, "base64"),
+    `The saved value for ${key}`,
+  )
 }
 
 export function removeKeyedSecret(store: KeyedStore, key: string): void {

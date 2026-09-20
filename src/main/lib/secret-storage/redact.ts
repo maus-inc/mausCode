@@ -7,9 +7,19 @@
 
 export const REDACTED = "[redacted]"
 
-/** Keys whose values are credentials in this codebase or in a provider payload. */
-const SECRET_KEY_PATTERN =
-  /(api[-_]?key|access[-_]?token|refresh[-_]?token|oauth[-_]?token|id[-_]?token|auth[-_]?token|token|secret|password|passwd|credential|authorization|bearer|cookie|private[-_]?key|client[-_]?secret)/i
+/**
+ * Keys whose values are credentials in this codebase or in a provider payload.
+ * A word like `token` covers `accessToken`, `refresh_token` and the rest, so
+ * only the compound names that a bare word would miss need their own pattern.
+ */
+const SECRET_KEY_PATTERNS: readonly RegExp[] = [
+  /(api|private)[-_]?key/i,
+  /token|secret|password|passwd|credential|authorization|bearer|cookie/i,
+]
+
+function isSecretKey(key: string): boolean {
+  return SECRET_KEY_PATTERNS.some((pattern) => pattern.test(key))
+}
 
 const MAX_DEPTH = 12
 
@@ -31,19 +41,19 @@ export function redactRecord<T>(value: T, depth = 0): T {
 
   const result: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(value)) {
-    result[key] = SECRET_KEY_PATTERN.test(key) ? REDACTED : redactRecord(item, depth + 1)
+    result[key] = isSecretKey(key) ? REDACTED : redactRecord(item, depth + 1)
   }
   return result as T
 }
 
 /** Known credential prefixes that must never appear inside a log line. */
 const LOCAL_SECRET_PATTERNS: readonly RegExp[] = [
-  /\bsk-ant-[A-Za-z0-9\-_]{8,}/g,
-  /\bsk-or-[A-Za-z0-9\-_]{8,}/g,
-  /\bsk-[A-Za-z0-9]{20,}/g,
-  /\bgh[pousr]_[A-Za-z0-9]{16,}/g,
-  /\bya29\.[A-Za-z0-9\-_]{8,}/g,
-  /\bBearer\s+[A-Za-z0-9\-._~+/]{12,}=*/gi,
+  /\bsk-ant-[\w-]{8,}/g,
+  /\bsk-or-[\w-]{8,}/g,
+  /\bsk-\w{20,}/g,
+  /\bgh[pousr]_\w{16,}/g,
+  /\bya29\.[\w-]{8,}/g,
+  /\bBearer\s+[\w.~+/-]{12,}=*/gi,
 ]
 
 export function redactText(text: string): string {

@@ -91,31 +91,42 @@ export async function applyNativeCredentials(
   }
   const providers: string[] = []
   const ephemeralProviders: string[] = []
+  const handoff = { client, sessionId: inMemory ? sessionId : undefined, ephemeralProviders }
+
   const anthropicToken = getActiveAnthropicToken()
   if (anthropicToken) {
-    if (inMemory && sessionId) {
-      await client.setEphemeralApiKey(sessionId, "anthropic-api", anthropicToken)
-      ephemeralProviders.push("anthropic-api")
-    } else {
-      await client.setApiKey("anthropic-api", anthropicToken)
-    }
+    await applyKey(handoff, "anthropic-api", anthropicToken)
     providers.push("anthropic-api")
   } else if (process.env.ANTHROPIC_API_KEY) {
     // The daemon inherits process env and resolves ANTHROPIC_API_KEY itself.
     providers.push("anthropic-api (env)")
   }
+
   if (request.customToken) {
-    if (inMemory && sessionId) {
-      await client.setEphemeralApiKey(sessionId, "openai-api", request.customToken)
-      ephemeralProviders.push("openai-api")
-    } else {
-      await client.setApiKey("openai-api", request.customToken)
-    }
+    await applyKey(handoff, "openai-api", request.customToken)
     providers.push("openai-api")
   } else if (process.env.OPENAI_API_KEY) {
     providers.push("openai-api (env)")
   }
+
   return { providers, ephemeralProviders }
+}
+
+type CredentialHandoff = {
+  client: JcodeClient
+  /** Set only when the daemon advertised the memory-only request. */
+  sessionId: string | undefined
+  ephemeralProviders: string[]
+}
+
+/** Writes a key in memory when the daemon supports it, on disk otherwise. */
+async function applyKey(handoff: CredentialHandoff, provider: string, key: string): Promise<void> {
+  if (handoff.sessionId !== undefined) {
+    await handoff.client.setEphemeralApiKey(handoff.sessionId, provider, key)
+    handoff.ephemeralProviders.push(provider)
+    return
+  }
+  await handoff.client.setApiKey(provider, key)
 }
 
 /**

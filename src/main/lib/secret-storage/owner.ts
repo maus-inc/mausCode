@@ -224,6 +224,16 @@ export function encodeSecret(
   return { ciphertext: null, plaintext: value, protection }
 }
 
+function statusReason(
+  availability: Availability,
+  metadataError: string | null,
+): SecretStorageStatus["reason"] {
+  if (metadataError) return "metadata-unreadable"
+  if (availability.usable) return "ready"
+  if (availability.hardcodedKey) return "hardcoded-key-backend"
+  return "encryption-unavailable"
+}
+
 export function buildStatus(input: {
   keychain: Keychain
   metadata: SecretStorageMetadata
@@ -231,13 +241,7 @@ export function buildStatus(input: {
 }): SecretStorageStatus {
   const availability = readAvailability(input.keychain)
   const protection = protectionFrom(availability)
-  const reason: SecretStorageStatus["reason"] = input.metadataError
-    ? "metadata-unreadable"
-    : availability.usable
-      ? "ready"
-      : availability.hardcodedKey
-        ? "hardcoded-key-backend"
-        : "encryption-unavailable"
+  const reason = statusReason(availability, input.metadataError)
   return {
     encryptionAvailable: availability.usable,
     protection,

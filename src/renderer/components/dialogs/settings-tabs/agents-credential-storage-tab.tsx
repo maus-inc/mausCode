@@ -18,6 +18,23 @@ import { Button } from "../../ui/button"
 import { Switch } from "../../ui/switch"
 
 /**
+ * What this page reads from the status query. The assignment in the component
+ * is a compile-time check: a field the router stops returning fails there.
+ */
+type StatusData = {
+  protection: "os-encryption" | "hardcoded-key" | "plaintext"
+  encryptionAvailable: boolean
+  plaintextConsent: boolean
+  plaintextConsentAt?: string | null
+  reason: string
+  backend: string | null
+  metadataError: string | null
+  signInFailure: string | null
+  rendererError: string | null
+  rendererKeysStored: string[]
+}
+
+/**
  * One page for every credential the app holds and how it is protected.
  *
  * The status comes from the main process, which owns the only encryption call,
@@ -36,11 +53,9 @@ export function AgentsCredentialStorageTab() {
     },
   })
 
-  const data = status.data
-  const protection = data?.protection ?? "plaintext"
-  const protectedByOs = protection === "os-encryption" && data?.encryptionAvailable === true
+  const data: StatusData | undefined = status.data
+  const protectedByOs = data?.protection === "os-encryption" && data.encryptionAvailable === true
   const consentOn = data?.plaintextConsent === true
-  const refusalReason = data?.metadataError ?? data?.reason ?? null
 
   return (
     <div className="space-y-6">
@@ -52,128 +67,17 @@ export function AgentsCredentialStorageTab() {
         </p>
       </div>
 
-      <div className="bg-background rounded-lg border border-border overflow-hidden">
-        <div className="flex items-start justify-between gap-4 p-4">
-          <div className="flex items-start gap-3">
-            <div
-              className={cn(
-                "mt-0.5 flex h-8 w-8 items-center justify-center rounded-md",
-                protectedByOs ? "bg-emerald-500/10" : "bg-amber-500/10",
-              )}
-            >
-              {protectedByOs ? (
-                <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              ) : (
-                <ShieldOff className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              )}
-            </div>
-            <div className="flex flex-col space-y-1">
-              <span className="text-sm font-medium text-foreground">
-                {status.isLoading
-                  ? "Checking the OS keyring..."
-                  : protectedByOs
-                    ? "New credentials are encrypted by the operating system"
-                    : "The operating system cannot encrypt new credentials"}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {protectedByOs
-                  ? "The app writes sign-in tokens and provider keys through the OS keyring. Existing credentials keep working."
-                  : describeRefusal(data?.reason, data?.backend, refusalReason)}
-              </span>
-            </div>
-          </div>
-          {status.isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-        </div>
+      <ProtectionCard
+        isLoading={status.isLoading}
+        protectedByOs={protectedByOs}
+        consentOn={consentOn}
+        data={data}
+        pending={setConsent.isPending}
+        onEnable={() => setConfirmOpen(true)}
+        onDisable={() => setConsent.mutate({ consent: false })}
+      />
 
-        <div className="flex items-center justify-between gap-4 border-t border-border p-4">
-          <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              Allow plaintext when encryption is not available
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Without this, a credential that cannot be encrypted is not saved at all and the app
-              tells you why. With it, that credential is written in the clear.
-            </span>
-          </div>
-          <Switch
-            checked={consentOn}
-            disabled={setConsent.isPending}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                setConfirmOpen(true)
-                return
-              }
-              setConsent.mutate({ consent: false })
-            }}
-          />
-        </div>
-
-        {consentOn && (
-          <div className="border-t border-border bg-amber-500/5 p-4">
-            <p className="text-xs text-muted-foreground">
-              Plaintext permission is on
-              {data?.plaintextConsentAt
-                ? `, granted ${new Date(data.plaintextConsentAt).toLocaleString()}`
-                : ""}
-              . Files written under this permission stay on disk after you turn it off, until you
-              remove them or sign out.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-background rounded-lg border border-border overflow-hidden">
-        <div className="p-4">
-          <h4 className="text-sm font-medium text-foreground">What is protected right now</h4>
-        </div>
-        <ul className="divide-y divide-border border-t border-border">
-          <StorageRow
-            label="Sign-in session"
-            detail={
-              data?.signInFailure
-                ? data.signInFailure
-                : protectedByOs
-                  ? "Encrypted by the OS keyring"
-                  : consentOn
-                    ? "Plaintext, because you allowed it"
-                    : "Not written when a new session cannot be encrypted"
-            }
-            ok={protectedByOs}
-          />
-          <StorageRow
-            label="Provider keys and accounts"
-            detail={
-              protectedByOs
-                ? "Encrypted by the OS keyring"
-                : consentOn
-                  ? "Plaintext, because you allowed it"
-                  : "Existing keys stay readable; new ones are refused"
-            }
-            ok={protectedByOs}
-          />
-          <StorageRow
-            label="Claude CLI credentials"
-            detail="Owned by the Claude CLI. Renewal writes to its own store, and a plaintext credential file is only updated when plaintext storage is allowed."
-            ok={false}
-          />
-          <StorageRow
-            label="Runtime provider files"
-            detail="The native runtime writes a key it is handed as a plaintext file in the app's private folder. The app clears that folder before the runtime starts and after it stops, so a key does not survive a run."
-            ok={false}
-          />
-          <StorageRow
-            label="Browser storage"
-            detail={
-              data?.rendererError
-                ? data.rendererError
-                : (data?.rendererKeysStored?.length ?? 0) > 0
-                  ? `${data?.rendererKeysStored?.length} value(s) moved out of browser storage into this app's store`
-                  : "No provider key is kept in browser storage"
-            }
-            ok={!data?.rendererError}
-          />
-        </ul>
-      </div>
+      <InventoryCard protectedByOs={protectedByOs} consentOn={consentOn} data={data} />
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
@@ -226,6 +130,170 @@ export function AgentsCredentialStorageTab() {
       </Button>
     </div>
   )
+}
+
+function ProtectionCard({
+  isLoading,
+  protectedByOs,
+  consentOn,
+  data,
+  pending,
+  onEnable,
+  onDisable,
+}: {
+  isLoading: boolean
+  protectedByOs: boolean
+  consentOn: boolean
+  data: StatusData | undefined
+  pending: boolean
+  onEnable: () => void
+  onDisable: () => void
+}) {
+  const headline = protectionHeadline(isLoading, protectedByOs, consentOn)
+  const detail = protectedByOs
+    ? "The app writes sign-in tokens and provider keys through the OS keyring. Existing credentials keep working."
+    : describeRefusal(data?.reason, data?.backend, data?.metadataError ?? null)
+
+  return (
+    <div className="bg-background rounded-lg border border-border overflow-hidden">
+      <div className="flex items-start justify-between gap-4 p-4">
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              "mt-0.5 flex h-8 w-8 items-center justify-center rounded-md",
+              protectedByOs ? "bg-emerald-500/10" : "bg-amber-500/10",
+            )}
+          >
+            {protectedByOs ? (
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <ShieldOff className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            )}
+          </div>
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">{headline}</span>
+            <span className="text-xs text-muted-foreground">{detail}</span>
+          </div>
+        </div>
+        {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      </div>
+
+      <div className="flex items-center justify-between gap-4 border-t border-border p-4">
+        <div className="flex flex-col space-y-1">
+          <span className="text-sm font-medium text-foreground">
+            Allow plaintext when encryption is not available
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Without this, a credential that cannot be encrypted is not saved at all and the app
+            tells you why. With it, that credential is written in the clear.
+          </span>
+        </div>
+        <Switch
+          checked={consentOn}
+          disabled={pending}
+          onCheckedChange={(checked) => (checked ? onEnable() : onDisable())}
+        />
+      </div>
+
+      {consentOn && (
+        <div className="border-t border-border bg-amber-500/5 p-4">
+          <p className="text-xs text-muted-foreground">
+            Plaintext permission is on
+            {data?.plaintextConsentAt
+              ? `, granted ${new Date(data.plaintextConsentAt).toLocaleString()}`
+              : ""}
+            . Files written under this permission stay on disk after you turn it off, until you
+            remove them or sign out.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function protectionHeadline(
+  isLoading: boolean,
+  protectedByOs: boolean,
+  consentOn: boolean,
+): string {
+  if (isLoading) return "Checking the OS keyring..."
+  if (protectedByOs) return "New credentials are encrypted by the operating system"
+  if (consentOn) return "New credentials are stored in plaintext because you allowed it"
+  return "The operating system cannot encrypt new credentials"
+}
+
+function InventoryCard({
+  protectedByOs,
+  consentOn,
+  data,
+}: {
+  protectedByOs: boolean
+  consentOn: boolean
+  data: StatusData | undefined
+}) {
+  const stored = data?.rendererKeysStored?.length ?? 0
+  const rendererDetail = data?.rendererError
+    ? data.rendererError
+    : stored > 0
+      ? `${stored} value(s) moved out of browser storage into this app's store`
+      : "No provider key is kept in browser storage"
+
+  return (
+    <div className="bg-background rounded-lg border border-border overflow-hidden">
+      <div className="p-4">
+        <h4 className="text-sm font-medium text-foreground">What is protected right now</h4>
+      </div>
+      <ul className="divide-y divide-border border-t border-border">
+        <StorageRow
+          label="Sign-in session"
+          detail={
+            data?.signInFailure ??
+            storedDetail(
+              protectedByOs,
+              consentOn,
+              "Encrypted by the OS keyring",
+              "Plaintext, because you allowed it",
+              "Not written when a new session cannot be encrypted",
+            )
+          }
+          ok={protectedByOs}
+        />
+        <StorageRow
+          label="Provider keys and accounts"
+          detail={storedDetail(
+            protectedByOs,
+            consentOn,
+            "Encrypted by the OS keyring",
+            "Plaintext, because you allowed it",
+            "Existing keys stay readable; new ones are refused",
+          )}
+          ok={protectedByOs}
+        />
+        <StorageRow
+          label="Claude CLI credentials"
+          detail="Owned by the Claude CLI. Renewal writes to its own store, and a plaintext credential file is only updated when plaintext storage is allowed."
+          ok={false}
+        />
+        <StorageRow
+          label="Runtime provider files"
+          detail="The native runtime writes a key it is handed as a plaintext file in the app's private folder. The app clears that folder before the runtime starts and after it stops, so a key does not survive a run."
+          ok={false}
+        />
+        <StorageRow label="Browser storage" detail={rendererDetail} ok={!data?.rendererError} />
+      </ul>
+    </div>
+  )
+}
+
+function storedDetail(
+  protectedByOs: boolean,
+  consentOn: boolean,
+  encrypted: string,
+  allowed: string,
+  refused: string,
+): string {
+  if (protectedByOs) return encrypted
+  return consentOn ? allowed : refused
 }
 
 function describeRefusal(

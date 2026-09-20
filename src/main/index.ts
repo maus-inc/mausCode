@@ -129,6 +129,25 @@ async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<
   }
 }
 
+/**
+ * Issues this run's cookie from the saved session. A previous run's session
+ * cookie is not on disk, so this is what carries the control-plane token after
+ * a restart, and a refresh inside `getValidToken` writes the new one again.
+ */
+function restoreDesktopTokenCookie(manager: AuthManager): void {
+  if (!manager.isAuthenticated()) return
+  void manager
+    .getValidToken()
+    .then((token) => {
+      const expiresAt = manager.getTokenExpiry()
+      if (token && expiresAt) return setDesktopTokenCookie(token, expiresAt)
+      return undefined
+    })
+    .catch((error) => {
+      console.warn("[Auth] Could not restore the desktop token cookie:", error)
+    })
+}
+
 export async function handleAuthCode(code: string): Promise<void> {
   console.log("[Auth] Handling auth code:", `${code.slice(0, 8)}...`)
 
@@ -941,18 +960,7 @@ if (gotTheLock) {
     // cookie from the saved session as the app starts. When the saved token is
     // already near expiry this refreshes it and the callback above writes the
     // new value.
-    if (authManager.isAuthenticated()) {
-      void authManager
-        .getValidToken()
-        .then((token) => {
-          const expiresAt = authManager.getTokenExpiry()
-          if (token && expiresAt) return setDesktopTokenCookie(token, expiresAt)
-          return undefined
-        })
-        .catch((error) => {
-          console.warn("[Auth] Could not restore the desktop token cookie:", error)
-        })
-    }
+    restoreDesktopTokenCookie(authManager)
 
     // Initialize database
     try {
