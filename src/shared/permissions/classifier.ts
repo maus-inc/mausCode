@@ -516,7 +516,11 @@ function stepSegmentScan(command: string, i: number, scan: SegmentScan): number 
     return 0
   }
   if (ch === "'" || ch === '"') {
-    scan.quote = scan.quote === ch ? null : scan.quote === null ? ch : scan.quote
+    if (scan.quote === ch) {
+      scan.quote = null
+    } else {
+      scan.quote ??= ch
+    }
     return 0
   }
   return unquotedBoundary(command, i, scan)
