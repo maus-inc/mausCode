@@ -1428,9 +1428,11 @@ function isHostMountSpec(word: string): boolean {
 
 /**
  * The host side of a bind mount in one word, or null when the word is not a
- * mount specification. All three spellings count: `-v /:/host` puts the spec in
- * the word after the flag, `--volume=/:/host` glues it on, and
- * `--mount=type=bind,source=/,target=/host` names it as a key.
+ * mount specification. Four spellings count: `-v /:/host` puts the spec in the
+ * word after the flag, `--volume=/:/host` glues it on,
+ * `--mount=type=bind,source=/,target=/host` names it as a key, and the
+ * separated `--mount type=bind,source=/,target=/host` carries the key in its
+ * own word.
  */
 function mountHostOf(word: string): string | null {
   if (word.startsWith("--mount=")) {
@@ -1438,6 +1440,12 @@ function mountHostOf(word: string): string | null {
       .slice("--mount=".length)
       .split(",")
       .find((part) => part.startsWith("source="))
+    return source === undefined ? null : source.slice("source=".length)
+  }
+  // The separated --mount spelling puts the spec in the word after the flag,
+  // and the word itself names the key.
+  if (word.startsWith("type=")) {
+    const source = word.split(",").find((part) => part.startsWith("source="))
     return source === undefined ? null : source.slice("source=".length)
   }
   if (word.startsWith("--volume=")) return word.slice("--volume=".length).split(":")[0] ?? null
@@ -1729,24 +1737,52 @@ const SUBPROCESS_SPAWN_CALLS = [
 ]
 
 /**
- * An inline interpreter payload's argv list flattened into the command line it
- * becomes, or null when the payload spawns nothing.
+ * The inline interpreter payload's spawn argument lists flattened into the
+ * command lines they become, or null when the payload spawns nothing.
  *
- * `subprocess.run(['rm','-rf','/etc'])` has no whitespace between the verb and its
- * flags, so the splitter hands the rules one token and every word-reading rule
- * reads an ordinary command. The string form of the same call needs none of this,
- * because a shell string keeps its spaces and the verb arrives as a word.
+ * `subprocess.run(['rm','-rf','/etc'])` has no whitespace between the verb and
+ * its flags, so the splitter hands the rules one token and every word-reading
+ * rule reads an ordinary command. The string form of the same call needs none
+ * of this, because a shell string keeps its spaces and the verb arrives as a
+ * word.
  *
- * Flattening runs only when a spawn call is present. A payload that merely prints
- * a delete verb, `python -c "print('rm -rf /')"`, names no spawn and stays
- * ordinary, which is the same line the rules already draw for
- * `echo "do not run rm -rf /"`.
+ * Only the argument list of a spawn call is read. A payload that also prints a
+ * delete verb, `subprocess.run(['ls']); print('rm -rf /')`, prints it, and the
+ * printed text is not an argv the shell would run, which is the same line the
+ * rules already draw for `echo "do not run rm -rf /"`.
  */
 function spawnedArgvCommand(command: string, segments: CommandSegment[]): string | null {
   if (!segments.some(isInlineInterpreter)) return null
   const lower = command.toLowerCase()
-  if (!SUBPROCESS_SPAWN_CALLS.some((call) => lower.includes(call))) return null
-  return lower.replaceAll(/["'`[\],]/g, " ")
+  const lists: string[] = []
+  for (const call of SUBPROCESS_SPAWN_CALLS) {
+    let index = lower.indexOf(call)
+    while (index !== -1) {
+      // The open paren is what makes the name a call, which also keeps
+      // `os.exec` from reading `os.execve` as a spawn.
+      if (lower[index + call.length] === "(") {
+        const end = matchParen(lower, index + call.length)
+        if (end !== -1) lists.push(lower.slice(index + call.length + 1, end))
+      }
+      index = lower.indexOf(call, index + 1)
+    }
+  }
+  if (lists.length === 0) return null
+  return lists.map((list) => list.replaceAll(/["'`[\],]/g, " ")).join(" ")
+}
+
+/** The index of the paren that closes the one at `open`, or -1 when it never does. */
+function matchParen(text: string, open: number): number {
+  let depth = 0
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === "(") depth += 1
+    else if (ch === ")") {
+      depth -= 1
+      if (depth === 0) return i
+    }
+  }
+  return -1
 }
 
 /**

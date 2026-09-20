@@ -446,6 +446,10 @@ describe("destructive patterns", () => {
     "python -c \"import os; os.remove('/tmp/build/cache.bin')\"",
     "node -e \"require('fs').rmSync('./build', {recursive:true, force:true})\"",
     "python -c \"import subprocess; subprocess.run(['ls','-la'])\"",
+    // Only the spawn call's argument list is an argv. A payload that spawns one
+    // thing and prints a delete verb prints it, and the printed text is not a
+    // command the shell would run.
+    "python3 -c \"import subprocess; subprocess.run(['ls']); print('rm -rf /')\"",
     "docker run alpine echo hi",
     "docker exec app ls",
     "docker run -v ./src:/app alpine npm test",
@@ -1286,6 +1290,9 @@ describe("a device named as a source rather than a target", () => {
       "docker run -v~:/h alpine sh",
       "docker run --volume=/home:/h alpine sh",
       "docker run --mount=type=bind,source=/,target=/host alpine sh",
+      // The separated spelling carries the key in its own word after the flag.
+      "docker run --mount type=bind,source=/,target=/host alpine sh",
+      "podman run --mount type=bind,source=/etc,target=/h alpine sh",
     ]
     for (const command of spellings) {
       expect(bash(command).ruleId, command).toBe("host-root-mount")
@@ -1297,6 +1304,7 @@ describe("a device named as a source rather than a target", () => {
       "docker run -v ./src:/app alpine npm test",
       "docker run -v myvolume:/data alpine sh",
       "docker run --mount=type=volume,source=cache,target=/cache alpine sh",
+      "docker run --mount type=bind,source=./src,target=/app alpine sh",
       "docker run -e FOO=bar:/baz alpine sh",
     ]) {
       expect(bash(command).ruleClass, command).not.toBe("destructive")
