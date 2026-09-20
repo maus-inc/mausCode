@@ -583,6 +583,35 @@ describe("destructive patterns", () => {
     ).toBe("recursive-force-delete")
   })
 
+  it("keeps a python floor division out of the comments and the name on its boundary", () => {
+    // `//` in a Python payload is floor division, not a comment, so the
+    // paren after it is the call's closer and the list it carries is read.
+    expect(
+      bash("python -c \"import subprocess; subprocess.run([1//1 and 'rm','-rf','/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    expect(
+      bash("python3 -c \"import subprocess; subprocess.run([2//2 and 'rm','-rf','/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    // Node still reads `//` as a comment, so its closer stays where it was.
+    expect(
+      bash("node -e \"require('child_process').spawn('rm', // delete\n['-rf', '/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    // A script writer may put a space between the call's name and its paren,
+    // and a longer name that ends in the call is not the call.
+    expect(
+      bash("node -e \"require('child_process').spawn ('rm', ['-rf', '/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    expect(
+      bash("node -e \"require('child_process').execFile ('rm', ['-rf', '/etc'])\"").ruleId,
+    ).toBe("recursive-force-delete")
+    expect(bash("node -e \"xspawn('rm', ['-rf', '/etc'])\"").ruleClass).toBe("approval")
+    // A delete that is an argument of the list's program is not the program.
+    expect(
+      bash("node -e \"require('child_process').spawn(['echo', 'rm -rf / is dangerous'])\"")
+        .ruleClass,
+    ).toBe("approval")
+  })
+
   it("reads a delete out of an interpreter payload for the critical-path breaker", () => {
     expect(critical("python -c \"import shutil; shutil.rmtree('/')\"")?.id).toBe("critical-delete")
     expect(

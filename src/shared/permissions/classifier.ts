@@ -694,6 +694,51 @@ function hasRecursiveForceRm(segments: CommandSegment[]): boolean {
 }
 
 /**
+ * A token an argv list's program can sit behind. In the flattened list the
+ * program is the first word, or the word right after the expression that
+ * evaluates to it, the way `1//1 and 'rm'` hands the list to the interpreter.
+ * A word in between, `['echo', 'rm -rf /']`, makes the delete an argument of
+ * the list's program rather than the program, and that stays where it was.
+ */
+const ARGV_PROGRAM_TOKENS = new Set([
+  "and",
+  "or",
+  "not",
+  "if",
+  "else",
+  "lambda",
+  "+",
+  "-",
+  "*",
+  "/",
+  "//",
+  "%",
+  "**",
+  "=",
+  "==",
+  "!=",
+  "<",
+  ">",
+  "<=",
+  ">=",
+])
+
+function hasArgvRecursiveForceDelete(segment: CommandSegment): boolean {
+  const words = segment.words
+  for (let i = 0; i < words.length; i += 1) {
+    if (words[i] !== "rm") continue
+    const before = i === 0 ? null : words[i - 1]
+    if (before !== null && !ARGV_PROGRAM_TOKENS.has(before)) continue
+    const rest = words.slice(i + 1)
+    const shortFlags = rest.filter((word) => /^-[a-z]+$/.test(word)).map((word) => word.slice(1)).join("")
+    const recursive = shortFlags.includes("r") || rest.includes("--recursive")
+    const force = shortFlags.includes("f") || rest.includes("--force")
+    if (recursive && force) return true
+  }
+  return false
+}
+
+/**
  * Locations a write needs a card for.
  *
  * `/dev` is absent because `redirectsOntoBlockDevice` and `writesBlockDevice` read
@@ -1784,14 +1829,29 @@ function blockCommentEnd(text: string, i: number): number {
  * a slash-star pair is a block. A quote wins over the rest, because a `#` in a
  * string literal is data the string carries, not a comment.
  */
-function spanEnd(text: string, i: number): number {
+/**
+ * The comment syntax a payload's language gives to the slash forms. `#` is a
+ * line comment in every language the interpreter list carries, but a
+ * `//` and a slash-star block are comments in Node and PHP only: Python and
+ * Perl read `//` as an operator, and a paren behind one is payload, not
+ * annotation.
+ */
+type PayloadSyntax = { slashLine: boolean; slashBlock: boolean }
+
+const SLASH_COMMENTS: PayloadSyntax = { slashLine: true, slashBlock: true }
+const NO_SLASH_COMMENTS: PayloadSyntax = { slashLine: false, slashBlock: false }
+
+/** The verbs whose language reads the slash forms as operators. */
+const NO_SLASH_VERBS = new Set(["python", "python2", "python3", "perl", "ruby"])
+
+function spanEnd(text: string, i: number, syntax: PayloadSyntax): number {
   const ch = text[i]
   if (isQuoteChar(ch)) return quoteEnd(text, i)
   if (ch === "#") return lineCommentEnd(text, i)
   if (ch === "/") {
     const next = text[i + 1]
-    if (next === "*") return blockCommentEnd(text, i)
-    if (next === "/") return lineCommentEnd(text, i)
+    if (syntax.slashBlock && next === "*") return blockCommentEnd(text, i)
+    if (syntax.slashLine && next === "/") return lineCommentEnd(text, i)
   }
   return i - 1
 }
@@ -1844,35 +1904,77 @@ const SUBPROCESS_SPAWN_CALLS = [
  * printed text is not an argv the shell would run, which is the same line the
  * rules already draw for `echo "do not run rm -rf /"`.
  */
+/**
+ * The index of the paren that makes the name at `index` a call, or -1 when it
+ * is not one. The open paren is what makes the name a call, which also keeps
+ * `os.exec` from reading `os.execve` as a spawn. The paren may sit a space
+ * away, because a script writer puts one between the name and its arguments,
+ * and the name must stand on an identifier boundary, because `xspawn(` is a
+ * call of a different function and its arguments are not a spawn argv.
+ */
+function callParen(lower: string, index: number, call: string): number {
+  if (index > 0 && /[a-z0-9_$]/.test(lower[index - 1])) return -1
+  let i = index + call.length
+  while (i < lower.length && " \t\n\r".includes(lower[i])) i += 1
+  return lower[i] === "(" ? i : -1
+}
+
+/**
+ * The comment syntax of the interpreter whose payload carries the call at
+ * `index`, or the full set when none of the no-slash verbs claims it. In a
+ * Python payload a `)` behind `1//1` is the closer of the call, not the start
+ * of a comment, and the closer has to stay reachable.
+ */
+function payloadSyntax(
+  interps: CommandSegment[],
+  lower: string,
+  index: number,
+  call: string,
+): PayloadSyntax {
+  for (const segment of interps) {
+    if (!NO_SLASH_VERBS.has(segment.verb)) continue
+    for (const word of segment.words) {
+      if (!word.includes(call)) continue
+      const start = lower.indexOf(word)
+      if (start !== -1 && index >= start && index < start + word.length) return NO_SLASH_COMMENTS
+    }
+  }
+  return SLASH_COMMENTS
+}
+
 function spawnedArgvCommand(command: string, segments: CommandSegment[]): string | null {
-  if (!segments.some(isInlineInterpreter)) return null
+  const interps = segments.filter(isInlineInterpreter)
+  if (interps.length === 0) return null
   const lower = command.toLowerCase()
-  const lists: string[] = []
+  const lists: Array<[string, PayloadSyntax]> = []
   for (const call of SUBPROCESS_SPAWN_CALLS) {
     let index = lower.indexOf(call)
     while (index !== -1) {
-      // The open paren is what makes the name a call, which also keeps
-      // `os.exec` from reading `os.execve` as a spawn.
-      if (lower[index + call.length] === "(") {
-        const end = matchParen(lower, index + call.length)
-        if (end !== -1) lists.push(lower.slice(index + call.length + 1, end))
+      const open = callParen(lower, index, call)
+      if (open !== -1) {
+        const syntax = payloadSyntax(interps, lower, index, call)
+        const end = matchParen(lower, open, syntax)
+        if (end !== -1) lists.push([lower.slice(open + 1, end), syntax])
       }
       index = lower.indexOf(call, index + 1)
     }
   }
   if (lists.length === 0) return null
-  return lists.map((list) => dropListComments(list).replaceAll(/["'`[\],]/g, " ")).join(" ")
+  return lists
+    .map(([list, syntax]) => dropListComments(list, syntax).replaceAll(/["'`[\],]/g, " "))
+    .join(" ")
 }
 
 /**
  * The list with its comments and newlines dropped, so it reads as one command
- * line. A `#` or `//` runs to the end of its line, a slash-star pair is a
- * block, and a quote wins over the rest, because a `#` in a string literal is
- * data the string carries and a `//` in one is a scheme in a url. The quoted
- * elements themselves are kept, so the argv inside them survives to the read
- * that follows.
+ * line. A `#` runs to the end of its line in every payload language, the
+ * slash forms run only where the language reads them as comments, and a quote
+ * wins over the rest, because a `#` in a string literal is data the string
+ * carries and a `//` in one is a scheme in a url. The quoted elements
+ * themselves are kept, so the argv inside them survives to the read that
+ * follows.
  */
-function dropListComments(list: string): string {
+function dropListComments(list: string, syntax: PayloadSyntax): string {
   let out = ""
   let i = 0
   while (i < list.length) {
@@ -1888,10 +1990,18 @@ function dropListComments(list: string): string {
       i += 1
       continue
     }
-    if (ch === "#" || (ch === "/" && (list[i + 1] === "*" || list[i + 1] === "/"))) {
+    if (ch === "#") {
       out += " "
-      i = spanEnd(list, i) + 1
+      i = spanEnd(list, i, syntax) + 1
       continue
+    }
+    if (ch === "/") {
+      const next = list[i + 1]
+      if ((syntax.slashBlock && next === "*") || (syntax.slashLine && next === "/")) {
+        out += " "
+        i = spanEnd(list, i, syntax) + 1
+        continue
+      }
     }
     out += ch
     i += 1
@@ -1930,7 +2040,7 @@ function quoteEnd(text: string, i: number): number {
  * call's real closer was never found, its argv was never read, and the delete
  * it runs hid behind approval.
  */
-function matchParen(text: string, open: number): number {
+function matchParen(text: string, open: number, syntax: PayloadSyntax): number {
   let depth = 0
   let i = open
   while (i < text.length) {
@@ -1939,7 +2049,7 @@ function matchParen(text: string, open: number): number {
       i += 2
       continue
     }
-    const end = spanEnd(text, i)
+    const end = spanEnd(text, i, syntax)
     if (end >= i) {
       i = end + 1
       continue
@@ -1965,6 +2075,16 @@ function spawnedArgvVerdict(command: string, segments: CommandSegment[]): Classi
   const spawned = spawnedArgvCommand(command, segments)
   if (spawned === null) return null
   const flattened = splitCommandSegments(spawned)
+  // The delete rule reads the segment's verb, and an expression prefix,
+  // `1//1 and 'rm'`, leaves the verb on the expression, so the list's own
+  // head and operator positions are read for the delete the list runs.
+  if (flattened.some(hasArgvRecursiveForceDelete)) {
+    return {
+      ruleClass: "destructive",
+      ruleId: "recursive-force-delete",
+      reason: "a recursive force delete removes files with no way to undo it",
+    }
+  }
   return (
     firstMatch(DESTRUCTIVE_PATTERNS, spawned, flattened, "destructive") ??
     firstMatch(NETWORK_PATTERNS, spawned, flattened, "network")

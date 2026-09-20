@@ -1221,6 +1221,48 @@ that resolves to an ordinary directory, `/tmp/../tmp`, stays where it was,
 and a relative source the classifier cannot resolve from one command string
 stays with the residual gap.
 
+## Decision 48: a comment is the payload language's own, and the name stands on its boundary (added 2026-09-20)
+
+The review round that read decision 47 found two bypasses in the spawn
+reader it had just fixed, each verified against the built classifier before a
+line moved.
+
+**The payload's language decides which slashes are comments.** The closer
+matcher and the list reader read a slash-slash as a line comment and a
+slash-star pair as a block for every interpreter, but Python and Perl read
+the slash-slash as an operator, so in
+`python -c "import subprocess; subprocess.run([1//1 and 'rm','-rf','/etc'])"`
+the floor division opened a comment that swallowed the call's closer, the
+argv was never read, and the delete it runs read as an ordinary shell
+command. The scanner now takes the syntax of the interpreter whose payload
+carries the call: Node and PHP read both slash forms as comments, and
+Python, Perl, and Ruby do not, while a `#` stays a line comment in every
+one of them. A slash-slash in a Node payload still starts its comment, and
+the list is read with the same syntax the closer matched with, so a
+language's operator can neither close a call early nor hide the list after
+it.
+
+**The call's name stands on its identifier boundary, and its paren may sit
+a space away.** The bare names read the require form only when the open
+paren followed the name with nothing between, so a space the script writer
+put between `spawn` and `(` left the call unread and its delete on
+approval. And a name embedded in a longer identifier, `xspawn(`, read as a
+spawn, so the arguments of an unrelated function were inspected as a spawn
+argv. The paren now resolves after optional whitespace, and the name is not
+a call when an identifier character stands before it, which keeps
+`os.exec` from reading `os.execve` the way it already did.
+
+**A delete at the head of the list, or after the expression that yields it,
+is the delete the list runs.** The list is read flattened, and an expression
+prefix, `1//1 and 'rm'`, leaves the first word on the expression, so the
+delete rule's verb read missed the `rm` the list actually runs. The list's
+own read now takes the `rm` at the head of the flattened list or right after
+a token the language reads as the value's operator, the way the
+expression hands the program to the list. A word in between,
+`['echo', 'rm -rf /']`, makes the delete an argument of the list's program
+rather than the program, and that stays where it was, a false positive in
+the other direction the verb read was keeping out.
+
 ## The residual gap, stated rather than closed
 
 Every command in this section was run against the built classifier on 2026-09-19
