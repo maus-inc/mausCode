@@ -1857,19 +1857,42 @@ function spawnedArgvCommand(command: string, segments: CommandSegment[]): string
     }
   }
   if (lists.length === 0) return null
-  return (
-    lists
-      // A block comment, and a `#` comment that runs to the end of its line,
-      // are the payload's own annotations, not argv, so they are dropped before
-      // the list is read as a command line. A `//` is left alone, because it is
-      // also a scheme in a url a list argument may carry. A newline is folded,
-      // because the list is one command line even when the payload wraps it.
-      .map((list) => list.replaceAll(/\*[\s\S]*?\*\//g, " "))
-      .map((list) => list.replaceAll(/#[^\n]*/g, " "))
-      .map((list) => list.replaceAll(/\n/g, " "))
-      .map((list) => list.replaceAll(/["'`[\],]/g, " "))
-      .join(" ")
-  )
+  return lists.map((list) => dropListComments(list).replaceAll(/["'`[\],]/g, " ")).join(" ")
+}
+
+/**
+ * The list with its comments and newlines dropped, so it reads as one command
+ * line. A `#` or `//` runs to the end of its line, a slash-star pair is a
+ * block, and a quote wins over the rest, because a `#` in a string literal is
+ * data the string carries and a `//` in one is a scheme in a url. The quoted
+ * elements themselves are kept, so the argv inside them survives to the read
+ * that follows.
+ */
+function dropListComments(list: string): string {
+  let out = ""
+  let i = 0
+  while (i < list.length) {
+    const ch = list[i]
+    if (isQuoteChar(ch)) {
+      const end = quoteEnd(list, i)
+      out += list.slice(i, end + 1)
+      i = end + 1
+      continue
+    }
+    if (ch === "\n") {
+      out += " "
+      i += 1
+      continue
+    }
+    if (ch === "#" || (ch === "/" && (list[i + 1] === "*" || list[i + 1] === "/"))) {
+      out += " "
+      i = spanEnd(list, i) + 1
+      continue
+    }
+    out += ch
+    i += 1
+  }
+  return out
 }
 
 /** True for the characters that open a quoted literal in a payload. */
@@ -1905,22 +1928,25 @@ function quoteEnd(text: string, i: number): number {
  */
 function matchParen(text: string, open: number): number {
   let depth = 0
-  for (let i = open; i < text.length; i++) {
+  let i = open
+  while (i < text.length) {
     const ch = text[i]
     if (ch === "\\") {
-      i += 1
+      i += 2
       continue
     }
     const end = spanEnd(text, i)
     if (end >= i) {
-      i = end
+      i = end + 1
       continue
     }
-    if (ch === "(") depth += 1
-    else if (ch === ")") {
+    if (ch === "(") {
+      depth += 1
+    } else if (ch === ")") {
       depth -= 1
       if (depth === 0) return i
     }
+    i += 1
   }
   return -1
 }
