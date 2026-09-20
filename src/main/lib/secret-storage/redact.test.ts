@@ -34,7 +34,7 @@ describe("log redaction", () => {
         token: "secret-value",
         headers: { Authorization: "Bearer abc" },
       },
-      profiles: [{ apiKey: "sk-or-v1-abcdefghijklmnop", name: "work" }],
+      profiles: [{ apiKey: "sk-or-v1-xxxxxxxx", name: "work" }],
     })
     expect(JSON.stringify(redacted)).not.toContain("secret-value")
     expect(JSON.stringify(redacted)).not.toContain("sk-or-v1")
