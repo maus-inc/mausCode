@@ -730,7 +730,10 @@ function hasArgvRecursiveForceDelete(segment: CommandSegment): boolean {
     const before = i === 0 ? null : words[i - 1]
     if (before !== null && !ARGV_PROGRAM_TOKENS.has(before)) continue
     const rest = words.slice(i + 1)
-    const shortFlags = rest.filter((word) => /^-[a-z]+$/.test(word)).map((word) => word.slice(1)).join("")
+    const shortFlags = rest
+      .filter((word) => /^-[a-z]+$/.test(word))
+      .map((word) => word.slice(1))
+      .join("")
     const recursive = shortFlags.includes("r") || rest.includes("--recursive")
     const force = shortFlags.includes("f") || rest.includes("--force")
     if (recursive && force) return true

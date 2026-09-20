@@ -598,9 +598,9 @@ describe("destructive patterns", () => {
     ).toBe("recursive-force-delete")
     // A script writer may put a space between the call's name and its paren,
     // and a longer name that ends in the call is not the call.
-    expect(
-      bash("node -e \"require('child_process').spawn ('rm', ['-rf', '/etc'])\"").ruleId,
-    ).toBe("recursive-force-delete")
+    expect(bash("node -e \"require('child_process').spawn ('rm', ['-rf', '/etc'])\"").ruleId).toBe(
+      "recursive-force-delete",
+    )
     expect(
       bash("node -e \"require('child_process').execFile ('rm', ['-rf', '/etc'])\"").ruleId,
     ).toBe("recursive-force-delete")
