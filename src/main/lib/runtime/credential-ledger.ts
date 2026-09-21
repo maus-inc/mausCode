@@ -134,11 +134,10 @@ export function planCredentialRelease(
     settle: (retained = []) => {
       for (const provider of clearable) {
         const slot = owners.get(provider)
+        if (slot === undefined) continue
         // A variable another turn claimed during the clear keeps that owner,
         // and so does one whose value the runtime still holds.
-        if (slot === undefined || slot.sessionId !== sessionId || slot.generation !== generation) {
-          continue
-        }
+        if (slot.sessionId !== sessionId || slot.generation !== generation) continue
         if (retained.includes(provider)) {
           slot.releasing = false
           continue
