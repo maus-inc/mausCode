@@ -6,6 +6,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
+import { removeStaleTemps } from "./owner"
 import type { SecretProtection, SecretWriter } from "./types"
 
 export const KEYED_SECRET_FILE = "renderer-secrets.json"
@@ -110,6 +111,7 @@ function writeFile(path: string, file: StoredFile, verify?: (written: StoredFile
   const dir = dirname(path)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
   const temp = `${path}.tmp-${process.pid}`
+  removeStaleTemps(path, temp)
   writeFileSync(temp, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
   try {
     const written = readFile(temp)
@@ -137,30 +139,49 @@ export function writeKeyedSecret(store: KeyedStore, key: string, value: string):
   const prepared = store.store.prepare(`The saved value for ${key}`, value)
   // A file this version cannot read holds entries it cannot carry over, so the
   // bytes are kept under a recovery name instead of being replaced by this write.
-  if (error !== null) setAsideUnreadableFile(store.filePath)
+  const setAside = error !== null ? setAsideUnreadableFile(store.filePath) : null
   const entry: StoredEntry =
     prepared.ciphertext === null
       ? { protection: "plaintext", payload: prepared.plaintext ?? "" }
       : { protection: prepared.protection, payload: prepared.ciphertext.toString("base64") }
 
   const next: StoredFile = { version: 1, entries: { ...file.entries, [key]: entry } }
-  writeFile(store.filePath, next, (written) => verifyReadBack(store, key, value, written))
+  try {
+    writeFile(store.filePath, next, (written) => verifyReadBack(store, key, value, written))
 
-  // Reading the saved file once more catches a replacement that did not land.
-  verifyReadBack(store, key, value, readFile(store.filePath).file)
+    // Reading the saved file once more catches a replacement that did not land.
+    verifyReadBack(store, key, value, readFile(store.filePath).file)
+  } catch (writeError) {
+    // Nothing replaced the file that was moved aside, and the recovery name is
+    // not read back. Put those bytes where reads look for them again, so a
+    // failed write cannot hide every saved entry behind a recovery file.
+    if (setAside !== null && !existsSync(store.filePath)) {
+      try {
+        renameSync(setAside, store.filePath)
+      } catch (restoreError) {
+        console.warn(
+          `[SecretStore] The unreadable ${KEYED_SECRET_FILE} could not be put back at ` +
+            `${store.filePath}, so it stays at ${setAside}:`,
+          restoreError,
+        )
+      }
+    }
+    throw writeError
+  }
 }
 
 /**
  * Moves an unreadable keyed file aside, keeping every byte for recovery, and
  * names the new path in the log so the user can find it.
  */
-function setAsideUnreadableFile(path: string): void {
+function setAsideUnreadableFile(path: string): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-")
   const target = `${path}.unreadable-${stamp}`
   renameSync(path, target)
   console.warn(
     `[SecretStore] ${KEYED_SECRET_FILE} could not be read, so it was kept at ${target} and a new file was written`,
   )
+  return target
 }
 
 function verifyReadBack(store: KeyedStore, key: string, value: string, file: StoredFile): void {

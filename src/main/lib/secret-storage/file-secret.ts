@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { stashedCiphertextPaths, stashUnreadableCiphertext } from "./owner"
+import { removeStaleTemps, stashedCiphertextPaths, stashUnreadableCiphertext } from "./owner"
 import type { Keychain, SecretWriter } from "./types"
 
 export type FileSecret = {
@@ -42,6 +42,7 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
 
   if (prepared.ciphertext) {
     const temp = `${secret.filePath}.tmp-${process.pid}`
+    removeStaleTemps(secret.filePath, temp)
     writeFileSync(temp, prepared.ciphertext, { mode: 0o600 })
     try {
       if (secret.store.read(readFileSync(temp), secret.context) !== value) {
@@ -75,6 +76,7 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
 function savePlaintextCompanion(secret: FileSecret, value: string): void {
   const payload = `${JSON.stringify({ [secret.field]: value })}\n`
   const temp = `${secret.plaintextPath}.tmp-${process.pid}`
+  removeStaleTemps(secret.plaintextPath, temp)
   writeFileSync(temp, payload, { mode: 0o600 })
   try {
     if (readFileSync(temp, "utf-8") !== payload) {

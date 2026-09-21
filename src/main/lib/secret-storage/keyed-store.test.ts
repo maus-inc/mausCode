@@ -87,6 +87,31 @@ describe("keyed secret store", () => {
     expect(readKeyedSecret(keyed(store), "a")).toBe("1")
   })
 
+  it("puts the unreadable file back when the replacement never lands", () => {
+    const store = keyedStore(true, false)
+    const path = keyedStorePath(store.userDataPath)
+    mkdirSync(join(store.userDataPath, "data"), { recursive: true })
+    writeFileSync(path, "{ this is not json")
+    // A directory where this write's temporary file belongs makes the write
+    // fail after the unreadable file was already moved aside.
+    mkdirSync(`${path}.tmp-${process.pid}`)
+    expect(() => writeKeyedSecret(keyed(store), "a", "1")).toThrow()
+    // The bytes are back where reads look for them, instead of surviving only
+    // under a recovery name this version never reads.
+    expect(readFileSync(path, "utf-8")).toBe("{ this is not json")
+  })
+
+  it("sweeps the temporary file an unfinished write left", () => {
+    const store = keyedStore(true, false)
+    const path = keyedStorePath(store.userDataPath)
+    mkdirSync(join(store.userDataPath, "data"), { recursive: true })
+    const stale = `${path}.tmp-999999`
+    writeFileSync(stale, JSON.stringify({ version: 1, entries: {} }))
+    writeKeyedSecret(keyed(store), "a", "1")
+    expect(readdirSync(join(store.userDataPath, "data"))).not.toContain(`${path}.tmp-999999`)
+    expect(readKeyedSecret(keyed(store), "a")).toBe("1")
+  })
+
   it("leaves an unreadable file in place when the write is refused", () => {
     const store = keyedStore(true, false)
     const dir = join(store.userDataPath, "data")

@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { homedir, userInfo } from "node:os"
 import { join } from "node:path"
 import { buildExtendedPath, isWindows } from "./platform"
-import { getSecretStore } from "./secret-storage"
+import { getSecretStore, removeStaleTemps } from "./secret-storage"
 
 interface ClaudeCredentials {
   claudeAiOauth?: {
@@ -339,6 +339,7 @@ function writeToCredentialsFile(creds: ClaudeOAuthCredential): boolean {
     // Replace the file in one step. Writing over it directly would leave the CLI
     // with a truncated credential if the process stopped mid-write.
     const temp = `${credentialsPath}.tmp-${process.pid}`
+    removeStaleTemps(credentialsPath, temp)
     try {
       writeFileSync(temp, serialized.plaintext ?? "", { mode: 0o600 })
       renameSync(temp, credentialsPath)

@@ -26,6 +26,7 @@ export {
   encodeSecret,
   inspectBytes,
   inspectStoredBase64,
+  removeStaleTemps,
   resolveProtection,
 } from "./owner"
 export { SecretStore } from "./store"

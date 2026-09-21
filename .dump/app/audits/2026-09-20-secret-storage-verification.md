@@ -466,3 +466,18 @@ The analysis landed at 03:12:30Z with the quality gate OK: 0 bugs, 0
 vulnerabilities, 0 open issues, 0 new code smells, 3891 new lines and 0
 duplicated lines in them (0.0%). The duplication acceptance the human set is met
 on the published head.
+
+## Fifth review round, CodeAnt AI on `29bca56` (2026-09-21)
+
+Three findings, all checked against the source.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `keyed-store.ts:140` a failed write leaves every entry only under a recovery name that reads ignore | Confirmed. The set-aside ran before the replacement write, and a write that threw left the canonical path empty | The set-aside path is captured, and a failed write puts those bytes back when the canonical path is still empty. A test creates a directory at the temporary name so the write fails after the move, then asserts the original bytes are readable at the canonical path again |
+| `auth-store.ts:122` a crash between the plaintext temporary write and its rename leaves a credential-bearing file that `clear()` never removes | Confirmed. The temporary name carried the process id, so the next write could not overwrite it and sign-out never looked for it | New shared helper `removeStaleTemps` in `owner.ts` lists and removes the temporary siblings of a file. It runs before every write in `file-secret.ts`, `keyed-store.ts` and `claude-token.ts`, and `clear()` sweeps all three session paths and reports anything it could not remove. Two tests cover a stale temporary file being swept and removed at sign-out |
+| `credentials.ts:82` the runtime holds one value per provider variable, so two live sessions can share the newest key | Confirmed and already disclosed. `docs/protocol.md` section 3.1 states that writing is not session-isolated, that the most recent write wins, and that a client must treat the handoff as one active session per provider variable; the Rust module comment repeats it | Reply-only. Scoping the lookup to a session needs a session id in the provider resolution path, which is the runtime's design and not in this diff; the PR body's known-gaps block now names it |
+
+Gate results after the fifth round: biome 966 files clean, typecheck pass,
+vitest 96 files / 1799 passed with 1 skipped, `test:node` 47, contracts 382,
+runtime-client 43, lint clean, both ratchets pass, skills 50 of 50, openspec
+valid, native check `claims_ok: true`.

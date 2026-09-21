@@ -142,6 +142,20 @@ describe("auth store", () => {
     expect(auth.lastError()).toMatch(/could not be removed/)
   })
 
+  it("removes the temporary file a crashed write left behind", () => {
+    const home = makeHome()
+    const { auth } = storeFor(home)
+    auth.save(session())
+    // A write that stopped before its rename leaves the session under this name.
+    const stale = join(home, "auth.dat.json.tmp-999999")
+    writeFileSync(stale, JSON.stringify(session()))
+    auth.clear()
+    expect(existsSync(stale)).toBe(false)
+    expect(readdirSync(home).filter((name) => name.startsWith("auth.dat.json.tmp-"))).toHaveLength(
+      0,
+    )
+  })
+
   it("clears every file the session could be stored in", () => {
     const home = makeHome()
     const { auth } = storeFor(home)

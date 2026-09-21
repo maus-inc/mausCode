@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { SecretWriter } from "./lib/secret-storage"
-import { stashUnreadableCiphertext } from "./lib/secret-storage/owner"
+import { removeStaleTemps, stashUnreadableCiphertext } from "./lib/secret-storage/owner"
 
 export interface AuthUser {
   id: string
@@ -215,6 +215,12 @@ export class AuthStore {
       } catch (error) {
         failed.push(path)
         console.error(`[AuthStore] Could not remove ${path}:`, error)
+      }
+      // A write that stopped before its rename leaves the session under a
+      // temporary name, which is just as readable as the file it replaced.
+      for (const stale of removeStaleTemps(path)) {
+        failed.push(stale)
+        console.error(`[AuthStore] Could not remove the unfinished write at ${stale}`)
       }
     }
     if (failed.length > 0) {

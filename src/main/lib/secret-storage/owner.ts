@@ -10,7 +10,7 @@
  *   legacy column decodes to the same value. It stays readable.
  * - Anything else is unreadable and is reported, never returned as a value.
  */
-import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import {
   type Keychain,
@@ -38,6 +38,33 @@ function startsWithCipherPrefix(payload: Buffer): boolean {
 
 /** The suffix `stashUnreadableCiphertext` adds to the file it moves aside. */
 const STASH_SUFFIX = ".unreadable-"
+
+/** The infix every write uses for the file it replaces its target with. */
+const TEMP_INFIX = ".tmp-"
+
+/**
+ * Removes the temporary files an unfinished write left next to a credential
+ * file. Each one carries the value that was being written, and the process that
+ * created it may never run again, so the next write or a clear sweeps them.
+ * Returns the paths that could not be removed.
+ */
+export function removeStaleTemps(filePath: string, keepPath?: string): string[] {
+  const dir = dirname(filePath)
+  if (!existsSync(dir)) return []
+  const prefix = `${basename(filePath)}${TEMP_INFIX}`
+  const left: string[] = []
+  for (const name of readdirSync(dir)) {
+    if (!name.startsWith(prefix)) continue
+    const candidate = join(dir, name)
+    if (candidate === keepPath) continue
+    try {
+      unlinkSync(candidate)
+    } catch {
+      left.push(candidate)
+    }
+  }
+  return left
+}
 
 /**
  * Every stashed copy of one credential file, so a caller that has to remove the
