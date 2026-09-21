@@ -33,9 +33,7 @@ function parseAuthUser(value: unknown): AuthUser | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null
   const { id, email, name, imageUrl, username } = value as Record<string, unknown>
   if (typeof id !== "string" || typeof email !== "string") return null
-  const optional = [name, imageUrl, username].map((field) =>
-    field === undefined || field === null ? null : field,
-  )
+  const optional = [name, imageUrl, username].map((field) => field ?? null)
   if (!optional.every((field) => typeof field === "string" || field === null)) return null
   return {
     id,
