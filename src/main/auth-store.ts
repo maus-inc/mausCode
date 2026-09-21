@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import type { SecretWriter } from "./lib/secret-storage"
 import { removeStaleTemps, stashUnreadableCiphertext } from "./lib/secret-storage/owner"
 
@@ -100,10 +100,13 @@ export class AuthStore {
           this.store.keychain,
           "The saved sign-in session",
         )
+        // The same rule as the file secret store: while a file sits at this
+        // path it is the only source reads use, so the new session does not load
+        // until it moves aside, and that has to be reported rather than cleared.
         if (!stashed.stashed && existsSync(this.filePath)) {
           stashWarning =
-            "The older sign-in session is still saved and cannot be read without a " +
-            "keyring, so the new session will not load until it moves aside" +
+            `The older sign-in session is still saved at ${basename(this.filePath)} and was ` +
+            "not moved aside, so the new session will not load while that file is there" +
             (stashed.reason ? ` (${stashed.reason}).` : ".")
         }
       }

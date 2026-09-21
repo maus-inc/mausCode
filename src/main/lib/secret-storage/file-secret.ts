@@ -5,7 +5,7 @@
  * plaintext companion is only removed after an encrypted write succeeded.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { removeStaleTemps, stashedCiphertextPaths, stashUnreadableCiphertext } from "./owner"
 import { type Keychain, SecretStorageError, type SecretWriter } from "./types"
 
@@ -69,12 +69,16 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
   // read, so it is kept aside rather than deleted. When it cannot be moved, the
   // old bytes would keep the new value from ever loading, so this write stops
   // instead of saving a value the app will not read.
+  // A file at this path is the only source reads use, and the plaintext write
+  // below targets the companion instead, so the new value would never load while
+  // it is still there. The stash declines to move a file it does not recognise
+  // as ciphertext, and that refusal has to be reported rather than overwritten.
   const stashed = stashUnreadableCiphertext(secret.filePath, secret.keychain, secret.context)
   if (!stashed.stashed && existsSync(secret.filePath)) {
     throw new SecretStorageError(
       "ciphertext-unreadable",
-      `${secret.context} could not be moved aside, so the value was not replaced` +
-        (stashed.reason ? `: ${stashed.reason}` : "."),
+      `The saved ${secret.context} is still in ${basename(secret.filePath)} and was not ` +
+        `moved aside, so the new value was not saved${stashed.reason ? `: ${stashed.reason}` : "."}`,
     )
   }
   ensureDir(secret.plaintextPath)

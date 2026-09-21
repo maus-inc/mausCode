@@ -85,6 +85,19 @@ describe("file secret", () => {
     expect(readdirSync(join(home, "data"))).toHaveLength(0)
   })
 
+  it("names the file that keeps a new value from loading, and saves the old one", () => {
+    const home = makeHome("mauscode-file-secret-")
+    const secret = fixture(home)
+    // A `.dat` this version never wrote itself holds readable plaintext. While
+    // it is there it is the only source reads use, so the write is refused and
+    // the value it already holds stays readable.
+    mkdirSync(join(home, "data"), { recursive: true })
+    writeFileSync(secret.filePath, "plain-text-token")
+    const consented = fixture(home, false, true)
+    expect(() => saveFileSecret(consented, "synthetic-token")).toThrow(SecretStorageError)
+    expect(loadFileSecret(consented)).toBe("plain-text-token")
+  })
+
   it("refuses a plaintext replacement when the old bytes cannot be moved aside", () => {
     const home = makeHome("mauscode-file-secret-")
     const secret = fixture(home)

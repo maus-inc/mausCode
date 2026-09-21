@@ -531,3 +531,28 @@ issues, 0 new code smells, 4084 new lines and 0 duplicated lines in them
 This is the head with the sweep-rule comment, the OpenAI rollback guard and the
 `ephemeral.rs` note. Each of the five commits since the fourth round was gated
 in this sandbox before it was pushed, and CI ran the full set on every one.
+
+### Eighth pass, the refusal message and what a foreign file does (2026-09-21)
+
+The sixth round refused a plaintext replacement when the file at the ciphertext
+path could not be moved aside. Reading that guard again showed the message was
+wrong for one of the two cases it covers, and the fix belongs in the wording and
+in the tests rather than in the condition.
+
+A file at that path is the only source reads use, and the plaintext write
+targets the companion file, so a stored file that holds no ciphertext still wins
+the next read and the new value never loads. Refusing is right. What was wrong
+was saying the file "cannot be read without a keyring" for a file that is
+perfectly readable.
+
+Both modules now name the file and say it was not moved aside, and the reason is
+appended when the move itself failed. Two tests replace the earlier pair: a
+plaintext file at the ciphertext path blocks the write, the error names the
+file, and the value that file already holds is still readable afterwards. The
+first attempt at this pass changed the condition instead and the tests showed
+the old value winning on read, which is why the condition stayed and the wording
+moved.
+
+Gate results: biome 966 files clean, typecheck pass, vitest 96 files / 1803
+passed with 1 skipped, `test:node` 47, contracts 382, lint clean, both ratchets
+pass.

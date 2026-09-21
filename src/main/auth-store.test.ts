@@ -142,6 +142,17 @@ describe("auth store", () => {
     expect(auth.lastError()).toMatch(/could not be removed/)
   })
 
+  it("reports a session file it will not replace, and keeps that session readable", () => {
+    const home = makeHome()
+    // A plaintext `auth.dat` is the only source reads use while it is there, so
+    // the write is refused with the file named and the saved session survives.
+    writeFileSync(join(home, "auth.dat"), JSON.stringify(session()))
+    const { auth } = storeFor(home, false, true)
+    auth.save(session({ token: "consented-plaintext-token" }))
+    expect(auth.lastError()).toMatch(/auth\.dat/)
+    expect(auth.load()?.token).toBe("synthetic-session-token")
+  })
+
   it("removes the temporary file a crashed write left behind", () => {
     const home = makeHome()
     const { auth } = storeFor(home)
