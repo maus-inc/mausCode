@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import {
@@ -26,6 +26,31 @@ function lockedCopyOf(store: SecretStore): SecretStore {
 }
 
 describe("keyed secret store", () => {
+  it("removes the copies it could not read once the last secret is removed", () => {
+    const store = keyedStore()
+    writeKeyedSecret(keyed(store), "agents:openai-api-key", "sk-value")
+    // A file this version cannot read is kept aside under a recovery name.
+    const stashed = `${keyedStorePath(store.userDataPath)}.unreadable-2026-09-21T00-00-00-000Z`
+    writeFileSync(stashed, "an entry this build cannot read")
+    removeKeyedSecret(keyed(store), "agents:openai-api-key")
+    expect(existsSync(stashed)).toBe(false)
+    expect(readdirSync(store.userDataPath).filter((name) => name.includes(".unreadable-"))).toEqual(
+      [],
+    )
+  })
+
+  it("keeps the copies it could not read while another secret is still stored", () => {
+    const store = keyedStore()
+    writeKeyedSecret(keyed(store), "agents:openai-api-key", "sk-value")
+    writeKeyedSecret(keyed(store), "agents:gemini-api-key", "gemini-value")
+    const stashed = `${keyedStorePath(store.userDataPath)}.unreadable-2026-09-21T00-00-00-000Z`
+    writeFileSync(stashed, "an entry this build cannot read")
+    removeKeyedSecret(keyed(store), "agents:openai-api-key")
+    // The other secret's older bytes stay available for a keyring that can read
+    // them, so a removal does not destroy what it did not touch.
+    expect(existsSync(stashed)).toBe(true)
+  })
+
   it("round trips an encrypted value and records how it was stored", () => {
     const store = keyedStore()
     writeKeyedSecret(keyed(store), "agents:openai-api-key", '{"key":"sk-value"}')

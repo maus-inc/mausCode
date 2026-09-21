@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { removeStaleTemps, writeCredentialTempFile } from "./owner"
+import { removeStaleTemps, stashedCiphertextPaths, writeCredentialTempFile } from "./owner"
 import type { SecretProtection, SecretWriter } from "./types"
 
 export const KEYED_SECRET_FILE = "renderer-secrets.json"
@@ -210,4 +210,15 @@ export function removeKeyedSecret(store: KeyedStore, key: string): void {
   const entries = { ...file.entries }
   delete entries[key]
   writeFile(store.filePath, { version: 1, entries })
+  if (Object.keys(entries).length > 0) return
+  // The last stored secret is gone, so the copies of this file that an earlier
+  // keyring could not read go with it. Nothing in the app can read them, and
+  // leaving them would keep credential bytes on disk with no way to remove them.
+  for (const stashed of stashedCiphertextPaths(store.filePath)) {
+    try {
+      unlinkSync(stashed)
+    } catch (error) {
+      console.warn(`[SecretStore] Could not remove the older copy at ${stashed}:`, error)
+    }
+  }
 }

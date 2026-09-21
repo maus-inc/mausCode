@@ -190,3 +190,18 @@ test("a settled release gives up only the providers it cleared", () => {
   plan.settle([])
   assert.deepEqual(planned("session-p", generation, ["anthropic-api"]), [])
 })
+
+test("the newest session to write a provider variable owns it", () => {
+  // The runtime resolves one value per provider variable, so the newer session
+  // takes the variable and the older session asks for nothing.
+  const older = turn("session-q", ["anthropic-api"])
+  const newer = turn("session-r", ["anthropic-api"])
+  assert.deepEqual(planned("session-q", older, ["anthropic-api"]), [])
+  assert.deepEqual(released("session-r", newer, ["anthropic-api"]), ["anthropic-api"])
+})
+
+test("a session the ledger never saw does not clear a variable another session holds", () => {
+  const owner = turn("session-s", ["openai-api"])
+  assert.deepEqual(planned("session-t", 1, ["openai-api"]), [])
+  assert.deepEqual(released("session-s", owner, ["openai-api"]), ["openai-api"])
+})

@@ -699,3 +699,15 @@ Gates: biome 968 files clean, typecheck pass, vitest 98 files / 1823 passed with
 ratchets pass, native check `claims_ok: true`, skills 50 of 50 locked plus 2
 unrecorded. The renderer bundle build is still killed by this sandbox's memory
 limit and `package:mac` still cannot run on Linux, so CI owns both.
+
+### Two more findings, posted while the round was being read
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `credentials.ts:173` two sessions can overlap, and the runtime holds one value per provider variable, so one session can use another session's newest credential | The value-sharing half is the limitation `docs/protocol.md` 3.1 already states, and the runtime has no session-scoped lookup for a client to work around. The ownership half was a real gap: the ledger tracked ownership per session, so an older session's release still asked to clear a variable the newer session had taken | Ownership is now per provider variable, keyed by the session and generation that wrote it. A variable another session took is not clearable by the older session, and a session the ledger never saw cannot clear a variable someone else holds. The doc comment records that this mirrors the newest-writer-wins rule the runtime enforces |
+| `keyed-store.ts:213` files set aside as `.unreadable-*` are never removed, so credential bytes stay on disk | Confirmed. Nothing in the app removed them, and no keyring this build has can read them | Removing the last stored secret removes those copies, since the store is being emptied on purpose. Removing one key of several leaves them, because they may hold the values of the secrets that remain and a later keyring could read them. Two tests cover both halves |
+
+Gates after both: biome 968 files clean, typecheck pass, vitest 98 files / 1825
+passed with 1 skipped, `test:node` 59, contracts 382, runtime-client 43, lint
+clean, both ratchets pass, native check `claims_ok: true`, skills 50 of 50
+locked plus 2 unrecorded. Both fixes fail their tests when reverted.

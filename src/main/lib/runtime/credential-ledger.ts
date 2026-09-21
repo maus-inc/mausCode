@@ -4,10 +4,13 @@
  * The runtime keeps one value per provider variable, and a turn that a
  * replacement superseded can finish after the replacement already applied its
  * keys. Releasing the superseded turn's keys blindly would strip the credential
- * the running turn depends on, so ownership is recorded per provider: a turn
- * clears a provider only while that slot still holds the value this turn wrote.
- * Ownership survives until the clear has settled, so a provider claimed while
- * the clear was in flight is not given up by the turn that no longer holds it.
+ * the running turn depends on, so ownership is recorded per provider variable:
+ * the newest writer owns it, which is what the runtime itself enforces when it
+ * decides whose clear to honour. A turn therefore clears a provider only while
+ * the variable still holds the value that turn wrote, and a claim from another
+ * session takes the variable the way the runtime does. Ownership survives until
+ * the clear has settled, so a provider claimed while the clear was in flight is
+ * not given up by the turn that no longer holds it.
  *
  * A generation number is allocated before the first key is written and is never
  * reused for a session, so a straggler from an older turn can never be mistaken
@@ -16,17 +19,12 @@
  */
 
 type SlotState = {
-  /** The generation whose value occupies this provider's slot. */
+  /** The session whose value occupies this provider variable. */
+  sessionId: string
+  /** The generation whose value occupies this provider variable. */
   generation: number
   /** Set between planning a clear and settling it, so a second plan waits. */
   releasing: boolean
-}
-
-type SessionSlots = {
-  /** The next generation number for this session. Never reused. */
-  next: number
-  /** Provider to the state of the slot that holds its value. */
-  slots: Map<string, SlotState>
 }
 
 /**
@@ -45,7 +43,16 @@ export type CredentialReleasePlan = {
   settle: (retained?: readonly string[]) => void
 }
 
-const sessions = new Map<string, SessionSlots>()
+/** The next generation number for each session that ran a turn. Never reused. */
+const generations = new Map<string, number>()
+
+/**
+ * The provider variables this process wrote, keyed by variable name because
+ * that is the unit the runtime holds. Two sessions writing different values for
+ * one variable share the newest value, which the runtime documents, so the
+ * newer session owns the variable and the older session asks for nothing.
+ */
+const owners = new Map<string, SlotState>()
 
 /**
  * Clears and writes for one session are chained, because the runtime keeps a
@@ -75,29 +82,24 @@ export function runCredentialTurn<T>(sessionId: string, task: () => Promise<T>):
   return result
 }
 
-function recordFor(sessionId: string): SessionSlots {
-  const existing = sessions.get(sessionId)
-  if (existing) return existing
-  const created: SessionSlots = { next: 1, slots: new Map<string, SlotState>() }
-  sessions.set(sessionId, created)
-  return created
-}
-
 /**
  * Opens a turn's claim on a session and returns its generation. The number is
  * allocated before any key is written, so a key that lands later is recorded
  * against the turn that wrote it even when that turn fails partway.
  */
 export function beginCredentialTurn(sessionId: string): number {
-  const record = recordFor(sessionId)
-  const generation = record.next
-  record.next = generation + 1
+  const generation = generations.get(sessionId) ?? 1
+  generations.set(sessionId, generation + 1)
   return generation
 }
 
-/** Records that this turn's value now occupies the provider's slot. */
+/**
+ * Records that this turn's value now occupies the provider variable. The newest
+ * writer owns it, whichever session wrote it, because that is the value the
+ * runtime resolves for every session.
+ */
 export function claimCredential(sessionId: string, generation: number, provider: string): void {
-  sessions.get(sessionId)?.slots.set(provider, { generation, releasing: false })
+  owners.set(provider, { sessionId, generation, releasing: false })
 }
 
 /**
@@ -113,35 +115,35 @@ export function planCredentialRelease(
   generation: number,
   providers: readonly string[],
 ): CredentialReleasePlan {
-  const record = sessions.get(sessionId)
-  // No record means the ledger never saw a turn for this session, so the caller
-  // is the only writer it knows about and may clear what it wrote.
-  if (record === undefined) {
-    return { providers: [...providers], settle: () => {} }
-  }
+  const known = generations.has(sessionId)
   const clearable: string[] = []
   for (const provider of providers) {
-    const slot = record.slots.get(provider)
-    if (slot?.generation !== generation || slot.releasing) continue
+    const slot = owners.get(provider)
+    if (slot === undefined) {
+      // Nothing in this process holds the variable, so a session the ledger
+      // never saw is the only writer it knows about and may clear what it wrote.
+      if (!known) clearable.push(provider)
+      continue
+    }
+    if (slot.sessionId !== sessionId || slot.generation !== generation || slot.releasing) continue
     slot.releasing = true
     clearable.push(provider)
   }
   return {
     providers: clearable,
     settle: (retained = []) => {
-      const current = sessions.get(sessionId)
-      if (current === undefined) return
       for (const provider of clearable) {
-        // A provider a newer turn claimed during the clear keeps that owner.
-        if (current.slots.get(provider)?.generation !== generation) continue
-        if (retained.includes(provider)) {
-          // The daemon still holds this value. The slot stays owned so the
-          // ledger agrees with the daemon, and a later release can clear it.
-          const slot = current.slots.get(provider)
-          if (slot !== undefined) slot.releasing = false
+        const slot = owners.get(provider)
+        // A variable another turn claimed during the clear keeps that owner,
+        // and so does one whose value the runtime still holds.
+        if (slot === undefined || slot.sessionId !== sessionId || slot.generation !== generation) {
           continue
         }
-        current.slots.delete(provider)
+        if (retained.includes(provider)) {
+          slot.releasing = false
+          continue
+        }
+        owners.delete(provider)
       }
     },
   }
