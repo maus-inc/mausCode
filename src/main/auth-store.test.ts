@@ -1,37 +1,10 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import { type AuthData, AuthStore } from "./auth-store"
-import { SecretStore } from "./lib/secret-storage/store"
-import { type Keychain, SecretStorageError } from "./lib/secret-storage/types"
-
-const homes: string[] = []
-
-function fakeKeychain(available = true): Keychain {
-  return {
-    isEncryptionAvailable: () => available,
-    encryptString: (value) =>
-      Buffer.concat([
-        Buffer.from("v10", "latin1"),
-        Buffer.from([1, 2]),
-        Buffer.from(value, "utf-8").map((byte) => byte ^ 0x5a),
-      ]),
-    decryptString: (payload) => {
-      if (!payload.subarray(0, 3).equals(Buffer.from("v10", "latin1"))) {
-        throw new Error("Ciphertext does not appear to be encrypted.")
-      }
-      return Buffer.from(payload.subarray(5).map((byte) => byte ^ 0x5a)).toString("utf-8")
-    },
-    selectedBackend: () => null,
-  }
-}
-
-function makeHome(): string {
-  const home = mkdtempSync(join(tmpdir(), "mauscode-auth-store-"))
-  homes.push(home)
-  return home
-}
+import type { SecretStore } from "./lib/secret-storage/store"
+import { makeHome, makeStore } from "./lib/secret-storage/test-support"
+import { SecretStorageError } from "./lib/secret-storage/types"
 
 function session(overrides: Partial<AuthData> = {}): AuthData {
   return {
@@ -48,14 +21,9 @@ function storeFor(
   available = true,
   consent = false,
 ): { auth: AuthStore; store: SecretStore } {
-  const store = new SecretStore(home, fakeKeychain(available))
-  if (consent) store.setPlaintextConsent(true)
+  const store = makeStore(home, { available, consent })
   return { auth: new AuthStore(home, store), store }
 }
-
-afterEach(() => {
-  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
-})
 
 describe("auth store", () => {
   it("round trips an encrypted session and writes no plaintext copies", () => {
@@ -64,11 +32,24 @@ describe("auth store", () => {
     auth.save(session())
     const raw = readFileSync(join(home, "auth.dat"))
     expect(raw.subarray(0, 3).toString("latin1")).toBe("v10")
-    expect(readFileSync(join(home, "auth.dat")).toString("utf-8")).not.toContain(
-      "synthetic-session-token",
-    )
+    expect(raw.toString("utf-8")).not.toContain("synthetic-session-token")
     expect(auth.getToken()).toBe("synthetic-session-token")
-    expect(readFileSync(join(home, "auth.dat")).subarray(0, 3).toString("latin1")).toBe("v10")
+  })
+
+  it("reports the token expiry while the token is valid", () => {
+    const home = makeHome()
+    const { auth } = storeFor(home)
+    auth.save(session())
+    expect(auth.getTokenExpiry()).toBe("2030-01-01T00:00:00.000Z")
+    expect(auth.getToken()).toBe("synthetic-session-token")
+  })
+
+  it("reports no expiry once the saved token has passed", () => {
+    const home = makeHome()
+    const { auth } = storeFor(home)
+    auth.save(session({ expiresAt: "2020-01-01T00:00:00.000Z" }))
+    expect(auth.getTokenExpiry()).toBeNull()
+    expect(auth.getToken()).toBeNull()
   })
 
   it("keeps every read working after the keyring disappears", () => {
@@ -84,7 +65,7 @@ describe("auth store", () => {
     const { auth } = storeFor(home)
     auth.save(session())
     const refused = storeFor(home, false).auth
-    expect(() => refused.save(session({ token: "replacement" }))).toThrow(SecretStorageError)
+    expect(() => refused.save(session({ token: "replacement-token" }))).toThrow(SecretStorageError)
     expect(auth.getToken()).toBe("synthetic-session-token")
   })
 

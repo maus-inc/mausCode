@@ -30,6 +30,7 @@ type StatusData = {
   backend: string | null
   metadataError: string | null
   signInFailure: string | null
+  providerReadErrors: { provider: string; error: string }[]
   rendererError: string | null
   rendererKeysStored: string[]
 }
@@ -233,6 +234,11 @@ function InventoryCard({
 }) {
   const stored = data?.rendererKeysStored?.length ?? 0
   const rendererDetail = describeRendererStorage(data?.rendererError ?? null, stored)
+  const providerReadErrors = data?.providerReadErrors ?? []
+  const providerIssue =
+    providerReadErrors.length > 0
+      ? providerReadErrors.map(({ provider, error }) => `${provider}: ${error}`).join(" ")
+      : null
 
   return (
     <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -256,14 +262,17 @@ function InventoryCard({
         />
         <StorageRow
           label="Provider keys and accounts"
-          detail={storedDetail(
-            protectedByOs,
-            consentOn,
-            "Encrypted by the OS keyring",
-            "Plaintext, because you allowed it",
-            "Existing keys stay readable; new ones are refused",
-          )}
-          ok={protectedByOs}
+          detail={
+            providerIssue ??
+            storedDetail(
+              protectedByOs,
+              consentOn,
+              "Encrypted by the OS keyring",
+              "Plaintext, because you allowed it",
+              "Existing keys stay readable; new ones are refused",
+            )
+          }
+          ok={protectedByOs && !providerIssue}
         />
         <StorageRow
           label="Claude CLI credentials"

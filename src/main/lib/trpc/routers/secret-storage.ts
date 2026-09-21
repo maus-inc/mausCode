@@ -7,6 +7,9 @@
 import { app } from "electron"
 import { z } from "zod"
 import { getAuthManager } from "../../../auth-manager"
+import { getGeminiAuthStatus } from "../../gemini-auth-store"
+import { getGithubAuthStatus } from "../../github-auth-store"
+import { getOpenRouterAuthStatus } from "../../openrouter-auth-store"
 import { getSecretStore } from "../../secret-storage"
 import {
   keyedStorePath,
@@ -30,6 +33,22 @@ function keyedStore() {
   return { filePath: keyedStorePath(app.getPath("userData")), store: getSecretStore() }
 }
 
+/**
+ * Provider files that exist but cannot be read right now. The settings page
+ * says a credential is reported there rather than silently missing, so the
+ * status carries the provider's own refusal message.
+ */
+function providerReadErrors(): { provider: string; error: string }[] {
+  const statuses: [string, { ok: true } | { ok: false; error: string }][] = [
+    ["GitHub", getGithubAuthStatus()],
+    ["Gemini", getGeminiAuthStatus()],
+    ["OpenRouter", getOpenRouterAuthStatus()],
+  ]
+  return statuses.flatMap(([provider, status]) =>
+    status.ok ? [] : [{ provider, error: status.error }],
+  )
+}
+
 export const secretStorageRouter = router({
   status: publicProcedure.query(() => {
     const status = getSecretStore().status()
@@ -37,6 +56,7 @@ export const secretStorageRouter = router({
     return {
       ...status,
       signInFailure: getAuthManager()?.lastError() ?? null,
+      providerReadErrors: providerReadErrors(),
       rendererError: renderer.error,
       rendererKeysStored: Object.keys(renderer.values),
     }

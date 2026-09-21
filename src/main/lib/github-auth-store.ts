@@ -8,59 +8,37 @@
  */
 import { app } from "electron"
 import { getSecretStore } from "./secret-storage"
-import {
-  clearFileSecret,
-  type FileSecret,
-  fileSecretPaths,
-  loadFileSecret,
-  saveFileSecret,
-} from "./secret-storage/file-secret"
+import { createKeyedAuthStore } from "./secret-storage/keyed-auth-store"
+
+const store = createKeyedAuthStore({
+  provider: "github",
+  field: "token",
+  context: "The GitHub token",
+  emptyMessage: "GitHub token cannot be empty",
+  userDataPath: () => app.getPath("userData"),
+  store: getSecretStore,
+})
 
 export type GithubAuthStatus =
   | { ok: true; hasToken: true; maskedToken: string }
   | { ok: true; hasToken: false }
   | { ok: false; error: string }
 
-function secret(): FileSecret {
-  return {
-    ...fileSecretPaths(app.getPath("userData"), "github"),
-    field: "token",
-    context: "The GitHub token",
-    store: getSecretStore(),
-    keychain: getSecretStore().keychain,
-  }
-}
-
-function maskToken(token: string): string {
-  if (token.length <= 8) return "****"
-  return `${token.slice(0, 4)}…${token.slice(-4)}`
-}
-
 export function saveGithubToken(token: string): void {
-  const trimmed = token.trim()
-  if (!trimmed) {
-    throw new Error("GitHub token cannot be empty")
-  }
-  saveFileSecret(secret(), trimmed)
+  store.save(token)
 }
 
 export function loadGithubToken(): string | null {
-  return loadFileSecret(secret())
+  return store.load()
 }
 
 export function clearGithubToken(): void {
-  clearFileSecret(secret())
+  store.clear()
 }
 
 export function getGithubAuthStatus(): GithubAuthStatus {
-  try {
-    const token = loadGithubToken()
-    if (!token) return { ok: true, hasToken: false }
-    return { ok: true, hasToken: true, maskedToken: maskToken(token) }
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    }
-  }
+  const status = store.status()
+  if (!status.ok) return status
+  if (!status.hasKey) return { ok: true, hasToken: false }
+  return { ok: true, hasToken: true, maskedToken: status.maskedKey }
 }

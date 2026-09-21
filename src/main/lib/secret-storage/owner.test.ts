@@ -9,46 +9,8 @@ import {
   readAvailability,
   resolveProtection,
 } from "./owner"
-import {
-  EMPTY_METADATA,
-  type Keychain,
-  SecretStorageError,
-  type SecretStorageMetadata,
-} from "./types"
-
-type FakeKeychainOptions = {
-  available?: boolean
-  backend?: string | null
-  encryptThrows?: boolean
-}
-
-function fakeKeychain(
-  options: FakeKeychainOptions = {},
-): Keychain & { setAvailable(value: boolean): void } {
-  let available = options.available ?? true
-  return {
-    isEncryptionAvailable: () => available,
-    encryptString: (value) => {
-      if (options.encryptThrows) throw new Error("keyring refused")
-      return Buffer.concat([
-        Buffer.from("v10", "latin1"),
-        Buffer.from([0, 255, 1]),
-        Buffer.from(value, "utf-8").map((byte) => byte ^ 0x5a),
-      ])
-    },
-    decryptString: (payload) => {
-      const head = payload.subarray(0, 6)
-      if (!head.equals(Buffer.from([118, 49, 48, 0, 255, 1]))) {
-        throw new Error("Ciphertext does not appear to be encrypted.")
-      }
-      return Buffer.from(payload.subarray(6).map((byte) => byte ^ 0x5a)).toString("utf-8")
-    },
-    selectedBackend: () => options.backend ?? null,
-    setAvailable: (value: boolean) => {
-      available = value
-    },
-  }
-}
+import { fakeKeychain } from "./test-support"
+import { EMPTY_METADATA, SecretStorageError, type SecretStorageMetadata } from "./types"
 
 const consent: SecretStorageMetadata = {
   version: 1,

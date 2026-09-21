@@ -8,62 +8,40 @@
  */
 import { app } from "electron"
 import { getSecretStore } from "./secret-storage"
-import {
-  clearFileSecret,
-  type FileSecret,
-  fileSecretPaths,
-  loadFileSecret,
-  saveFileSecret,
-} from "./secret-storage/file-secret"
+import { createKeyedAuthStore } from "./secret-storage/keyed-auth-store"
+
+const store = createKeyedAuthStore({
+  provider: "openrouter",
+  field: "apiKey",
+  context: "The OpenRouter API key",
+  emptyMessage: "OpenRouter API key cannot be empty",
+  // The service rejects anything else, so the refusal happens before a write.
+  validate: (value) => {
+    if (!value.startsWith("sk-or-")) {
+      throw new Error("OpenRouter API key must start with 'sk-or-'")
+    }
+  },
+  userDataPath: () => app.getPath("userData"),
+  store: getSecretStore,
+})
 
 export type OpenRouterAuthStatus =
   | { ok: true; hasKey: true; maskedKey: string }
   | { ok: true; hasKey: false }
   | { ok: false; error: string }
 
-function secret(): FileSecret {
-  return {
-    ...fileSecretPaths(app.getPath("userData"), "openrouter"),
-    field: "apiKey",
-    context: "The OpenRouter API key",
-    store: getSecretStore(),
-    keychain: getSecretStore().keychain,
-  }
-}
-
-function maskKey(apiKey: string): string {
-  if (apiKey.length <= 8) return "****"
-  return `${apiKey.slice(0, 4)}…${apiKey.slice(-4)}`
-}
-
 export function saveOpenRouterApiKey(apiKey: string): void {
-  const trimmed = apiKey.trim()
-  if (!trimmed) {
-    throw new Error("OpenRouter API key cannot be empty")
-  }
-  if (!trimmed.startsWith("sk-or-")) {
-    throw new Error("OpenRouter API key must start with 'sk-or-'")
-  }
-  saveFileSecret(secret(), trimmed)
+  store.save(apiKey)
 }
 
 export function loadOpenRouterApiKey(): string | null {
-  return loadFileSecret(secret())
+  return store.load()
 }
 
 export function clearOpenRouterApiKey(): void {
-  clearFileSecret(secret())
+  store.clear()
 }
 
 export function getOpenRouterAuthStatus(): OpenRouterAuthStatus {
-  try {
-    const key = loadOpenRouterApiKey()
-    if (!key) return { ok: true, hasKey: false }
-    return { ok: true, hasKey: true, maskedKey: maskKey(key) }
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    }
-  }
+  return store.status()
 }

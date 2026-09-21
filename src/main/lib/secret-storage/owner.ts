@@ -5,8 +5,9 @@
  * Encoding contract, in the order a reader resolves it:
  * - `v10`/`v11` prefixed bytes are OS-encrypted and must decrypt. A prefix in
  *   the clear is what Electron itself checks, so no decode path guesses.
- * - Anything else that is exact base64 of UTF-8 text is a legacy plaintext
- *   value written by an earlier version. It stays readable.
+ * - Anything else that is valid UTF-8 text is a legacy plaintext value written
+ *   by an earlier version. Text columns hold base64 of those same bytes, so a
+ *   legacy column decodes to the same value. It stays readable.
  * - Anything else is unreadable and is reported, never returned as a value.
  */
 import { readFileSync, renameSync } from "node:fs"
@@ -34,10 +35,6 @@ function startsWithCipherPrefix(payload: Buffer): boolean {
   return CIPHER_PREFIXES.has(payload.subarray(0, 3).toString("latin1"))
 }
 
-/**
- * Inspection without decoding. `v10`/`v11` in the clear is the only signal
- * that a payload is ciphertext, matching what Electron itself checks.
- */
 /**
  * Moves a ciphertext file aside when it cannot be decrypted with the current
  * keyring, so a newer plaintext value can be read instead. The bytes are kept
@@ -73,6 +70,10 @@ export function stashUnreadableCiphertext(
   }
 }
 
+/**
+ * Inspection without decoding. `v10`/`v11` in the clear is the only signal
+ * that a payload is ciphertext, matching what Electron itself checks.
+ */
 export function inspectBytes(payload: Buffer): SecretProtection | "unknown" {
   if (startsWithCipherPrefix(payload)) return "os-encryption"
   if (isUtf8Text(payload)) return "plaintext"

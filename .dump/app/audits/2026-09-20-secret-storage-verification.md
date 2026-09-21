@@ -118,3 +118,51 @@ Two self-review findings changed code after the earlier draft of this record:
 - The `electron` postinstall cannot complete here, so native module rebuild and the Electron dev patch remain unverified; CI's package job runs a full install.
 - No raw credential was loaded at any point. The native check used the synthetic value `sk-ant-synthetic-0000000000000000`.
 - The issue backlink is still blocked by `Resource not accessible by integration`; PR creation is attempted this turn.
+
+## Duplication and review cleanup, session 2026-09-20 to 2026-09-21
+
+SonarCloud measured 77 duplicated lines in the new code of PR #68, 2.59% of 2,973 new lines, against the 0.0% target. The component tree and two `duplications/show` responses located all of it:
+
+| File | New duplicated lines | Duplicated with |
+| --- | --- | --- |
+| `src/main/auth-store.test.ts` | 20 | `file-secret.test.ts`, `keyed-store.test.ts` |
+| `src/main/lib/secret-storage/file-secret.test.ts` | 20 | `auth-store.test.ts`, `keyed-store.test.ts` |
+| `src/main/lib/secret-storage/keyed-store.test.ts` | 17 | the same two |
+| `src/main/lib/gemini-auth-store.ts` | 10 | `openrouter-auth-store.ts` |
+| `src/main/lib/openrouter-auth-store.ts` | 10 | `gemini-auth-store.ts` |
+
+The counters add to 77 exactly, so no other new file carries duplicated lines on that analysis.
+
+| Change | Files |
+| --- | --- |
+| One save/load/clear/status implementation, with the provider stores as configuration over it | `keyed-auth-store.ts` (new), `github-auth-store.ts`, `gemini-auth-store.ts`, `openrouter-auth-store.ts` |
+| One fake keyring, temp home and cleanup, imported by every store test | `test-support.ts` (new), `owner.test.ts`, `auth-store.test.ts`, `file-secret.test.ts`, `keyed-store.test.ts` |
+
+Findings from the same pass:
+
+| Finding | Change | Test |
+| --- | --- | --- |
+| `loadFileSecret` answered `null` for a file it could not decrypt, so a provider status said "not saved" while the file sat on disk, and the settings page promised that an unreadable credential is reported there | `readFileSecret` returns `{ value, error }`, the keyed auth store reports `{ ok: false, error }`, and the status query carries `providerReadErrors` for the page | `keyed-auth-store.test.ts`, plus the `StatusData` assignment check in the settings tab |
+| Masked credentials used the ellipsis character | `maskCredential` uses `...` | `keyed-auth-store.test.ts` |
+| An orphaned doc comment above `stashUnreadableCiphertext` described `inspectBytes` | Comment moved to `inspectBytes`, and the decode contract says text columns hold base64 of the same bytes | Reading only |
+
+SonarCloud issues after the re-analysis of `c9ee81d`: seven open, one MAJOR (`S3358` nested ternary in the settings tab) and six MINOR (three `S6759` read-only props, `S6606` at `secret-storage/index.ts:13`, `S7776` at `owner.ts:24`, `S7763` at `owner.ts:258`). Commit `7a33259` fixes all seven, and the re-analysis of the pushed head is the check that confirms it.
+
+### Gate results after these changes
+
+| Gate | Command | Result | Evidence |
+| --- | --- | --- | --- |
+| Frozen install | `bun install --frozen-lockfile --ignore-scripts` | No changes, 1285 packages | E3 |
+| Runtime-client build | `npm run build:runtime-client` | Passed | E3 |
+| Biome, full tree | `bun x biome check .` | Passed, 962 files, no suppressions | E3 |
+| Typecheck | `npm run typecheck` | Passed | E3 |
+| Vitest | `npm test` | Passed, 1785 tests in 95 files | E3 |
+| Node runtime suites | `npm run test:node` | Passed, 40 tests | E3 |
+| Contract tests | `npm run test:contracts` | Passed, 382 tests in 23 files | E3 |
+| Lint gate | `node scripts/ci/lint-changed.mjs` with bun on PATH | Passed, 1107 changed paths reduce to 907 lintable files, no fixes | E3 |
+| Typecheck ratchet | `node scripts/ci/typecheck-ratchet.mjs` | Passed, 0 errors against a 0 baseline | E3 |
+| Runtime-client typecheck | `npm --prefix packages/runtime-client run typecheck` | Passed | E3 |
+| Dependency audit ratchet | `npm run ratchet:audit` | Passed, no new critical advisories against baseline | E3 |
+| Skills verification | `npm run skills:verify` | Passed, 50 of 50 locked skills | E3 |
+| OpenSpec strict validation | `openspec validate refactor-secret-storage-owner --strict` | Valid | E3 |
+| Typecheck comparison | `npm run ts:check` | Not run to completion here. Four attempts were killed with no diagnostics at 2048, 3072 and 4096 MB heaps while host load sat above 6, and a fifth hung past ten minutes. The command passed in this environment earlier in the session on the previous commit, `tsc` typecheck passes, and CI runs it in the quality job, which is green on `c9ee81d` | E4 |

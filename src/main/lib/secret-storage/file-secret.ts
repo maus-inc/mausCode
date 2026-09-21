@@ -61,25 +61,31 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
   })
 }
 
+export type FileSecretRead = {
+  value: string | null
+  /** Set when a stored file exists but cannot be read. Never holds the value. */
+  error: string | null
+}
+
 /**
- * Reads the credential. Once the encrypted file exists it is the only source,
- * so an unreadable payload is reported and never replaced by a plaintext copy.
+ * Reads the credential and says whether a stored file was unreadable, so a
+ * caller that reports status can tell "nothing saved" from "cannot be read".
+ * Once the encrypted file exists it is the only source, and an unreadable
+ * payload is never replaced by a plaintext copy.
  */
-export function loadFileSecret(secret: FileSecret): string | null {
+export function readFileSecret(secret: FileSecret): FileSecretRead {
   if (existsSync(secret.filePath)) {
     try {
       const value = secret.store.read(readFileSync(secret.filePath), secret.context)
-      return value.length > 0 ? value : null
+      return { value: value.length > 0 ? value : null, error: null }
     } catch (error) {
-      console.error(
-        `[SecretStore] Could not read ${secret.context}:`,
-        error instanceof Error ? error.message : error,
-      )
-      return null
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`[SecretStore] Could not read ${secret.context}:`, message)
+      return { value: null, error: message }
     }
   }
 
-  if (!existsSync(secret.plaintextPath)) return null
+  if (!existsSync(secret.plaintextPath)) return { value: null, error: null }
   let value: string
   try {
     const parsed = JSON.parse(readFileSync(secret.plaintextPath, "utf-8")) as Record<
@@ -87,10 +93,10 @@ export function loadFileSecret(secret: FileSecret): string | null {
       unknown
     >
     const field = parsed[secret.field]
-    if (typeof field !== "string") return null
+    if (typeof field !== "string") return { value: null, error: null }
     value = field
   } catch {
-    return null
+    return { value: null, error: null }
   }
 
   try {
@@ -101,7 +107,12 @@ export function loadFileSecret(secret: FileSecret): string | null {
       error instanceof Error ? error.message : error,
     )
   }
-  return value
+  return { value, error: null }
+}
+
+/** The value alone, for callers that treat an unreadable file as absent. */
+export function loadFileSecret(secret: FileSecret): string | null {
+  return readFileSecret(secret).value
 }
 
 export function clearFileSecret(secret: FileSecret): void {

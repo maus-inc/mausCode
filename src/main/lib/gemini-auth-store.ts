@@ -8,59 +8,34 @@
  */
 import { app } from "electron"
 import { getSecretStore } from "./secret-storage"
-import {
-  clearFileSecret,
-  type FileSecret,
-  fileSecretPaths,
-  loadFileSecret,
-  saveFileSecret,
-} from "./secret-storage/file-secret"
+import { createKeyedAuthStore } from "./secret-storage/keyed-auth-store"
+
+const store = createKeyedAuthStore({
+  provider: "gemini",
+  field: "apiKey",
+  context: "The Gemini API key",
+  emptyMessage: "Gemini API key cannot be empty",
+  userDataPath: () => app.getPath("userData"),
+  store: getSecretStore,
+})
 
 export type GeminiAuthStatus =
   | { ok: true; hasKey: true; maskedKey: string }
   | { ok: true; hasKey: false }
   | { ok: false; error: string }
 
-function secret(): FileSecret {
-  return {
-    ...fileSecretPaths(app.getPath("userData"), "gemini"),
-    field: "apiKey",
-    context: "The Gemini API key",
-    store: getSecretStore(),
-    keychain: getSecretStore().keychain,
-  }
-}
-
-function maskKey(apiKey: string): string {
-  if (apiKey.length <= 8) return "****"
-  return `${apiKey.slice(0, 4)}…${apiKey.slice(-4)}`
-}
-
 export function saveGeminiApiKey(apiKey: string): void {
-  const trimmed = apiKey.trim()
-  if (!trimmed) {
-    throw new Error("Gemini API key cannot be empty")
-  }
-  saveFileSecret(secret(), trimmed)
+  store.save(apiKey)
 }
 
 export function loadGeminiApiKey(): string | null {
-  return loadFileSecret(secret())
+  return store.load()
 }
 
 export function clearGeminiApiKey(): void {
-  clearFileSecret(secret())
+  store.clear()
 }
 
 export function getGeminiAuthStatus(): GeminiAuthStatus {
-  try {
-    const key = loadGeminiApiKey()
-    if (!key) return { ok: true, hasKey: false }
-    return { ok: true, hasKey: true, maskedKey: maskKey(key) }
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    }
-  }
+  return store.status()
 }
