@@ -670,3 +670,10 @@ Gate results: biome 968 files clean, typecheck pass, vitest 98 files / 1817
 passed with 1 skipped, `test:node` 57, contracts 382, runtime-client 43, lint
 clean, both ratchets pass, native check `claims_ok: true`, skills 50 of 50
 locked plus 2 unrecorded.
+
+### SonarCloud on `0c56366` (2026-09-21)
+
+Quality gate OK: 0 bugs, 0 vulnerabilities, 0 open issues, 0 new code smells,
+4849 new lines and 0 duplicated lines in them (0.0%). The acceptance the human
+set for this step holds on the head that carries the ninth round, including the
+two critical fixes and the new auth manager tests.
