@@ -783,7 +783,7 @@ human triggered at 17:16 produced nothing. Sourcery refuses the diff for size.
 
 CodeAnt keeps a second comment beside its reviews, the nitpicks list, and four
 suggestions sat in it from the round it ran on `6f35a8c`. Three were real and are
-fixed in `06a2ac5`; the fourth is declined with the reason recorded here.
+fixed in `efa8330`; the fourth is declined with the reason recorded here.
 
 | Nitpick | Verdict | Change |
 | --- | --- | --- |
