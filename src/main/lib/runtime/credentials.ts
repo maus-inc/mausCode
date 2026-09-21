@@ -118,9 +118,17 @@ export async function applyNativeCredentials(
     }
   } catch (error) {
     // The caller installs its release hook only after this function returns, so
-    // a handoff that stops halfway must drop the keys it already placed.
+    // a handoff that stops halfway must drop the keys it already placed. The
+    // ledger still applies: a turn that superseded this one in the meantime owns
+    // the providers it wrote, and releasing those would strip its credentials.
     if (handoff.sessionId !== undefined) {
-      await clearNativeEphemeralCredentials(client, handoff.sessionId, ephemeralProviders)
+      const generation = markCredentialsApplied(handoff.sessionId, ephemeralProviders)
+      await releaseNativeEphemeralCredentials(
+        client,
+        handoff.sessionId,
+        ephemeralProviders,
+        generation,
+      )
     }
     throw error
   }

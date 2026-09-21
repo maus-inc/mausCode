@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { type AuthData, AuthStore } from "./auth-store"
@@ -114,6 +114,19 @@ describe("auth store", () => {
     const consented = storeFor(home, false, true).auth
     expect(() => consented.save(session({ token: "replacement-token" }))).toThrow()
     expect(storeFor(home).auth.getToken()).toBe("synthetic-session-token")
+  })
+
+  it("reports a stash that did not happen instead of clearing the message", () => {
+    const home = makeHome()
+    // A directory where the ciphertext belongs makes the read that the stash
+    // needs fail, so the path it could not move stays on disk.
+    mkdirSync(join(home, "auth.dat"))
+    const consented = storeFor(home, false, true).auth
+    consented.save(session({ token: "consented-plaintext-token" }))
+    // The new plaintext is readable and the reason the older file stayed is
+    // still reported, instead of the save looking fully clean.
+    expect(consented.lastError()).toMatch(/still saved/)
+    expect(existsSync(join(home, "auth.dat"))).toBe(true)
   })
 
   it("removes every file it can and reports the one it could not", () => {

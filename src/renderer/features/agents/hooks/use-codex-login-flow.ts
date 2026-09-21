@@ -141,11 +141,14 @@ export function useCodexLoginFlow() {
       return false
     }
 
+    const previous = storedApiKey
     setStoredApiKey(normalized)
     // The atom holds the key for this session, so wait for the app store before
-    // saying it was saved: a refused write would otherwise disappear at restart.
+    // saying it was saved. A refused write puts the previous key back, because
+    // the session must not run on a key that is not the one on disk.
     const saved = await whenRendererSecretSaved("onboarding:codex-api-key")
     if (!saved.ok) {
+      setStoredApiKey(previous)
       const message = `The Codex API key could not be saved: ${saved.error}`
       setState("error")
       setError(message)
@@ -160,7 +163,7 @@ export function useCodexLoginFlow() {
     await trpcUtils.codex.getIntegration.invalidate()
     toast.success("Codex API key saved", { duration: 10000 })
     return true
-  }, [apiKeyInput, notifyError, setStoredApiKey, trpcUtils])
+  }, [apiKeyInput, notifyError, setStoredApiKey, storedApiKey, trpcUtils])
 
   const start = useCallback(async () => {
     if (method === "api_key") {

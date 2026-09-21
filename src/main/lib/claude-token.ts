@@ -205,18 +205,29 @@ function readFromCredentialsFile(): ClaudeOAuthCredential | null {
   return null
 }
 
+/** Which store a credential came from, so a write can target the same one. */
+type ClaudeCredentialSource = "keychain" | "file"
+
+/**
+ * The stored credential and the store it came from. Reads prefer the system
+ * credential store, which is where the CLI keeps them on macOS, Windows and
+ * Linux; the credentials file is the fallback.
+ */
+function readExistingClaudeCredential(): {
+  creds: ClaudeOAuthCredential
+  source: ClaudeCredentialSource
+} | null {
+  const keychainCreds = readFromKeychain()
+  if (keychainCreds) return { creds: keychainCreds, source: "keychain" }
+  const fileCreds = readFromCredentialsFile()
+  return fileCreds ? { creds: fileCreds, source: "file" } : null
+}
+
 /**
  * Get existing Claude OAuth credentials from keychain or credentials file
  */
 export function getExistingClaudeCredentials(): ClaudeOAuthCredential | null {
-  // Try keychain first (macOS, Windows, Linux)
-  const keychainCreds = readFromKeychain()
-  if (keychainCreds) {
-    return keychainCreds
-  }
-
-  // Fall back to credentials file
-  return readFromCredentialsFile()
+  return readExistingClaudeCredential()?.creds ?? null
 }
 
 /**
@@ -285,8 +296,22 @@ export function externalClaudeStoreKind(): ExternalClaudeStoreKind {
  * Checks that a refreshed credential may be written before the network call
  * that rotates it. A refusal here never rotates the token, so the store the
  * CLI owns stays exactly as it is.
+ *
+ * `source` is the store the credential was read from. Writing somewhere else
+ * would leave the store that answers later reads holding the token the server
+ * just replaced, so a credential read from a store this platform cannot write
+ * is not refreshed at all.
  */
-export function canPersistRefreshedClaudeCredential(): boolean {
+export function canPersistRefreshedClaudeCredential(
+  source: ClaudeCredentialSource = "file",
+): boolean {
+  if (source === "keychain" && externalClaudeStoreKind() !== "keychain") {
+    console.warn(
+      "[claude-token] The CLI credential came from the system credential store, which this " +
+        "platform cannot write, so the refresh was not started.",
+    )
+    return false
+  }
   if (externalClaudeStoreKind() === "keychain") return true
   try {
     getSecretStore().prepare("The Claude CLI credential file", "check", true)
@@ -345,8 +370,9 @@ function writeExistingClaudeCredentials(creds: ClaudeOAuthCredential): boolean {
  * refreshed token so the desktop app does not fail after the CLI token rotates.
  */
 export async function getValidExistingClaudeToken(): Promise<string | null> {
-  const creds = getExistingClaudeCredentials()
-  if (!creds) return null
+  const existing = readExistingClaudeCredential()
+  if (!existing) return null
+  const { creds, source } = existing
 
   if (!isTokenExpired(creds.expiresAt)) {
     return creds.accessToken
@@ -361,7 +387,7 @@ export async function getValidExistingClaudeToken(): Promise<string | null> {
   // that write is checked before the token is rotated. Two refreshes racing on
   // one refresh token would leave the CLI holding a token the server already
   // replaced, so this session runs at most one at a time.
-  if (!canPersistRefreshedClaudeCredential()) {
+  if (!canPersistRefreshedClaudeCredential(source)) {
     return isPastExpiresAt(creds.expiresAt) ? null : creds.accessToken
   }
   if (refreshInFlight) return refreshInFlight

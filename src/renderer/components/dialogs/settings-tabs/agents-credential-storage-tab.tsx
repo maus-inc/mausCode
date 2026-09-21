@@ -258,9 +258,9 @@ function InventoryCard({
             storedDetail(
               protectedByOs,
               consentOn,
-              "Encrypted by the OS keyring",
-              "Plaintext, because you allowed it",
-              "Not written when a new session cannot be encrypted",
+              "The next sign-in is encrypted by the OS keyring.",
+              "The next sign-in is written in plaintext, because you allowed it.",
+              "A new sign-in is not written when it cannot be encrypted.",
             )
           }
           state={storedState(protectedByOs, consentOn, data?.signInFailure ?? null)}
@@ -272,9 +272,9 @@ function InventoryCard({
             storedDetail(
               protectedByOs,
               consentOn,
-              "Encrypted by the OS keyring",
-              "Plaintext, because you allowed it",
-              "Existing keys stay readable; new ones are refused",
+              "New keys are encrypted by the OS keyring.",
+              "New keys are written in plaintext, because you allowed it.",
+              "Existing keys stay readable; new ones are refused.",
             )
           }
           state={storedState(protectedByOs, consentOn, providerIssue)}
@@ -302,10 +302,17 @@ function InventoryCard({
 /** One pill for every row: the tone names the state, the label names it in words. */
 type RowState = { tone: "ok" | "warn" | "bad" | "mute"; label: string }
 
+/**
+ * The state of the next write, not a claim about what is already saved: the
+ * main process reports stored read errors rather than a protection level per
+ * file, and a value written before this policy existed keeps working.
+ */
 function storedState(protectedByOs: boolean, consentOn: boolean, error: string | null): RowState {
   if (error) return { tone: "bad", label: "Unreadable" }
-  if (protectedByOs) return { tone: "ok", label: "Encrypted" }
-  return consentOn ? { tone: "warn", label: "Plaintext" } : { tone: "warn", label: "Refused" }
+  if (protectedByOs) return { tone: "ok", label: "New: encrypted" }
+  return consentOn
+    ? { tone: "warn", label: "New: plaintext" }
+    : { tone: "warn", label: "New: refused" }
 }
 
 function browserState(error: string | null, stored: number): RowState {

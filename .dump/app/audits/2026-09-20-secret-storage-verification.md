@@ -416,3 +416,26 @@ The renderer retry is not covered by a test: `src/renderer` has no vitest suite
 for this module, and the retry depends on the tRPC client. The behavior is a
 two-line guard that typecheck and the manual read of the module cover, and it is
 reported here as E4 rather than claimed as verified.
+
+## Fourth review round, CodeAnt AI on `caab035` (2026-09-21)
+
+Twelve new threads arrived on the self-review commit. Each one was checked
+against the source before changing anything.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `keyed-store.ts:138` moves an unreadable file aside before the consent check, so a refused write still destroys the canonical store | Confirmed. `prepare` is what enforces consent, and it ran after `setAsideUnreadableFile` | `prepare` now runs first, and a test asserts a refused write leaves both the bytes and the absence of a `.unreadable-` copy |
+| `owner.ts:91` swallows read and rename failures, so the bytes stay at the canonical path and hide the new value | Partly confirmed. The failure was returned, but `save()` cleared the message it had just set | The message is carried out of the branch instead of being overwritten, with a test that forces the stash to fail |
+| `raw-logger.ts:112` only redacts known key names and token shapes | Known limitation. The redactor is a boundary filter over a log that only carries provider payloads; widening it to arbitrary fields has no bounded rule | Reply-only, reasoning recorded in the thread |
+| `credentials.ts:124` partial-handoff cleanup ignores generations | Confirmed. The catch cleared every ephemeral provider, including one a newer turn had just written | Cleanup now goes through `markCredentialsApplied` and `releaseNativeEphemeralCredentials`, so a superseding turn keeps its key |
+| `runtime/index.ts:59` clearing runs only when the manager is created, so crash recovery can restart the daemon beside stale files | Confirmed as a real gap; the crash path is the cleanup's whole purpose | Deferred with a flag: a recovery hook has to sit in the manager's restart path, which is a different owner's file and beyond this PR's scope. The spawned-process path is covered |
+| `auth-store.ts:108` clears the stash failure and reports success | Same finding as `owner.ts:91`, same fix |
+| `claude-token.ts:290` macOS passes the persistence check even when the Keychain write can fail | Confirmed and narrowed. Availability cannot be proven per item, so the fix is not a pre-flight claim | The refresh now refuses when the credential came from the system store on a platform that cannot write it, and the outcome is surfaced |
+| `claude-token.ts:394` Linux and Windows read from the keychain but write the file, so later reads keep the stale value | Confirmed. The write path never looked at where the credential came from | `readExistingClaudeCredential` returns the source store, the refresh refuses when the source is the keychain and the platform writes files, and the file path is unchanged for file-sourced credentials |
+| `windows/main.ts:540` the logout catch swallows a failure that leaves a session on disk | Confirmed. Logging the failure and signing the user out in the UI is the wrong signal for a credential that is still on disk | Deferred: the only non-cascading change is to rethrow, which would leave the renderer mid-logout. The comment records the gap |
+| `agents-credential-storage-tab.tsx:309` a capability pill reads as a claim about saved plaintext | Confirmed. Legacy values stay readable and are never described per file | Pills and details now say what the next write does, which is the state the main process actually reports |
+| `agents-models-tab.tsx:732` the rejected OpenAI key stays active in the main process | Confirmed. `voice.setOpenAIKey` lands before the app store is written, and only renderer state was restored | `restoreOpenAIKey` re-applies the previous key and invalidates `voice.isAvailable` |
+| `use-codex-login-flow.ts:153` the atom keeps a key that failed to persist | Same class as the models tab, and cheaper to fix here | The previous atom value is restored before the error is reported |
+
+Untested changes in this round are the two renderer rollbacks and the runtime
+restart hook, all noted above as E4.

@@ -87,6 +87,19 @@ describe("keyed secret store", () => {
     expect(readKeyedSecret(keyed(store), "a")).toBe("1")
   })
 
+  it("leaves an unreadable file in place when the write is refused", () => {
+    const store = keyedStore(true, false)
+    const dir = join(store.userDataPath, "data")
+    mkdirSync(dir, { recursive: true })
+    const path = keyedStorePath(store.userDataPath)
+    writeFileSync(path, "{ this is not json")
+    // No keyring and no consent: the refusal happens before anything moves.
+    const refused = makeStore(store.userDataPath, { available: false, consent: false })
+    expect(() => writeKeyedSecret(keyed(refused), "a", "1")).toThrow(SecretStorageError)
+    expect(readFileSync(path, "utf-8")).toBe("{ this is not json")
+    expect(readdirSync(dir).filter((name) => name.includes(".unreadable-"))).toHaveLength(0)
+  })
+
   it("keeps an unreadable file instead of replacing its bytes", () => {
     const store = keyedStore()
     const dir = join(store.userDataPath, "data")

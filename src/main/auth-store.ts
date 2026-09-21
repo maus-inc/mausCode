@@ -69,6 +69,7 @@ export class AuthStore {
    */
   save(data: AuthData): void {
     const value = JSON.stringify(data)
+    let stashWarning: string | null = null
     try {
       const dir = dirname(this.filePath)
       if (!existsSync(dir)) {
@@ -100,12 +101,12 @@ export class AuthStore {
           "The saved sign-in session",
         )
         if (!stashed.stashed && existsSync(this.filePath)) {
-          this.lastFailure =
+          stashWarning =
             "The older sign-in session is still saved and cannot be read without a " +
             "keyring, so the new session will not load until it moves aside."
         }
       }
-      this.lastFailure = null
+      this.lastFailure = stashWarning
     } catch (error) {
       this.lastFailure = error instanceof Error ? error.message : String(error)
       console.error("[AuthStore] Failed to save the sign-in session:", this.lastFailure)

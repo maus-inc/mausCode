@@ -715,6 +715,21 @@ export function AgentsModelsTab() {
     }
   }
 
+  /**
+   * The main process keeps the session copy of the OpenAI key, so a settings
+   * copy that was refused has to give that copy back too. Otherwise voice would
+   * keep using a key the settings view no longer shows.
+   */
+  const restoreOpenAIKey = async (previous: string) => {
+    setStoredOpenAIKey(previous)
+    try {
+      await setOpenAIKeyMutation.mutateAsync({ key: previous })
+    } catch {
+      toast.error("The OpenAI API key could not be restored in this session. Check it again.")
+    }
+    await trpcUtils.voice.isAvailable.invalidate()
+  }
+
   const handleSaveOpenAI = async () => {
     if (trimmedOpenAIKey === storedOpenAIKey) return // No change
     if (trimmedOpenAIKey && !trimmedOpenAIKey.startsWith("sk-")) {
@@ -727,7 +742,7 @@ export function AgentsModelsTab() {
       setStoredOpenAIKey(trimmedOpenAIKey)
       const saved = await whenRendererSecretSaved("agents:openai-api-key")
       if (!saved.ok) {
-        setStoredOpenAIKey(storedOpenAIKey)
+        await restoreOpenAIKey(storedOpenAIKey)
         toast.error(`Failed to save OpenAI API key: ${saved.error}`)
         return
       }
@@ -746,7 +761,7 @@ export function AgentsModelsTab() {
       setOpenaiKey("")
       const removed = await whenRendererSecretSaved("agents:openai-api-key")
       if (!removed.ok) {
-        setStoredOpenAIKey(storedOpenAIKey)
+        await restoreOpenAIKey(storedOpenAIKey)
         setOpenaiKey(storedOpenAIKey)
         toast.error(`Failed to remove OpenAI API key: ${removed.error}`)
         return

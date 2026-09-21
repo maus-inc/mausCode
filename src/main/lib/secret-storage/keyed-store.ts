@@ -132,10 +132,12 @@ function writeFile(path: string, file: StoredFile, verify?: (written: StoredFile
  */
 export function writeKeyedSecret(store: KeyedStore, key: string, value: string): void {
   const { file, error } = readFile(store.filePath)
+  // The refusal must land before anything moves: a write that is not permitted
+  // has to leave the store exactly as it was.
+  const prepared = store.store.prepare(`The saved value for ${key}`, value)
   // A file this version cannot read holds entries it cannot carry over, so the
   // bytes are kept under a recovery name instead of being replaced by this write.
   if (error !== null) setAsideUnreadableFile(store.filePath)
-  const prepared = store.store.prepare(`The saved value for ${key}`, value)
   const entry: StoredEntry =
     prepared.ciphertext === null
       ? { protection: "plaintext", payload: prepared.plaintext ?? "" }
