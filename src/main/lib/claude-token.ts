@@ -6,11 +6,11 @@
  * (Apache-2.0, © the 1Code contributors).
  */
 import { execFileSync, execSync, spawn } from "node:child_process"
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs"
 import { homedir, userInfo } from "node:os"
 import { join } from "node:path"
 import { buildExtendedPath, isWindows } from "./platform"
-import { getSecretStore, removeStaleTemps } from "./secret-storage"
+import { getSecretStore, removeStaleTemps, writeCredentialTempFile } from "./secret-storage"
 
 interface ClaudeCredentials {
   claudeAiOauth?: {
@@ -206,7 +206,18 @@ function readFromCredentialsFile(): ClaudeOAuthCredential | null {
 }
 
 /** Which store a credential came from, so a write can target the same one. */
-type ClaudeCredentialSource = "keychain" | "file"
+export type ClaudeCredentialSource = "keychain" | "file"
+
+/**
+ * The store a read from the platform's credential store actually came from. The
+ * Windows reader reads the CLI's credentials file, so a credential it returns is
+ * file-backed rather than held by a store this app can write.
+ */
+export function credentialSourceForRead(
+  platform: NodeJS.Platform = process.platform,
+): ClaudeCredentialSource {
+  return platform === "win32" ? "file" : "keychain"
+}
 
 /**
  * The stored credential and the store it came from. Reads prefer the system
@@ -218,7 +229,7 @@ function readExistingClaudeCredential(): {
   source: ClaudeCredentialSource
 } | null {
   const keychainCreds = readFromKeychain()
-  if (keychainCreds) return { creds: keychainCreds, source: "keychain" }
+  if (keychainCreds) return { creds: keychainCreds, source: credentialSourceForRead() }
   const fileCreds = readFromCredentialsFile()
   return fileCreds ? { creds: fileCreds, source: "file" } : null
 }
@@ -288,8 +299,10 @@ function credentialsFilePath(): string {
  */
 export type ExternalClaudeStoreKind = "keychain" | "plaintext-file"
 
-export function externalClaudeStoreKind(): ExternalClaudeStoreKind {
-  return process.platform === "darwin" ? "keychain" : "plaintext-file"
+export function externalClaudeStoreKind(
+  platform: NodeJS.Platform = process.platform,
+): ExternalClaudeStoreKind {
+  return platform === "darwin" ? "keychain" : "plaintext-file"
 }
 
 /**
@@ -304,15 +317,21 @@ export function externalClaudeStoreKind(): ExternalClaudeStoreKind {
  */
 export function canPersistRefreshedClaudeCredential(
   source: ClaudeCredentialSource = "file",
+  platform: NodeJS.Platform = process.platform,
 ): boolean {
-  if (source === "keychain" && externalClaudeStoreKind() !== "keychain") {
-    console.warn(
-      "[claude-token] The CLI credential came from the system credential store, which this " +
-        "platform cannot write, so the refresh was not started.",
-    )
-    return false
+  if (source === "keychain") {
+    if (externalClaudeStoreKind(platform) !== "keychain") {
+      console.warn(
+        "[claude-token] The CLI credential came from the system credential store, which this " +
+          "platform cannot write, so the refresh was not started.",
+      )
+      return false
+    }
+    return true
   }
-  if (externalClaudeStoreKind() === "keychain") return true
+  // A file-backed credential is written back to the file whether or not this
+  // platform has a credential store, so the plaintext permission is checked
+  // here instead of assumed from the platform.
   try {
     getSecretStore().prepare("The Claude CLI credential file", "check", true)
     return true
@@ -340,17 +359,8 @@ function writeToCredentialsFile(creds: ClaudeOAuthCredential): boolean {
     // with a truncated credential if the process stopped mid-write.
     const temp = `${credentialsPath}.tmp-${process.pid}`
     removeStaleTemps(credentialsPath, temp)
-    try {
-      writeFileSync(temp, serialized.plaintext ?? "", { mode: 0o600 })
-      renameSync(temp, credentialsPath)
-    } catch (error) {
-      try {
-        if (existsSync(temp)) unlinkSync(temp)
-      } catch {
-        // The failure worth reporting is the one that stopped the write.
-      }
-      throw error
-    }
+    writeCredentialTempFile(temp, serialized.plaintext ?? "")
+    renameSync(temp, credentialsPath)
     return true
   } catch (error) {
     console.warn("[claude-token] Failed to update credentials file:", error)
@@ -358,8 +368,15 @@ function writeToCredentialsFile(creds: ClaudeOAuthCredential): boolean {
   }
 }
 
-function writeExistingClaudeCredentials(creds: ClaudeOAuthCredential): boolean {
-  if (externalClaudeStoreKind() === "keychain") {
+function writeExistingClaudeCredentials(
+  creds: ClaudeOAuthCredential,
+  source: ClaudeCredentialSource,
+): boolean {
+  // The write targets the store the credential came from. Writing to the other
+  // one would leave the store that answers later reads holding a token the
+  // server already replaced, and on a platform whose store cannot take the
+  // write the refresh would fail even though the file is writable.
+  if (source === "keychain") {
     return writeToMacOSKeychain(creds)
   }
   return writeToCredentialsFile(creds)
@@ -393,7 +410,7 @@ export async function getValidExistingClaudeToken(): Promise<string | null> {
   }
   if (refreshInFlight) return refreshInFlight
 
-  refreshInFlight = refreshLocalClaudeToken(creds).finally(() => {
+  refreshInFlight = refreshLocalClaudeToken(creds, source).finally(() => {
     refreshInFlight = null
   })
   return refreshInFlight
@@ -401,7 +418,10 @@ export async function getValidExistingClaudeToken(): Promise<string | null> {
 
 let refreshInFlight: Promise<string | null> | null = null
 
-async function refreshLocalClaudeToken(creds: ClaudeOAuthCredential): Promise<string | null> {
+async function refreshLocalClaudeToken(
+  creds: ClaudeOAuthCredential,
+  source: ClaudeCredentialSource,
+): Promise<string | null> {
   try {
     console.log("[claude-token] Refreshing local Claude Code OAuth token")
     const refreshed = await refreshClaudeToken(creds.refreshToken ?? "", creds.scopes)
@@ -413,7 +433,7 @@ async function refreshLocalClaudeToken(creds: ClaudeOAuthCredential): Promise<st
       subscriptionType: refreshed.subscriptionType ?? creds.subscriptionType,
       rateLimitTier: refreshed.rateLimitTier ?? creds.rateLimitTier,
     }
-    if (!writeExistingClaudeCredentials(nextCreds)) {
+    if (!writeExistingClaudeCredentials(nextCreds, source)) {
       console.warn(
         "[claude-token] Refreshed Claude credentials could not be saved, keeping the CLI store as it is",
       )

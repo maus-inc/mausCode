@@ -186,17 +186,19 @@ function ProtectionCard({
 
       <div className="flex items-center justify-between gap-4 border-t border-border p-4">
         <div className="flex flex-col space-y-1">
-          <span className="text-sm font-medium text-foreground">
+          <label htmlFor="plaintext-consent" className="text-sm font-medium text-foreground">
             Allow plaintext when encryption is not available
-          </span>
-          <span className="text-xs text-muted-foreground">
+          </label>
+          <span id="plaintext-consent-description" className="text-xs text-muted-foreground">
             Without this, a credential that cannot be encrypted is not saved at all and the app
             tells you why. With it, that credential is written in the clear.
           </span>
         </div>
         <Switch
+          id="plaintext-consent"
           checked={consentOn}
           disabled={pending}
+          aria-describedby="plaintext-consent-description"
           onCheckedChange={(checked) => (checked ? onEnable() : onDisable())}
         />
       </div>

@@ -197,9 +197,15 @@ export async function handleAuthCode(code: string): Promise<void> {
     // token stays behind in the on-disk cookie store.
     const apiBase = getBaseUrl()
     if (apiBase) {
-      await removeDesktopTokenCookie(apiBase)
-      await setDesktopTokenCookie(authData.token, authData.expiresAt)
-      console.log("[Auth] Desktop token cookie set")
+      // Two sign-ins can overlap, and the older exchange can reach this point
+      // after the newer one stored its session. The cookie belongs to the
+      // session the manager kept, so a superseded exchange does not overwrite
+      // it with the account that just signed out of the app's state.
+      if (authManager.getAuth()?.token === authData.token) {
+        await removeDesktopTokenCookie(apiBase)
+        await setDesktopTokenCookie(authData.token, authData.expiresAt)
+        console.log("[Auth] Desktop token cookie set")
+      }
     }
 
     // Notify all windows and reload them to show app

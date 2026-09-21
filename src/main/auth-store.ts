@@ -23,6 +23,29 @@ export interface AuthData {
   user: AuthUser
 }
 
+/**
+ * Reads the saved user record. The fields this app writes are checked by type,
+ * because a file with the wrong shape would otherwise reach callers as if it
+ * were a session. An absent optional field counts as null, so a file an earlier
+ * version wrote stays readable.
+ */
+function parseAuthUser(value: unknown): AuthUser | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null
+  const { id, email, name, imageUrl, username } = value as Record<string, unknown>
+  if (typeof id !== "string" || typeof email !== "string") return null
+  const optional = [name, imageUrl, username].map((field) =>
+    field === undefined || field === null ? null : field,
+  )
+  if (!optional.every((field) => typeof field === "string" || field === null)) return null
+  return {
+    id,
+    email,
+    name: optional[0] as string | null,
+    imageUrl: optional[1] as string | null,
+    username: optional[2] as string | null,
+  }
+}
+
 function parseAuthData(content: string): AuthData | null {
   const parsed: unknown = JSON.parse(content)
   if (typeof parsed !== "object" || parsed === null) return null
@@ -30,13 +53,18 @@ function parseAuthData(content: string): AuthData | null {
   if (
     typeof candidate.token !== "string" ||
     typeof candidate.refreshToken !== "string" ||
-    typeof candidate.expiresAt !== "string" ||
-    typeof candidate.user !== "object" ||
-    candidate.user === null
+    typeof candidate.expiresAt !== "string"
   ) {
     return null
   }
-  return candidate as AuthData
+  const user = parseAuthUser(candidate.user)
+  if (!user) return null
+  return {
+    token: candidate.token,
+    refreshToken: candidate.refreshToken,
+    expiresAt: candidate.expiresAt,
+    user,
+  }
 }
 
 /**

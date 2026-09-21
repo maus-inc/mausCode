@@ -15,9 +15,22 @@ vi.mock("electron", () => ({
   },
 }))
 
-const { canPersistRefreshedClaudeCredential, externalClaudeStoreKind } = await import(
-  "./claude-token"
-)
+/** The permission the app has for a plaintext write, toggled per test. */
+let plaintextAllowed = false
+/** A home of this file's own, because the permission is stored in it. */
+let storeHome = ""
+
+vi.mock("./secret-storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./secret-storage")>()
+  return {
+    ...actual,
+    getSecretStore: () => makeStore(storeHome, { available: false, consent: plaintextAllowed }),
+  }
+})
+
+const { makeHome, makeStore } = await import("./secret-storage/test-support")
+const { canPersistRefreshedClaudeCredential, credentialSourceForRead, externalClaudeStoreKind } =
+  await import("./claude-token")
 
 describe("claude token refresh store", () => {
   // A rotated token written into a different store than the one that answers
@@ -34,5 +47,37 @@ describe("claude token refresh store", () => {
   it.runIf(process.platform === "darwin")("writes a keychain refresh back to the keychain", () => {
     expect(externalClaudeStoreKind()).toBe("keychain")
     expect(canPersistRefreshedClaudeCredential("keychain")).toBe(true)
+  })
+})
+
+describe("claude token store choice", () => {
+  it.beforeEach(() => {
+    storeHome = makeHome("mauscode-claude-token-")
+    plaintextAllowed = false
+  })
+
+  it("treats the Windows credential read as the file it reads", () => {
+    // The Windows reader reads the CLI's credentials file, so a refresh of a
+    // credential it returned may write that file.
+    expect(credentialSourceForRead("win32")).toBe("file")
+    expect(credentialSourceForRead("darwin")).toBe("keychain")
+    expect(credentialSourceForRead("linux")).toBe("keychain")
+  })
+
+  it("checks plaintext permission before a file-backed refresh on any platform", () => {
+    expect(canPersistRefreshedClaudeCredential("file", "darwin")).toBe(false)
+    expect(canPersistRefreshedClaudeCredential("file", "win32")).toBe(false)
+    plaintextAllowed = true
+    // A platform with a credential store no longer skips the check for a
+    // credential that came from the file, because the write goes to the file.
+    expect(canPersistRefreshedClaudeCredential("file", "darwin")).toBe(true)
+    expect(canPersistRefreshedClaudeCredential("file", "win32")).toBe(true)
+  })
+
+  it("refuses a credential store the platform cannot write", () => {
+    plaintextAllowed = true
+    expect(canPersistRefreshedClaudeCredential("keychain", "win32")).toBe(false)
+    expect(canPersistRefreshedClaudeCredential("keychain", "linux")).toBe(false)
+    expect(canPersistRefreshedClaudeCredential("keychain", "darwin")).toBe(true)
   })
 })

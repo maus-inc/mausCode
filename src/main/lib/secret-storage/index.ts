@@ -28,6 +28,7 @@ export {
   inspectStoredBase64,
   removeStaleTemps,
   resolveProtection,
+  writeCredentialTempFile,
 } from "./owner"
 export { SecretStore } from "./store"
 export type {

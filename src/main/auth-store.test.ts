@@ -244,6 +244,48 @@ describe("auth store", () => {
     expect(readdirSync(home).filter((name) => name.startsWith("auth."))).toHaveLength(0)
   })
 
+  it("treats a user record of the wrong shape as absent", () => {
+    const home = makeHome()
+    writeFileSync(
+      join(home, "auth.dat.json"),
+      JSON.stringify({ ...session(), user: { id: 7, email: "user@example.test" } }),
+    )
+    const { auth } = storeFor(home, false, true)
+    // A number where an id belongs would reach the app as a user, so the whole
+    // session is treated as unrecognized instead.
+    expect(auth.load()).toBeNull()
+    expect(auth.lastError()).toMatch(/unrecognized shape/)
+  })
+
+  it("reads a session whose user record omits the optional fields", () => {
+    const home = makeHome()
+    writeFileSync(
+      join(home, "auth.dat.json"),
+      JSON.stringify({ ...session(), user: { id: "u1", email: "user@example.test" } }),
+    )
+    const { auth } = storeFor(home, false, true)
+    // An earlier version wrote only the two required fields, so that file stays
+    // readable and the missing fields read as null.
+    expect(auth.load()?.user).toEqual({
+      id: "u1",
+      email: "user@example.test",
+      name: null,
+      imageUrl: null,
+      username: null,
+    })
+  })
+
+  it("rejects a user record that is an array", () => {
+    const home = makeHome()
+    writeFileSync(
+      join(home, "auth.dat.json"),
+      JSON.stringify({ ...session(), user: ["u1", "user@example.test"] }),
+    )
+    const { auth } = storeFor(home, false, true)
+    expect(auth.load()).toBeNull()
+    expect(auth.lastError()).toMatch(/unrecognized shape/)
+  })
+
   it("treats a malformed saved session as absent and reports it", () => {
     const home = makeHome()
     writeFileSync(join(home, "auth.dat"), "not a session")

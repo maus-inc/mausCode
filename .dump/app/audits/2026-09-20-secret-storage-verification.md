@@ -677,3 +677,25 @@ Quality gate OK: 0 bugs, 0 vulnerabilities, 0 open issues, 0 new code smells,
 4849 new lines and 0 duplicated lines in them (0.0%). The acceptance the human
 set for this step holds on the head that carries the ninth round, including the
 two critical fixes and the new auth manager tests.
+
+## Tenth review round, CodeAnt AI on `6f35a8c` (2026-09-21)
+
+Five findings, all confirmed. Two of them are in the external Claude CLI
+renewal path, which is the one place this branch writes a store it does not own,
+so a wrong store decision there is costly. Every fix has a test that fails
+without it except the two that need a running app or a mock of the whole
+exchange path, which are noted below.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `auth-store.ts:39` the saved user record is only checked as a non-null object, so an array or wrong-typed field reaches callers as a user | Confirmed. `typeof [] === "object"`, so an array passed, and `{ id: 7 }` passed as well | The user record is parsed field by field. `id` and `email` must be strings, the other three must be a string or null, and an absent optional field reads as null so a file an earlier version wrote stays readable |
+| `agents-credential-storage-tab.tsx:201` the plaintext-consent switch has no accessible name | Confirmed. The visible text sat in a `span`, which labels nothing, so a screen reader announced an unnamed switch | The text is a `label` pointing at the switch's `id`, and the helper text is wired through `aria-describedby`. No visual change |
+| `index.ts:203` overlapping sign-in exchanges can let an older response write the cookie after a newer session is stored | Confirmed. The exchange path removed and rewrote the cookie without checking that the session it just stored is still the one the manager holds | The cookie is written only while `getAuth()?.token` matches the token this exchange returned, so a superseded exchange leaves the newer session's cookie alone. Guarded by inspection, since the path needs a running app and a deep link |
+| `claude-token.ts:221` the Windows reader reads the credentials file but reports the source as the credential store | Confirmed. The Windows branch of `readFromKeychain` reads `~/.claude/.credentials.json`, so every Windows refresh was refused as unwritable even though the file is exactly what the platform can write | `credentialSourceForRead` reports what the reader actually read, so a Windows read is file-backed |
+| `claude-token.ts:365` a file-backed credential on macOS is written to the keychain, so the refresh fails when the file is the only usable store | Confirmed, and it also breaks the rule the same file states. The permission check returned true for any file-backed credential on macOS, then the write went to the keychain | The write targets the credential's own store, and the plaintext permission is checked for a file-backed credential on every platform. The platform seams take an explicit platform so both halves are tested on one machine |
+
+Gates: biome 968 files clean, typecheck pass, vitest 98 files / 1823 passed with
+1 skipped, `test:node` 57, contracts 382, runtime-client 43, lint clean, both
+ratchets pass, native check `claims_ok: true`, skills 50 of 50 locked plus 2
+unrecorded. The renderer bundle build is still killed by this sandbox's memory
+limit and `package:mac` still cannot run on Linux, so CI owns both.
