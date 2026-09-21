@@ -103,7 +103,8 @@ export class AuthStore {
         if (!stashed.stashed && existsSync(this.filePath)) {
           stashWarning =
             "The older sign-in session is still saved and cannot be read without a " +
-            "keyring, so the new session will not load until it moves aside."
+            "keyring, so the new session will not load until it moves aside" +
+            (stashed.reason ? ` (${stashed.reason}).` : ".")
         }
       }
       this.lastFailure = stashWarning

@@ -145,6 +145,19 @@ describe("secret storage owner", () => {
     expect(readFileSync(file).subarray(0, 3).toString("latin1")).toBe("v10")
   })
 
+  it("names why a file it could not move aside stayed", () => {
+    const home = makeHome("mauscode-owner-")
+    mkdirSync(home, { recursive: true })
+    // A directory cannot be read as a file, so the move cannot happen and the
+    // reason is reported instead of a silent false.
+    const file = join(home, "auth.dat")
+    mkdirSync(file)
+    const result = stashUnreadableCiphertext(file, fakeKeychain(), "The GitHub token")
+    expect(result.stashed).toBe(false)
+    expect(result.reason).toBeTruthy()
+    expect(result.path).toBeNull()
+  })
+
   it("reports an encryption failure instead of storing anything", () => {
     const keychain = fakeKeychain({ encryptThrows: true })
     expect(() => encodeSecret("sk-live-value", "os-encryption", keychain)).toThrow(

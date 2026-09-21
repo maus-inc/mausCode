@@ -92,16 +92,16 @@ export function stashUnreadableCiphertext(
   filePath: string,
   keychain: Keychain,
   context: string,
-): { stashed: boolean; path: string | null } {
+): { stashed: boolean; path: string | null; reason: string | null } {
   try {
     const payload = readFileSync(filePath)
-    if (!startsWithCipherPrefix(payload)) return { stashed: false, path: null }
+    if (!startsWithCipherPrefix(payload)) return { stashed: false, path: null, reason: null }
     try {
       // With a usable keyring the bytes may still belong to another keyring,
       // which the decrypt call reveals.
       if (readAvailability(keychain).usable) {
         keychain.decryptString(payload)
-        return { stashed: false, path: null }
+        return { stashed: false, path: null, reason: null }
       }
       throw new Error("no usable keyring")
     } catch {
@@ -111,10 +111,14 @@ export function stashUnreadableCiphertext(
       console.warn(
         `[SecretStore] ${context} could not be decrypted, so the file was kept at ${target} and is no longer read.`,
       )
-      return { stashed: true, path: target }
+      return { stashed: true, path: target, reason: null }
     }
-  } catch {
-    return { stashed: false, path: null }
+  } catch (error) {
+    // The file is still where reads look for it, so the caller learns why it
+    // stayed instead of reading a silent false as "nothing to move aside".
+    const reason = error instanceof Error ? error.message : String(error)
+    console.warn(`[SecretStore] ${context} could not be moved aside:`, reason)
+    return { stashed: false, path: null, reason }
   }
 }
 

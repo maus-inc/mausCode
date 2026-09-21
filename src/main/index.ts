@@ -151,6 +151,10 @@ function restoreDesktopTokenCookie(manager: AuthManager): void {
   void manager
     .getValidToken()
     .then((token) => {
+      // Sign-out can land while the token is being resolved, and the store is
+      // cleared before the cookie is removed, so this check decides the race:
+      // a signed-out app must not have a cookie put back from this continuation.
+      if (!manager.isAuthenticated()) return undefined
       const expiresAt = manager.getTokenExpiry()
       if (token && expiresAt) return setDesktopTokenCookie(token, expiresAt)
       return undefined

@@ -720,7 +720,12 @@ export function AgentsModelsTab() {
    * copy that was refused has to give that copy back too. Otherwise voice would
    * keep using a key the settings view no longer shows.
    */
-  const restoreOpenAIKey = async (previous: string) => {
+  const openAIAttemptRef = useRef(0)
+
+  const restoreOpenAIKey = async (previous: string, attempt: number) => {
+    // A newer save or removal owns the key by now, so this failure leaving the
+    // older value behind would overwrite what the user actually asked for.
+    if (openAIAttemptRef.current !== attempt) return
     setStoredOpenAIKey(previous)
     try {
       await setOpenAIKeyMutation.mutateAsync({ key: previous })
@@ -737,12 +742,14 @@ export function AgentsModelsTab() {
       return
     }
 
+    const attempt = openAIAttemptRef.current + 1
+    openAIAttemptRef.current = attempt
     try {
       await setOpenAIKeyMutation.mutateAsync({ key: trimmedOpenAIKey })
       setStoredOpenAIKey(trimmedOpenAIKey)
       const saved = await whenRendererSecretSaved("agents:openai-api-key")
       if (!saved.ok) {
-        await restoreOpenAIKey(storedOpenAIKey)
+        await restoreOpenAIKey(storedOpenAIKey, attempt)
         toast.error(`Failed to save OpenAI API key: ${saved.error}`)
         return
       }
@@ -755,13 +762,15 @@ export function AgentsModelsTab() {
   }
 
   const handleResetOpenAI = async () => {
+    const attempt = openAIAttemptRef.current + 1
+    openAIAttemptRef.current = attempt
     try {
       await setOpenAIKeyMutation.mutateAsync({ key: "" })
       setStoredOpenAIKey("")
       setOpenaiKey("")
       const removed = await whenRendererSecretSaved("agents:openai-api-key")
       if (!removed.ok) {
-        await restoreOpenAIKey(storedOpenAIKey)
+        await restoreOpenAIKey(storedOpenAIKey, attempt)
         setOpenaiKey(storedOpenAIKey)
         toast.error(`Failed to remove OpenAI API key: ${removed.error}`)
         return

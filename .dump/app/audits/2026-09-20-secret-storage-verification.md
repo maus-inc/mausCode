@@ -481,3 +481,16 @@ Gate results after the fifth round: biome 966 files clean, typecheck pass,
 vitest 96 files / 1799 passed with 1 skipped, `test:node` 47, contracts 382,
 runtime-client 43, lint clean, both ratchets pass, skills 50 of 50, openspec
 valid, native check `claims_ok: true`.
+
+## Sixth review round, CodeAnt AI on `31c6402` (2026-09-21)
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `agents-models-tab.tsx:747` a slower failed save restores a stale key over a newer one | Confirmed. The rollback captured the value at the time of the write, so an older attempt that lost the race wrote its value back over the newer one | Every save and removal takes an attempt number, and a rollback returns early when a newer attempt owns the key |
+| `index.ts:156` a cookie restore can finish after sign-out and put the removed cookie back | Confirmed. `logout()` clears the store before the cookie is removed, so an in-flight `getValidToken` could resolve into an app that is already signed out | The continuation re-checks `isAuthenticated()` before setting the cookie, which leaves the sign-out the winner |
+| `owner.ts:118` a failed stash is swallowed, so a caller can report success while reads still select the inaccessible file | Confirmed for the file secret store. The auth store already kept the reason | The stash result carries a `reason`, `file-secret.ts` refuses a plaintext replacement when the old bytes could not be moved aside and throws with a concrete message, and the auth store now names the reason too. Two tests cover the reason and the refusal |
+
+Gate results after the sixth round: biome 966 files clean, typecheck pass,
+vitest 96 files / 1801 passed with 1 skipped, `test:node` 47, contracts 382,
+runtime-client 43, lint clean, both ratchets pass, skills 50 of 50, native check
+`claims_ok: true`.

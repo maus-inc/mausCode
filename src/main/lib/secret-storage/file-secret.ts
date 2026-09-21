@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { removeStaleTemps, stashedCiphertextPaths, stashUnreadableCiphertext } from "./owner"
-import type { Keychain, SecretWriter } from "./types"
+import { type Keychain, SecretStorageError, type SecretWriter } from "./types"
 
 export type FileSecret = {
   /** Encrypted bytes, for example `github-auth.dat`. */
@@ -66,8 +66,17 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
   }
 
   // A stored file the current keyring cannot protect would keep winning on
-  // read, so it is kept aside rather than deleted.
-  stashUnreadableCiphertext(secret.filePath, secret.keychain, secret.context)
+  // read, so it is kept aside rather than deleted. When it cannot be moved, the
+  // old bytes would keep the new value from ever loading, so this write stops
+  // instead of saving a value the app will not read.
+  const stashed = stashUnreadableCiphertext(secret.filePath, secret.keychain, secret.context)
+  if (!stashed.stashed && existsSync(secret.filePath)) {
+    throw new SecretStorageError(
+      "ciphertext-unreadable",
+      `${secret.context} could not be moved aside, so the value was not replaced` +
+        (stashed.reason ? `: ${stashed.reason}` : "."),
+    )
+  }
   ensureDir(secret.plaintextPath)
   savePlaintextCompanion(secret, value)
 }

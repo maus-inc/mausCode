@@ -85,6 +85,16 @@ describe("file secret", () => {
     expect(readdirSync(join(home, "data"))).toHaveLength(0)
   })
 
+  it("refuses a plaintext replacement when the old bytes cannot be moved aside", () => {
+    const home = makeHome("mauscode-file-secret-")
+    const secret = fixture(home)
+    // The stored file is an unreadable directory, so the stash cannot move it,
+    // and it would keep winning on read over anything written now.
+    mkdirSync(secret.filePath, { recursive: true })
+    const consented = fixture(home, false, true)
+    expect(() => saveFileSecret(consented, "synthetic-token")).toThrow(SecretStorageError)
+  })
+
   it("is quiet when there is nothing to clear", () => {
     const home = makeHome("mauscode-file-secret-")
     // No data directory at all, which is the state before the first write.
