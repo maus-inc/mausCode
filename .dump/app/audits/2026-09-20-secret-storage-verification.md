@@ -711,3 +711,47 @@ Gates after both: biome 968 files clean, typecheck pass, vitest 98 files / 1825
 passed with 1 skipped, `test:node` 59, contracts 382, runtime-client 43, lint
 clean, both ratchets pass, native check `claims_ok: true`, skills 50 of 50
 locked plus 2 unrecorded. Both fixes fail their tests when reverted.
+
+## Eleventh pass, the gates after the two late fixes
+
+SonarCloud raised two new minor smells on the rewrite from `dd2036d`, one in each
+file. Both asked for an existing check to be written more directly rather than
+pointing at a defect: `auth-store.ts` normalised an absent optional user field in
+two branches where `??` says it in one, and `credential-ledger.ts` reached into a
+slot on both sides of an absence check. `f718d14` and `e93c977` make those two
+expressions direct, and the behaviour is unchanged: `auth-store.test.ts` stays at
+22 passing and the ledger node tests stay at 17. SonarCloud on `e93c977` reports
+the quality gate passed with zero new issues, zero hotspots, and 0.0% duplication
+on new code (bot comment 5765072838, 17:56Z).
+
+CodeAnt's SAST gate failed on `dd2036d` and again on `e93c977` with four findings
+in `src/main/index.ts`. The findings do not match the code:
+
+| Finding | What the line holds |
+| --- | --- |
+| `115` CRITICAL, auth-bypass-falsy-password-check | `if (Number.isFinite(expiry) && expiry <= Date.now()) {`. No password anywhere in the repository: `grep -rn "currentPassword"` finds nothing, and no file under `src/main` mentions a password |
+| `131`, `140`, `171` LOW, sensitive-data-in-logs | The three `console.warn` calls that report a failed cookie set, removal, or restore. Each logs the thrown Electron error, which carries the API's message; the token is not a field on those calls |
+
+`dd2036d` does not touch `src/main/index.ts` at all, and the same lines passed the
+same gate at `6f35a8c` with "Rating S: No issues". The base tree at line 115 holds
+`if (planData)` and `origin/main` holds `const planData = await
+authManager.fetchUserPlan()`, so the rule name cannot be about this code on either
+revision. The gate failed at `6f35a8c` for an unrelated reason, "Bugs: Rating C",
+which is what a scanner that answers differently on the same bytes looks like. The
+dispute is posted on the pull request as comment 5764897677. The rest of that
+gate passes here: no secrets, no duplicate code, rating S for bugs and IAC, and
+100% test coverage.
+
+The Rust handoff cannot be compiled in this sandbox and CI has no cargo job, so
+the patch was checked by reading it against the tree it plugs into:
+`load_api_key_from_env_or_config` consults `ephemeral::lookup` before it reads the
+provider file, `is_safe_env_key_name` is the same guard the persisted path uses,
+and `pub mod ephemeral` is declared in `lib.rs`. The pull request previously said
+CI owns the Rust compile check, which was wrong, and now says a human with a Rust
+toolchain does.
+
+Gates on `e93c977`: biome 968 files clean, `tsc --noEmit` clean, vitest 98 files
+with 1825 passed and 1 skipped, `test:node` 59, contracts 382, lint 913 files
+clean, both ratchets pass, runtime-client 43, native check `claims_ok: true`, and
+skills 50 of 50 locked with 2 unrecorded. GitHub CI is green on that head apart
+from the CodeAnt gate described above.
