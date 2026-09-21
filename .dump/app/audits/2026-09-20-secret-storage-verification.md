@@ -251,3 +251,47 @@ recorded reason.
 | The ephemeral registry holds one value per provider variable, so two live sessions cannot hold different keys for the same variable | Documented in `docs/protocol.md` and at the Rust functions. The capability stays unadvertised and unshipped; a session-scoped lookup is a runtime change for a release that carries the patch |
 | A successful Claude token rotation whose local write then fails leaves the CLI store on the previous token | Approved rule: the permission is checked before the network call, and the write re-checks it. The failure keeps the old store and logs; a user who can no longer refresh signs in again |
 | A crash can still leave the Cline per-run `providers.json` | Unchanged from the previous record; the item is now an unchecked task with the file named |
+
+## Second review round (2026-09-21)
+
+Commit `17715b0` answers every open thread on the pull request: 14 from CodeAnt
+AI and 16 from CodeRabbit. Each was checked against the source before any
+change; 24 brought code changes, two are answered with a recorded reason and no
+change (`token-crypto.ts` error mapping, `claude-token.ts` pre-refresh probe),
+and four are documentation or evidence changes (`docs/protocol.md` and the
+`ephemeral.rs` comments on the one-value-per-variable registry, the OpenSpec
+owner requirement, and the two task-list items).
+
+Per-thread dispositions are recorded in the "Review comment resolution" table
+earlier in this file, and each thread carries a reply on the pull request.
+
+### Gate results on `17715b0`
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Frozen install | No changes | E3 |
+| `npx biome check .` | 962 files, no fixes | E3 |
+| `npm run typecheck` | Passed | E3 |
+| `npm run ts:check` | Not run to completion. Every attempt in this sandbox was killed by the environment with no diagnostics (latest: 4096 MB heap, killed after 727 s). CI runs it in the quality job | E4 |
+| `npm test` | 95 files, 1788 tests passed | E3 |
+| `npm run test:node` | 41 tests passed | E3 |
+| `npm run test:contracts` | 23 files, 382 tests passed | E3 |
+| `npm run lint` | 907 files checked, no findings | E3 |
+| `npm run ratchet:typecheck` | 0 errors <= 0 baseline | E3 |
+| `npm run ratchet:audit` | No new critical advisories | E3 |
+| `npm run skills:verify` | 50 of 50 locked skills | E3 |
+| `npm run build:runtime-client` | Passed | E3 |
+| OpenSpec strict validation | Valid | E3 |
+| Native credential check | `claims_ok: true`, exit 0 | E1 |
+| `electron-vite build` renderer | Cannot finish here (heap exhaustion; a clean base checkout behaves the same). CI builds it | E4 |
+| `package:mac` | Not run, no Electron binary on Linux | E4 |
+| SonarCloud, new head | Analysis pending at the time of writing. The target is zero open issues and 0.0% new-code duplication | E5 |
+
+### Open items after this round
+
+- The SonarCloud analysis of `17715b0` has not run yet; recheck the issues and
+  the new-code duplication measure before calling the duplication target met.
+- CI on `17715b0` is watched to terminal; the security and Ubuntu build jobs had
+  passed when this was written.
+- The manual Linux disabled-keyring run and `package:mac` remain with the human
+  or CI, as recorded above.
