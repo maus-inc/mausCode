@@ -285,7 +285,7 @@ earlier in this file, and each thread carries a reply on the pull request.
 | Native credential check | `claims_ok: true`, exit 0 | E1 |
 | `electron-vite build` renderer | Cannot finish here (heap exhaustion; a clean base checkout behaves the same). CI builds it | E4 |
 | `package:mac` | Not run, no Electron binary on Linux | E4 |
-| SonarCloud, new head | Analysis pending at the time of writing. The target is zero open issues and 0.0% new-code duplication | E5 |
+| SonarCloud, `b19089e` (the head that carries every dedupe change) | Quality gate OK, zero open issues, zero bugs, zero vulnerabilities, and `new_duplicated_lines` 0 of 3,151 new lines, which is 0.0% new-code duplication | E1, read from the SonarCloud API |
 
 ### Open items after this round
 
@@ -295,3 +295,31 @@ earlier in this file, and each thread carries a reply on the pull request.
   passed when this was written.
 - The manual Linux disabled-keyring run and `package:mac` remain with the human
   or CI, as recorded above.
+
+### SonarCloud re-read after the fix batches (2026-09-21)
+
+- Issues: `total: 0`. The seven findings recorded against `c9ee81d` are gone
+  from the analysis of `b19089e`.
+- New-code duplication: the project row reads `new_duplicated_lines` 0 of
+  `new_lines` 3,151, and SonarCloud marks it as the best value. The 77
+  duplicated lines from the `c9ee81d` analysis are gone: the shared provider
+  store, the shared test fixtures, and the test-file rewrites removed every
+  carrier.
+- The analysis covering `17715b0` and `5bde078` had not been published when this
+  was written. Those commits touch imports, two save or removal handlers, a few
+  error paths and comments, with no new repeated block, but the measure is
+  re-read after the analysis lands rather than assumed.
+
+Re-read endpoints:
+
+- `https://sonarcloud.io/api/issues/search?componentKeys=maus-inc_mauscode&pullRequest=68&resolved=false&ps=50`
+- `https://sonarcloud.io/api/measures/component_tree?component=maus-inc_mauscode&pullRequest=68&metricKeys=new_duplicated_lines,new_lines&ps=500&s=metric&metricSort=new_duplicated_lines&asc=false`
+
+### GitHub connection state (2026-09-21)
+
+The GitHub token stopped working partway through the verification round
+(`gh auth status` reports the token in `GH_TOKEN` as no longer valid, and every
+API call answers 401). The pushes of `17715b0` and `5bde078` went through
+before that, and every review reply and thread resolution was posted. What
+remains blocked is reading the terminal CI conclusion for `5bde078` and any
+further push, including this record.
