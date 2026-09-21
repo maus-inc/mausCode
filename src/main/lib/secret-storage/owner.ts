@@ -10,7 +10,7 @@
  *   legacy column decodes to the same value. It stays readable.
  * - Anything else is unreadable and is reported, never returned as a value.
  */
-import { readdirSync, readFileSync, renameSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import {
   type Keychain,
@@ -41,11 +41,13 @@ const STASH_SUFFIX = ".unreadable-"
 
 /**
  * Every stashed copy of one credential file, so a caller that has to remove the
- * credential can remove the copies too. Throws when the directory cannot be
- * listed: a clear that cannot rule out a stashed copy must not report success.
+ * credential can remove the copies too. An absent directory holds none. Any
+ * other listing failure throws, because a clear that cannot rule out a stashed
+ * copy must not report success.
  */
 export function stashedCiphertextPaths(filePath: string): string[] {
   const dir = dirname(filePath)
+  if (!existsSync(dir)) return []
   const prefix = `${basename(filePath)}${STASH_SUFFIX}`
   return readdirSync(dir)
     .filter((name) => name.startsWith(prefix))

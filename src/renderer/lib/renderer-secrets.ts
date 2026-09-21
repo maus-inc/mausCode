@@ -33,7 +33,10 @@ const listeners = new Map<string, Set<Listener>>()
 const edited = new Set<string>()
 /** One chain per key, so an older write can never land after a newer one. */
 const writes = new Map<string, Promise<RendererSecretWrite>>()
+/** True once a read succeeded; a failed read leaves this false so it can retry. */
 let started = false
+/** At most one read in flight, so retries cannot pile up queries. */
+let attempt: Promise<void> | null = null
 
 function browserStore(): Storage | null {
   try {
@@ -62,13 +65,15 @@ async function hydrate(): Promise<void> {
     // Nothing was read and no legacy value was touched, so the next caller may
     // try again. Without this the first transport error of a session would keep
     // every stored value out of the app until it restarted.
-    started = false
     console.error(
       "[renderer-secrets] stored values could not be read:",
       error instanceof Error ? error.message : String(error),
     )
     return
   }
+  // The read worked, so this session is done hydrating even when a stored entry
+  // was unreadable, which is the state where the migration must not run.
+  started = true
 
   for (const [key, raw] of Object.entries(stored.values)) {
     if (!edited.has(key)) emit(key, raw)
@@ -99,9 +104,10 @@ async function hydrate(): Promise<void> {
 
 /** Starts reading stored values. Safe to call more than once. */
 export function startRendererSecretSync(): void {
-  if (started) return
-  started = true
-  void hydrate()
+  if (started || attempt !== null) return
+  attempt = hydrate().finally(() => {
+    attempt = null
+  })
 }
 
 function recordWriteFailure(key: RendererSecretKey, error: unknown): RendererSecretWrite {

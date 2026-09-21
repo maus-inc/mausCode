@@ -401,3 +401,18 @@ changed.
 - Two pre-existing items stay out of scope and are flagged: the Cline
   custom-endpoint temporary `providers.json` sweep, and the `docs/protocol.md`
   session-scoped lookup, which needs a runtime signature change.
+
+### Self-review findings on the third-round diff (2026-09-21)
+
+Two gaps were found in my own changes after the gates went green, both fixed
+before the commit was pushed:
+
+| Gap | Why it mattered | Fix |
+| --- | --- | --- |
+| `clearFileSecret` would throw when nothing was ever written, because listing an absent `data` directory raises ENOENT | Clearing a key on a fresh install would have reported that a credential "may still be stored" when none existed | `stashedCiphertextPaths` returns an empty list for an absent directory, keeps the throw for any other listing failure, and a new test clears a secret whose data directory does not exist |
+| The renderer retry re-fired the status query on every read while the failure persisted | A broken main process would have been queried on every render instead of once per retry | `startRendererSecretSync` keeps one attempt in flight and only marks the session hydrated after a successful read, so a failure allows exactly one new attempt per caller |
+
+The renderer retry is not covered by a test: `src/renderer` has no vitest suite
+for this module, and the retry depends on the tRPC client. The behavior is a
+two-line guard that typecheck and the manual read of the module cover, and it is
+reported here as E4 rather than claimed as verified.

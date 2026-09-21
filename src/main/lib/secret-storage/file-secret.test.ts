@@ -85,6 +85,12 @@ describe("file secret", () => {
     expect(readdirSync(join(home, "data"))).toHaveLength(0)
   })
 
+  it("is quiet when there is nothing to clear", () => {
+    const home = makeHome("mauscode-file-secret-")
+    // No data directory at all, which is the state before the first write.
+    expect(() => clearFileSecret(fixture(home))).not.toThrow()
+  })
+
   it("clears the stashed ciphertext copy too", () => {
     const home = makeHome("mauscode-file-secret-")
     saveFileSecret(fixture(home), "first-token")
