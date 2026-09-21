@@ -7,12 +7,20 @@ import assert from "node:assert/strict"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { test } from "node:test"
+import { after, test } from "node:test"
 import { clearPrivateCredentialFiles, privateCredentialDir } from "./credential-files.ts"
 
+const homes: string[] = []
+
 function tempHome(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "maus-runtime-cred-"))
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "maus-runtime-cred-"))
+  homes.push(home)
+  return home
 }
+
+after(() => {
+  for (const home of homes) fs.rmSync(home, { recursive: true, force: true })
+})
 
 function writeCredential(home: string, name: string, contents: string): string {
   const dir = privateCredentialDir(home)
@@ -55,6 +63,19 @@ test("refuses a credential path that is a symlink", () => {
   fs.symlinkSync(elsewhere, privateCredentialDir(home))
   assert.deepEqual(clearPrivateCredentialFiles(home), [])
   assert.equal(fs.existsSync(path.join(elsewhere, "anthropic.env")), true)
+})
+
+test("fails closed when a credential file cannot be removed", () => {
+  const home = tempHome()
+  const file = writeCredential(home, "anthropic.env", "ANTHROPIC_API_KEY=sk-synthetic")
+  assert.throws(
+    () =>
+      clearPrivateCredentialFiles(home, () => {
+        throw new Error("EPERM")
+      }),
+    /could not be removed/,
+  )
+  assert.equal(fs.existsSync(file), true)
 })
 
 test("passes over a missing directory without throwing", () => {

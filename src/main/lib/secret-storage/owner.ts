@@ -36,9 +36,11 @@ function startsWithCipherPrefix(payload: Buffer): boolean {
 }
 
 /**
- * Moves a ciphertext file aside when it cannot be decrypted with the current
- * keyring, so a newer plaintext value can be read instead. The bytes are kept
- * under a timestamped name for recovery; nothing is deleted.
+ * Moves a ciphertext file aside when the current keyring cannot protect it, so
+ * a newer plaintext value can be read instead. The check matches the write
+ * policy: a backend that may not protect new values (no keyring, or the Linux
+ * `basic_text` backend) must not let its older bytes keep winning on read. The
+ * bytes are kept under a timestamped name for recovery; nothing is deleted.
  */
 export function stashUnreadableCiphertext(
   filePath: string,
@@ -49,13 +51,13 @@ export function stashUnreadableCiphertext(
     const payload = readFileSync(filePath)
     if (!startsWithCipherPrefix(payload)) return { stashed: false, path: null }
     try {
-      // With no keyring the bytes cannot be read at all; with one they may
-      // still belong to another keyring, which the decrypt call reveals.
-      if (keychain.isEncryptionAvailable()) {
+      // With a usable keyring the bytes may still belong to another keyring,
+      // which the decrypt call reveals.
+      if (readAvailability(keychain).usable) {
         keychain.decryptString(payload)
         return { stashed: false, path: null }
       }
-      throw new Error("no keyring")
+      throw new Error("no usable keyring")
     } catch {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-")
       const target = `${filePath}.unreadable-${stamp}`

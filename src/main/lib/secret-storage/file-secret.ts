@@ -28,6 +28,14 @@ function ensureDir(path: string): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
 }
 
+function removeQuietly(path: string): void {
+  try {
+    if (existsSync(path)) unlinkSync(path)
+  } catch {
+    // The failure worth reporting is the one that stopped the write.
+  }
+}
+
 export function saveFileSecret(secret: FileSecret, value: string): void {
   const prepared = secret.store.prepare(secret.context, value)
   ensureDir(secret.filePath)
@@ -35,11 +43,15 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
   if (prepared.ciphertext) {
     const temp = `${secret.filePath}.tmp-${process.pid}`
     writeFileSync(temp, prepared.ciphertext, { mode: 0o600 })
-    if (secret.store.read(readFileSync(temp), secret.context) !== value) {
-      unlinkSync(temp)
-      throw new Error(
-        `${secret.context} could not be read back after encryption. Nothing was changed.`,
-      )
+    try {
+      if (secret.store.read(readFileSync(temp), secret.context) !== value) {
+        throw new Error(
+          `${secret.context} could not be read back after encryption. Nothing was changed.`,
+        )
+      }
+    } catch (error) {
+      removeQuietly(temp)
+      throw error
     }
     renameSync(temp, secret.filePath)
     if (existsSync(secret.plaintextPath)) {
@@ -52,13 +64,27 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
     return
   }
 
-  // A stored file that cannot be decrypted now would keep winning on read, so
-  // it is kept aside rather than deleted.
+  // A stored file the current keyring cannot protect would keep winning on
+  // read, so it is kept aside rather than deleted.
   stashUnreadableCiphertext(secret.filePath, secret.keychain, secret.context)
   ensureDir(secret.plaintextPath)
-  writeFileSync(secret.plaintextPath, `${JSON.stringify({ [secret.field]: value })}\n`, {
-    mode: 0o600,
-  })
+  savePlaintextCompanion(secret, value)
+}
+
+/** Replaces the companion through a temporary file, so a failed write cannot truncate it. */
+function savePlaintextCompanion(secret: FileSecret, value: string): void {
+  const payload = `${JSON.stringify({ [secret.field]: value })}\n`
+  const temp = `${secret.plaintextPath}.tmp-${process.pid}`
+  writeFileSync(temp, payload, { mode: 0o600 })
+  try {
+    if (readFileSync(temp, "utf-8") !== payload) {
+      throw new Error(`${secret.context} could not be read back after it was written.`)
+    }
+    renameSync(temp, secret.plaintextPath)
+  } catch (error) {
+    removeQuietly(temp)
+    throw error
+  }
 }
 
 export type FileSecretRead = {
@@ -93,10 +119,17 @@ export function readFileSecret(secret: FileSecret): FileSecretRead {
       unknown
     >
     const field = parsed[secret.field]
-    if (typeof field !== "string") return { value: null, error: null }
+    if (typeof field !== "string") {
+      return {
+        value: null,
+        error: `${secret.context} is saved in a file with an unrecognized shape.`,
+      }
+    }
     value = field
   } catch {
-    return { value: null, error: null }
+    const message = `${secret.context} is saved in a file that could not be read.`
+    console.error(`[SecretStore] ${message}`, secret.plaintextPath)
+    return { value: null, error: message }
   }
 
   try {
@@ -116,12 +149,17 @@ export function loadFileSecret(secret: FileSecret): string | null {
 }
 
 export function clearFileSecret(secret: FileSecret): void {
+  const failed: string[] = []
   for (const path of [secret.filePath, secret.plaintextPath]) {
     try {
       if (existsSync(path)) unlinkSync(path)
     } catch {
-      // Clearing continues for the remaining path.
+      failed.push(path)
     }
+  }
+  if (failed.length > 0) {
+    console.error(`[SecretStore] Could not remove ${failed.join(", ")}`)
+    throw new Error(`${secret.context} could not be removed from disk and may still be stored.`)
   }
 }
 

@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import {
   buildStatus,
@@ -8,8 +10,9 @@ import {
   inspectStoredBase64,
   readAvailability,
   resolveProtection,
+  stashUnreadableCiphertext,
 } from "./owner"
-import { fakeKeychain } from "./test-support"
+import { fakeKeychain, makeHome } from "./test-support"
 import { EMPTY_METADATA, SecretStorageError, type SecretStorageMetadata } from "./types"
 
 const consent: SecretStorageMetadata = {
@@ -123,6 +126,23 @@ describe("secret storage owner", () => {
     expect(() =>
       resolveProtection({ keychain, metadata: EMPTY_METADATA, context: "This credential" }),
     ).toThrow(SecretStorageError)
+  })
+
+  it("keeps ciphertext aside when the backend cannot protect new values", () => {
+    const home = makeHome("mauscode-owner-")
+    const file = join(home, "data", "github-auth.dat")
+    mkdirSync(join(home, "data"), { recursive: true })
+    const usable = fakeKeychain()
+    writeFileSync(file, usable.encryptString("sk-live-value"))
+
+    const hardcoded = fakeKeychain({ available: true, backend: "basic_text" })
+    expect(stashUnreadableCiphertext(file, hardcoded, "The GitHub token").stashed).toBe(true)
+    expect(existsSync(file)).toBe(false)
+
+    // A keyring that can protect new values keeps the file where it is.
+    writeFileSync(file, usable.encryptString("sk-live-value"))
+    expect(stashUnreadableCiphertext(file, usable, "The GitHub token").stashed).toBe(false)
+    expect(readFileSync(file).subarray(0, 3).toString("latin1")).toBe("v10")
   })
 
   it("reports an encryption failure instead of storing anything", () => {

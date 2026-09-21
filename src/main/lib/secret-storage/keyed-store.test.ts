@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs"
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import {
@@ -83,8 +83,19 @@ describe("keyed secret store", () => {
     const store = keyedStore()
     writeKeyedSecret(keyed(store), "a", "1")
     const dir = join(store.userDataPath, "data")
-    const leftovers = readKeyedSecrets(keyed(store))
-    expect(leftovers.error).toBeNull()
-    expect(statSync(dir).isDirectory()).toBe(true)
+    expect(readdirSync(dir).filter((name) => name.includes(".tmp-"))).toHaveLength(0)
+    expect(readKeyedSecret(keyed(store), "a")).toBe("1")
+  })
+
+  it("reports an entry whose protection it does not recognize", () => {
+    const store = keyedStore()
+    mkdirSync(join(store.userDataPath, "data"), { recursive: true })
+    writeFileSync(
+      keyedStorePath(store.userDataPath),
+      JSON.stringify({ version: 1, entries: { k: { protection: "rot13", payload: "value" } } }),
+    )
+    const read = readKeyedSecrets(keyed(store))
+    expect(read.values.k).toBeUndefined()
+    expect(read.error).toMatch(/unrecognized shape/)
   })
 })

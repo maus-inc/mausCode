@@ -24,6 +24,7 @@ import {
   openaiApiKeyAtom,
   pinnedOpenRouterModelsAtom,
 } from "../../../lib/atoms"
+import { whenRendererSecretSaved } from "../../../lib/renderer-secrets"
 import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
 import { OpenRouterModelBrowser } from "./openrouter-model-browser"
 
@@ -425,7 +426,7 @@ export function AgentsModelsTab() {
   const codexLogoutMutation = trpc.codex.logout.useMutation()
   const trpcUtils = trpc.useUtils()
 
-  // Gemini API key state (encrypted by the app secret store; never touches localStorage)
+  // Gemini API key state (stored by the app secret store; never touches localStorage)
   const { data: geminiAuth, isLoading: isGeminiAuthLoading } = trpc.gemini.getAuthStatus.useQuery()
   const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
   const setGeminiKeyMutation = trpc.gemini.setApiKey.useMutation()
@@ -594,6 +595,11 @@ export function AgentsModelsTab() {
     try {
       setStoredCodexApiKey(normalized)
       setCodexApiKey(normalized)
+      const saved = await whenRendererSecretSaved("onboarding:codex-api-key")
+      if (!saved.ok) {
+        toast.error(`Failed to save Codex API key: ${saved.error}`)
+        return
+      }
       await trpcUtils.codex.getIntegration.invalidate()
       toast.success("Codex API key saved")
     } catch {
@@ -608,6 +614,11 @@ export function AgentsModelsTab() {
     try {
       setStoredCodexApiKey("")
       setCodexApiKey("")
+      const removed = await whenRendererSecretSaved("onboarding:codex-api-key")
+      if (!removed.ok) {
+        toast.error(`Failed to remove Codex API key: ${removed.error}`)
+        return
+      }
 
       if (codexIntegration?.state === "connected_api_key") {
         await codexLogoutMutation.mutateAsync().catch(() => {
@@ -709,6 +720,11 @@ export function AgentsModelsTab() {
     try {
       await setOpenAIKeyMutation.mutateAsync({ key: trimmedOpenAIKey })
       setStoredOpenAIKey(trimmedOpenAIKey)
+      const saved = await whenRendererSecretSaved("agents:openai-api-key")
+      if (!saved.ok) {
+        toast.error(`Failed to save OpenAI API key: ${saved.error}`)
+        return
+      }
       // Invalidate voice availability check
       await trpcUtils.voice.isAvailable.invalidate()
       toast.success("OpenAI API key saved")
@@ -722,6 +738,11 @@ export function AgentsModelsTab() {
       await setOpenAIKeyMutation.mutateAsync({ key: "" })
       setStoredOpenAIKey("")
       setOpenaiKey("")
+      const removed = await whenRendererSecretSaved("agents:openai-api-key")
+      if (!removed.ok) {
+        toast.error(`Failed to remove OpenAI API key: ${removed.error}`)
+        return
+      }
       await trpcUtils.voice.isAvailable.invalidate()
       toast.success("OpenAI API key removed")
     } catch (_err) {
@@ -907,7 +928,7 @@ export function AgentsModelsTab() {
             <h4 className="text-sm font-medium text-foreground">Gemini Account</h4>
             <p className="text-xs text-muted-foreground">
               {hasGeminiKey
-                ? `API key stored encrypted via OS keychain · ${geminiMaskedKey}`
+                ? `API key saved by the app · ${geminiMaskedKey}`
                 : hasGeminiCliAuth
                   ? `Gemini CLI connected via ${geminiCliStatus?.authSource ?? "local auth"}`
                   : "Connect a Google AI Studio API key or run `gemini` to sign in"}
@@ -964,7 +985,7 @@ export function AgentsModelsTab() {
             <h4 className="text-sm font-medium text-foreground">OpenRouter Account</h4>
             <p className="text-xs text-muted-foreground">
               {hasOpenRouterKey
-                ? `API key stored encrypted via OS keychain · ${openRouterMaskedKey}`
+                ? `API key saved by the app · ${openRouterMaskedKey}`
                 : "Connect an OpenRouter API key (openrouter.ai/keys)"}
             </p>
           </div>

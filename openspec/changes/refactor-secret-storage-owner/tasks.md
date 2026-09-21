@@ -20,9 +20,12 @@
 - [x] Route the three provider file stores and all database credential writers through the owner; existing database readers keep the legacy representation readable.
 - [ ] Preserve Anthropic dual writes and check policy before refresh or token exchange.
 - [x] Replace new raw renderer persistence with owner-held references (`src/renderer/lib/renderer-secrets.ts`) while keeping untouched legacy browser-storage reads and moving them only after a confirmed write.
-- [x] Remove secondary runtime, temporary-provider, and cookie secret writes after tracing all named consumers.
-  - The persistent `x-desktop-token` cookie is now a session cookie written by one helper (`src/main/index.ts:111`), re-issued at startup from the encrypted session and on refresh, so no token stays in the on-disk cookie store. Removing an older persisted cookie on the next login covers installs that already have one.
-  - The CLI temp `providers.json` is still written by the Claude CLI process itself, outside the app (see the inventory), and stays documented and outstanding.
+- [x] Remove the secondary runtime and cookie secret writes after tracing all named consumers.
+  - The persistent `x-desktop-token` cookie is now a session cookie written by one helper (`src/main/index.ts:111`), re-issued at startup from the encrypted session and on refresh, and removed when the stored token has already expired, so no token stays in the on-disk cookie store. Removing an older persisted cookie on the next login covers installs that already have one.
+  - The runtime's plaintext provider files are cleared before the daemon starts, failing closed when a file cannot be removed, and after it stops (`src/main/lib/runtime/credential-files.ts`).
+- [ ] Remove the temporary plaintext provider write on the Cline custom-endpoint path.
+  - `src/main/lib/cline-print/auth-config.ts` writes `settings.apiKey` into an isolated `providers.json` for the CLI run and removes it afterwards; the file is 0600 and never touches the user's real `~/.cline`, but a crash can leave it behind. The cleanup sweep is the remaining work (`.dump/app/audits/2026-09-20-secret-storage-verification.md`).
+  - Files the external CLIs own stay external in the inventory; that record already names them and their permissions.
 - [x] Implement the approved external CLI refresh behavior without changing OAuth screens: pre-refresh permission check, single-flight refresh, no forked token stores.
 
 ## Settings and logging
@@ -38,7 +41,8 @@
 - [x] Add unit tests for refusal, consent, legacy formats, the keyed store, redaction, and private-file cleanup (30 vitest plus 5 node tests).
 - [ ] Verify the private-file cleanup inside the running app, and on Linux with the keyring disabled.
 - [ ] Measure storage-operation and startup cost against the base.
-- [x] Run all AGENTS gates, shipping build/package gates, and security checks on the final diff. Static gates, tests, lint, both typecheck gates and ratchets, the dependency audit, and skills verification are green (`.dump/app/audits/2026-09-20-secret-storage-verification.md`); the renderer bundle and packaging cannot finish in this sandbox and are covered by CI.
+- [x] Run the AGENTS static gates, tests, and security checks on the final diff. Install (frozen), the runtime-client build, Biome, both typecheck gates and their ratchets, vitest, the node runtime tests, the contract tests, the dependency audit, and skills verification are green, with the evidence record in `.dump/app/audits/2026-09-20-secret-storage-verification.md`.
+- [ ] Run the shipping gates locally. `build` cannot finish in this sandbox (the renderer chunk runs out of memory) and `package:mac` has no Electron binary here. CI runs `bun run build` on three operating systems and the unsigned packaging matrix (`.github/workflows/ci.yml`); record the terminal results for the final head before calling these done.
 - [ ] Run the real Linux disabled-keyring connect/restart/disk inspection.
 - [ ] Run the six UI delivery gates against the application, not only the prototype.
 - [ ] Run final-diff code research and up to three self-review passes.

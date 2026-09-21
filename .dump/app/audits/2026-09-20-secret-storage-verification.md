@@ -184,3 +184,70 @@ SonarCloud issues after the re-analysis of `c9ee81d`: seven open, one MAJOR (`S3
 | A crash leaves the per-run Cline temp directory `cline-run-*` in the OS temp dir holding a plaintext provider key | `src/main/lib/cline-print/auth-config.ts:106-153` | The module documents a one-turn plaintext window, and a crash or a killed process extends it until the OS cleans temp. The key is written only for a custom baseUrl, and the file mode is 0600 | Recommend a sweep of `cline-run-*` at app start or before the next Cline run, in the shape of `clearPrivateCredentialFiles` for the native runtime. Not changed here: the file belongs to another step's domain and step 11's approved native scope covers the runtime, not `cline-print` |
 | The memory-only handoff ships in the vendored tree, while the daemon binary comes from the `@1jehuang/jcode-*` optional package | `runtime/jcode/crates/jcode-provider-env/src/ephemeral.rs` | No protection until a jcode release carries the patch. The shipped mitigation is the spawn and quit cleanup of `config/jcode/*.env`, and the settings page states the mechanism | Already stated in the PR body and the roadmap notes; the finding is recorded here so it is not mistaken for shipped protection |
 | The native handoff path is unverified against a real capability advertisement | `src/main/lib/runtime/credentials.ts` | The runtime check recorded that the shipped daemon omits `ephemeral_api_key` and answers `unknown_request`, so the memory path never runs in the shipped configuration. The disk path it falls back to is disclosed in settings and cleared around each run | Verified live for the daemon in use, E1. A release that carries the patch is the next chance to exercise the memory path |
+
+## Review comment resolution, PR #68 round 2 (2026-09-21)
+
+Thirty open threads were on the pull request after the deduplication commit
+(twenty-nine from CodeAnt AI and CodeRabbit, plus four nitpick suggestions in a
+thread comment). Each was checked against the source before any change. This
+round covers fixes only; no thread was closed without either a change or a
+recorded reason.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `keyed-store.ts:75` unknown protection treated as plaintext | Valid | `isStoredEntry` reports an entry whose recorded protection or payload shape is unknown instead of returning raw payload |
+| `keyed-store.ts:114` temporary file renamed before it is validated | Valid | `writeFile` reads the temporary file and runs the value check before `renameSync`, and removes the temporary file on any failure |
+| `file-secret.ts:61` plaintext replacement written in place | Valid | `savePlaintextCompanion` writes through a temporary file and verifies it before replacing the companion |
+| `file-secret.ts:123` clear swallows an unlink failure | Valid | `clearFileSecret` attempts both paths, then throws with the context when one remains |
+| `file-secret.ts:37-44` temporary ciphertext leaked on a throw | Valid | The encrypted branch removes the temporary file in a `catch` for both the mismatch and the throwing read |
+| `file-secret.ts:98-99` unreadable companion reported as absent | Valid | A companion that cannot be parsed, or lacks the field, returns an error instead of `{value: null, error: null}` |
+| `owner.ts:58` stash predicate did not match the write policy | Valid | `stashUnreadableCiphertext` now keys off `readAvailability(keychain).usable`, so Linux `basic_text` cannot keep an older value winning after a consented plaintext write. Covered in `owner.test.ts` and `file-secret.test.ts` |
+| `auth-store.ts:32` unvalidated session fields | Valid | `parseAuthData` requires string `refreshToken` and `expiresAt`; both legacy writers always wrote the full record |
+| `runtime/credentials.ts:106` half-applied handoff | Valid | The applied ephemeral providers are cleared before the failure is rethrown, so no key outlives the turn that failed |
+| `runtime/index.ts:75` cleanup skipped when shutdown fails | Valid | `try`/`finally` around `manager.shutdown()` |
+| `runtime/credential-files.ts:47` unlink failure only warned | Valid | Cleanup fails closed: a `.env` file that cannot be removed stops the daemon, and the startup path calls the strict variant. The teardown wrapper stays quiet |
+| `credential-files.test.ts:26` temp dirs never removed | Valid | Homes are registered and removed in an `after` hook; a failure path test was added |
+| `redact.test.ts:51` GitHub-shaped token never asserted | Valid | The fixture builds `ghp_` plus 24 characters at runtime and the test asserts it is gone |
+| `renderer-secrets.ts:99` migration after a read error | Valid | `hydrate` records the error and stops before touching browser storage |
+| `renderer-secrets.ts:116` unsequenced mutations | Valid | Writes are chained per key, so an older request cannot land after a newer one |
+| `renderer-secrets.ts:160` fire-and-forget save reported as success | Valid | `whenRendererSecretSaved` exposes the write outcome; both Codex save paths and the removal path in the models tab and the login flow await it before claiming success |
+| `src/main/index.ts:115` expired token left the cookie behind | Valid | `removeDesktopTokenCookie` runs on the expired path and in the login block |
+| `keyed-auth-store.test.ts:63` assertion could not fail | Valid | The check now filters the recursive listing for `openrouter-auth` entries |
+| `keyed-store.test.ts:89` temporary file never inspected | Valid | The test asserts no `.tmp-` entry remains in the data directory |
+| `preview.py:44` prototype bound to all interfaces | Valid | Loopback by default, with `PREVIEW_HOST` for a container preview proxy |
+| `agents-models-tab.tsx:428` wording claimed encryption | Valid | The Gemini and OpenRouter rows say the key is saved by the app; the database writers still refuse without encryption or consent |
+| `openspec .../spec.md:5` owner named as `auth-store.ts` | Valid | The requirement names `src/main/lib/secret-storage/` as the policy owner, `electron-keychain.ts` as the boundary and `auth-store.ts` as the sign-in surface |
+| `openspec .../tasks.md:23` temporary-provider item marked done | Valid | Split: the runtime and cookie writes stay done, and the Cline custom-endpoint `providers.json` is a new unchecked item naming `src/main/lib/cline-print/auth-config.ts` |
+| `openspec .../tasks.md:41` shipping gates marked done | Valid | Split: the static and test gates stay checked, and the renderer bundle and `package:mac` runs are a new unchecked item pointing at CI |
+| `.dump .../native-credential-check.mjs:64` audit never failed | Valid | The five conclusions are checked, recorded as claims and exit non-zero when one changes. Re-run after the change: `claims_ok: true` |
+| `docs/protocol.md:67` session-isolation claim | Valid | The section now states that the registry holds one value per provider variable, that only clearing is session-scoped, and that a client must treat the handoff as one active session per variable. The Rust comments say the same |
+| `ephemeral.rs:29` and `:66`, session-aware lookup | Valid, not changed in code | The provider resolves its key by variable name and carries no session id, so session-scoped lookup is a runtime design change, not a patch. The capability is not advertised, mausCode gates its use on `client.supports("ephemeral_api_key")`, and the limitation is now documented at both sites and in `docs/protocol.md` |
+| `claude-token.ts:359` permission checked before the refresh | Valid as a race, by design as a control | The pre-refresh probe is the approved rule, `writeToCredentialsFile` runs the same authorization again at write time, and a failed write keeps the CLI store as it is. A rotation that cannot be persisted stays a disclosed residual risk |
+| `keyed-auth-store.ts:69` and `github-auth-store.ts:32` `load()` returns null for an unreadable file | Intended contract | `status()` reports the reason and the Credential storage page shows it per provider; `load()` is the value-or-nothing path for callers that cannot act on an unreadable file. Its contract is now documented on the type |
+| `token-crypto.ts:14` `SecretStorageError` from a save procedure | No change needed | The refusal is the mutation error; there is no plaintext fallback and no other error shape in those procedures to map to. The message names the permission the user can grant |
+
+### Gate results after this round
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| `npm run build:runtime-client` | Passed | E3 |
+| `npx biome check .` | Passed, 962 files, no fixes | E3 |
+| `npm run typecheck` | Passed | E3 |
+| `npm test` | 95 files, 1788 tests passed (was 1785) | E3 |
+| `npm run test:node` | 41 tests passed (was 40) | E3 |
+| `npm run test:contracts` | 23 files, 382 tests passed | E3 |
+| `npm run lint` | Passed, 907 files | E3 |
+| `npm run ratchet:typecheck` | 0 errors <= 0 baseline | E3 |
+| `npm run ratchet:audit` | No new critical advisories | E3 |
+| `npm run skills:verify` | 50 of 50 locked skills verified | E3 |
+| OpenSpec strict validation | Valid | E3 |
+| Native credential check | `claims_ok: true`, exit 0, refreshed `.json` | E1 |
+| `npm run ts:check` | Not run to completion here. A fifth attempt was killed after 300 seconds with no diagnostics while memory was free; CI runs the same command in the quality job | E4 |
+
+### Residual gaps after this round
+
+| Gap | Position |
+| --- | --- |
+| The ephemeral registry holds one value per provider variable, so two live sessions cannot hold different keys for the same variable | Documented in `docs/protocol.md` and at the Rust functions. The capability stays unadvertised and unshipped; a session-scoped lookup is a runtime change for a release that carries the patch |
+| A successful Claude token rotation whose local write then fails leaves the CLI store on the previous token | Approved rule: the permission is checked before the network call, and the write re-checks it. The failure keeps the old store and logs; a user who can no longer refresh signs in again |
+| A crash can still leave the Cline per-run `providers.json` | Unchanged from the previous record; the item is now an unchecked task with the file named |

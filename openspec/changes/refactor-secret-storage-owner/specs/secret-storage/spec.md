@@ -2,7 +2,7 @@
 
 ### Requirement: One app secret owner
 
-The application SHALL delegate encryption and app-held secret persistence policy to `src/main/auth-store.ts`. Provider wrappers SHALL NOT import Electron safeStorage directly. The token-crypto import path SHALL remain a thin re-export.
+The application SHALL delegate encryption and app-held secret persistence policy to `src/main/lib/secret-storage/`, where `electron-keychain.ts` is the only `safeStorage` boundary. `src/main/auth-store.ts` SHALL keep its sign-in public surface and write through that owner. Provider wrappers SHALL NOT import Electron safeStorage directly. The token-crypto import path SHALL remain a thin re-export.
 
 #### Scenario: Provider saves a credential
 

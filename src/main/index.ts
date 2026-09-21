@@ -106,13 +106,16 @@ export function getAuthManager(): AuthManager {
  * is never written to the cookie store on disk. The app re-issues it at
  * startup from the encrypted session and again whenever the token refreshes,
  * so nothing needs to survive a restart. A token that has already expired is
- * not written at all.
+ * not written, and any cookie an earlier version left behind is removed.
  */
 async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<void> {
   const apiBase = getBaseUrl()
   if (!apiBase) return
   const expiry = new Date(expiresAt).getTime()
-  if (Number.isFinite(expiry) && expiry <= Date.now()) return
+  if (Number.isFinite(expiry) && expiry <= Date.now()) {
+    await removeDesktopTokenCookie(apiBase)
+    return
+  }
   try {
     await session.fromPartition("persist:main").cookies.set({
       url: apiBase,
@@ -126,6 +129,15 @@ async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<
     // The cookie carries control-plane requests; the session itself is already
     // saved in the store, and the next refresh retries this.
     console.warn("[Auth] Desktop token cookie could not be set:", error)
+  }
+}
+
+/** Drops the control-plane cookie, so a rotated or expired token cannot linger. */
+async function removeDesktopTokenCookie(apiBase: string): Promise<void> {
+  try {
+    await session.fromPartition("persist:main").cookies.remove(apiBase, "x-desktop-token")
+  } catch (error) {
+    console.warn("[Auth] Desktop token cookie could not be removed:", error)
   }
 }
 
@@ -173,10 +185,7 @@ export async function handleAuthCode(code: string): Promise<void> {
     // token stays behind in the on-disk cookie store.
     const apiBase = getBaseUrl()
     if (apiBase) {
-      await session
-        .fromPartition("persist:main")
-        .cookies.remove(apiBase, "x-desktop-token")
-        .catch(() => {})
+      await removeDesktopTokenCookie(apiBase)
       await setDesktopTokenCookie(authData.token, authData.expiresAt)
       console.log("[Auth] Desktop token cookie set")
     }

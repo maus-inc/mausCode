@@ -2,6 +2,7 @@ import { useAtom } from "jotai"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { codexApiKeyAtom, normalizeCodexApiKey } from "../../../lib/atoms"
+import { whenRendererSecretSaved } from "../../../lib/renderer-secrets"
 import { trpc, trpcClient } from "../../../lib/trpc"
 
 export type CodexAuthMethod = "chatgpt" | "api_key"
@@ -141,6 +142,16 @@ export function useCodexLoginFlow() {
     }
 
     setStoredApiKey(normalized)
+    // The atom holds the key for this session, so wait for the app store before
+    // saying it was saved: a refused write would otherwise disappear at restart.
+    const saved = await whenRendererSecretSaved("onboarding:codex-api-key")
+    if (!saved.ok) {
+      const message = `The Codex API key could not be saved: ${saved.error}`
+      setState("error")
+      setError(message)
+      notifyError(message)
+      return false
+    }
     setSessionId(null)
     setUrl(null)
     setOutput("Using app-managed API key")

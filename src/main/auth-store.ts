@@ -24,6 +24,8 @@ function parseAuthData(content: string): AuthData | null {
   const candidate = parsed as Partial<AuthData>
   if (
     typeof candidate.token !== "string" ||
+    typeof candidate.refreshToken !== "string" ||
+    typeof candidate.expiresAt !== "string" ||
     typeof candidate.user !== "object" ||
     candidate.user === null
   ) {

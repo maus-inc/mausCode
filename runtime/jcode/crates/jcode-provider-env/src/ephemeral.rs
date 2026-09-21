@@ -49,6 +49,11 @@ fn validate_value(value: &str) -> Result<(), String> {
 }
 
 /// Hold `value` for `env_key` in memory, attributed to `session_id`.
+///
+/// The registry holds one value per variable, so a write from another session
+/// replaces the value the previous session held and both sessions then read the
+/// new one. Only clearing is session-scoped; see the module comment above
+/// `EPHEMERAL_KEYS`.
 pub fn set(session_id: &str, env_key: &str, value: &str) -> Result<(), String> {
     if session_id.trim().is_empty() {
         return Err("session_id must be non-empty".to_string());
@@ -68,6 +73,9 @@ pub fn set(session_id: &str, env_key: &str, value: &str) -> Result<(), String> {
 }
 
 /// The in-memory key for `env_key`, if one is held.
+///
+/// A provider resolves its key by variable name and carries no session id, so
+/// this lookup cannot be scoped to the session that supplied the value.
 pub fn lookup(env_key: &str) -> Option<String> {
     registry().get(env_key).map(|key| key.value.clone())
 }

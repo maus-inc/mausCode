@@ -45,9 +45,11 @@ describe("log redaction", () => {
   })
 
   it("redacts a token embedded in free text", () => {
-    const line = `refresh failed for sk-ant-oat01-abcdefghijklmnop and gh p_${"a".repeat(20)}`
+    const githubToken = `ghp_${"b".repeat(24)}`
+    const line = `refresh failed for sk-ant-oat01-abcdefghijklmnop and ${githubToken}`
     const redacted = redactText(line)
     expect(redacted).not.toContain("sk-ant-oat01")
+    expect(redacted).not.toContain(githubToken)
     expect(redacted).toContain("refresh failed for")
     expect(redactText("Authorization: Bearer abcdefghijklmnop").endsWith(REDACTED)).toBe(true)
   })

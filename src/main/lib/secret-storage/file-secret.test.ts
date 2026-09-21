@@ -5,8 +5,8 @@ import { clearFileSecret, fileSecretPaths, loadFileSecret, saveFileSecret } from
 import { makeHome, makeStore } from "./test-support"
 import { SecretStorageError } from "./types"
 
-function fixture(home: string, available = true, consent = false) {
-  const store = makeStore(home, { available, consent })
+function fixture(home: string, available = true, consent = false, backend: string | null = null) {
+  const store = makeStore(home, { available, consent, backend })
   return {
     ...fileSecretPaths(home, "github"),
     field: "token",
@@ -59,6 +59,19 @@ describe("file secret", () => {
     const consented = fixture(home, false, true)
     saveFileSecret(consented, "second-token")
     expect(loadFileSecret(consented)).toBe("second-token")
+    expect(
+      readdirSync(join(home, "data")).filter((name) => name.includes(".unreadable-")),
+    ).toHaveLength(1)
+  })
+
+  it("reads a consented plaintext value when the backend cannot protect ciphertext", () => {
+    const home = makeHome("mauscode-file-secret-")
+    saveFileSecret(fixture(home), "first-token")
+    // Linux basic_text reports encryption while using a fixed key, so it does
+    // not count as protection; the older ciphertext must stop winning on read.
+    const hardcoded = fixture(home, true, true, "basic_text")
+    saveFileSecret(hardcoded, "second-token")
+    expect(loadFileSecret(hardcoded)).toBe("second-token")
     expect(
       readdirSync(join(home, "data")).filter((name) => name.includes(".unreadable-")),
     ).toHaveLength(1)

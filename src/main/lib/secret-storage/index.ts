@@ -5,18 +5,11 @@
 import { app } from "electron"
 import { electronKeychain } from "./electron-keychain"
 import { SecretStore } from "./store"
-import type { Keychain } from "./types"
 
 let store: SecretStore | null = null
 
 export function getSecretStore(): SecretStore {
   store ??= new SecretStore(app.getPath("userData"), electronKeychain)
-  return store
-}
-
-/** Test seam: binds the process-wide store to a temp home and a fake keychain. */
-export function configureSecretStore(userDataPath: string, keychain: Keychain): SecretStore {
-  store = new SecretStore(userDataPath, keychain)
   return store
 }
 

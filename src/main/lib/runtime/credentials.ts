@@ -93,20 +93,29 @@ export async function applyNativeCredentials(
   const ephemeralProviders: string[] = []
   const handoff = { client, sessionId: inMemory ? sessionId : undefined, ephemeralProviders }
 
-  const anthropicToken = getActiveAnthropicToken()
-  if (anthropicToken) {
-    await applyKey(handoff, "anthropic-api", anthropicToken)
-    providers.push("anthropic-api")
-  } else if (process.env.ANTHROPIC_API_KEY) {
-    // The daemon inherits process env and resolves ANTHROPIC_API_KEY itself.
-    providers.push("anthropic-api (env)")
-  }
+  try {
+    const anthropicToken = getActiveAnthropicToken()
+    if (anthropicToken) {
+      await applyKey(handoff, "anthropic-api", anthropicToken)
+      providers.push("anthropic-api")
+    } else if (process.env.ANTHROPIC_API_KEY) {
+      // The daemon inherits process env and resolves ANTHROPIC_API_KEY itself.
+      providers.push("anthropic-api (env)")
+    }
 
-  if (request.customToken) {
-    await applyKey(handoff, "openai-api", request.customToken)
-    providers.push("openai-api")
-  } else if (process.env.OPENAI_API_KEY) {
-    providers.push("openai-api (env)")
+    if (request.customToken) {
+      await applyKey(handoff, "openai-api", request.customToken)
+      providers.push("openai-api")
+    } else if (process.env.OPENAI_API_KEY) {
+      providers.push("openai-api (env)")
+    }
+  } catch (error) {
+    // The caller installs its release hook only after this function returns, so
+    // a handoff that stops halfway must drop the keys it already placed.
+    if (handoff.sessionId !== undefined) {
+      await clearNativeEphemeralCredentials(client, handoff.sessionId, ephemeralProviders)
+    }
+    throw error
   }
 
   return { providers, ephemeralProviders }

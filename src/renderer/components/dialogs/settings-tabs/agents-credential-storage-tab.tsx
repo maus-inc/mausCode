@@ -1,6 +1,5 @@
 import { KeyRound, Loader2, ShieldCheck, ShieldOff } from "lucide-react"
 import { useState } from "react"
-import { clearRendererSecretFailure } from "../../../lib/renderer-secrets"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import {
@@ -48,7 +47,6 @@ export function AgentsCredentialStorageTab() {
   const status = trpc.secretStorage.status.useQuery()
   const setConsent = trpc.secretStorage.setPlaintextConsent.useMutation({
     onSuccess: () => {
-      clearRendererSecretFailure()
       void utils.secretStorage.status.invalidate()
       void utils.secretStorage.rendererSecrets.invalidate()
     },

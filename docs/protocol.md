@@ -58,13 +58,21 @@ v0 reserves these names without defining payloads (each gets a follow-up change)
 client that holds a key for one session only needs the value kept in memory:
 
 - `set_ephemeral_api_key` — `{session_id, provider, api_key}`. The runtime holds
-  the key in process memory, attributed to that session, and never writes it to
-  the provider store. It replies with `credential_updated`. It is advertised as
-  the `ephemeral_api_key` capability in `hello`, so a client that does not see
-  the capability never sends it.
-- `clear_ephemeral_api_key` — `{session_id, provider}`. Drops an in-memory key.
-  It never deletes a persisted credential, and a key set by another session is
-  left alone.
+  the key in process memory and never writes it to the provider store. It
+  replies with `credential_updated`. A release that carries it advertises the
+  `ephemeral_api_key` capability in `hello`, so a client that does not see the
+  capability never sends it.
+- `clear_ephemeral_api_key` — `{session_id, provider}`. Drops the in-memory key
+  when `session_id` owns it. It never deletes a persisted credential, and a key
+  held by another session is left alone.
+- The registry holds one value per provider variable, not one per session, and
+  the most recent write wins. A provider resolves its key by variable name and
+  holds no session id, so a lookup cannot be scoped to the asking session yet.
+  Writing is therefore not session-isolated: two live sessions that hold
+  different keys for the same provider variable against one runtime will share
+  the newest one. Only clearing is session-scoped. Until lookup is
+  session-scoped, a client must treat the handoff as one active session per
+  provider variable.
 
 A runtime that does not implement these answers `unknown_request` with the
 request name and keeps the connection open, which is how a client detects
@@ -72,7 +80,7 @@ support when it has not read the `hello` capability list.
 
 The runtime's credential registry (`jcode-provider-env::ephemeral`) prefers a
 held key over the provider file, so a value written by an earlier run cannot
-shadow what the current session supplied. Wiring the harness API path through
+shadow what the client supplied. Wiring the harness API path through
 to that registry in the daemon process is the remaining runtime work; until a
 release carries it, mausCode clears the plaintext provider files around the
 daemon lifecycle instead (see `.dump/app/research/2026-09-13-secret-owners.md`).

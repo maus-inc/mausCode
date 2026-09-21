@@ -17,14 +17,22 @@ export function privateCredentialDir(jcodeHome: string): string {
   return join(jcodeHome, "config", "jcode")
 }
 
+/** How one file is removed. Injected so a test can exercise a failure. */
+export type CredentialFileRemover = (path: string) => void
+
 /**
  * Removes the runtime's provider credential files. Returns the file names it
  * removed, never their contents. A path that is not a plain directory is left
- * alone.
+ * alone. Throws when a targeted file could not be removed, so a caller that
+ * must not run the daemon beside a stale credential can fail closed.
  */
-export function clearPrivateCredentialFiles(jcodeHome: string): string[] {
+export function clearPrivateCredentialFiles(
+  jcodeHome: string,
+  remove: CredentialFileRemover = (path) => unlinkSync(path),
+): string[] {
   const dir = privateCredentialDir(jcodeHome)
   const removed: string[] = []
+  const failed: string[] = []
   try {
     if (!existsSync(dir)) return removed
     const stats = lstatSync(dir)
@@ -40,24 +48,38 @@ export function clearPrivateCredentialFiles(jcodeHome: string): string[] {
       if (!entry.isFile() && !entry.isSymbolicLink()) continue
       const path = join(dir, entry.name)
       try {
-        unlinkSync(path)
+        remove(path)
         removed.push(entry.name)
       } catch (error) {
+        failed.push(entry.name)
         console.warn(`[NativeRuntime] Could not remove ${entry.name}:`, error)
       }
     }
   } catch (error) {
     console.warn("[NativeRuntime] Could not inspect the credential directory:", error)
   }
+  if (failed.length > 0) {
+    throw new Error(
+      `A plaintext runtime credential could not be removed (${failed.join(", ")}). ` +
+        "Remove it from the runtime home and try again.",
+    )
+  }
   return removed
 }
 
 /**
- * Removes the plaintext credentials and says how many were removed, without
- * naming a provider or a value in the log.
+ * Teardown cleanup: removes the plaintext credentials and says how many were
+ * removed, without naming a provider or a value in the log. Never throws, so a
+ * quit path cannot fail on it.
  */
 export function clearPrivateCredentialFilesQuietly(jcodeHome: string, when: string): void {
-  const removed = clearPrivateCredentialFiles(jcodeHome)
+  let removed: string[]
+  try {
+    removed = clearPrivateCredentialFiles(jcodeHome)
+  } catch (error) {
+    console.warn(`[NativeRuntime] Credential cleanup did not finish ${when}:`, error)
+    return
+  }
   if (removed.length > 0) {
     console.log(
       `[NativeRuntime] Cleared ${removed.length} plaintext runtime credential file(s) ${when}`,

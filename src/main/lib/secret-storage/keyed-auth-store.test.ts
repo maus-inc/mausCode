@@ -60,7 +60,11 @@ describe("keyed auth store", () => {
       store: () => makeStore(home),
     })
     expect(() => store.save("wrong-prefix")).toThrow("must start with 'sk-or-'")
-    expect(readdirSync(home, { recursive: true })).not.toContain("openrouter.dat")
+    expect(
+      readdirSync(home, { recursive: true }).filter((name) =>
+        String(name).includes("openrouter-auth"),
+      ),
+    ).toHaveLength(0)
   })
 
   it("reports an unreadable value instead of returning it", () => {

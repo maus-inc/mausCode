@@ -10,7 +10,7 @@
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { app } from "electron"
-import { clearPrivateCredentialFilesQuietly } from "./credential-files"
+import { clearPrivateCredentialFiles, clearPrivateCredentialFilesQuietly } from "./credential-files"
 import { buildDaemonEndpointEnv, readEndpointSettings } from "./endpoints"
 import { RuntimeManager } from "./manager"
 
@@ -54,7 +54,14 @@ export function getRuntimeManager(): RuntimeManager {
     // The runtime writes a key it is handed as a plaintext file in this home.
     // Clear anything a previous run left before the daemon can read it; the app
     // applies the credential again for every turn, so nothing needs to survive.
-    clearPrivateCredentialFilesQuietly(jcodeHome, "before starting the runtime")
+    // This call fails closed: a file that cannot be removed stops the daemon
+    // rather than letting it run beside a credential from an earlier session.
+    const cleared = clearPrivateCredentialFiles(jcodeHome)
+    if (cleared.length > 0) {
+      console.log(
+        `[NativeRuntime] Cleared ${cleared.length} plaintext runtime credential file(s) before starting the runtime`,
+      )
+    }
     manager = new RuntimeManager({
       jcodeHome,
       packagedBinary: resolvePackagedBinary(),
@@ -71,9 +78,14 @@ export function getRuntimeManager(): RuntimeManager {
 export async function shutdownRuntime(): Promise<void> {
   if (manager) {
     const home = manager.jcodeHome
-    await manager.shutdown()
-    clearPrivateCredentialFilesQuietly(home, "after stopping the runtime")
-    manager = null
+    try {
+      await manager.shutdown()
+    } finally {
+      // A failed or timed-out shutdown must not leave the plaintext files, or
+      // a stale manager, behind.
+      clearPrivateCredentialFilesQuietly(home, "after stopping the runtime")
+      manager = null
+    }
   }
 }
 

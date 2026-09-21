@@ -1,5 +1,6 @@
 """Serve only the step 11 comparison and its four local font files."""
 
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -41,4 +42,7 @@ class Preview(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    HTTPServer(("0.0.0.0", 4173), Preview).serve_forever()
+    # Loopback by default: this serves a credential-storage prototype and needs
+    # no network access. PREVIEW_HOST exists only for a container preview proxy.
+    host = os.environ.get("PREVIEW_HOST", "127.0.0.1")
+    HTTPServer((host, 4173), Preview).serve_forever()

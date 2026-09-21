@@ -28,6 +28,10 @@ export type KeyedAuthStatus =
 export type KeyedAuthStore = {
   /** Trims and validates, then writes through the owner. Throws on refusal. */
   save(value: string): void
+  /**
+   * The stored value, or null when nothing is stored. An unreadable file also
+   * yields null here; `status()` is the call that tells the two apart.
+   */
   load(): string | null
   clear(): void
   status(): KeyedAuthStatus

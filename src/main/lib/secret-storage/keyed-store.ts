@@ -4,7 +4,7 @@
  * write is verified by reading the file back before it replaces the old one.
  * The file holds no Electron dependency and is unit-tested directly.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { SecretProtection, SecretWriter } from "./types"
 
@@ -32,6 +32,19 @@ export function keyedStorePath(userDataPath: string): string {
 
 function emptyFile(): StoredFile {
   return { version: 1, entries: {} }
+}
+
+/**
+ * An entry records how it was stored, so a reader never guesses. Anything else,
+ * including a protection value this version does not know, is reported.
+ */
+function isStoredEntry(value: unknown): value is StoredEntry {
+  if (typeof value !== "object" || value === null) return false
+  const candidate = value as Partial<StoredEntry>
+  if (candidate.protection !== "os-encryption" && candidate.protection !== "plaintext") {
+    return false
+  }
+  return typeof candidate.payload === "string"
 }
 
 function readFile(path: string): { file: StoredFile; error: string | null } {
@@ -64,6 +77,10 @@ export function readKeyedSecrets(store: KeyedStore): {
   const values: Record<string, string> = {}
   let firstError = error
   for (const [key, entry] of Object.entries(file.entries)) {
+    if (!isStoredEntry(entry)) {
+      firstError ??= `The saved value for ${key} has an unrecognized shape`
+      continue
+    }
     try {
       // The recorded protection decides how to decode; nothing is guessed.
       values[key] =
@@ -84,12 +101,29 @@ export function readKeyedSecret(store: KeyedStore, key: string): string | null {
   return readKeyedSecrets(store).values[key] ?? null
 }
 
-function writeFile(path: string, file: StoredFile): void {
+/**
+ * Writes through a temporary file and replaces the saved file only after the
+ * temporary file was read back and `verify` accepted it, so a value that cannot
+ * be read back leaves the previous file in place.
+ */
+function writeFile(path: string, file: StoredFile, verify?: (written: StoredFile) => void): void {
   const dir = dirname(path)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
   const temp = `${path}.tmp-${process.pid}`
   writeFileSync(temp, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
-  renameSync(temp, path)
+  try {
+    const written = readFile(temp)
+    if (written.error) throw new Error(written.error)
+    verify?.(written.file)
+    renameSync(temp, path)
+  } catch (error) {
+    try {
+      if (existsSync(temp)) unlinkSync(temp)
+    } catch {
+      // The failure worth reporting is the one that stopped the write.
+    }
+    throw error
+  }
 }
 
 /**
@@ -105,10 +139,14 @@ export function writeKeyedSecret(store: KeyedStore, key: string, value: string):
       : { protection: prepared.protection, payload: prepared.ciphertext.toString("base64") }
 
   const next: StoredFile = { version: 1, entries: { ...file.entries, [key]: entry } }
-  writeFile(store.filePath, next)
+  writeFile(store.filePath, next, (written) => verifyReadBack(store, key, value, written))
 
-  const written = readFile(store.filePath)
-  const readBack = readBackValue(store, key, written.file.entries[key])
+  // Reading the saved file once more catches a replacement that did not land.
+  verifyReadBack(store, key, value, readFile(store.filePath).file)
+}
+
+function verifyReadBack(store: KeyedStore, key: string, value: string, file: StoredFile): void {
+  const readBack = readBackValue(store, key, file.entries[key])
   if (readBack !== value) {
     throw new Error(`The saved value for ${key} could not be read back after it was written.`)
   }
