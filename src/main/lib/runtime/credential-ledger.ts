@@ -115,7 +115,7 @@ export function planCredentialRelease(
   const clearable: string[] = []
   for (const provider of providers) {
     const slot = record.slots.get(provider)
-    if (slot === undefined || slot.generation !== generation || slot.releasing) continue
+    if (slot?.generation !== generation || slot.releasing) continue
     slot.releasing = true
     clearable.push(provider)
   }

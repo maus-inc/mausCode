@@ -633,3 +633,11 @@ clean, both ratchets pass, skills 50 of 50 locked plus 2 unrecorded, native chec
 `claims_ok: true`. The renderer bundle build was killed by this sandbox's memory
 limit while the main and preload bundles built, so CI owns the renderer build as
 before.
+
+### SonarCloud on `bd1a1db` (2026-09-21)
+
+Analysis at 16:13Z reports one new code smell, `typescript:S6582` on
+`credential-ledger.ts:118`, which asks for an optional chain on the slot lookup
+added in this round. The guard is now `slot?.generation !== generation`, which
+says the same thing, so the finding is fixed rather than suppressed. Quality gate
+OK, 0 bugs, 0 vulnerabilities, 0.0% duplication in 4561 new lines.
