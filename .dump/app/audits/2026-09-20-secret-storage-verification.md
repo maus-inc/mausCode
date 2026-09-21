@@ -166,3 +166,21 @@ SonarCloud issues after the re-analysis of `c9ee81d`: seven open, one MAJOR (`S3
 | Skills verification | `npm run skills:verify` | Passed, 50 of 50 locked skills | E3 |
 | OpenSpec strict validation | `openspec validate refactor-secret-storage-owner --strict` | Valid | E3 |
 | Typecheck comparison | `npm run ts:check` | Not run to completion here. Four attempts were killed with no diagnostics at 2048, 3072 and 4096 MB heaps while host load sat above 6, and a fifth hung past ten minutes. The command passed in this environment earlier in the session on the previous commit, `tsc` typecheck passes, and CI runs it in the quality job, which is green on `c9ee81d` | E4 |
+
+## Acceptance criteria check, step 11
+
+| Criterion | State | Evidence |
+| --- | --- | --- |
+| One import path for credential encryption, proven by a grep that finds no direct `safeStorage` use in provider routers | Met. Five call sites in `secret-storage/electron-keychain.ts` and comments elsewhere; the base had six importers and 35 references across `src/main` | E3, `rg -n "safeStorage" src/main`, recorded in `research/2026-09-13-secret-owners.md` |
+| Unavailable encryption surfaces in settings and blocks new `secret: true` writes without consent | Met in code. `buildStatus` returns the protection, the backend and a concrete reason the page renders; `resolveProtection` throws `consent-required`; the store tests cover refusal, consent, plaintext-only targets, the Linux `basic_text` backend and an encryption failure | E3 tests, E4 for the rendered page (the app cannot be launched here) |
+| A test asserts a credential record serialises redacted | Met. `redact.test.ts` covers a serialized credential record with nested provider payloads, tokens in free text, and deep input | E3 |
+| The `safeStorage` grep shrinks and the record explains each remaining call | Met. The research record lists the remaining call sites, tests aside, and why each is there | E1 |
+| Manual Linux run with the keyring disabled | Not run. No D-Bus, no keyring daemon, no display and no Electron binary here, so the connect, restart and disk-inspection flow stays with the human | E4, unchanged |
+
+## Residual gaps from the review passes
+
+| Gap | Where | Risk | Position |
+| --- | --- | --- | --- |
+| A crash leaves the per-run Cline temp directory `cline-run-*` in the OS temp dir holding a plaintext provider key | `src/main/lib/cline-print/auth-config.ts:106-153` | The module documents a one-turn plaintext window, and a crash or a killed process extends it until the OS cleans temp. The key is written only for a custom baseUrl, and the file mode is 0600 | Recommend a sweep of `cline-run-*` at app start or before the next Cline run, in the shape of `clearPrivateCredentialFiles` for the native runtime. Not changed here: the file belongs to another step's domain and step 11's approved native scope covers the runtime, not `cline-print` |
+| The memory-only handoff ships in the vendored tree, while the daemon binary comes from the `@1jehuang/jcode-*` optional package | `runtime/jcode/crates/jcode-provider-env/src/ephemeral.rs` | No protection until a jcode release carries the patch. The shipped mitigation is the spawn and quit cleanup of `config/jcode/*.env`, and the settings page states the mechanism | Already stated in the PR body and the roadmap notes; the finding is recorded here so it is not mistaken for shipped protection |
+| The native handoff path is unverified against a real capability advertisement | `src/main/lib/runtime/credentials.ts` | The runtime check recorded that the shipped daemon omits `ephemeral_api_key` and answers `unknown_request`, so the memory path never runs in the shipped configuration. The disk path it falls back to is disclosed in settings and cleared around each run | Verified live for the daemon in use, E1. A release that carries the patch is the next chance to exercise the memory path |
