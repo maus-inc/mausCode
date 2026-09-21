@@ -594,3 +594,13 @@ key, a generation number never being reused, and a release giving up ownership.
 Gate results: biome 966 files clean, typecheck pass, vitest 96 files / 1803
 passed with 1 skipped, `test:node` 51, contracts 382, runtime-client 43, lint
 clean, both ratchets pass, native check `claims_ok: true`.
+
+### SonarCloud on `84a8b05` (2026-09-21)
+
+Quality gate OK: 0 bugs, 0 vulnerabilities, 0 open issues, 0 new code smells,
+4195 new lines and 0 duplicated lines in them (0.0%). The acceptance for this
+step holds on the head that carries the seventh round: the ledger rewrite, the
+failed-handoff fix, and the two startup cookie fixes.
+
+Every check on the pull request passes on this head, including SonarCloud, and
+no review thread is unresolved.
