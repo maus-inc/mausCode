@@ -755,3 +755,26 @@ with 1825 passed and 1 skipped, `test:node` 59, contracts 382, lint 913 files
 clean, both ratchets pass, runtime-client 43, native check `claims_ok: true`, and
 skills 50 of 50 locked with 2 unrecorded. GitHub CI is green on that head apart
 from the CodeAnt gate described above.
+
+## Round eleven, the review that verified the last round
+
+CodeAnt answered the ten findings of the previous two rounds with one verification
+per thread, each marked "verified this suggestion was addressed in subsequent
+commits" as of `e93c977`, and approved that head. Two of its ten replies cover the
+two late findings, so every thread is now resolved and the audit keeps the count
+at zero open.
+
+The one item that was still open came from CodeRabbit's review of `4f0572b2d`,
+posted outside the diff and therefore answered nowhere: `docs/protocol.md`
+section 5 said credentials cross the protocol only as reference operations and
+never as values in call arguments, while `set_api_key` and the reserved
+`set_ephemeral_api_key` both carry the value in the request. The invariant now
+names the two credential-update requests and keeps the reference-only rule for
+every other operation, and the clause about logs, telemetry, crash reports and
+persisted transcripts covers any other persisted frame. Section 3.1 states the
+same rule for the reserved extension from the other direction. This is a wording
+correction in a document this change extends, not a change to behaviour.
+
+CodeRabbit itself will not review this pull request again: its own status on every
+head reads "Review skipped: bot user not eligible for review", so the review the
+human triggered at 17:16 produced nothing. Sourcery refuses the diff for size.

@@ -94,9 +94,10 @@ daemon lifecycle instead (see `.dump/app/research/2026-09-13-secret-owners.md`).
 
 ## 5. Security invariants (binding)
 
-- Credentials cross the protocol only as reference operations, never as values in
-  call arguments. No key material in logs, telemetry, crash reports, or persisted
-  transcripts.
+- Credential values cross the protocol only in credential-update requests,
+  `set_api_key` and `set_ephemeral_api_key`. Every other operation refers to a
+  credential instead of carrying it, and no key material reaches logs, telemetry,
+  crash reports, persisted transcripts, or any other persisted frame.
 - Permission policy is deny-by-default with explicit, tested allow rules. Gated
   actions pause individually; the session continues. The inherited
   `bypassPermissions` default is never ported.
