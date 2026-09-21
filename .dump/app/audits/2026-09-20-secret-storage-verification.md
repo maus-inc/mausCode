@@ -494,3 +494,30 @@ Gate results after the sixth round: biome 966 files clean, typecheck pass,
 vitest 96 files / 1801 passed with 1 skipped, `test:node` 47, contracts 382,
 runtime-client 43, lint clean, both ratchets pass, skills 50 of 50, native check
 `claims_ok: true`.
+
+### SonarCloud on `1a831ca` (2026-09-21)
+
+Analysis at 11:20:35Z, quality gate OK: 0 bugs, 0 vulnerabilities, 0 open
+issues, 0 new code smells, 4077 new lines and 0 duplicated lines in them
+(0.0%).
+
+### Seventh pass, gaps in the sweep and the rollback (2026-09-21)
+
+Three things my own review turned up after the sixth commit, fixed before this
+note was written:
+
+| Gap | Why it mattered | Fix |
+| --- | --- | --- |
+| `removeStaleTemps` deletes every temporary sibling, including one a live process is about to rename | The app holds a single-instance lock, so another process id can only be an earlier run that is gone, but the helper gave no way for a caller to say so | The rule is documented on the helper: `keepPath` protects the caller's own in-flight temporary file, and a foreign process id means a run that is already gone |
+| The OpenAI removal rollback put the previous key back into the edit box even when a newer attempt owned the key | The atom guard covered the stored value, but the field the user is typing in was still overwritten by an older failure | `restoreOpenAIKey` returns whether it acted, and the caller only restores the field when it did |
+| The plaintext refusal in `file-secret.ts` can also fire for a `.dat` file that holds plaintext, where the message would not name a reason | The base version only ever wrote ciphertext to that path, so the case comes from outside this app, and the refusal is still the honest outcome | Left as it is, and recorded here: the guard refuses rather than reporting a save that reads would never see |
+
+One documentation gap was closed in the same commit: the `ephemeral.rs` module
+comment described the memory-only registry without saying that no released
+binary reaches it. It now states that the request variants exist in
+`jcode-harness-api`, that the daemon does not handle them, and that a client
+falls back to the persisted path, matching `docs/protocol.md`. The change is a
+comment only, so it needs no compile check beyond the CI job that owns Rust.
+
+Gate results after this pass: biome 966 files clean, typecheck pass, vitest 96
+files / 1801 passed with 1 skipped, `test:node` 47, contracts 382, lint clean.

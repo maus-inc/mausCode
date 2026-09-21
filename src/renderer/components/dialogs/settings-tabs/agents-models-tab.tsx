@@ -722,10 +722,10 @@ export function AgentsModelsTab() {
    */
   const openAIAttemptRef = useRef(0)
 
-  const restoreOpenAIKey = async (previous: string, attempt: number) => {
+  const restoreOpenAIKey = async (previous: string, attempt: number): Promise<boolean> => {
     // A newer save or removal owns the key by now, so this failure leaving the
     // older value behind would overwrite what the user actually asked for.
-    if (openAIAttemptRef.current !== attempt) return
+    if (openAIAttemptRef.current !== attempt) return false
     setStoredOpenAIKey(previous)
     try {
       await setOpenAIKeyMutation.mutateAsync({ key: previous })
@@ -733,6 +733,7 @@ export function AgentsModelsTab() {
       toast.error("The OpenAI API key could not be restored in this session. Check it again.")
     }
     await trpcUtils.voice.isAvailable.invalidate()
+    return true
   }
 
   const handleSaveOpenAI = async () => {
@@ -770,8 +771,9 @@ export function AgentsModelsTab() {
       setOpenaiKey("")
       const removed = await whenRendererSecretSaved("agents:openai-api-key")
       if (!removed.ok) {
-        await restoreOpenAIKey(storedOpenAIKey, attempt)
-        setOpenaiKey(storedOpenAIKey)
+        // The field is only put back while this attempt still owns the key, so
+        // a newer edit in the box is not overwritten by an older failure.
+        if (await restoreOpenAIKey(storedOpenAIKey, attempt)) setOpenaiKey(storedOpenAIKey)
         toast.error(`Failed to remove OpenAI API key: ${removed.error}`)
         return
       }

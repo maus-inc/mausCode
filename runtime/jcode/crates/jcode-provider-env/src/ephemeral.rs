@@ -10,6 +10,11 @@
 //! prefers an ephemeral key over the provider file, so a stale file cannot
 //! silently win over the value the client just supplied. Clearing a key never
 //! deletes a file, and nothing here writes to disk.
+//!
+//! No released binary reaches this registry yet. The request variants exist in
+//! `jcode-harness-api`, and the daemon does not handle them, so a client that
+//! sends one falls back to the persisted path. `docs/protocol.md` carries the
+//! same statement for protocol readers.
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};

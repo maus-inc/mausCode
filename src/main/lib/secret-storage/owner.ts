@@ -46,6 +46,11 @@ const TEMP_INFIX = ".tmp-"
  * Removes the temporary files an unfinished write left next to a credential
  * file. Each one carries the value that was being written, and the process that
  * created it may never run again, so the next write or a clear sweeps them.
+ *
+ * The app holds a single-instance lock, so a temporary file with another
+ * process id can only come from a run that is already gone. `keepPath` is the
+ * caller's own in-flight temporary file, which is never removed.
+ *
  * Returns the paths that could not be removed.
  */
 export function removeStaleTemps(filePath: string, keepPath?: string): string[] {
