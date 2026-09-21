@@ -439,3 +439,30 @@ against the source before changing anything.
 
 Untested changes in this round are the two renderer rollbacks and the runtime
 restart hook, all noted above as E4.
+
+### Fifth pass, gaps the fourth round left (2026-09-21)
+
+The refusal added for `claude-token.ts:290` was the one new decision with no
+test behind it. `canPersistRefreshedClaudeCredential("keychain")` now has a test
+in `src/main/lib/claude-token.test.ts` that stubs Electron the way
+`src/main/lib/hermes/acp-chat.test.ts` already does. On Linux and Windows it
+asserts the refusal, and on macOS it asserts the keychain write is allowed, so
+the platform split is covered instead of assumed. The macOS case is skipped on
+this Linux sandbox and runs on the macOS CI job.
+
+Two more checks in this pass, both clean: the OpenAI key has exactly one
+renderer writer and one main-process sink, so the rollback covers every path,
+and the Codex key in the models tab never leaves the atom, which is why its
+round-3 restore is enough there.
+
+Gate results after this pass: biome 966 files clean, typecheck pass, vitest 96
+files / 1796 passed with 1 skipped (the macOS case), `test:node` 47, contracts
+382, runtime-client 43, lint clean, both ratchets pass, skills 50 of 50, openspec
+valid, native check `claims_ok: true`.
+
+### SonarCloud on `4f99745` (2026-09-21)
+
+The analysis landed at 03:12:30Z with the quality gate OK: 0 bugs, 0
+vulnerabilities, 0 open issues, 0 new code smells, 3891 new lines and 0
+duplicated lines in them (0.0%). The duplication acceptance the human set is met
+on the published head.
