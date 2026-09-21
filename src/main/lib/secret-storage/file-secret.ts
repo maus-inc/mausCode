@@ -75,10 +75,11 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
   // as ciphertext, and that refusal has to be reported rather than overwritten.
   const stashed = stashUnreadableCiphertext(secret.filePath, secret.keychain, secret.context)
   if (!stashed.stashed && existsSync(secret.filePath)) {
+    const reason = stashed.reason ? `: ${stashed.reason}` : "."
     throw new SecretStorageError(
       "ciphertext-unreadable",
       `The saved ${secret.context} is still in ${basename(secret.filePath)} and was not ` +
-        `moved aside, so the new value was not saved${stashed.reason ? `: ${stashed.reason}` : "."}`,
+        `moved aside, so the new value was not saved${reason}`,
     )
   }
   ensureDir(secret.plaintextPath)

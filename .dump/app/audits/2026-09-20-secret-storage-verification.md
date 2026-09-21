@@ -556,3 +556,11 @@ moved.
 Gate results: biome 966 files clean, typecheck pass, vitest 96 files / 1803
 passed with 1 skipped, `test:node` 47, contracts 382, lint clean, both ratchets
 pass.
+
+### SonarCloud on `db0c16f` (2026-09-21)
+
+Analysis at 14:13:24Z with the gate OK, but one new code smell: `typescript:S4624`
+on `file-secret.ts:81`, a nested template literal inside the refusal message
+added in the eighth pass. The same shape sat in the auth store message. Both now
+build the optional reason in a local variable before the message, which is the
+clearer form anyway, so the finding is fixed rather than suppressed.

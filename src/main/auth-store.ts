@@ -104,10 +104,10 @@ export class AuthStore {
         // path it is the only source reads use, so the new session does not load
         // until it moves aside, and that has to be reported rather than cleared.
         if (!stashed.stashed && existsSync(this.filePath)) {
+          const reason = stashed.reason ? ` (${stashed.reason}).` : "."
           stashWarning =
             `The older sign-in session is still saved at ${basename(this.filePath)} and was ` +
-            "not moved aside, so the new session will not load while that file is there" +
-            (stashed.reason ? ` (${stashed.reason}).` : ".")
+            `not moved aside, so the new session will not load while that file is there${reason}`
         }
       }
       this.lastFailure = stashWarning
