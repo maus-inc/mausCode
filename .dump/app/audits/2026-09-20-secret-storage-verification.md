@@ -778,3 +778,16 @@ correction in a document this change extends, not a change to behaviour.
 CodeRabbit itself will not review this pull request again: its own status on every
 head reads "Review skipped: bot user not eligible for review", so the review the
 human triggered at 17:16 produced nothing. Sourcery refuses the diff for size.
+
+## Round twelve, the nitpicks list
+
+CodeAnt keeps a second comment beside its reviews, the nitpicks list, and four
+suggestions sat in it from the round it ran on `6f35a8c`. Three were real and are
+fixed in `06a2ac5`; the fourth is declined with the reason recorded here.
+
+| Nitpick | Verdict | Change |
+| --- | --- | --- |
+| The protection card shows a refusal reason while the status query is still running | Confirmed. `protectedByOs` is false until the query answers and the missing data fell through to `describeRefusal`, so the card read "Checking the OS keyring..." above a sentence saying the keyring could not be read | `protectionDetail` says it is reading the state while the query runs, reports the query's own message when it fails, and only then states a verdict |
+| A refused or failed sign-in save is labeled "Unreadable" | Confirmed. `AuthStore.lastFailure` is set by saves, reads, migrations and removals, and the sign-in row labeled all four the same way | The row names its own failure. The provider rows still say "Unreadable", because their failures come from `providerReadErrors`, which only reports reads |
+| Any value in the app store is labeled "Moved to the app store" | Confirmed. The status lists the keys the store holds, whether they were migrated from browser storage or written there directly | The row says "In the app store" or "Nothing saved", and the caption counts the provider values the store holds without claiming where they came from |
+| Each session keeps a ledger entry for the process lifetime | Declined. The generation number must never be handed out twice: a release from an older turn can be queued after the same session's newer turn has written its keys, and a reused number would make that release clear the newer keys, which is the defect the numbering was added to fix. One string and one number per session is the price, and the comment on the map now says so | Comment on `generations` |

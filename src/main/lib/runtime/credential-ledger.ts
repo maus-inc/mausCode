@@ -43,7 +43,13 @@ export type CredentialReleasePlan = {
   settle: (retained?: readonly string[]) => void
 }
 
-/** The next generation number for each session that ran a turn. Never reused. */
+/**
+ * The next generation number for each session that ran a turn. Never reused, and
+ * kept for the process lifetime: a release from an older turn can be queued after
+ * the session's newer turn has already written its keys, and a number handed out
+ * again would make that release match the newer keys. One entry per session is
+ * the price of that guarantee.
+ */
 const generations = new Map<string, number>()
 
 /**

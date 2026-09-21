@@ -69,6 +69,7 @@ export function AgentsCredentialStorageTab() {
 
       <ProtectionCard
         isLoading={status.isLoading}
+        loadError={status.error instanceof Error ? status.error.message : null}
         protectedByOs={protectedByOs}
         consentOn={consentOn}
         data={data}
@@ -140,6 +141,7 @@ export function AgentsCredentialStorageTab() {
 
 function ProtectionCard({
   isLoading,
+  loadError,
   protectedByOs,
   consentOn,
   data,
@@ -148,6 +150,8 @@ function ProtectionCard({
   onDisable,
 }: {
   readonly isLoading: boolean
+  /** Message from a failed status query, which is not a keyring verdict. */
+  readonly loadError: string | null
   readonly protectedByOs: boolean
   readonly consentOn: boolean
   readonly data: StatusData | undefined
@@ -156,9 +160,7 @@ function ProtectionCard({
   readonly onDisable: () => void
 }) {
   const headline = protectionHeadline(isLoading, protectedByOs, consentOn)
-  const detail = protectedByOs
-    ? "The app writes sign-in tokens and provider keys through the OS keyring. Existing credentials keep working."
-    : describeRefusal(data?.reason, data?.backend, data?.metadataError ?? null)
+  const detail = protectionDetail(isLoading, loadError, protectedByOs, data)
 
   return (
     <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -230,6 +232,27 @@ function protectionHeadline(
   return "The operating system cannot encrypt new credentials"
 }
 
+/**
+ * The sentence under the headline. Nothing is said about protection until the
+ * main process has answered, because a refusal reason shown while the query is
+ * still running reads as a verdict the app has not reached yet.
+ */
+function protectionDetail(
+  isLoading: boolean,
+  loadError: string | null,
+  protectedByOs: boolean,
+  data: StatusData | undefined,
+): string {
+  if (loadError) return loadError
+  if (isLoading || data === undefined) {
+    return "Reading the protection state from the main process."
+  }
+  if (protectedByOs) {
+    return "The app writes sign-in tokens and provider keys through the OS keyring. Existing credentials keep working."
+  }
+  return describeRefusal(data.reason, data.backend, data.metadataError ?? null)
+}
+
 function InventoryCard({
   protectedByOs,
   consentOn,
@@ -265,7 +288,7 @@ function InventoryCard({
               "A new sign-in is not written when it cannot be encrypted.",
             )
           }
-          state={storedState(protectedByOs, consentOn, data?.signInFailure ?? null)}
+          state={storedState(protectedByOs, consentOn, data?.signInFailure ?? null, "Failed")}
         />
         <StorageRow
           label="Provider keys and accounts"
@@ -279,7 +302,7 @@ function InventoryCard({
               "Existing keys stay readable; new ones are refused.",
             )
           }
-          state={storedState(protectedByOs, consentOn, providerIssue)}
+          state={storedState(protectedByOs, consentOn, providerIssue, "Unreadable")}
         />
         <StorageRow
           label="Claude CLI credentials"
@@ -308,9 +331,19 @@ type RowState = { tone: "ok" | "warn" | "bad" | "mute"; label: string }
  * The state of the next write, not a claim about what is already saved: the
  * main process reports stored read errors rather than a protection level per
  * file, and a value written before this policy existed keeps working.
+ *
+ * `failureLabel` names the failure for the row it belongs to. The provider rows
+ * only report read errors, while the sign-in row reports anything the session
+ * store last refused or failed to do, a refused save included, so calling that
+ * one unreadable would name the wrong problem.
  */
-function storedState(protectedByOs: boolean, consentOn: boolean, error: string | null): RowState {
-  if (error) return { tone: "bad", label: "Unreadable" }
+function storedState(
+  protectedByOs: boolean,
+  consentOn: boolean,
+  error: string | null,
+  failureLabel: string,
+): RowState {
+  if (error) return { tone: "bad", label: failureLabel }
   if (protectedByOs) return { tone: "ok", label: "New: encrypted" }
   return consentOn
     ? { tone: "warn", label: "New: plaintext" }
@@ -319,15 +352,19 @@ function storedState(protectedByOs: boolean, consentOn: boolean, error: string |
 
 function browserState(error: string | null, stored: number): RowState {
   if (error) return { tone: "bad", label: "Unreadable" }
+  // The app store holds whatever was saved there, migrated or written directly,
+  // so the pill names the location rather than how the value arrived.
   return stored > 0
-    ? { tone: "ok", label: "Moved to the app store" }
-    : { tone: "ok", label: "Not in use" }
+    ? { tone: "ok", label: "In the app store" }
+    : { tone: "mute", label: "Nothing saved" }
 }
 
 function describeRendererStorage(error: string | null, stored: number): string {
   if (error) return error
-  if (stored > 0) return `${stored} value(s) moved out of browser storage into this app's store`
-  return "No provider key is kept in browser storage"
+  if (stored > 0) {
+    return `${stored} provider value(s) are saved in this app's store, which is not browser storage`
+  }
+  return "No provider value is saved in this app's store"
 }
 
 function storedDetail(
