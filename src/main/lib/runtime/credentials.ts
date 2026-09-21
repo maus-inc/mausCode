@@ -17,7 +17,7 @@ import type { JcodeClient } from "@maus-inc/runtime-client"
 import { eq } from "drizzle-orm"
 import { anthropicAccounts, anthropicSettings, getDatabase } from "../db"
 import { decryptToken } from "../token-crypto"
-import { markCredentialsApplied, planCredentialRelease } from "./credential-ledger"
+import { beginCredentialTurn, claimCredential, planCredentialRelease } from "./credential-ledger"
 import { isHonoredEndpoint, readEndpointSettings } from "./endpoints"
 
 export interface NativeCredentialRequest {
@@ -98,7 +98,11 @@ export async function applyNativeCredentials(
   }
   const providers: string[] = []
   const ephemeralProviders: string[] = []
-  const handoff = { client, sessionId: memorySession, ephemeralProviders }
+  // The generation is allocated before the first key is written, so every key
+  // that lands belongs to this turn whether the handoff finishes or stops
+  // partway, and a turn that superseded this one is never mistaken for it.
+  const generation = memorySession === undefined ? 0 : beginCredentialTurn(memorySession)
+  const handoff = { client, sessionId: memorySession, ephemeralProviders, generation }
 
   try {
     const anthropicToken = getActiveAnthropicToken()
@@ -119,24 +123,14 @@ export async function applyNativeCredentials(
   } catch (error) {
     // The caller installs its release hook only after this function returns, so
     // a handoff that stops halfway must drop the keys it already placed. The
-    // ledger still applies: a turn that superseded this one in the meantime owns
-    // the providers it wrote, and releasing those would strip its credentials.
-    if (handoff.sessionId !== undefined) {
-      const generation = markCredentialsApplied(handoff.sessionId, ephemeralProviders)
-      await releaseNativeEphemeralCredentials(
-        client,
-        handoff.sessionId,
-        ephemeralProviders,
-        generation,
-      )
+    // ledger decides which ones those are: a turn that superseded this one owns
+    // the slots it wrote, and clearing those would strip its credentials.
+    if (memorySession !== undefined) {
+      await releaseNativeEphemeralCredentials(client, memorySession, ephemeralProviders, generation)
     }
     throw error
   }
 
-  // Remember which generation owns the in-memory keys, so a turn that a
-  // replacement superseded cannot release the keys the replacement applied.
-  const generation =
-    memorySession === undefined ? 0 : markCredentialsApplied(memorySession, ephemeralProviders)
   return { providers, ephemeralProviders, generation }
 }
 
@@ -145,12 +139,17 @@ type CredentialHandoff = {
   /** Set only when the daemon advertised the memory-only request. */
   sessionId: string | undefined
   ephemeralProviders: string[]
+  /** This turn's ledger generation, or 0 when the keys go to the provider store. */
+  generation: number
 }
 
 /** Writes a key in memory when the daemon supports it, on disk otherwise. */
 async function applyKey(handoff: CredentialHandoff, provider: string, key: string): Promise<void> {
   if (handoff.sessionId !== undefined) {
     await handoff.client.setEphemeralApiKey(handoff.sessionId, provider, key)
+    // Ownership is claimed after the daemon accepted the key, so the ledger
+    // never claims a slot this turn did not actually fill.
+    claimCredential(handoff.sessionId, handoff.generation, provider)
     handoff.ephemeralProviders.push(provider)
     return
   }

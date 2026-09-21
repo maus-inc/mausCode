@@ -564,3 +564,33 @@ on `file-secret.ts:81`, a nested template literal inside the refusal message
 added in the eighth pass. The same shape sat in the auth store message. Both now
 build the optional reason in a local variable before the message, which is the
 clearer form anyway, so the finding is fixed rather than suppressed.
+
+### SonarCloud on `1709e35` (2026-09-21)
+
+Analysis at 14:26:48Z, quality gate OK: 0 bugs, 0 vulnerabilities, 0 open
+issues, 0 new code smells, 4117 new lines and 0 duplicated lines in them
+(0.0%). The nested-template finding from `db0c16f` is gone, and the acceptance
+the human set for this step holds on the head that carries every fix: zero
+duplication in new code, zero open issues.
+
+## Seventh review round, CodeAnt AI on `1709e35` (2026-09-21)
+
+Four findings, all in code this pull request added, and two of them in the
+credential ledger I wrote in the third round. Every one is confirmed and fixed.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `credential-ledger.ts:38` a late release returns every provider once the current record is deleted, so it can clear a slot a later handoff took | Confirmed, and the round-3 test encoded the wrong behaviour on purpose. Generation numbers were also reused after a delete, so a straggler could collide with the live turn's number | The ledger now tracks ownership per provider and allocates a generation before the first write, never reusing a number. A release clears a provider only while the slot still holds the value that generation wrote, and clearing gives up ownership |
+| `credentials.ts:140` a failed partial handoff overwrites a newer ledger generation and then clears the replacement's providers | Confirmed. The catch called `markCredentialsApplied`, which advanced the generation, so the failed turn became the newest owner and cleared everything it had written, including a slot the replacement owned | The generation is allocated at the start of the handoff and each key is claimed only after the daemon accepted it. The catch releases under that same generation, so it clears exactly the keys it wrote |
+| `index.ts:150` a saved session that is expired or unreadable returns before the old persistent cookie is removed | Confirmed. `isAuthenticated()` false returned early, leaving a cookie an earlier version wrote with an expiry in the on-disk store | The not-authenticated path now removes the cookie before returning |
+| `index.ts:159` a sign-in as another account lets an older restore pass `isAuthenticated()` and overwrite the new user's cookie | Confirmed. The check was authentication, not identity | The continuation writes the cookie only while the store still holds the exact token it resolved, which covers sign-out, a different account, and a re-sign-in as the same account |
+
+The ledger test file was rewritten, not relaxed: the old test asserted that a
+straggler clears a slot nothing had replaced, which is the behaviour this round
+removes. It now asserts the opposite, plus a failed handoff clearing only its own
+key, a generation number never being reused, and a release giving up ownership.
+`test:node` grew from 47 to 51 passing tests.
+
+Gate results: biome 966 files clean, typecheck pass, vitest 96 files / 1803
+passed with 1 skipped, `test:node` 51, contracts 382, runtime-client 43, lint
+clean, both ratchets pass, native check `claims_ok: true`.

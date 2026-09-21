@@ -147,17 +147,25 @@ async function removeDesktopTokenCookie(apiBase: string): Promise<void> {
  * a restart, and a refresh inside `getValidToken` writes the new one again.
  */
 function restoreDesktopTokenCookie(manager: AuthManager): void {
-  if (!manager.isAuthenticated()) return
+  const apiBase = getBaseUrl()
+  if (!manager.isAuthenticated()) {
+    // A session this run cannot use still leaves the cookie an earlier version
+    // wrote with an expiry in the on-disk store, so it goes before anything else.
+    if (apiBase) void removeDesktopTokenCookie(apiBase)
+    return
+  }
   void manager
     .getValidToken()
     .then((token) => {
-      // Sign-out can land while the token is being resolved, and the store is
-      // cleared before the cookie is removed, so this check decides the race:
-      // a signed-out app must not have a cookie put back from this continuation.
-      if (!manager.isAuthenticated()) return undefined
+      // Sign-out and a sign-in as another account can both land while the token
+      // is being resolved. The store is the arbiter, so the cookie is only
+      // written while the session this continuation started with is still the
+      // one saved: a sign-in that replaced it, or a sign-out, keeps its own
+      // outcome instead of being overwritten by an older token.
+      if (token === null || manager.getAuth()?.token !== token) return undefined
       const expiresAt = manager.getTokenExpiry()
-      if (token && expiresAt) return setDesktopTokenCookie(token, expiresAt)
-      return undefined
+      if (!expiresAt) return undefined
+      return setDesktopTokenCookie(token, expiresAt)
     })
     .catch((error) => {
       console.warn("[Auth] Could not restore the desktop token cookie:", error)
