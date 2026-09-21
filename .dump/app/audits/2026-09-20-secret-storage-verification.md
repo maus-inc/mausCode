@@ -521,3 +521,13 @@ comment only, so it needs no compile check beyond the CI job that owns Rust.
 
 Gate results after this pass: biome 966 files clean, typecheck pass, vitest 96
 files / 1801 passed with 1 skipped, `test:node` 47, contracts 382, lint clean.
+
+### SonarCloud on `0b78fa3` (2026-09-21)
+
+Analysis at 13:44:19Z, quality gate OK: 0 bugs, 0 vulnerabilities, 0 open
+issues, 0 new code smells, 4084 new lines and 0 duplicated lines in them
+(0.0%).
+
+This is the head with the sweep-rule comment, the OpenAI rollback guard and the
+`ephemeral.rs` note. Each of the five commits since the fourth round was gated
+in this sandbox before it was pushed, and CI ran the full set on every one.
