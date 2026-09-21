@@ -158,6 +158,15 @@ describe("secret storage owner", () => {
     expect(result.path).toBeNull()
   })
 
+  it("says nothing about moving aside a file that was never written", () => {
+    const home = makeHome("mauscode-owner-")
+    const file = join(home, "data", "github-auth.dat")
+    const result = stashUnreadableCiphertext(file, fakeKeychain({ available: false }), "The token")
+    // The refusal guard also checks the file exists, so a first save is not
+    // turned away and no failure is reported for it.
+    expect(result).toEqual({ stashed: false, path: null, reason: null })
+  })
+
   it("reports an encryption failure instead of storing anything", () => {
     const keychain = fakeKeychain({ encryptThrows: true })
     expect(() => encodeSecret("sk-live-value", "os-encryption", keychain)).toThrow(

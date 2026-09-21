@@ -604,3 +604,32 @@ failed-handoff fix, and the two startup cookie fixes.
 
 Every check on the pull request passes on this head, including SonarCloud, and
 no review thread is unresolved.
+
+## Eighth review round, CodeAnt AI on `e46b831` (2026-09-21)
+
+Three findings. Two of them sit in code added by earlier rounds of this pull
+request, and one of them is a race that the ledger rewrite in the seventh round
+narrowed without closing. All three are confirmed and fixed.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `credentials.ts:196` a release gives up ownership before its clear lands, so a replacement that claims the provider meanwhile loses its key to the older clear | Confirmed, and stronger than the wording suggests. Ownership was not the whole problem: the clear call is already in flight when a replacement writes, so no bookkeeping change alone can stop the older clear from landing after the newer write | Turns for one session are now chained through `runCredentialTurn`, so a release and a replacement's writes never overlap, and the release reads the slots when it runs rather than when it was asked for. Ownership is given up in `settle` once the clear has settled |
+| `file-secret.ts:46` a `writeFileSync` that fails after creating the temporary file leaves plaintext bytes with no cleanup | Confirmed. The read-back check and the rename sat inside a `try` that starts after the write returns, so a throw from the write itself skipped the cleanup entirely. The keyed store's writer had the same shape | Both stores write the temporary file through `writeCredentialTempFile`, which removes a file the failed write created and rethrows. The keyed store's own catch still covers read-back and verify failures |
+| `auth-store.ts:228` a directory listing failure in `removeStaleTemps` throws out of `clear()` and leaves the remaining session copies behind | Confirmed. The call sat outside the per-file handler, so a listing error ended the sign-out loop | The sweep and the stash removal are wrapped per path, a failure is recorded against that path and reported, and the loop continues. Stashed ciphertext copies are removed too, since they hold the same session |
+
+The new tests fail without the fixes, which was checked by reverting each one in
+turn. The ledger file grew three tests for the turn queue, the temp-write file
+has three, and the auth store two, one of which covers a listing failure that
+cannot be arranged on a real filesystem without permissions a test cannot rely
+on, so it is injected through a partial module mock.
+
+An unrelated gap found while reading the same code: `stashUnreadableCiphertext`
+reported a failure to move aside a file that does not exist, which is the state
+before the first save. The warning is gone and the result says nothing was moved.
+
+Gate results: biome 967 files clean, typecheck pass, vitest 97 files / 1809
+passed with 1 skipped, `test:node` 55, contracts 382, runtime-client 43, lint
+clean, both ratchets pass, skills 50 of 50 locked plus 2 unrecorded, native check
+`claims_ok: true`. The renderer bundle build was killed by this sandbox's memory
+limit while the main and preload bundles built, so CI owns the renderer build as
+before.

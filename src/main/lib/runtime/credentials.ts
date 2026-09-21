@@ -17,7 +17,12 @@ import type { JcodeClient } from "@maus-inc/runtime-client"
 import { eq } from "drizzle-orm"
 import { anthropicAccounts, anthropicSettings, getDatabase } from "../db"
 import { decryptToken } from "../token-crypto"
-import { beginCredentialTurn, claimCredential, planCredentialRelease } from "./credential-ledger"
+import {
+  beginCredentialTurn,
+  claimCredential,
+  planCredentialRelease,
+  runCredentialTurn,
+} from "./credential-ledger"
 import { isHonoredEndpoint, readEndpointSettings } from "./endpoints"
 
 export interface NativeCredentialRequest {
@@ -145,12 +150,17 @@ type CredentialHandoff = {
 
 /** Writes a key in memory when the daemon supports it, on disk otherwise. */
 async function applyKey(handoff: CredentialHandoff, provider: string, key: string): Promise<void> {
-  if (handoff.sessionId !== undefined) {
-    await handoff.client.setEphemeralApiKey(handoff.sessionId, provider, key)
-    // Ownership is claimed after the daemon accepted the key, so the ledger
-    // never claims a slot this turn did not actually fill.
-    claimCredential(handoff.sessionId, handoff.generation, provider)
-    handoff.ephemeralProviders.push(provider)
+  const sessionId = handoff.sessionId
+  if (sessionId !== undefined) {
+    // The write takes its place in the session's order, so it cannot land
+    // between a previous turn's clear and the next turn's write.
+    await runCredentialTurn(sessionId, async () => {
+      await handoff.client.setEphemeralApiKey(sessionId, provider, key)
+      // Ownership is claimed after the daemon accepted the key, so the ledger
+      // never claims a slot this turn did not actually fill.
+      claimCredential(sessionId, handoff.generation, provider)
+      handoff.ephemeralProviders.push(provider)
+    })
     return
   }
   await handoff.client.setApiKey(provider, key)
@@ -191,7 +201,17 @@ export async function releaseNativeEphemeralCredentials(
   providers: readonly string[],
   generation: number,
 ): Promise<void> {
-  const toClear = planCredentialRelease(sessionId, generation, providers)
-  if (toClear.length === 0) return
-  await clearNativeEphemeralCredentials(client, sessionId, toClear)
+  await runCredentialTurn(sessionId, async () => {
+    // The slots are read when the clear runs, not when it was asked for. A
+    // turn that already lost a provider to a newer one clears nothing there.
+    const plan = planCredentialRelease(sessionId, generation, providers)
+    if (plan.providers.length === 0) return
+    try {
+      await clearNativeEphemeralCredentials(client, sessionId, plan.providers)
+    } finally {
+      // Ownership is given up once the clear has settled, so the release ends
+      // with the ledger agreeing with what the daemon holds.
+      plan.settle()
+    }
+  })
 }

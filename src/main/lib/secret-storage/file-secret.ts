@@ -4,9 +4,14 @@
  * is verified by reading it back before it replaces the saved file, and the
  * plaintext companion is only removed after an encrypted write succeeded.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
-import { removeStaleTemps, stashedCiphertextPaths, stashUnreadableCiphertext } from "./owner"
+import {
+  removeStaleTemps,
+  stashedCiphertextPaths,
+  stashUnreadableCiphertext,
+  writeCredentialTempFile,
+} from "./owner"
 import { type Keychain, SecretStorageError, type SecretWriter } from "./types"
 
 export type FileSecret = {
@@ -43,7 +48,7 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
   if (prepared.ciphertext) {
     const temp = `${secret.filePath}.tmp-${process.pid}`
     removeStaleTemps(secret.filePath, temp)
-    writeFileSync(temp, prepared.ciphertext, { mode: 0o600 })
+    writeCredentialTempFile(temp, prepared.ciphertext)
     try {
       if (secret.store.read(readFileSync(temp), secret.context) !== value) {
         throw new Error(
@@ -91,7 +96,7 @@ function savePlaintextCompanion(secret: FileSecret, value: string): void {
   const payload = `${JSON.stringify({ [secret.field]: value })}\n`
   const temp = `${secret.plaintextPath}.tmp-${process.pid}`
   removeStaleTemps(secret.plaintextPath, temp)
-  writeFileSync(temp, payload, { mode: 0o600 })
+  writeCredentialTempFile(temp, payload)
   try {
     if (readFileSync(temp, "utf-8") !== payload) {
       throw new Error(`${secret.context} could not be read back after it was written.`)

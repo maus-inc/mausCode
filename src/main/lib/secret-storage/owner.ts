@@ -10,7 +10,14 @@
  *   legacy column decodes to the same value. It stays readable.
  * - Anything else is unreadable and is reported, never returned as a value.
  */
-import { existsSync, readdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { basename, dirname, join } from "node:path"
 import {
   type Keychain,
@@ -41,6 +48,25 @@ const STASH_SUFFIX = ".unreadable-"
 
 /** The infix every write uses for the file it replaces its target with. */
 const TEMP_INFIX = ".tmp-"
+
+/**
+ * Writes a credential's temporary file and removes it again when the write
+ * itself fails. A write can stop partway, after the file exists and before all
+ * of its bytes are on disk, and nothing else would sweep that file until the
+ * next write or sign-out.
+ */
+export function writeCredentialTempFile(temp: string, contents: string | Buffer): void {
+  try {
+    writeFileSync(temp, contents, { mode: 0o600 })
+  } catch (error) {
+    try {
+      if (existsSync(temp)) unlinkSync(temp)
+    } catch {
+      // The failure worth reporting is the one that stopped the write.
+    }
+    throw error
+  }
+}
 
 /**
  * Removes the temporary files an unfinished write left next to a credential
@@ -119,6 +145,9 @@ export function stashUnreadableCiphertext(
       return { stashed: true, path: target, reason: null }
     }
   } catch (error) {
+    // Nothing has been saved yet on a first run, and an absent file has nothing
+    // to move aside or warn about.
+    if (!existsSync(filePath)) return { stashed: false, path: null, reason: null }
     // The file is still where reads look for it, so the caller learns why it
     // stayed instead of reading a silent false as "nothing to move aside".
     const reason = error instanceof Error ? error.message : String(error)

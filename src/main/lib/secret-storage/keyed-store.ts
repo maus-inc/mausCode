@@ -4,9 +4,9 @@
  * write is verified by reading the file back before it replaces the old one.
  * The file holds no Electron dependency and is unit-tested directly.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { removeStaleTemps } from "./owner"
+import { removeStaleTemps, writeCredentialTempFile } from "./owner"
 import type { SecretProtection, SecretWriter } from "./types"
 
 export const KEYED_SECRET_FILE = "renderer-secrets.json"
@@ -112,7 +112,7 @@ function writeFile(path: string, file: StoredFile, verify?: (written: StoredFile
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
   const temp = `${path}.tmp-${process.pid}`
   removeStaleTemps(path, temp)
-  writeFileSync(temp, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
+  writeCredentialTempFile(temp, `${JSON.stringify(file, null, 2)}\n`)
   try {
     const written = readFile(temp)
     if (written.error) throw new Error(written.error)

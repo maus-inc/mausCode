@@ -1,6 +1,26 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+
+/**
+ * A directory listing that fails, which a real disk reports for permissions,
+ * descriptor exhaustion or a path that stopped being a directory. The failure
+ * is injected so the loop that has to survive it can be exercised.
+ */
+let failListFor: string | null = null
+vi.mock("./lib/secret-storage/owner", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./lib/secret-storage/owner")>()
+  return {
+    ...actual,
+    removeStaleTemps: (filePath: string, keepPath?: string) => {
+      if (failListFor !== null && filePath === failListFor) {
+        throw new Error("EACCES: permission denied, scandir")
+      }
+      return actual.removeStaleTemps(filePath, keepPath)
+    },
+  }
+})
+
 import { type AuthData, AuthStore } from "./auth-store"
 import type { SecretStore } from "./lib/secret-storage/store"
 import { makeHome, makeStore } from "./lib/secret-storage/test-support"
@@ -165,6 +185,32 @@ describe("auth store", () => {
     expect(readdirSync(home).filter((name) => name.startsWith("auth.dat.json.tmp-"))).toHaveLength(
       0,
     )
+  })
+
+  it("removes the other session files when one cannot be listed", () => {
+    const home = makeHome()
+    const { auth } = storeFor(home)
+    auth.save(session())
+    writeFileSync(join(home, "auth.json"), JSON.stringify(session()))
+    failListFor = join(home, "auth.dat")
+    // The listing failure is reported, and the paths after it are still tried.
+    expect(() => auth.clear()).toThrow(/could not be removed/)
+    failListFor = null
+    expect(existsSync(join(home, "auth.dat"))).toBe(false)
+    expect(existsSync(join(home, "auth.json"))).toBe(false)
+    expect(auth.lastError()).toMatch(/auth\.dat/)
+  })
+
+  it("removes the copy kept aside when the old bytes could not be read", () => {
+    const home = makeHome()
+    const { auth } = storeFor(home)
+    auth.save(session())
+    // `stashUnreadableCiphertext` renames the session file to this name when a
+    // keyring cannot read it. The session is just as readable there.
+    const stashed = join(home, "auth.dat.unreadable-2026-09-21T00-00-00-000Z")
+    writeFileSync(stashed, JSON.stringify(session()))
+    auth.clear()
+    expect(existsSync(stashed)).toBe(false)
   })
 
   it("clears every file the session could be stored in", () => {

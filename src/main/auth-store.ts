@@ -1,7 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import type { SecretWriter } from "./lib/secret-storage"
-import { removeStaleTemps, stashUnreadableCiphertext } from "./lib/secret-storage/owner"
+import {
+  removeStaleTemps,
+  stashedCiphertextPaths,
+  stashUnreadableCiphertext,
+} from "./lib/secret-storage/owner"
 
 export interface AuthUser {
   id: string
@@ -221,10 +225,27 @@ export class AuthStore {
         console.error(`[AuthStore] Could not remove ${path}:`, error)
       }
       // A write that stopped before its rename leaves the session under a
-      // temporary name, which is just as readable as the file it replaced.
-      for (const stale of removeStaleTemps(path)) {
-        failed.push(stale)
-        console.error(`[AuthStore] Could not remove the unfinished write at ${stale}`)
+      // temporary name, and a ciphertext this keyring could not read was kept
+      // aside under another. Both hold the same session, so both go.
+      try {
+        for (const stale of removeStaleTemps(path)) {
+          failed.push(stale)
+          console.error(`[AuthStore] Could not remove the unfinished write at ${stale}`)
+        }
+        for (const stashed of stashedCiphertextPaths(path)) {
+          try {
+            unlinkSync(stashed)
+          } catch (error) {
+            failed.push(stashed)
+            console.error(`[AuthStore] Could not remove ${stashed}:`, error)
+          }
+        }
+      } catch (error) {
+        // Listing the directory failed, so a file next to this path could not
+        // be checked. The remaining paths are still attempted, and this one is
+        // reported, because a session file could still be stored there.
+        failed.push(path)
+        console.error(`[AuthStore] Could not list the files next to ${path}:`, error)
       }
     }
     if (failed.length > 0) {
