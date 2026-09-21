@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import type { SecretWriter } from "./lib/secret-storage"
 import {
   removeStaleTemps,
   stashedCiphertextPaths,
   stashUnreadableCiphertext,
+  writeCredentialTempFile,
 } from "./lib/secret-storage/owner"
 
 export interface AuthUser {
@@ -73,7 +74,9 @@ export class AuthStore {
    */
   save(data: AuthData): void {
     const value = JSON.stringify(data)
-    let stashWarning: string | null = null
+    // Every warning this save produces is reported, so a plaintext copy that
+    // could not be removed is never replaced by a later, milder notice.
+    const warnings: string[] = []
     try {
       const dir = dirname(this.filePath)
       if (!existsSync(dir)) {
@@ -83,14 +86,14 @@ export class AuthStore {
       const prepared = this.store.prepare("The sign-in token", value)
       if (prepared.ciphertext) {
         const temp = `${this.filePath}.tmp-${process.pid}`
-        writeFileSync(temp, prepared.ciphertext, { mode: 0o600 })
+        writeCredentialTempFile(temp, prepared.ciphertext)
         const verified = this.store.read(readFileSync(temp), "The sign-in token") === value
         if (!verified) {
           unlinkSync(temp)
           throw new Error("The saved sign-in token could not be read back after encryption.")
         }
         renameSync(temp, this.filePath)
-        this.removePlaintextCopies()
+        warnings.push(...this.removePlaintextCopies())
       } else {
         // The new value lands before the ciphertext moves: the ciphertext is the
         // only readable candidate until then, so a failed write must leave it in
@@ -109,12 +112,13 @@ export class AuthStore {
         // until it moves aside, and that has to be reported rather than cleared.
         if (!stashed.stashed && existsSync(this.filePath)) {
           const reason = stashed.reason ? ` (${stashed.reason}).` : "."
-          stashWarning =
+          warnings.push(
             `The older sign-in session is still saved at ${basename(this.filePath)} and was ` +
-            `not moved aside, so the new session will not load while that file is there${reason}`
+              `not moved aside, so the new session will not load while that file is there${reason}`,
+          )
         }
       }
-      this.lastFailure = stashWarning
+      this.lastFailure = warnings.length > 0 ? warnings.join(" ") : null
     } catch (error) {
       this.lastFailure = error instanceof Error ? error.message : String(error)
       console.error("[AuthStore] Failed to save the sign-in session:", this.lastFailure)
@@ -126,7 +130,7 @@ export class AuthStore {
   private writePlaintext(value: string): void {
     const temp = `${this.plaintextPath}.tmp-${process.pid}`
     try {
-      writeFileSync(temp, `${value}\n`, { mode: 0o600 })
+      writeCredentialTempFile(temp, `${value}\n`)
       renameSync(temp, this.plaintextPath)
     } catch (error) {
       try {
@@ -198,16 +202,18 @@ export class AuthStore {
   }
 
   /** Only called after the encrypted file was written and read back. */
-  private removePlaintextCopies(): void {
+  private removePlaintextCopies(): string[] {
+    const failures: string[] = []
     for (const path of [this.plaintextPath, this.legacyPath]) {
       if (!existsSync(path)) continue
       try {
         unlinkSync(path)
       } catch (error) {
-        this.lastFailure = `The session moved to the encrypted store, but ${path} could not be removed.`
+        failures.push(`The session moved to the encrypted store, but ${path} could not be removed.`)
         console.error(`[AuthStore] Could not remove ${path}:`, error)
       }
     }
+    return failures
   }
 
   /**

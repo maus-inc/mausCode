@@ -172,3 +172,21 @@ test("sessions do not wait for each other", async () => {
   releaseFirst()
   await first
 })
+
+test("a provider the daemon did not clear stays owned", () => {
+  const generation = turn("session-o", ["anthropic-api", "openai-api"])
+  const plan = planCredentialRelease("session-o", generation, ["anthropic-api", "openai-api"])
+  // Clearing openai-api failed, so the daemon still holds that value. The slot
+  // stays owned rather than being recorded as released.
+  plan.settle(["openai-api"])
+  assert.deepEqual(planned("session-o", generation, ["anthropic-api"]), [])
+  // A later release of the same generation tries the clear again.
+  assert.deepEqual(released("session-o", generation, ["openai-api"]), ["openai-api"])
+})
+
+test("a settled release gives up only the providers it cleared", () => {
+  const generation = turn("session-p", ["anthropic-api"])
+  const plan = planCredentialRelease("session-p", generation, ["anthropic-api"])
+  plan.settle([])
+  assert.deepEqual(planned("session-p", generation, ["anthropic-api"]), [])
+})

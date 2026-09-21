@@ -7,6 +7,7 @@
 import { existsSync, readdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
+import { AuthStore } from "../../auth-store"
 import { fileSecretPaths, saveFileSecret } from "./file-secret"
 import { keyedStorePath, writeKeyedSecret } from "./keyed-store"
 import { makeHome, makeStore } from "./test-support"
@@ -32,6 +33,15 @@ vi.mock("node:fs", async (importOriginal) => {
     },
   }
 })
+
+function session() {
+  return {
+    token: "synthetic-session-token",
+    refreshToken: "synthetic-refresh-token",
+    expiresAt: "2030-01-01T00:00:00.000Z",
+    user: { id: "u1", email: "user@example.test", name: null, imageUrl: null, username: null },
+  }
+}
 
 function filesStartingWith(dir: string, prefix: string): string[] {
   return readdirSync(dir).filter((name) => name.startsWith(prefix))
@@ -74,6 +84,18 @@ describe("a credential write that fails partway", () => {
 
     expect(existsSync(paths.plaintextPath)).toBe(false)
     expect(filesStartingWith(join(store.userDataPath, "data"), "github-auth.json.tmp-")).toEqual([])
+  })
+
+  it("leaves no temporary file behind when the session write stops", () => {
+    const home = makeHome("mauscode-temp-write-")
+    const store = makeStore(home, { available: true })
+    const auth = new AuthStore(home, store)
+    failNextWriteWhen = (file) => file.includes(`${join(home, "auth.dat")}.tmp-`)
+
+    expect(() => auth.save(session())).toThrow(/no space left/)
+
+    expect(existsSync(join(home, "auth.dat"))).toBe(false)
+    expect(filesStartingWith(home, "auth.dat.tmp-")).toEqual([])
   })
 
   it("leaves no temporary file behind when the keyed store write stops", () => {

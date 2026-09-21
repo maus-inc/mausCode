@@ -37,7 +37,12 @@ type SessionSlots = {
  */
 export type CredentialReleasePlan = {
   providers: string[]
-  settle: () => void
+  /**
+   * Ends the plan. Providers the daemon did not clear stay owned, so the ledger
+   * never reports a release that did not happen and a later release can try the
+   * clear again.
+   */
+  settle: (retained?: readonly string[]) => void
 }
 
 const sessions = new Map<string, SessionSlots>()
@@ -111,7 +116,9 @@ export function planCredentialRelease(
   const record = sessions.get(sessionId)
   // No record means the ledger never saw a turn for this session, so the caller
   // is the only writer it knows about and may clear what it wrote.
-  if (record === undefined) return { providers: [...providers], settle: () => {} }
+  if (record === undefined) {
+    return { providers: [...providers], settle: () => {} }
+  }
   const clearable: string[] = []
   for (const provider of providers) {
     const slot = record.slots.get(provider)
@@ -121,14 +128,20 @@ export function planCredentialRelease(
   }
   return {
     providers: clearable,
-    settle: () => {
+    settle: (retained = []) => {
       const current = sessions.get(sessionId)
       if (current === undefined) return
       for (const provider of clearable) {
         // A provider a newer turn claimed during the clear keeps that owner.
-        if (current.slots.get(provider)?.generation === generation) {
-          current.slots.delete(provider)
+        if (current.slots.get(provider)?.generation !== generation) continue
+        if (retained.includes(provider)) {
+          // The daemon still holds this value. The slot stays owned so the
+          // ledger agrees with the daemon, and a later release can clear it.
+          const slot = current.slots.get(provider)
+          if (slot !== undefined) slot.releasing = false
+          continue
         }
+        current.slots.delete(provider)
       }
     },
   }

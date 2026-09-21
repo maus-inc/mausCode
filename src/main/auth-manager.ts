@@ -11,6 +11,7 @@ import { getSecretStore } from "./lib/secret-storage"
 export class AuthManager {
   private store: AuthStore
   private refreshTimer?: NodeJS.Timeout
+  private refreshInFlight: Promise<boolean> | null = null
   private isDev: boolean
   private onTokenRefresh?: (authData: AuthData) => void
 
@@ -92,9 +93,20 @@ export class AuthManager {
   }
 
   /**
-   * Refresh the current session
+   * Refresh the current session. Two refreshes at once would rotate the stored
+   * refresh token twice, so callers that arrive during one wait for its result.
    */
-  async refresh(): Promise<boolean> {
+  refresh(): Promise<boolean> {
+    if (this.refreshInFlight !== null) return this.refreshInFlight
+    const inFlight = this.runRefresh()
+    this.refreshInFlight = inFlight
+    void inFlight.finally(() => {
+      if (this.refreshInFlight === inFlight) this.refreshInFlight = null
+    })
+    return inFlight
+  }
+
+  private async runRefresh(): Promise<boolean> {
     const refreshToken = this.store.getRefreshToken()
     if (!refreshToken) {
       console.warn("No refresh token available")
@@ -124,6 +136,15 @@ export class AuthManager {
         refreshToken: data.refreshToken,
         expiresAt: data.expiresAt,
         user: data.user,
+      }
+
+      // The user may have signed out, or signed in as another account, while
+      // this request was in flight. That session is the one that counts, so
+      // this response is dropped rather than stored over it or handed to the
+      // cookie callback.
+      if (this.store.getRefreshToken() !== refreshToken) {
+        console.warn("[Auth] Discarded a token refresh for a session that was replaced")
+        return false
       }
 
       this.store.save(authData)

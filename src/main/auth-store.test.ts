@@ -187,6 +187,28 @@ describe("auth store", () => {
     )
   })
 
+  it("reports a plaintext copy it could not remove instead of a clean save", () => {
+    const home = makeHome()
+    const { auth } = storeFor(home)
+    // A directory cannot be unlinked, so this copy stays behind. The save must
+    // not report success while the plaintext file is still on disk.
+    mkdirSync(join(home, "auth.dat.json"))
+    auth.save(session())
+    expect(existsSync(join(home, "auth.dat.json"))).toBe(true)
+    expect(auth.lastError()).toMatch(/auth\.dat\.json could not be removed/)
+  })
+
+  it("reports every plaintext copy it could not remove", () => {
+    const home = makeHome()
+    const { auth } = storeFor(home)
+    mkdirSync(join(home, "auth.dat.json"))
+    mkdirSync(join(home, "auth.json"))
+    auth.save(session())
+    // One failure is not dropped in favour of the other.
+    expect(auth.lastError()).toMatch(/auth\.dat\.json could not be removed/)
+    expect(auth.lastError()).toMatch(/auth\.json could not be removed/)
+  })
+
   it("removes the other session files when one cannot be listed", () => {
     const home = makeHome()
     const { auth } = storeFor(home)

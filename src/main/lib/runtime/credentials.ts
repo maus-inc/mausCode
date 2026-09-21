@@ -75,10 +75,21 @@ export function getActiveAnthropicToken(): string | null {
   }
 }
 
-export async function applyNativeCredentials(
+export function applyNativeCredentials(
   client: JcodeClient,
   request: NativeCredentialRequest,
   sessionId?: string,
+): Promise<NativeCredentialResult> {
+  // One handoff takes one place in the session's order, so no other turn's
+  // write or clear can land between two providers.
+  if (sessionId === undefined) return applyNativeCredentialsNow(client, request, undefined)
+  return runCredentialTurn(sessionId, () => applyNativeCredentialsNow(client, request, sessionId))
+}
+
+async function applyNativeCredentialsNow(
+  client: JcodeClient,
+  request: NativeCredentialRequest,
+  sessionId: string | undefined,
 ): Promise<NativeCredentialResult> {
   // The runtime's own provider store is plaintext on disk. When the daemon
   // advertises the memory-only handoff, the key stays in its memory instead and
@@ -131,7 +142,14 @@ export async function applyNativeCredentials(
     // ledger decides which ones those are: a turn that superseded this one owns
     // the slots it wrote, and clearing those would strip its credentials.
     if (memorySession !== undefined) {
-      await releaseNativeEphemeralCredentials(client, memorySession, ephemeralProviders, generation)
+      // This runs inside the handoff's own place in the queue, so it is the
+      // direct call rather than the queued one, which would wait on itself.
+      await releaseNativeEphemeralCredentialsNow(
+        client,
+        memorySession,
+        ephemeralProviders,
+        generation,
+      )
     }
     throw error
   }
@@ -152,15 +170,11 @@ type CredentialHandoff = {
 async function applyKey(handoff: CredentialHandoff, provider: string, key: string): Promise<void> {
   const sessionId = handoff.sessionId
   if (sessionId !== undefined) {
-    // The write takes its place in the session's order, so it cannot land
-    // between a previous turn's clear and the next turn's write.
-    await runCredentialTurn(sessionId, async () => {
-      await handoff.client.setEphemeralApiKey(sessionId, provider, key)
-      // Ownership is claimed after the daemon accepted the key, so the ledger
-      // never claims a slot this turn did not actually fill.
-      claimCredential(sessionId, handoff.generation, provider)
-      handoff.ephemeralProviders.push(provider)
-    })
+    await handoff.client.setEphemeralApiKey(sessionId, provider, key)
+    // Ownership is claimed after the daemon accepted the key, so the ledger
+    // never claims a slot this turn did not actually fill.
+    claimCredential(sessionId, handoff.generation, provider)
+    handoff.ephemeralProviders.push(provider)
     return
   }
   await handoff.client.setApiKey(provider, key)
@@ -177,41 +191,54 @@ async function clearNativeEphemeralCredentials(
   client: JcodeClient,
   sessionId: string,
   providers: readonly string[],
-): Promise<void> {
-  await Promise.all(
-    providers.map((provider) =>
-      client.clearEphemeralApiKey(sessionId, provider).catch((error: unknown) => {
+): Promise<string[]> {
+  const attempted = await Promise.all(
+    providers.map(async (provider) => {
+      try {
+        await client.clearEphemeralApiKey(sessionId, provider)
+        return null
+      } catch (error) {
         console.warn(
           `[NativeRuntime] The daemon still holds the in-memory ${provider} key; ` +
             `the release call failed: ${error instanceof Error ? error.message : String(error)}`,
         )
-      }),
-    ),
+        return provider
+      }
+    }),
   )
+  return attempted.filter((provider): provider is string => provider !== null)
 }
 
 /**
- * Releases the keys one turn applied, once that turn is over. A superseded turn
- * cannot clear a provider its replacement wrote, because that slot holds the
- * replacement's value.
+ * Clears the keys one turn applied. A superseded turn cannot clear a provider
+ * its replacement wrote, because that slot holds the replacement's value. The
+ * slots are read when the clear runs rather than when it was asked for.
  */
-export async function releaseNativeEphemeralCredentials(
+async function releaseNativeEphemeralCredentialsNow(
   client: JcodeClient,
   sessionId: string,
   providers: readonly string[],
   generation: number,
 ): Promise<void> {
-  await runCredentialTurn(sessionId, async () => {
-    // The slots are read when the clear runs, not when it was asked for. A
-    // turn that already lost a provider to a newer one clears nothing there.
-    const plan = planCredentialRelease(sessionId, generation, providers)
-    if (plan.providers.length === 0) return
-    try {
-      await clearNativeEphemeralCredentials(client, sessionId, plan.providers)
-    } finally {
-      // Ownership is given up once the clear has settled, so the release ends
-      // with the ledger agreeing with what the daemon holds.
-      plan.settle()
-    }
-  })
+  const plan = planCredentialRelease(sessionId, generation, providers)
+  if (plan.providers.length === 0) return
+  // A provider the daemon did not clear stays owned, so the ledger does not
+  // record a release that did not happen.
+  plan.settle(await clearNativeEphemeralCredentials(client, sessionId, plan.providers))
+}
+
+/**
+ * Releases the keys one turn applied, once that turn is over. The clear takes
+ * its place in the session's order, so it cannot land between a replacement's
+ * two writes or after the replacement's own key is in place.
+ */
+export function releaseNativeEphemeralCredentials(
+  client: JcodeClient,
+  sessionId: string,
+  providers: readonly string[],
+  generation: number,
+): Promise<void> {
+  return runCredentialTurn(sessionId, () =>
+    releaseNativeEphemeralCredentialsNow(client, sessionId, providers, generation),
+  )
 }

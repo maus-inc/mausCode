@@ -641,3 +641,32 @@ Analysis at 16:13Z reports one new code smell, `typescript:S6582` on
 added in this round. The guard is now `slot?.generation !== generation`, which
 says the same thing, so the finding is fixed rather than suppressed. Quality gate
 OK, 0 bugs, 0 vulnerabilities, 0.0% duplication in 4561 new lines.
+
+## Ninth review round, CodeAnt AI on `bd1a1db` (2026-09-21)
+
+Four findings, and the two critical ones sit in code from earlier rounds rather
+than in the round-eight change that prompted them. All four are confirmed and
+fixed, and every fix has a test that fails without it.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `credentials.ts:163` each provider is queued separately, so another turn can run between the two writes and see a mixed configuration | Confirmed. Queueing per key left a window between the providers, which is the same window the round-eight finding was about | The whole handoff is one queued unit. The catch that releases a failed handoff calls the unqueued clear directly, because the queued one would wait on the handoff holding its own place |
+| `credentials.ts:188` clear failures are swallowed but `settle()` then drops ownership, so a failed release is never retried and the daemon keeps the key | Confirmed. The clear returned nothing, so a failed release was indistinguishable from a completed one | The clear returns the providers the daemon did not clear. `settle(retained)` keeps those slots owned, so the ledger never records a release that did not happen and a later release of the same generation tries again. The daemon still holding an in-memory key is the residual risk already stated for the handoff |
+| `auth-store.ts:117` a later assignment overwrites an earlier plaintext-removal failure, so `save` reports success while a plaintext session remains | Confirmed, and worse than described. `removePlaintextCopies` assigned each failure over the previous one, so two failed removals reported only the second, and the ciphertext path then replaced the whole message with the stash notice, which is null on the happy path | The removal returns every failure, the save collects them with the stash notice, and `lastError()` names each copy that is still on disk |
+| `index.ts:977` the refresh callback writes any completed refresh over the current session's cookie | Confirmed, and the root cause is one level up. `AuthManager.refresh()` saved the response without checking that the session it refreshed is still the current one, so a replaced session was also stored, not just written to the cookie | `refresh()` is single flight and drops a response when the store no longer holds the refresh token the request used. The callback cannot hear about a replaced session, because a discarded refresh never reaches it |
+
+The auth manager had no test file. A new one covers the five behaviours that
+matter here: a current refresh is stored and reported, a refresh that finished
+after another account signed in is dropped, one that finished after a sign-out
+is dropped, callers arriving together make one request, and a later call starts
+a new request. Removing the guard and the single flight fails three of them.
+
+The session store now writes its temporary files through the same
+`writeCredentialTempFile` helper as the other two stores, which closes the
+partial-write gap CodeAnt reported for `file-secret.ts` in the same class of
+code, so all three credential writers behave alike.
+
+Gate results: biome 968 files clean, typecheck pass, vitest 98 files / 1817
+passed with 1 skipped, `test:node` 57, contracts 382, runtime-client 43, lint
+clean, both ratchets pass, native check `claims_ok: true`, skills 50 of 50
+locked plus 2 unrecorded.
