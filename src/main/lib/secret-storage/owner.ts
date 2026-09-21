@@ -10,7 +10,8 @@
  *   legacy column decodes to the same value. It stays readable.
  * - Anything else is unreadable and is reported, never returned as a value.
  */
-import { readFileSync, renameSync } from "node:fs"
+import { readdirSync, readFileSync, renameSync } from "node:fs"
+import { basename, dirname, join } from "node:path"
 import {
   type Keychain,
   type PrepareResult,
@@ -33,6 +34,22 @@ export type DecodeResult = {
 function startsWithCipherPrefix(payload: Buffer): boolean {
   if (payload.length < 3) return false
   return CIPHER_PREFIXES.has(payload.subarray(0, 3).toString("latin1"))
+}
+
+/** The suffix `stashUnreadableCiphertext` adds to the file it moves aside. */
+const STASH_SUFFIX = ".unreadable-"
+
+/**
+ * Every stashed copy of one credential file, so a caller that has to remove the
+ * credential can remove the copies too. Throws when the directory cannot be
+ * listed: a clear that cannot rule out a stashed copy must not report success.
+ */
+export function stashedCiphertextPaths(filePath: string): string[] {
+  const dir = dirname(filePath)
+  const prefix = `${basename(filePath)}${STASH_SUFFIX}`
+  return readdirSync(dir)
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => join(dir, name))
 }
 
 /**
@@ -60,7 +77,7 @@ export function stashUnreadableCiphertext(
       throw new Error("no usable keyring")
     } catch {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-")
-      const target = `${filePath}.unreadable-${stamp}`
+      const target = `${filePath}${STASH_SUFFIX}${stamp}`
       renameSync(filePath, target)
       console.warn(
         `[SecretStore] ${context} could not be decrypted, so the file was kept at ${target} and is no longer read.`,

@@ -87,16 +87,44 @@ export class AuthStore {
         renameSync(temp, this.filePath)
         this.removePlaintextCopies()
       } else {
+        // The new value lands before the ciphertext moves: the ciphertext is the
+        // only readable candidate until then, so a failed write must leave it in
+        // place rather than sign the user out.
+        this.writePlaintext(value)
         // The saved ciphertext cannot be read without a keyring, and leaving it
         // in place would keep this new value from ever being loaded. Keep it
         // aside instead of deleting it.
-        stashUnreadableCiphertext(this.filePath, this.store.keychain, "The saved sign-in session")
-        writeFileSync(this.plaintextPath, `${value}\n`, { mode: 0o600 })
+        const stashed = stashUnreadableCiphertext(
+          this.filePath,
+          this.store.keychain,
+          "The saved sign-in session",
+        )
+        if (!stashed.stashed && existsSync(this.filePath)) {
+          this.lastFailure =
+            "The older sign-in session is still saved and cannot be read without a " +
+            "keyring, so the new session will not load until it moves aside."
+        }
       }
       this.lastFailure = null
     } catch (error) {
       this.lastFailure = error instanceof Error ? error.message : String(error)
       console.error("[AuthStore] Failed to save the sign-in session:", this.lastFailure)
+      throw error
+    }
+  }
+
+  /** Writes the session to the plaintext companion through a temporary file. */
+  private writePlaintext(value: string): void {
+    const temp = `${this.plaintextPath}.tmp-${process.pid}`
+    try {
+      writeFileSync(temp, `${value}\n`, { mode: 0o600 })
+      renameSync(temp, this.plaintextPath)
+    } catch (error) {
+      try {
+        if (existsSync(temp)) unlinkSync(temp)
+      } catch {
+        // The failure worth reporting is the one that stopped the write.
+      }
       throw error
     }
   }
@@ -173,16 +201,26 @@ export class AuthStore {
     }
   }
 
-  /** Sign-out removes every file the session could be stored in. */
+  /**
+   * Sign-out removes every file the session could be stored in. One protected
+   * file does not stop the others from going, and what could not be removed is
+   * reported rather than passed off as a completed sign-out.
+   */
   clear(): void {
-    try {
-      for (const path of [this.filePath, this.plaintextPath, this.legacyPath]) {
+    const failed: string[] = []
+    for (const path of [this.filePath, this.plaintextPath, this.legacyPath]) {
+      try {
         if (existsSync(path)) unlinkSync(path)
+      } catch (error) {
+        failed.push(path)
+        console.error(`[AuthStore] Could not remove ${path}:`, error)
       }
-      this.lastFailure = null
-    } catch (error) {
-      console.error("[AuthStore] Failed to clear the sign-in session:", error)
     }
+    if (failed.length > 0) {
+      this.lastFailure = `The sign-in session could not be removed from ${failed.join(", ")} and may still be stored.`
+      throw new Error(this.lastFailure)
+    }
+    this.lastFailure = null
   }
 
   isAuthenticated(): boolean {

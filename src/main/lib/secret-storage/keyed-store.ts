@@ -131,7 +131,10 @@ function writeFile(path: string, file: StoredFile, verify?: (written: StoredFile
  * file is touched.
  */
 export function writeKeyedSecret(store: KeyedStore, key: string, value: string): void {
-  const { file } = readFile(store.filePath)
+  const { file, error } = readFile(store.filePath)
+  // A file this version cannot read holds entries it cannot carry over, so the
+  // bytes are kept under a recovery name instead of being replaced by this write.
+  if (error !== null) setAsideUnreadableFile(store.filePath)
   const prepared = store.store.prepare(`The saved value for ${key}`, value)
   const entry: StoredEntry =
     prepared.ciphertext === null
@@ -143,6 +146,19 @@ export function writeKeyedSecret(store: KeyedStore, key: string, value: string):
 
   // Reading the saved file once more catches a replacement that did not land.
   verifyReadBack(store, key, value, readFile(store.filePath).file)
+}
+
+/**
+ * Moves an unreadable keyed file aside, keeping every byte for recovery, and
+ * names the new path in the log so the user can find it.
+ */
+function setAsideUnreadableFile(path: string): void {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const target = `${path}.unreadable-${stamp}`
+  renameSync(path, target)
+  console.warn(
+    `[SecretStore] ${KEYED_SECRET_FILE} could not be read, so it was kept at ${target} and a new file was written`,
+  )
 }
 
 function verifyReadBack(store: KeyedStore, key: string, value: string, file: StoredFile): void {

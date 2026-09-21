@@ -597,6 +597,9 @@ export function AgentsModelsTab() {
       setCodexApiKey(normalized)
       const saved = await whenRendererSecretSaved("onboarding:codex-api-key")
       if (!saved.ok) {
+        // The value never reached the store, so the old one stays in use.
+        setStoredCodexApiKey(storedCodexApiKey)
+        setCodexApiKey(storedCodexApiKey)
         toast.error(`Failed to save Codex API key: ${saved.error}`)
         return
       }
@@ -616,6 +619,8 @@ export function AgentsModelsTab() {
       setCodexApiKey("")
       const removed = await whenRendererSecretSaved("onboarding:codex-api-key")
       if (!removed.ok) {
+        setStoredCodexApiKey(storedCodexApiKey)
+        setCodexApiKey(storedCodexApiKey)
         toast.error(`Failed to remove Codex API key: ${removed.error}`)
         return
       }
@@ -722,6 +727,7 @@ export function AgentsModelsTab() {
       setStoredOpenAIKey(trimmedOpenAIKey)
       const saved = await whenRendererSecretSaved("agents:openai-api-key")
       if (!saved.ok) {
+        setStoredOpenAIKey(storedOpenAIKey)
         toast.error(`Failed to save OpenAI API key: ${saved.error}`)
         return
       }
@@ -740,6 +746,8 @@ export function AgentsModelsTab() {
       setOpenaiKey("")
       const removed = await whenRendererSecretSaved("agents:openai-api-key")
       if (!removed.ok) {
+        setStoredOpenAIKey(storedOpenAIKey)
+        setOpenaiKey(storedOpenAIKey)
         toast.error(`Failed to remove OpenAI API key: ${removed.error}`)
         return
       }

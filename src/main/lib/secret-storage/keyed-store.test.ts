@@ -87,6 +87,19 @@ describe("keyed secret store", () => {
     expect(readKeyedSecret(keyed(store), "a")).toBe("1")
   })
 
+  it("keeps an unreadable file instead of replacing its bytes", () => {
+    const store = keyedStore()
+    const dir = join(store.userDataPath, "data")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(keyedStorePath(store.userDataPath), "{ this is not json")
+    writeKeyedSecret(keyed(store), "a", "1")
+    const kept = readdirSync(dir).filter((name) => name.includes(".unreadable-"))
+    expect(kept).toHaveLength(1)
+    // Every byte the broken file held is still there to recover from.
+    expect(readFileSync(join(dir, kept[0] ?? ""), "utf-8")).toBe("{ this is not json")
+    expect(readKeyedSecret(keyed(store), "a")).toBe("1")
+  })
+
   it("reports an entry whose protection it does not recognize", () => {
     const store = keyedStore()
     mkdirSync(join(store.userDataPath, "data"), { recursive: true })

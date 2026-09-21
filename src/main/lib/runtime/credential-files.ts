@@ -9,7 +9,7 @@
  * before the daemon starts and after it stops, so a key lives on disk only
  * while the daemon that needs it is running.
  */
-import { existsSync, lstatSync, readdirSync, unlinkSync } from "node:fs"
+import { type Dirent, existsSync, lstatSync, readdirSync, unlinkSync } from "node:fs"
 import { join } from "node:path"
 
 /** Mirrors `storage::app_config_dir` with `JCODE_HOME` set. */
@@ -22,9 +22,10 @@ export type CredentialFileRemover = (path: string) => void
 
 /**
  * Removes the runtime's provider credential files. Returns the file names it
- * removed, never their contents. A path that is not a plain directory is left
- * alone. Throws when a targeted file could not be removed, so a caller that
- * must not run the daemon beside a stale credential can fail closed.
+ * removed, never their contents. Throws when the directory cannot be inspected
+ * or when a targeted file could not be removed, so a caller that must not run
+ * the daemon beside a stale credential can fail closed instead of starting it
+ * on the strength of a cleanup that did not happen.
  */
 export function clearPrivateCredentialFiles(
   jcodeHome: string,
@@ -33,30 +34,37 @@ export function clearPrivateCredentialFiles(
   const dir = privateCredentialDir(jcodeHome)
   const removed: string[] = []
   const failed: string[] = []
+  if (!existsSync(dir)) return removed
+
+  let entries: Dirent[]
   try {
-    if (!existsSync(dir)) return removed
     const stats = lstatSync(dir)
     if (!stats.isDirectory() || stats.isSymbolicLink()) {
-      console.warn(
-        "[NativeRuntime] Refusing to clean a credential path that is not a directory:",
-        dir,
-      )
-      return removed
+      throw new Error("the path is not a plain directory")
     }
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.name.endsWith(".env")) continue
-      if (!entry.isFile() && !entry.isSymbolicLink()) continue
-      const path = join(dir, entry.name)
-      try {
-        remove(path)
-        removed.push(entry.name)
-      } catch (error) {
-        failed.push(entry.name)
-        console.warn(`[NativeRuntime] Could not remove ${entry.name}:`, error)
-      }
-    }
+    entries = readdirSync(dir, { withFileTypes: true })
   } catch (error) {
-    console.warn("[NativeRuntime] Could not inspect the credential directory:", error)
+    // The daemon follows this path itself. Starting it while the app cannot say
+    // what is stored there would run it on credentials the cleanup never saw.
+    throw new Error(
+      `The runtime credential directory could not be inspected (${dir}), so the app ` +
+        `cannot confirm that no plaintext credential is left there: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+    )
+  }
+
+  for (const entry of entries) {
+    if (!entry.name.endsWith(".env")) continue
+    if (!entry.isFile() && !entry.isSymbolicLink()) continue
+    const path = join(dir, entry.name)
+    try {
+      remove(path)
+      removed.push(entry.name)
+    } catch (error) {
+      failed.push(entry.name)
+      console.warn(`[NativeRuntime] Could not remove ${entry.name}:`, error)
+    }
   }
   if (failed.length > 0) {
     throw new Error(

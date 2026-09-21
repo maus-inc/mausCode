@@ -55,14 +55,29 @@ test("is quiet when the instance never wrote credentials", () => {
   assert.deepEqual(clearPrivateCredentialFiles(tempHome()), [])
 })
 
-test("refuses a credential path that is a symlink", () => {
+test("refuses a credential path that is a symlink, without following it", () => {
   const home = tempHome()
   const elsewhere = tempHome()
   fs.mkdirSync(path.join(home, "config"), { recursive: true })
   fs.writeFileSync(path.join(elsewhere, "anthropic.env"), "ANTHROPIC_API_KEY=sk-synthetic")
   fs.symlinkSync(elsewhere, privateCredentialDir(home))
-  assert.deepEqual(clearPrivateCredentialFiles(home), [])
+  // Failing closed is the point: the daemon follows this path itself, so a
+  // cleanup that cannot vouch for it must stop the daemon rather than wave it on.
+  assert.throws(
+    () => clearPrivateCredentialFiles(home),
+    /could not be inspected|not a plain directory/,
+  )
   assert.equal(fs.existsSync(path.join(elsewhere, "anthropic.env")), true)
+})
+
+test("fails closed when the credential path is not a directory", () => {
+  const home = tempHome()
+  fs.mkdirSync(path.join(home, "config"), { recursive: true })
+  fs.writeFileSync(privateCredentialDir(home), "not a directory")
+  assert.throws(
+    () => clearPrivateCredentialFiles(home),
+    /could not be inspected|not a plain directory/,
+  )
 })
 
 test("fails closed when a credential file cannot be removed", () => {

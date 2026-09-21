@@ -323,3 +323,81 @@ API call answers 401). The pushes of `17715b0` and `5bde078` went through
 before that, and every review reply and thread resolution was posted. What
 remains blocked is reading the terminal CI conclusion for `5bde078` and any
 further push, including this record.
+
+## Third review round, CodeAnt AI on `5bde078` (2026-09-21)
+
+Twelve new threads, all from CodeAnt AI, all validated against the source before
+any change. Eleven brought code changes, one is answered with a recorded reason
+and no change. Every thread carries a reply on the pull request.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `agents-models-tab.tsx:596` a refused write leaves the new value in the atoms | Valid | The Codex and OpenAI save and removal handlers restore the previous atom values when the write is refused, so the session cannot run on a key that was never stored |
+| `renderer-secrets.ts:100` a failed startup read freezes the sync for the session | Valid | `hydrate` clears `started` on a transport failure, so the next read retries. A keyed-store read error still stops the migration, which is the documented guard, and the Credential storage page is the recovery path |
+| `file-secret.ts:153` sign-out leaves a stashed ciphertext copy | Valid | `clearFileSecret` also removes the stashed copies, named by the new `stashedCiphertextPaths` in `owner.ts`, so one place owns the naming. A listing failure fails the clear. Covered in `file-secret.test.ts` |
+| `credential-files.ts:38` a symlinked credential directory counts as cleaned | Valid | The cleanup throws instead of returning success, so the startup path refuses to run the daemon beside a path it cannot vouch for. The test now asserts the throw and that the symlink target is untouched |
+| `credential-files.ts:58` inspection errors are swallowed | Valid | `lstat` and `readdir` failures throw with the directory named. ENOENT still returns quietly, and the teardown wrapper stays non-throwing |
+| `credentials.ts:151` a failed release is swallowed | Valid | Each failure warns with the provider name and the reason, never the value. The daemon is long-lived and holds one value per variable, so the residual key is now visible instead of silent |
+| `auth-store.ts:93` the stash runs before the plaintext write | Valid | The companion is written through a temporary file first, then the ciphertext moves aside, and a stash that did not happen is reported. `auth-store.test.ts` covers a failed companion write that keeps the session loadable |
+| `auth-store.ts:179` the cleanup loop stops on the first unlink error | Valid | Every path is attempted, the failures are named, and `clear()` throws. The logout handler logs and still clears the cookie and shows the login page, and the Credential storage page shows the recorded reason |
+| `claude-token.ts:314` the CLI credential file is written in place | Valid | The write goes to a temporary file and replaces the file in one step, so an interrupted refresh cannot truncate the only stored credential |
+| `claude-token.ts:376` a rotation whose write fails | Valid as a race, answered without a code change | A server-side rotation cannot be undone locally. The permission probe before the refresh is the approved rule, `writeToCredentialsFile` re-checks it, the write can no longer truncate, and a failure keeps the CLI store and reports it. The refreshed access token still serves this session in memory |
+| `keyed-store.ts:134` a malformed file is replaced by the next write | Valid | The unreadable bytes move to `<file>.unreadable-<stamp>` with the path logged, and the write then starts from a clean file. Covered in `keyed-store.test.ts` |
+| `runtime.ts:396` a replaced turn clears the replacement's key | Valid | A new credential ledger (`runtime/credential-ledger.ts`) records which generation wrote which providers. A superseded turn releases only providers no newer generation owns, and the ledger is pure state with five unit tests |
+
+## Design alignment pass on the Credential storage page (2026-09-21)
+
+Sources loaded: `DESIGN.md`, `docs/design-system-baseline.md`,
+`.agents/skills/impeccable/reference/craft-floor.md`, the `antislop` core,
+`antislop-ui`, `unslop`, `design-taste-frontend`, and `ui-ux-pro-max`. No skill
+script was run, per the execution limits in `docs/design-skills.md`.
+
+Findings and changes:
+
+| Finding | Baseline rule | Change |
+| --- | --- | --- |
+| The page's row pill used `text-[10px]`, `bg-muted`, and `text-emerald-700 dark:text-emerald-400` | §3.5 and `DESIGN.md` badges: `inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`, a 10 percent wash, solid-500 text | New shared `src/renderer/components/ui/status-pill.tsx` with the four recorded tones, used by the Credential storage page and by the Backends page, whose local copy of the same pill is deleted. One implementation, one set of values |
+| Every row without a claim showed "See notes" | Copy names the state; a control names its action | Each row now carries its own honest state: Encrypted, Plaintext, Refused, Unreadable, CLI-owned, Plaintext during a run, Moved to the app store, Not in use |
+| The consent notice used `bg-amber-500/5` | Colored status washes are 10 percent (`bg-orange-500/10`, `bg-destructive/10`, `bg-amber-500/10`) | Changed to `bg-amber-500/10` |
+| "Check again" was a bare ghost button with no loading state | States: hover, disabled, loading, error, empty; the debug page pairs `RefreshCw h-4 w-4 mr-2` with an outline small button | Outline small button with a `RefreshCw` that spins while fetching and disables the button |
+| `agents-backends-tab.tsx` used the `…` character | `DESIGN.md`: don't use the `…` character | `probing...` |
+
+Checked and left alone: the tab header (`h3 text-sm font-semibold` plus `text-xs`
+description) matches every sibling settings tab; the card shell, card header, row
+switches, `space-y-6` root, loader, and the shared `AlertDialog` confirm all match
+the baseline and the siblings. The page was not redesigned; the human approved
+its direction, and only values and copy that contradicted the recorded baseline
+changed.
+
+## Gate results after the third round
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Frozen install | `bun install --frozen-lockfile --ignore-scripts`, lockfile unchanged | E3 |
+| `npm run build:runtime-client` | Passed | E3 |
+| `npx biome check .` | 965 files, no fixes | E3 |
+| `npm run typecheck` | Passed | E3 |
+| `npm run ts:check` | Not run to completion. The sandbox kills `tsgo` with no diagnostics (4096 MB heap, killed after 366 s). CI runs it in the quality job | E4 |
+| `npm test` | 95 files, 1792 tests passed | E3 |
+| `npm run test:node` | 47 tests passed, including the credential ledger and the fail-closed cleanup | E3 |
+| `npm run test:contracts` | 382 tests passed | E3 |
+| `npm --prefix packages/runtime-client run test` | Passed | E3 |
+| `npm run lint` | 910 files checked, no findings | E3 |
+| `npm run ratchet:typecheck` | 0 errors <= 0 baseline | E3 |
+| `npm run ratchet:audit` | No new critical advisories | E3 |
+| `npm run skills:verify` | 50 of 50 locked skills | E3 |
+| OpenSpec strict validation | Valid | E3 |
+| Native credential check | `claims_ok: true`, exit 0 | E1 |
+| SonarCloud on `b19089e` | Quality gate OK, 0 open issues, 0.0% duplication on new code (0 of 3,151 lines) | E1, read from the SonarCloud API |
+| `electron-vite build` renderer, `package:mac` | Not run here, environment-blocked; CI owns both | E4 |
+
+### Open items after the third round
+
+- SonarCloud has not analysed the commits after `b19089e`; the duplication and
+  issue measures are re-read once the analysis lands.
+- CI on the newest head is watched to terminal.
+- The manual Linux disabled-keyring run and `package:mac` remain with the human
+  or CI.
+- Two pre-existing items stay out of scope and are flagged: the Cline
+  custom-endpoint temporary `providers.json` sweep, and the `docs/protocol.md`
+  session-scoped lookup, which needs a runtime signature change.

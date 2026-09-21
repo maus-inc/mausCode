@@ -84,4 +84,16 @@ describe("file secret", () => {
     clearFileSecret(secret)
     expect(readdirSync(join(home, "data"))).toHaveLength(0)
   })
+
+  it("clears the stashed ciphertext copy too", () => {
+    const home = makeHome("mauscode-file-secret-")
+    saveFileSecret(fixture(home), "first-token")
+    // A keyring that cannot read the first value moves it aside under a recovery
+    // name; sign-out has to remove that copy as well.
+    saveFileSecret(fixture(home, false, true), "second-token")
+    const dir = join(home, "data")
+    expect(readdirSync(dir).filter((name) => name.includes(".unreadable-"))).toHaveLength(1)
+    clearFileSecret(fixture(home))
+    expect(readdirSync(dir)).toHaveLength(0)
+  })
 })

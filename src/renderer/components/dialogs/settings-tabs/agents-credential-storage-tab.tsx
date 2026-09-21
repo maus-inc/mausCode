@@ -1,4 +1,4 @@
-import { KeyRound, Loader2, ShieldCheck, ShieldOff } from "lucide-react"
+import { KeyRound, Loader2, RefreshCw, ShieldCheck, ShieldOff } from "lucide-react"
 import { useState } from "react"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "../../ui/alert-dialog"
 import { Button } from "../../ui/button"
+import { StatusPill } from "../../ui/status-pill"
 import { Switch } from "../../ui/switch"
 
 /**
@@ -124,7 +125,13 @@ export function AgentsCredentialStorageTab() {
         </p>
       )}
 
-      <Button variant="ghost" size="sm" onClick={() => void status.refetch()}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => void status.refetch()}
+        disabled={status.isFetching}
+      >
+        <RefreshCw className={cn("mr-2 h-4 w-4", status.isFetching && "animate-spin")} />
         Check again
       </Button>
     </div>
@@ -195,7 +202,7 @@ function ProtectionCard({
       </div>
 
       {consentOn && (
-        <div className="border-t border-border bg-amber-500/5 p-4">
+        <div className="border-t border-border bg-amber-500/10 p-4">
           <p className="text-xs text-muted-foreground">
             Plaintext permission is on
             {data?.plaintextConsentAt
@@ -256,7 +263,7 @@ function InventoryCard({
               "Not written when a new session cannot be encrypted",
             )
           }
-          ok={protectedByOs}
+          state={storedState(protectedByOs, consentOn, data?.signInFailure ?? null)}
         />
         <StorageRow
           label="Provider keys and accounts"
@@ -270,22 +277,42 @@ function InventoryCard({
               "Existing keys stay readable; new ones are refused",
             )
           }
-          ok={protectedByOs && !providerIssue}
+          state={storedState(protectedByOs, consentOn, providerIssue)}
         />
         <StorageRow
           label="Claude CLI credentials"
           detail="Owned by the Claude CLI. Renewal writes to its own store, and a plaintext credential file is only updated when plaintext storage is allowed."
-          ok={false}
+          state={{ tone: "mute", label: "CLI-owned" }}
         />
         <StorageRow
           label="Runtime provider files"
           detail="The native runtime writes a key it is handed as a plaintext file in the app's private folder. The app clears that folder before the runtime starts and after it stops, so a key does not survive a run."
-          ok={false}
+          state={{ tone: "warn", label: "Plaintext during a run" }}
         />
-        <StorageRow label="Browser storage" detail={rendererDetail} ok={!data?.rendererError} />
+        <StorageRow
+          label="Browser storage"
+          detail={rendererDetail}
+          state={browserState(data?.rendererError ?? null, stored)}
+        />
       </ul>
     </div>
   )
+}
+
+/** One pill for every row: the tone names the state, the label names it in words. */
+type RowState = { tone: "ok" | "warn" | "bad" | "mute"; label: string }
+
+function storedState(protectedByOs: boolean, consentOn: boolean, error: string | null): RowState {
+  if (error) return { tone: "bad", label: "Unreadable" }
+  if (protectedByOs) return { tone: "ok", label: "Encrypted" }
+  return consentOn ? { tone: "warn", label: "Plaintext" } : { tone: "warn", label: "Refused" }
+}
+
+function browserState(error: string | null, stored: number): RowState {
+  if (error) return { tone: "bad", label: "Unreadable" }
+  return stored > 0
+    ? { tone: "ok", label: "Moved to the app store" }
+    : { tone: "ok", label: "Not in use" }
 }
 
 function describeRendererStorage(error: string | null, stored: number): string {
@@ -329,11 +356,11 @@ function describeRefusal(
 function StorageRow({
   label,
   detail,
-  ok,
+  state,
 }: {
   readonly label: string
   readonly detail: string
-  readonly ok: boolean
+  readonly state: RowState
 }) {
   return (
     <li className="flex items-start justify-between gap-4 p-4">
@@ -341,16 +368,9 @@ function StorageRow({
         <span className="text-sm text-foreground">{label}</span>
         <span className="text-xs text-muted-foreground">{detail}</span>
       </div>
-      <span
-        className={cn(
-          "mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-          ok
-            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-            : "bg-muted text-muted-foreground",
-        )}
-      >
-        {ok ? "Encrypted" : "See notes"}
-      </span>
+      <StatusPill tone={state.tone} className="mt-0.5 shrink-0">
+        {state.label}
+      </StatusPill>
     </li>
   )
 }

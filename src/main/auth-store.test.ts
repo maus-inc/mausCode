@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { type AuthData, AuthStore } from "./auth-store"
@@ -103,6 +103,30 @@ describe("auth store", () => {
     expect(auth.getToken()).toBe("synthetic-session-token")
     expect(readdirSync(home).includes("auth.dat.json")).toBe(true)
     expect(auth.lastError()).not.toBeNull()
+  })
+
+  it("keeps the readable session when the plaintext write cannot land", () => {
+    const home = makeHome()
+    storeFor(home).auth.save(session())
+    // A directory where the companion belongs makes the replace fail. The
+    // ciphertext is the only readable candidate, so it must stay in place.
+    mkdirSync(join(home, "auth.dat.json"))
+    const consented = storeFor(home, false, true).auth
+    expect(() => consented.save(session({ token: "replacement-token" }))).toThrow()
+    expect(storeFor(home).auth.getToken()).toBe("synthetic-session-token")
+  })
+
+  it("removes every file it can and reports the one it could not", () => {
+    const home = makeHome()
+    const { auth } = storeFor(home)
+    auth.save(session())
+    writeFileSync(join(home, "auth.json"), JSON.stringify(session()))
+    // A directory cannot be unlinked, so this one stays behind and is named.
+    mkdirSync(join(home, "auth.dat.json"))
+    expect(() => auth.clear()).toThrow(/could not be removed/)
+    expect(readdirSync(home).filter((name) => name === "auth.dat")).toHaveLength(0)
+    expect(readdirSync(home).filter((name) => name === "auth.json")).toHaveLength(0)
+    expect(auth.lastError()).toMatch(/could not be removed/)
   })
 
   it("clears every file the session could be stored in", () => {

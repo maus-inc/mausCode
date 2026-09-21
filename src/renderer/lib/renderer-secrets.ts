@@ -59,6 +59,10 @@ async function hydrate(): Promise<void> {
   try {
     stored = await trpcClient.secretStorage.rendererSecrets.query()
   } catch (error) {
+    // Nothing was read and no legacy value was touched, so the next caller may
+    // try again. Without this the first transport error of a session would keep
+    // every stored value out of the app until it restarted.
+    started = false
     console.error(
       "[renderer-secrets] stored values could not be read:",
       error instanceof Error ? error.message : String(error),

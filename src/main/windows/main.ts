@@ -531,7 +531,13 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("auth:logout", async (event) => {
     if (!validateSender(event)) return
-    getAuthManager().logout()
+    try {
+      getAuthManager().logout()
+    } catch (error) {
+      // A session file the app could not remove leaves the user signed out
+      // here; the Credential storage page reports what stayed on disk.
+      console.error("[Auth] Logout could not remove every stored session file:", error)
+    }
     // Clear cookie from persist:main partition
     const ses = session.fromPartition("persist:main")
     try {

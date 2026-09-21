@@ -20,17 +20,18 @@ import { getRunStore } from "../../runs"
 import type { RunHandle } from "../../runs/run-state"
 import {
   applyNativeCredentials,
-  clearNativeEphemeralCredentials,
   ensureNativeSession,
   getMappedNativeSession,
   getRuntimeManager,
   NATIVE_QUESTION_PREFIX,
   NativeCredentialError,
+  type NativeCredentialResult,
   type NativeEndpoints,
   NativeTranslator,
   normalizeEndpointUrl,
   probeEndpoint,
   readEndpointSettings,
+  releaseNativeEphemeralCredentials,
   resolveNativeMcpSnapshot,
   restartRuntime,
   writeEndpointSettings,
@@ -187,7 +188,7 @@ async function prepareNativeCredentials(
   input: { customToken?: string; customBaseUrl?: string },
   sessionId: string,
   hooks: { fail: NativeFail; safeEmit: NativeEmit; safeComplete: () => void },
-): Promise<{ providers: string[]; ephemeralProviders: string[] } | null> {
+): Promise<NativeCredentialResult | null> {
   try {
     const applied = await applyNativeCredentials(
       client,
@@ -394,10 +395,11 @@ export const runtimeRouter = router({
             // A key held in the runtime's memory is released when this turn
             // ends; the next turn applies it again.
             turn.releaseCredentials = () => {
-              void clearNativeEphemeralCredentials(
+              void releaseNativeEphemeralCredentials(
                 client,
                 sessionId,
                 credentials.ephemeralProviders,
+                credentials.generation,
               )
             }
 

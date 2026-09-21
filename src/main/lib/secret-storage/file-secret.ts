@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { stashUnreadableCiphertext } from "./owner"
+import { stashedCiphertextPaths, stashUnreadableCiphertext } from "./owner"
 import type { Keychain, SecretWriter } from "./types"
 
 export type FileSecret = {
@@ -150,7 +150,15 @@ export function loadFileSecret(secret: FileSecret): string | null {
 
 export function clearFileSecret(secret: FileSecret): void {
   const failed: string[] = []
-  for (const path of [secret.filePath, secret.plaintextPath]) {
+  const targets = new Set([secret.filePath, secret.plaintextPath])
+  try {
+    // A stashed copy is the same credential under a recovery name. Sign-out that
+    // left one behind would leave the credential recoverable on disk.
+    for (const path of stashedCiphertextPaths(secret.filePath)) targets.add(path)
+  } catch {
+    failed.push(`${dirname(secret.filePath)} (stashed copies could not be listed)`)
+  }
+  for (const path of targets) {
     try {
       if (existsSync(path)) unlinkSync(path)
     } catch {

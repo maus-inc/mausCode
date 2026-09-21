@@ -17,6 +17,7 @@ import type { JcodeClient } from "@maus-inc/runtime-client"
 import { eq } from "drizzle-orm"
 import { anthropicAccounts, anthropicSettings, getDatabase } from "../db"
 import { decryptToken } from "../token-crypto"
+import { markCredentialsApplied, planCredentialRelease } from "./credential-ledger"
 import { isHonoredEndpoint, readEndpointSettings } from "./endpoints"
 
 export interface NativeCredentialRequest {
@@ -29,6 +30,11 @@ export interface NativeCredentialResult {
   providers: string[]
   /** Providers whose key was held in the runtime's memory, not on disk. */
   ephemeralProviders: string[]
+  /**
+   * Which handoff generation wrote the in-memory keys, or 0 when none were
+   * written. Pass it back to `releaseNativeEphemeralCredentials`.
+   */
+  generation: number
 }
 
 /** Typed credential failure so the router maps it to an honest chunk. */
@@ -72,7 +78,8 @@ export async function applyNativeCredentials(
   // The runtime's own provider store is plaintext on disk. When the daemon
   // advertises the memory-only handoff, the key stays in its memory instead and
   // nothing is written at all.
-  const inMemory = sessionId !== undefined && client.supports("ephemeral_api_key")
+  const memorySession =
+    sessionId !== undefined && client.supports("ephemeral_api_key") ? sessionId : undefined
   if (request.customBaseUrl) {
     // Daemon-level endpoints only (see endpoints.ts): accept the chat's custom
     // endpoint when the daemon will actually honor it — an explicitly
@@ -91,7 +98,7 @@ export async function applyNativeCredentials(
   }
   const providers: string[] = []
   const ephemeralProviders: string[] = []
-  const handoff = { client, sessionId: inMemory ? sessionId : undefined, ephemeralProviders }
+  const handoff = { client, sessionId: memorySession, ephemeralProviders }
 
   try {
     const anthropicToken = getActiveAnthropicToken()
@@ -118,7 +125,11 @@ export async function applyNativeCredentials(
     throw error
   }
 
-  return { providers, ephemeralProviders }
+  // Remember which generation owns the in-memory keys, so a turn that a
+  // replacement superseded cannot release the keys the replacement applied.
+  const generation =
+    memorySession === undefined ? 0 : markCredentialsApplied(memorySession, ephemeralProviders)
+  return { providers, ephemeralProviders, generation }
 }
 
 type CredentialHandoff = {
@@ -139,16 +150,41 @@ async function applyKey(handoff: CredentialHandoff, provider: string, key: strin
 }
 
 /**
- * Release keys that were held in the runtime's memory for one session. A
- * failure is harmless: the key never reached disk, and the process drops it
- * when the daemon exits. Never deletes a stored credential.
+ * Release keys held in the runtime's memory for one session. The daemon is
+ * long-lived and keeps one value per provider variable, so a key left behind
+ * would be read by the next session that sets nothing. A failure is therefore
+ * reported by provider name, never by value; the key never reached disk. Never
+ * deletes a stored credential.
  */
-export async function clearNativeEphemeralCredentials(
+async function clearNativeEphemeralCredentials(
   client: JcodeClient,
   sessionId: string,
   providers: readonly string[],
 ): Promise<void> {
   await Promise.all(
-    providers.map((provider) => client.clearEphemeralApiKey(sessionId, provider).catch(() => {})),
+    providers.map((provider) =>
+      client.clearEphemeralApiKey(sessionId, provider).catch((error: unknown) => {
+        console.warn(
+          `[NativeRuntime] The daemon still holds the in-memory ${provider} key; ` +
+            `the release call failed: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }),
+    ),
   )
+}
+
+/**
+ * Releases the keys one turn applied, once that turn is over. A superseded turn
+ * cannot clear a provider its replacement wrote, because that slot holds the
+ * replacement's value.
+ */
+export async function releaseNativeEphemeralCredentials(
+  client: JcodeClient,
+  sessionId: string,
+  providers: readonly string[],
+  generation: number,
+): Promise<void> {
+  const toClear = planCredentialRelease(sessionId, generation, providers)
+  if (toClear.length === 0) return
+  await clearNativeEphemeralCredentials(client, sessionId, toClear)
 }

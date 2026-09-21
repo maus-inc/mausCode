@@ -18,9 +18,9 @@ export { clearPrivateCredentialFiles, privateCredentialDir } from "./credential-
 export type { NativeCredentialRequest, NativeCredentialResult } from "./credentials"
 export {
   applyNativeCredentials,
-  clearNativeEphemeralCredentials,
   getActiveAnthropicToken,
   NativeCredentialError,
+  releaseNativeEphemeralCredentials,
 } from "./credentials"
 export type { NativeEndpoints } from "./endpoints"
 export {
