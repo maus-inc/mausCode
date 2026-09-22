@@ -56,6 +56,8 @@ export function AgentsCredentialStorageTab() {
   const data: StatusData | undefined = status.data
   const protectedByOs = data?.protection === "os-encryption" && data.encryptionAvailable === true
   const consentOn = data?.plaintextConsent === true
+  // No result yet, so the page has no verdict to state about the keyring.
+  const unknown = data === undefined
 
   return (
     <div className="space-y-6">
@@ -69,6 +71,7 @@ export function AgentsCredentialStorageTab() {
 
       <ProtectionCard
         isLoading={status.isLoading}
+        unknown={unknown}
         loadError={status.error instanceof Error ? status.error.message : null}
         protectedByOs={protectedByOs}
         consentOn={consentOn}
@@ -78,7 +81,12 @@ export function AgentsCredentialStorageTab() {
         onDisable={() => setConsent.mutate({ consent: false })}
       />
 
-      <InventoryCard protectedByOs={protectedByOs} consentOn={consentOn} data={data} />
+      <InventoryCard
+        protectedByOs={protectedByOs}
+        consentOn={consentOn}
+        unknown={unknown}
+        data={data}
+      />
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
@@ -141,6 +149,7 @@ export function AgentsCredentialStorageTab() {
 
 function ProtectionCard({
   isLoading,
+  unknown,
   loadError,
   protectedByOs,
   consentOn,
@@ -150,6 +159,8 @@ function ProtectionCard({
   onDisable,
 }: {
   readonly isLoading: boolean
+  /** True while the status query has no result, so no verdict can be stated. */
+  readonly unknown: boolean
   /** Message from a failed status query, which is not a keyring verdict. */
   readonly loadError: string | null
   readonly protectedByOs: boolean
@@ -159,8 +170,8 @@ function ProtectionCard({
   readonly onEnable: () => void
   readonly onDisable: () => void
 }) {
-  const headline = protectionHeadline(isLoading, protectedByOs, consentOn)
-  const detail = protectionDetail(isLoading, loadError, protectedByOs, data)
+  const headline = protectionHeadline(isLoading, unknown, protectedByOs, consentOn)
+  const detail = protectionDetail(isLoading, unknown, loadError, protectedByOs, data)
 
   return (
     <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -223,10 +234,15 @@ function ProtectionCard({
 
 function protectionHeadline(
   isLoading: boolean,
+  unknown: boolean,
   protectedByOs: boolean,
   consentOn: boolean,
 ): string {
   if (isLoading) return "Checking the OS keyring..."
+  // A query that has not answered, or one that failed, says nothing about the
+  // keyring. Claiming it cannot encrypt would state a verdict the app has not
+  // reached.
+  if (unknown) return "The OS keyring state is not known"
   if (protectedByOs) return "New credentials are encrypted by the operating system"
   if (consentOn) return "New credentials are stored in plaintext because you allowed it"
   return "The operating system cannot encrypt new credentials"
@@ -239,12 +255,13 @@ function protectionHeadline(
  */
 function protectionDetail(
   isLoading: boolean,
+  unknown: boolean,
   loadError: string | null,
   protectedByOs: boolean,
   data: StatusData | undefined,
 ): string {
   if (loadError) return loadError
-  if (isLoading || data === undefined) {
+  if (isLoading || unknown || data === undefined) {
     return "Reading the protection state from the main process."
   }
   if (protectedByOs) {
@@ -256,10 +273,13 @@ function protectionDetail(
 function InventoryCard({
   protectedByOs,
   consentOn,
+  unknown,
   data,
 }: {
   readonly protectedByOs: boolean
   readonly consentOn: boolean
+  /** True while the status query has no result, so the rows state no verdict. */
+  readonly unknown: boolean
   readonly data: StatusData | undefined
 }) {
   const stored = data?.rendererKeysStored?.length ?? 0
@@ -280,29 +300,39 @@ function InventoryCard({
           label="Sign-in session"
           detail={
             data?.signInFailure ??
-            storedDetail(
-              protectedByOs,
-              consentOn,
-              "The next sign-in is encrypted by the OS keyring.",
-              "The next sign-in is written in plaintext, because you allowed it.",
-              "A new sign-in is not written when it cannot be encrypted.",
-            )
+            (unknown
+              ? UNKNOWN_DETAIL
+              : storedDetail(
+                  protectedByOs,
+                  consentOn,
+                  "The next sign-in is encrypted by the OS keyring.",
+                  "The next sign-in is written in plaintext, because you allowed it.",
+                  "A new sign-in is not written when it cannot be encrypted.",
+                ))
           }
-          state={storedState(protectedByOs, consentOn, data?.signInFailure ?? null, "Failed")}
+          state={storedState(
+            protectedByOs,
+            consentOn,
+            data?.signInFailure ?? null,
+            "Failed",
+            unknown,
+          )}
         />
         <StorageRow
           label="Provider keys and accounts"
           detail={
             providerIssue ??
-            storedDetail(
-              protectedByOs,
-              consentOn,
-              "New keys are encrypted by the OS keyring.",
-              "New keys are written in plaintext, because you allowed it.",
-              "Existing keys stay readable; new ones are refused.",
-            )
+            (unknown
+              ? UNKNOWN_DETAIL
+              : storedDetail(
+                  protectedByOs,
+                  consentOn,
+                  "New keys are encrypted by the OS keyring.",
+                  "New keys are written in plaintext, because you allowed it.",
+                  "Existing keys stay readable; new ones are refused.",
+                ))
           }
-          state={storedState(protectedByOs, consentOn, providerIssue, "Unreadable")}
+          state={storedState(protectedByOs, consentOn, providerIssue, "Unreadable", unknown)}
         />
         <StorageRow
           label="Claude CLI credentials"
@@ -316,8 +346,8 @@ function InventoryCard({
         />
         <StorageRow
           label="Browser storage"
-          detail={rendererDetail}
-          state={browserState(data?.rendererError ?? null, stored)}
+          detail={unknown ? UNKNOWN_DETAIL : rendererDetail}
+          state={unknown ? UNKNOWN_STATE : browserState(data?.rendererError ?? null, stored)}
         />
       </ul>
     </div>
@@ -326,6 +356,14 @@ function InventoryCard({
 
 /** One pill for every row: the tone names the state, the label names it in words. */
 type RowState = { tone: "ok" | "warn" | "bad" | "mute"; label: string }
+
+/**
+ * What a row says before the status query answers. The flags the rows read are
+ * false without data, and a row that stated a verdict from those would report a
+ * refusal the app has not made.
+ */
+const UNKNOWN_STATE: RowState = { tone: "warn", label: "Unknown" }
+const UNKNOWN_DETAIL = "Reading the storage state from the main process."
 
 /**
  * The state of the next write, not a claim about what is already saved: the
@@ -342,8 +380,10 @@ function storedState(
   consentOn: boolean,
   error: string | null,
   failureLabel: string,
+  unknown: boolean,
 ): RowState {
   if (error) return { tone: "bad", label: failureLabel }
+  if (unknown) return UNKNOWN_STATE
   if (protectedByOs) return { tone: "ok", label: "New: encrypted" }
   return consentOn
     ? { tone: "warn", label: "New: plaintext" }

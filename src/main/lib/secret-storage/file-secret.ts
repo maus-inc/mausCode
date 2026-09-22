@@ -59,7 +59,14 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
       removeQuietly(temp)
       throw error
     }
-    renameSync(temp, secret.filePath)
+    try {
+      renameSync(temp, secret.filePath)
+    } catch (error) {
+      // The temporary file holds this credential, encrypted. A rename that did
+      // not land leaves the bytes at a name reads never look at, so they go.
+      removeQuietly(temp)
+      throw error
+    }
     if (existsSync(secret.plaintextPath)) {
       try {
         unlinkSync(secret.plaintextPath)
@@ -88,7 +95,25 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
     )
   }
   ensureDir(secret.plaintextPath)
-  savePlaintextCompanion(secret, value)
+  try {
+    savePlaintextCompanion(secret, value)
+  } catch (error) {
+    // The old ciphertext was moved aside to let this value load. The new value
+    // did not land, so putting the old file back keeps the credential readable
+    // at the path reads use instead of stranding it under a recovery name.
+    if (stashed.path !== null && !existsSync(secret.filePath)) {
+      try {
+        renameSync(stashed.path, secret.filePath)
+      } catch (restoreError) {
+        console.warn(
+          `[SecretStore] The saved ${secret.context} could not be put back at ` +
+            `${secret.filePath}, so it stays at ${stashed.path}:`,
+          restoreError,
+        )
+      }
+    }
+    throw error
+  }
 }
 
 /** Replaces the companion through a temporary file, so a failed write cannot truncate it. */

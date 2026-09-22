@@ -819,3 +819,33 @@ not unit-tested: `credentials.ts` imports the database module, which the node
 test runner cannot strip, so that path stays E4 and needs a daemon that answers
 `set_ephemeral_api_key`. The ledger contract the retry loop relies on is covered
 by the retained-provider test.
+
+## Round fourteen, five findings on the cookie and the store writes
+
+CodeAnt reviewed `ac40492` and left five findings, all Major. All five were real
+and all five are fixed here.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `index.ts:163` `setDesktopTokenCookie` swallows the cookie-store failure, so the settle step reports success with no cookie in place | Confirmed. The function caught the `cookies.set` rejection, logged it and returned nothing, so the caller's `true` meant "the session is still saved", not "the cookie is there" | `setDesktopTokenCookie` returns whether the store accepted the write, and the settle step returns false when it did not. An expired token still removes the cookie and now reports that it wrote nothing |
+| `index.ts:193` a startup refresh that ends in a sign-out leaves an older persisted cookie behind | Confirmed. `getValidToken` can fail into `logout()` inside a 401 refresh, and the continuation returned on a null token without touching the cookie an earlier version wrote with an expiry | When the token resolves to null and the manager is no longer authenticated, the cookie is removed before the continuation ends |
+| `file-secret.ts:62` a failed `renameSync` leaves the temporary ciphertext behind | Confirmed. The read-back was inside the try and the rename was outside it, so a rename failure threw past the cleanup | The rename has its own handler that removes the temporary file and rethrows. The temporary file holds the credential, encrypted, under a name no read uses |
+| `file-secret.ts:91` a failed plaintext companion write after the stash leaves neither value at the path reads use | Confirmed. The old ciphertext was moved aside so the new plaintext value could load, and a failed companion write threw with the old bytes stranded under a recovery name | The write restores the stashed file at the original path before rethrowing, the same shape `writeKeyedSecret` uses |
+| `agents-credential-storage-tab.tsx:232` a status query that failed states a keyring verdict it never reached | Confirmed, and the earlier nitpick fix covered only the sentence, not the headline or the inventory rows. With no data the flags are false, so the card said the OS cannot encrypt new credentials and the rows said a new sign-in is refused | Both cards take the unknown state from the tab. The headline, the sentence, the sign-in row, the provider row and the browser-storage row all say the state is not known while the query has no result, and the failed query's own message is shown when there is one |
+
+Tests for the two store fixes are in `temp-write-failure.test.ts`, which already
+interrupts a write partway: 6 tests there now, 2 new. The rename test makes the
+next rename from a temporary file fail and asserts no temporary file survives and
+the previous value still loads. The stash test fails the companion write after
+the stash and asserts the old file is back at the read path with no
+`.unreadable-*` copy left. Reverting each fix separately fails its own test and
+no other.
+
+The cookie fixes are E4: they need a running app with a sign-out or a failed
+cookie write landing inside the window, and there is no main-process test
+harness here.
+
+Gates: biome 968 files clean, `tsc --noEmit` clean, vitest 98 files with 1827
+passed and 1 skipped, `test:node` 59, contracts 382, lint 913 files clean, both
+ratchets, runtime-client 43, native check `claims_ok: true`, skills 50 of 50
+locked with 2 unrecorded.

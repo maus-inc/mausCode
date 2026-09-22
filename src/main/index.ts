@@ -108,13 +108,13 @@ export function getAuthManager(): AuthManager {
  * so nothing needs to survive a restart. A token that has already expired is
  * not written, and any cookie an earlier version left behind is removed.
  */
-async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<void> {
+async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<boolean> {
   const apiBase = getBaseUrl()
-  if (!apiBase) return
+  if (!apiBase) return false
   const expiry = new Date(expiresAt).getTime()
   if (Number.isFinite(expiry) && expiry <= Date.now()) {
     await removeDesktopTokenCookie(apiBase)
-    return
+    return false
   }
   try {
     await session.fromPartition("persist:main").cookies.set({
@@ -125,10 +125,13 @@ async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<
       secure: apiBase.startsWith("https"),
       sameSite: "lax" as const,
     })
+    return true
   } catch (error) {
     // The cookie carries control-plane requests; the session itself is already
-    // saved in the store, and the next refresh retries this.
+    // saved in the store, and the next refresh retries this. A caller that
+    // reports what happened needs to know the store refused it.
     console.warn("[Auth] Desktop token cookie could not be set:", error)
+    return false
   }
 }
 
@@ -160,7 +163,9 @@ async function writeDesktopTokenCookie(
   if (!apiBase) return false
   if (manager.getAuth()?.token !== token) return false
   await removeDesktopTokenCookie(apiBase)
-  await setDesktopTokenCookie(token, expiresAt)
+  // The cookie store can refuse the write. Reporting success after that would
+  // tell the caller an authenticated cookie is in place when none is.
+  if (!(await setDesktopTokenCookie(token, expiresAt))) return false
   if (manager.getAuth()?.token === token) return true
   await removeDesktopTokenCookie(apiBase)
   const current = manager.getAuth()
@@ -184,12 +189,18 @@ function restoreDesktopTokenCookie(manager: AuthManager): void {
   }
   void manager
     .getValidToken()
-    .then((token) => {
+    .then(async (token) => {
       // Sign-out and a sign-in as another account can both land while the token
       // is being resolved, and again while the cookie is being written. The
       // store is the arbiter, so the cookie is only left in place while the
       // session this continuation started with is still the one saved.
-      if (token === null) return undefined
+      if (token === null) {
+        // Resolving the token can fail into a sign-out, and the session that
+        // started this run is gone. A cookie an earlier version wrote with an
+        // expiry is still usable from disk, so it goes with the session.
+        if (apiBase && !manager.isAuthenticated()) await removeDesktopTokenCookie(apiBase)
+        return undefined
+      }
       const expiresAt = manager.getTokenExpiry()
       if (!expiresAt) return undefined
       return writeDesktopTokenCookie(manager, token, expiresAt)
