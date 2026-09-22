@@ -874,3 +874,28 @@ Gates: biome 968 files clean, `tsc --noEmit` clean, vitest 98 files with 1828
 passed and 1 skipped, `test:node` 59, contracts 382, lint 913 files clean, both
 ratchets, runtime-client 43, native check `claims_ok: true`, skills 50 of 50
 locked with 2 unrecorded.
+
+## Round sixteen, the three SonarCloud findings
+
+The analysis of `a19fca3` reported three new issues, all of them from this pull
+request's own new code. All three are fixed here.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `owner.ts:229` S8786, twice, on the two `=+$` expressions: super-linear backtracking | Confirmed. `=+$` backtracks once per start position when a run of padding is not at the end, which is quadratic in the length of the column, and a column can hold a whole credential blob | The padding is counted by walking the text once, the alphabet is checked character by character against a constant, and the decoded bytes are compared to the text that was stored. No regular expression remains in the check |
+| `file-secret.ts:44` S3776: `saveFileSecret` cognitive complexity 23 against a limit of 15 | Confirmed, and this pull request's own additions caused it: the rename handler and the stash restore each added nesting to a function that already had a branch per storage kind | The function is now a dispatcher over three extracted steps: `saveEncryptedSecret`, `savePlaintextSecret`, and `restoreStashedCiphertext`, with `verifyReadBack` and `removePlaintextCompanion` pulled out of the encrypted path. Behaviour is unchanged, which the existing tests hold |
+
+The rewritten check was probed against the cases that matter before it was
+trusted: padded, unpadded and singly padded encodings of the same bytes are all
+accepted; a stray character, a character outside the alphabet, and a length that
+decodes differently are refused. A 200,000 character column is checked in about
+10ms, and the invalid form exits immediately. `owner.test.ts` gained a test that
+round trips a column of that size, 16 there now.
+
+Non-vacuity after the refactor: putting the rename back outside the handler
+fails the rename test and nothing else, and the temporary file tests still pass.
+
+Gates: biome 968 files clean, `tsc --noEmit` clean, vitest 98 files with 1829
+passed and 1 skipped, `test:node` 59, contracts 382, lint 913 files clean, both
+ratchets, runtime-client 43, native check `claims_ok: true`, skills 50 of 50
+locked with 2 unrecorded.

@@ -215,6 +215,9 @@ export function decodeBytes(payload: Buffer, keychain: Keychain, context: string
   }
 }
 
+/** The characters a base64 column may hold, in the standard alphabet. */
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
 /**
  * Whether the stored text is exactly a base64 encoding of bytes, rather than
  * text a decoder would read while ignoring part of it. `Buffer.from` skips
@@ -224,9 +227,28 @@ export function decodeBytes(payload: Buffer, keychain: Keychain, context: string
  * accepted, because the bytes are what a reader takes from it.
  */
 function isCanonicalBase64(payload: string): boolean {
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) return false
-  const bytes = Buffer.from(payload, "base64")
-  return bytes.toString("base64").replace(/=+$/, "") === payload.replace(/=+$/, "")
+  const padding = countTrailingPadding(payload)
+  if (padding > 2 || padding === payload.length) return false
+  const characters = payload.slice(0, payload.length - padding)
+  for (const character of characters) {
+    if (!BASE64_ALPHABET.includes(character)) return false
+  }
+  // The decoded bytes must encode back to exactly the text that was stored,
+  // which is what rules out a character the decoder silently skipped.
+  const encoded = Buffer.from(payload, "base64").toString("base64")
+  return stripPadding(encoded) === characters
+}
+
+/** How many `=` characters the text ends with, counted in one pass. */
+function countTrailingPadding(text: string): number {
+  let end = text.length
+  while (end > 0 && text[end - 1] === "=") end -= 1
+  return text.length - end
+}
+
+/** The text without its trailing `=`, so a padded and an unpadded form compare equal. */
+function stripPadding(text: string): string {
+  return text.slice(0, text.length - countTrailingPadding(text))
 }
 
 /**

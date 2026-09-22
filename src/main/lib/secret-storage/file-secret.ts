@@ -44,47 +44,62 @@ function removeQuietly(path: string): void {
 export function saveFileSecret(secret: FileSecret, value: string): void {
   const prepared = secret.store.prepare(secret.context, value)
   ensureDir(secret.filePath)
-
   if (prepared.ciphertext) {
-    const temp = `${secret.filePath}.tmp-${process.pid}`
-    removeStaleTemps(secret.filePath, temp)
-    writeCredentialTempFile(temp, prepared.ciphertext)
-    try {
-      if (secret.store.read(readFileSync(temp), secret.context) !== value) {
-        throw new Error(
-          `${secret.context} could not be read back after encryption. Nothing was changed.`,
-        )
-      }
-    } catch (error) {
-      removeQuietly(temp)
-      throw error
-    }
-    try {
-      renameSync(temp, secret.filePath)
-    } catch (error) {
-      // The temporary file holds this credential, encrypted. A rename that did
-      // not land leaves the bytes at a name reads never look at, so they go.
-      removeQuietly(temp)
-      throw error
-    }
-    if (existsSync(secret.plaintextPath)) {
-      try {
-        unlinkSync(secret.plaintextPath)
-      } catch (error) {
-        console.error(`[SecretStore] Could not remove ${secret.plaintextPath}:`, error)
-      }
-    }
+    saveEncryptedSecret(secret, value, prepared.ciphertext)
     return
   }
+  savePlaintextSecret(secret, value)
+}
 
-  // A stored file the current keyring cannot protect would keep winning on
-  // read, so it is kept aside rather than deleted. When it cannot be moved, the
-  // old bytes would keep the new value from ever loading, so this write stops
-  // instead of saving a value the app will not read.
-  // A file at this path is the only source reads use, and the plaintext write
-  // below targets the companion instead, so the new value would never load while
-  // it is still there. The stash declines to move a file it does not recognise
-  // as ciphertext, and that refusal has to be reported rather than overwritten.
+/**
+ * Writes the ciphertext through a temporary file, reads it back, and only then
+ * replaces the stored file. A write or a rename that does not land removes the
+ * temporary file, because it holds the credential.
+ */
+function saveEncryptedSecret(secret: FileSecret, value: string, ciphertext: Buffer): void {
+  const temp = `${secret.filePath}.tmp-${process.pid}`
+  removeStaleTemps(secret.filePath, temp)
+  writeCredentialTempFile(temp, ciphertext)
+  try {
+    verifyReadBack(secret, value, temp)
+    renameSync(temp, secret.filePath)
+  } catch (error) {
+    // The temporary file holds this credential, encrypted, at a name reads
+    // never look at. A write or a rename that did not land leaves those bytes
+    // behind unless they are removed here.
+    removeQuietly(temp)
+    throw error
+  }
+  removePlaintextCompanion(secret)
+}
+
+function verifyReadBack(secret: FileSecret, value: string, temp: string): void {
+  const readBack = secret.store.read(readFileSync(temp), secret.context)
+  if (readBack === value) return
+  throw new Error(`${secret.context} could not be read back after encryption. Nothing was changed.`)
+}
+
+/** The encrypted file is the only source reads use, so the companion goes with it. */
+function removePlaintextCompanion(secret: FileSecret): void {
+  if (!existsSync(secret.plaintextPath)) return
+  try {
+    unlinkSync(secret.plaintextPath)
+  } catch (error) {
+    console.error(`[SecretStore] Could not remove ${secret.plaintextPath}:`, error)
+  }
+}
+
+/**
+ * Writes a value that may only be stored in the clear. A stored file the current
+ * keyring cannot protect would keep winning on read, so it is kept aside rather
+ * than deleted. When it cannot be moved, the old bytes would keep the new value
+ * from ever loading, so this write stops instead of saving a value the app will
+ * not read. A file at this path is the only source reads use, and the write
+ * below targets the companion instead, so the new value would never load while
+ * it is still there. The stash declines to move a file it does not recognise as
+ * ciphertext, and that refusal has to be reported rather than overwritten.
+ */
+function savePlaintextSecret(secret: FileSecret, value: string): void {
   const stashed = stashUnreadableCiphertext(secret.filePath, secret.keychain, secret.context)
   if (!stashed.stashed && existsSync(secret.filePath)) {
     const reason = stashed.reason ? `: ${stashed.reason}` : "."
@@ -98,21 +113,26 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
   try {
     savePlaintextCompanion(secret, value)
   } catch (error) {
-    // The old ciphertext was moved aside to let this value load. The new value
-    // did not land, so putting the old file back keeps the credential readable
-    // at the path reads use instead of stranding it under a recovery name.
-    if (stashed.path !== null && !existsSync(secret.filePath)) {
-      try {
-        renameSync(stashed.path, secret.filePath)
-      } catch (restoreError) {
-        console.warn(
-          `[SecretStore] The saved ${secret.context} could not be put back at ` +
-            `${secret.filePath}, so it stays at ${stashed.path}:`,
-          restoreError,
-        )
-      }
-    }
+    restoreStashedCiphertext(secret, stashed.path)
     throw error
+  }
+}
+
+/**
+ * Puts a file that was moved aside back at the path reads use. The new value did
+ * not land, so the credential would otherwise sit under a recovery name nothing
+ * reads while the app reports nothing saved.
+ */
+function restoreStashedCiphertext(secret: FileSecret, stashedPath: string | null): void {
+  if (stashedPath === null || existsSync(secret.filePath)) return
+  try {
+    renameSync(stashedPath, secret.filePath)
+  } catch (restoreError) {
+    console.warn(
+      `[SecretStore] The saved ${secret.context} could not be put back at ` +
+        `${secret.filePath}, so it stays at ${stashedPath}:`,
+      restoreError,
+    )
   }
 }
 

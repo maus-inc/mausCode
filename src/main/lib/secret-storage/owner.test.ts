@@ -89,6 +89,17 @@ describe("secret storage owner", () => {
     expect(inspectStoredBase64("aGVsbG8=")).toBe("plaintext")
   })
 
+  it("round trips a large column without scanning it quadratically", () => {
+    const keychain = fakeKeychain()
+    // A text column can hold a whole credential blob, and the check walks the
+    // characters once, so a column of this size is read in a few milliseconds.
+    const value = `sk-${"a".repeat(200_000)}`
+    const encoded = Buffer.from(value, "utf-8").toString("base64")
+    const started = Date.now()
+    expect(decodeStoredBase64(encoded, keychain, "The key").value).toBe(value)
+    expect(Date.now() - started).toBeLessThan(1000)
+  })
+
   it("refuses a plaintext write without consent and allows it with consent", () => {
     const keychain = fakeKeychain({ available: false })
     const base = { keychain, context: "This credential" }
