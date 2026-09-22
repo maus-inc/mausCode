@@ -968,6 +968,14 @@ settings page's rendering is still E4 because the app cannot be launched here;
 the Rust handoff, `ts:check`, the renderer build and `package:mac` are unchanged
 E4 and owned by CI or the human.
 
+### One SonarCloud smell from the pass
+
+The analysis of the pass reported one new issue in this pull request's own new
+code, `typescript:S3358` at `agents-credential-storage-tab.tsx`, the nested
+ternary that chose the wash behind the keyring icon. It is now a named function
+of the verdict with one return per state, which is also what the rule asks for.
+No other issue, no security hotspot, and duplication on new code stays 0.0%.
+
 ### CI on the pass, one unreadable failure
 
 The quality job on `700aeeb` failed in its node:test step while vitest, lint and

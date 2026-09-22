@@ -167,7 +167,7 @@ function ProtectionCard({
           <div
             className={cn(
               "mt-0.5 flex h-8 w-8 items-center justify-center rounded-md",
-              unknown ? "bg-muted" : protectedByOs ? "bg-emerald-500/10" : "bg-amber-500/10",
+              keyringTileClass(verdict),
             )}
           >
             {protectedByOs ? (
@@ -298,6 +298,15 @@ function InventoryCard({
       </ul>
     </div>
   )
+}
+
+/**
+ * The wash behind the keyring icon. It is muted while the status is not known,
+ * because neither the protected nor the unprotected wash is true then.
+ */
+function keyringTileClass(verdict: ProtectionVerdict): string {
+  if (verdict.unknown) return "bg-muted"
+  return verdict.protectedByOs ? "bg-emerald-500/10" : "bg-amber-500/10"
 }
 
 function StorageRow({
