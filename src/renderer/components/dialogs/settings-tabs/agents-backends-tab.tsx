@@ -60,9 +60,9 @@ function FactHeading({ children }: { readonly children: ReactNode }) {
   )
 }
 
-/** A joined list, or the placeholder this card already used for an empty one. */
+/** A joined list, or `none` when the capability records no value. */
 function joinedOrDash(values: string[]): string {
-  return values.join(", ") || "—"
+  return values.join(", ") || "none"
 }
 
 function permissionFloorLabel(floor: ProviderCapability["security"]["permissionFloor"]): string {
@@ -185,10 +185,10 @@ export function AgentsBackendsTab() {
       )}
 
       {listQuery.isLoading && (
-        <div className="text-sm text-muted-foreground">Loading backends…</div>
+        <div className="text-sm text-muted-foreground">Loading backends...</div>
       )}
       {listQuery.isError && (
-        <div className="text-sm text-red-500">
+        <div className="text-sm text-red-600 dark:text-red-400">
           Could not load backends: {listQuery.error.message}
         </div>
       )}

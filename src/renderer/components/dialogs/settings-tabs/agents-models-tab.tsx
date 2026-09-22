@@ -302,7 +302,7 @@ function NativeEndpointsSection() {
       if (next.openaiBaseUrl === savedOpenai && next.anthropicBaseUrl === savedAnthropic) return
       setMutation.mutate(next, {
         onSuccess: () => {
-          toast.success("Native endpoints saved — daemon restarted")
+          toast.success("Native endpoints saved and the daemon restarted")
           void trpcUtils.runtime.endpoints.get.invalidate()
         },
         onError: (err) => toast.error(`Failed to save endpoints: ${err.message}`),
@@ -337,7 +337,7 @@ function NativeEndpointsSection() {
         <p className="text-xs text-muted-foreground">
           Daemon-level custom endpoints for the Native engine (applied at daemon start; saving
           restarts the daemon, sessions persist). A native chat's custom base URL must match one of
-          these — or an ambient *_BASE_URL env var — or the turn is refused.
+          these, or an ambient *_BASE_URL env var, or the turn is refused.
         </p>
       </div>
       <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -494,7 +494,7 @@ export function AgentsModelsTab() {
         savedConfigRef.current = next
       }
     } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
-      // All cleared — reset
+      // All cleared, so reset
       if (
         savedConfigRef.current.model ||
         savedConfigRef.current.token ||
@@ -730,7 +730,7 @@ export function AgentsModelsTab() {
     try {
       await setOpenAIKeyMutation.mutateAsync({ key: previous })
     } catch {
-      toast.error("The OpenAI API key could not be restored in this session. Check it again.")
+      toast.error("The OpenAI API key could not be put back. Try saving it again.")
     }
     await trpcUtils.voice.isAvailable.invalidate()
     return true
@@ -962,7 +962,7 @@ export function AgentsModelsTab() {
             <h4 className="text-sm font-medium text-foreground">Gemini Account</h4>
             <p className="text-xs text-muted-foreground">
               {hasGeminiKey
-                ? `API key saved by the app · ${geminiMaskedKey}`
+                ? `API key saved in this app's store · ${geminiMaskedKey}`
                 : hasGeminiCliAuth
                   ? `Gemini CLI connected via ${geminiCliStatus?.authSource ?? "local auth"}`
                   : "Connect a Google AI Studio API key or run `gemini` to sign in"}
@@ -1019,7 +1019,7 @@ export function AgentsModelsTab() {
             <h4 className="text-sm font-medium text-foreground">OpenRouter Account</h4>
             <p className="text-xs text-muted-foreground">
               {hasOpenRouterKey
-                ? `API key saved by the app · ${openRouterMaskedKey}`
+                ? `API key saved in this app's store · ${openRouterMaskedKey}`
                 : "Connect an OpenRouter API key (openrouter.ai/keys)"}
             </p>
           </div>

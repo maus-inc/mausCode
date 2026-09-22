@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest"
 import {
+  browserRow,
   browserState,
   describeRefusal,
   describeRendererStorage,
@@ -17,6 +18,7 @@ import {
   type StatusData,
   storedDetail,
   storedState,
+  UNKNOWN_DETAIL,
   UNKNOWN_STATE,
 } from "./credential-storage-state"
 
@@ -179,18 +181,50 @@ describe("credential storage rows", () => {
     expect(storedState(refused, null, "Failed").label).toBe("New: refused")
   })
 
+  it("reads the store row only from a status the main process confirmed", () => {
+    const stale = status({ rendererKeysStored: ["a", "b"] })
+    // The failed query leaves the count in the cache, and a pill drawn from it
+    // would report a store the page has just said it cannot read.
+    expect(browserRow(stale, unknownVerdict)).toEqual({
+      detail: UNKNOWN_DETAIL,
+      state: UNKNOWN_STATE,
+    })
+    expect(browserRow(undefined, unknownVerdict)).toEqual(
+      expect.objectContaining({ state: UNKNOWN_STATE }),
+    )
+    expect(browserRow(status({ rendererKeysStored: ["a", "b"] }), encrypted)).toEqual({
+      detail: "2 provider values are saved in this app's store, which is not browser storage",
+      state: { tone: "ok", label: "Saved here" },
+    })
+    expect(browserRow(status({ rendererKeysStored: [] }), encrypted)).toEqual({
+      detail: "No provider value is saved in this app's store",
+      state: { tone: "mute", label: "Nothing saved" },
+    })
+    expect(browserRow(status({ rendererError: "the file could not be read" }), encrypted)).toEqual({
+      detail: "the file could not be read",
+      state: { tone: "bad", label: "Unreadable" },
+    })
+  })
+
   it("names where a renderer value is stored, or that there is none", () => {
+    // The label on the row names the app's own store, so the pill says the value
+    // is saved there rather than naming a store the row does not report on.
     expect(browserState(null, 0)).toEqual({ tone: "mute", label: "Nothing saved" })
-    expect(browserState(null, 2)).toEqual({ tone: "ok", label: "In the app store" })
+    expect(browserState(null, 2)).toEqual({ tone: "ok", label: "Saved here" })
     expect(browserState("the file could not be read", 2)).toEqual({
       tone: "bad",
       label: "Unreadable",
     })
   })
 
-  it("explains the renderer row in a sentence", () => {
+  it("counts the renderer values in a sentence rather than writing a plural hint", () => {
     expect(describeRendererStorage(null, 0)).toBe("No provider value is saved in this app's store")
-    expect(describeRendererStorage(null, 1)).toContain("1 provider value(s)")
+    expect(describeRendererStorage(null, 1)).toBe(
+      "1 provider value is saved in this app's store, which is not browser storage",
+    )
+    expect(describeRendererStorage(null, 3)).toBe(
+      "3 provider values are saved in this app's store, which is not browser storage",
+    )
     expect(describeRendererStorage("the file could not be read", 1)).toBe(
       "the file could not be read",
     )

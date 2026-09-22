@@ -409,9 +409,11 @@ default are out. Content is plain text, or a title plus a `Kbd` such as
 
 **Badges and dots.** Count pill is `rounded-full bg-primary/10 text-primary`.
 Status pill is `inline-flex items-center rounded-full px-2 py-0.5 text-xs
-font-medium` over a 10 percent wash with solid-500 text. Dots are `w-1.5 h-1.5`
-in rows and `w-2 h-2` in status wells. Priority order for a corner badge:
-question, loader, plan, unseen.
+font-medium` over a 10 percent wash with solid-700 text in light and solid-400 in
+dark, the step that clears 4.5:1 at that size; the mute tone is
+`bg-foreground/5 text-foreground/60`. Dots are `w-1.5 h-1.5` in rows and `w-2
+h-2` in status wells. Priority order for a corner badge: question, loader, plan,
+unseen.
 
 **Inputs.** Settings search is `h-7 w-full rounded-lg text-sm bg-muted
 border border-input px-3 placeholder:text-muted-foreground/40 outline-none`. The

@@ -1,3 +1,5 @@
+import { pluralize } from "../../../lib/utils/pluralize"
+
 /**
  * What the credential storage page says, kept apart from how it looks.
  *
@@ -124,15 +126,33 @@ export function browserState(error: string | null, stored: number): RowState {
   if (error) return { tone: "bad", label: "Unreadable" }
   // The app store holds whatever was saved there, migrated or written directly,
   // so the pill names the location rather than how the value arrived.
-  return stored > 0
-    ? { tone: "ok", label: "In the app store" }
-    : { tone: "mute", label: "Nothing saved" }
+  return stored > 0 ? { tone: "ok", label: "Saved here" } : { tone: "mute", label: "Nothing saved" }
+}
+
+/**
+ * The row that reports the app's own store.
+ *
+ * A failed status query leaves the previous answer in the cache, so the row
+ * reads its count and its error only from a status the main process confirmed.
+ * Without that gate a stale count would draw a pill about a store the page has
+ * just said it cannot read.
+ */
+export function browserRow(
+  data: StatusData | undefined,
+  verdict: ProtectionVerdict,
+): { detail: string; state: RowState } {
+  if (verdict.unknown) return { detail: UNKNOWN_DETAIL, state: UNKNOWN_STATE }
+  const stored = data?.rendererKeysStored?.length ?? 0
+  const error = data?.rendererError ?? null
+  return { detail: describeRendererStorage(error, stored), state: browserState(error, stored) }
 }
 
 export function describeRendererStorage(error: string | null, stored: number): string {
   if (error) return error
   if (stored > 0) {
-    return `${stored} provider value(s) are saved in this app's store, which is not browser storage`
+    const values = pluralize(stored, "provider value")
+    const verb = stored === 1 ? "is" : "are"
+    return `${stored} ${values} ${verb} saved in this app's store, which is not browser storage`
   }
   return "No provider value is saved in this app's store"
 }

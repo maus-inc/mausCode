@@ -354,7 +354,7 @@ export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
 // When enabled, allow rollback to previous assistant messages
 export const historyEnabledAtom = atomWithStorage<boolean>(
   "preferences:history-enabled",
-  false, // Default OFF — beta feature
+  false, // Default OFF, beta feature
   undefined,
   { getOnInit: true },
 )
@@ -432,7 +432,7 @@ export const betaGitFeaturesEnabledAtom = atomWithStorage<boolean>(
 // When enabled, shows Kanban button in sidebar to view workspaces as a board
 export const betaKanbanEnabledAtom = atomWithStorage<boolean>(
   "preferences:beta-kanban-enabled",
-  true, // Default ON — graduated from beta
+  true, // Default ON, graduated from beta
   undefined,
   { getOnInit: true },
 )

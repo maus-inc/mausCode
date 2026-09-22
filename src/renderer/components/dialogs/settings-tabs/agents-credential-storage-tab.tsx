@@ -17,8 +17,7 @@ import { Button } from "../../ui/button"
 import { StatusPill } from "../../ui/status-pill"
 import { Switch } from "../../ui/switch"
 import {
-  browserState,
-  describeRendererStorage,
+  browserRow,
   type ProtectionVerdict,
   protectionDetail,
   protectionHeadline,
@@ -28,7 +27,6 @@ import {
   storedDetail,
   storedState,
   UNKNOWN_DETAIL,
-  UNKNOWN_STATE,
 } from "./credential-storage-state"
 
 /**
@@ -57,8 +55,8 @@ export function AgentsCredentialStorageTab() {
   const verdict = protectionVerdict(data, status.error)
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col space-y-1">
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col space-y-1.5 text-center sm:text-left">
         <h3 className="text-sm font-semibold text-foreground">Credential storage</h3>
         <p className="text-xs text-muted-foreground">
           Where this app keeps your sign-in and provider keys, and whether the operating system
@@ -117,7 +115,7 @@ export function AgentsCredentialStorageTab() {
       </div>
 
       {setConsent.isError && (
-        <p className="text-xs text-destructive">
+        <p className="text-xs text-red-600 dark:text-red-400">
           {setConsent.error instanceof Error
             ? setConsent.error.message
             : "The plaintext setting could not be changed."}
@@ -129,6 +127,7 @@ export function AgentsCredentialStorageTab() {
         size="sm"
         onClick={() => void status.refetch()}
         disabled={status.isFetching}
+        aria-busy={status.isFetching}
       >
         <RefreshCw className={cn("mr-2 h-4 w-4", status.isFetching && "animate-spin")} />
         Check again
@@ -163,34 +162,36 @@ function ProtectionCard({
   return (
     <div className="bg-background rounded-lg border border-border overflow-hidden">
       <div className="flex items-start justify-between gap-4 p-4">
-        <div className="flex items-start gap-3">
+        <div className="flex min-w-0 items-start gap-3">
           <div
             className={cn(
-              "mt-0.5 flex h-8 w-8 items-center justify-center rounded-md",
+              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
               keyringTileClass(verdict),
             )}
           >
             {protectedByOs ? (
-              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
             ) : (
               <ShieldOff
                 className={cn(
                   "h-4 w-4",
-                  unknown ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400",
+                  unknown ? "text-muted-foreground" : "text-amber-700 dark:text-amber-400",
                 )}
               />
             )}
           </div>
-          <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">{headline}</span>
-            <span className="text-xs text-muted-foreground">{detail}</span>
+          <div className="flex min-w-0 flex-col space-y-1">
+            <span role="status" className="text-sm font-medium text-foreground">
+              {headline}
+            </span>
+            <span className="text-xs text-muted-foreground break-words">{detail}</span>
           </div>
         </div>
         {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
       <div className="flex items-center justify-between gap-4 border-t border-border p-4">
-        <div className="flex flex-col space-y-1">
+        <div className="flex min-w-0 flex-col space-y-1">
           <label htmlFor="plaintext-consent" className="text-sm font-medium text-foreground">
             Allow plaintext when encryption is not available
           </label>
@@ -213,7 +214,7 @@ function ProtectionCard({
 
       {consentOn && (
         <div className="border-t border-border bg-amber-500/10 p-4">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-foreground break-words">
             Plaintext permission is on
             {data?.plaintextConsentAt
               ? `, granted ${new Date(data.plaintextConsentAt).toLocaleString()}`
@@ -236,9 +237,10 @@ function InventoryCard({
   readonly data: StatusData | undefined
 }) {
   const { unknown } = verdict
-  const stored = data?.rendererKeysStored?.length ?? 0
-  const rendererDetail = describeRendererStorage(data?.rendererError ?? null, stored)
-  const providerReadErrors = data?.providerReadErrors ?? []
+  const store = browserRow(data, verdict)
+  // A failed status query keeps the last answer in the cache, so every row reads
+  // its own failure only from a status the main process confirmed.
+  const providerReadErrors = unknown ? [] : (data?.providerReadErrors ?? [])
   const providerIssue =
     providerReadErrors.length > 0
       ? providerReadErrors.map(({ provider, error }) => `${provider}: ${error}`).join(" ")
@@ -253,32 +255,32 @@ function InventoryCard({
         <StorageRow
           label="Sign-in session"
           detail={
-            data?.signInFailure ??
-            (unknown
+            unknown
               ? UNKNOWN_DETAIL
-              : storedDetail(
+              : (data?.signInFailure ??
+                storedDetail(
                   verdict,
                   "The next sign-in is encrypted by the OS keyring.",
                   "The next sign-in is written in plaintext, because you allowed it.",
                   "A new sign-in is not written when it cannot be encrypted.",
                 ))
           }
-          state={storedState(verdict, data?.signInFailure ?? null, "Failed")}
+          state={storedState(verdict, unknown ? null : (data?.signInFailure ?? null), "Failed")}
         />
         <StorageRow
           label="Provider keys and accounts"
           detail={
-            providerIssue ??
-            (unknown
+            unknown
               ? UNKNOWN_DETAIL
-              : storedDetail(
+              : (providerIssue ??
+                storedDetail(
                   verdict,
                   "New keys are encrypted by the OS keyring.",
                   "New keys are written in plaintext, because you allowed it.",
                   "Existing keys stay readable; new ones are refused.",
                 ))
           }
-          state={storedState(verdict, providerIssue, "Unreadable")}
+          state={storedState(verdict, unknown ? null : providerIssue, "Unreadable")}
         />
         <StorageRow
           label="Claude CLI credentials"
@@ -290,11 +292,7 @@ function InventoryCard({
           detail="The native runtime writes a key it is handed as a plaintext file in the app's private folder. The app clears that folder before the runtime starts and after it stops, so a key does not survive a run."
           state={{ tone: "warn", label: "Plaintext during a run" }}
         />
-        <StorageRow
-          label="Browser storage"
-          detail={unknown ? UNKNOWN_DETAIL : rendererDetail}
-          state={unknown ? UNKNOWN_STATE : browserState(data?.rendererError ?? null, stored)}
-        />
+        <StorageRow label="App credential store" detail={store.detail} state={store.state} />
       </ul>
     </div>
   )
@@ -320,9 +318,9 @@ function StorageRow({
 }) {
   return (
     <li className="flex items-start justify-between gap-4 p-4">
-      <div className="flex flex-col space-y-1">
+      <div className="flex min-w-0 flex-col space-y-1">
         <span className="text-sm text-foreground">{label}</span>
-        <span className="text-xs text-muted-foreground">{detail}</span>
+        <span className="text-xs text-muted-foreground break-words">{detail}</span>
       </div>
       <StatusPill tone={state.tone} className="mt-0.5 shrink-0">
         {state.label}
