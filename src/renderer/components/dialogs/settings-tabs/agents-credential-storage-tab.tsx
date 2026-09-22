@@ -56,8 +56,11 @@ export function AgentsCredentialStorageTab() {
   const data: StatusData | undefined = status.data
   const protectedByOs = data?.protection === "os-encryption" && data.encryptionAvailable === true
   const consentOn = data?.plaintextConsent === true
-  // No result yet, so the page has no verdict to state about the keyring.
-  const unknown = data === undefined
+  // The page states a verdict only from a status the main process confirmed. A
+  // query that failed leaves the previous answer in the cache, and presenting
+  // that as the current state would report a keyring decision the app cannot
+  // stand behind now, next to the error that says the read failed.
+  const unknown = data === undefined || status.error !== null
 
   return (
     <div className="space-y-6">

@@ -849,3 +849,28 @@ Gates: biome 968 files clean, `tsc --noEmit` clean, vitest 98 files with 1827
 passed and 1 skipped, `test:node` 59, contracts 382, lint 913 files clean, both
 ratchets, runtime-client 43, native check `claims_ok: true`, skills 50 of 50
 locked with 2 unrecorded.
+
+## Round fifteen, the settle step, the decoder and a stale answer
+
+CodeAnt reviewed `dac468b` and left three findings. All three were real and are
+fixed here.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `index.ts:173` CRITICAL the fallback cookie write is not serialized, so an older continuation can restore a token after the session changed | Confirmed, and it was two gaps. The first write was settled against the store, but the fallback write after it was not, so a logout landing during that write left the cookie behind. Nothing serialized cookie work either, so two writers could interleave their remove and set | Cookie work now runs one task at a time through a queue, and `writeDesktopTokenCookieNow` settles in a loop: each round writes the cookie for whatever session the store holds and checks again, up to three rounds. A session that keeps changing takes the cookie back rather than leave one that may belong to an account the app has left. The direct `...Now` helpers run inside a task, the queued ones only from outside, so nothing waits on itself |
+| `owner.ts:228` `Buffer.from` ignores invalid base64, so malformed database text can decode into readable bytes and be returned as a credential | Confirmed by probe. `Buffer.from("aGVsbG8=!", "base64")` drops the stray character and yields "hello", which `decodeBytes` returns as a plaintext credential because the bytes are valid UTF-8 | `isCanonicalBase64` requires the text to be exactly a base64 encoding of the bytes it decodes to, accepting an unpadded payload because it carries the same bytes. Text that fails is refused with a typed error instead of being read as whatever the decoder made of part of it, and the status reader reports it as unknown rather than describing it |
+| `agents-credential-storage-tab.tsx:60` after a failed refetch the cached data keeps `unknown` false, so stale protection and inventory read as current beside a separate error | Confirmed. A failed query keeps the previous answer in the React Query cache, and only a missing result was treated as unknown | `unknown` is true while there is no result or the query is in an error state, so the headline, the rows and the sentence all say the state is not known, and the query's own message is what the sentence shows |
+
+Tests: `owner.test.ts` gains one, 15 there now. It asserts that the payload with a
+stray character is refused, that its inspection is unknown, and that the same
+text without the stray character still reads as the legacy plaintext value this
+store writes. The test was written first and failed against the unfixed code.
+
+The cookie serialization and the settle loop are E4: they need a running app with
+a sign-out landing inside a cookie write, and there is no main-process test
+harness here. The renderer change is E4 for the same reason.
+
+Gates: biome 968 files clean, `tsc --noEmit` clean, vitest 98 files with 1828
+passed and 1 skipped, `test:node` 59, contracts 382, lint 913 files clean, both
+ratchets, runtime-client 43, native check `claims_ok: true`, skills 50 of 50
+locked with 2 unrecorded.

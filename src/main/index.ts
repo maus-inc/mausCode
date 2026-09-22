@@ -113,7 +113,9 @@ async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<
   if (!apiBase) return false
   const expiry = new Date(expiresAt).getTime()
   if (Number.isFinite(expiry) && expiry <= Date.now()) {
-    await removeDesktopTokenCookie(apiBase)
+    // The direct call: this runs inside the queued write when a token is
+    // already expired, and the queued form would wait on its own task.
+    await removeDesktopTokenCookieNow(apiBase)
     return false
   }
   try {
@@ -135,8 +137,8 @@ async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<
   }
 }
 
-/** Drops the control-plane cookie, so a rotated or expired token cannot linger. */
-async function removeDesktopTokenCookie(apiBase: string): Promise<void> {
+/** Drops the control-plane cookie. Callers inside a queued task use this one. */
+async function removeDesktopTokenCookieNow(apiBase: string): Promise<void> {
   try {
     await session.fromPartition("persist:main").cookies.remove(apiBase, "x-desktop-token")
   } catch (error) {
@@ -145,16 +147,43 @@ async function removeDesktopTokenCookie(apiBase: string): Promise<void> {
 }
 
 /**
+ * Cookie work runs one task at a time. A write, the check that follows it and
+ * the fallback write are a single decision, and two of them interleaving their
+ * removes and sets would leave whichever cookie store command happened to run
+ * last, which is not necessarily the session that is saved. Tasks run through
+ * `cookieTasks`, and the `...Now` helpers run inside one.
+ */
+let cookieTasks: Promise<unknown> = Promise.resolve()
+
+function runCookieTask<T>(task: () => Promise<T>): Promise<T> {
+  const result = cookieTasks.then(task, task)
+  cookieTasks = result.then(
+    () => {},
+    () => {},
+  )
+  return result
+}
+
+/** Drops the control-plane cookie, so a rotated or expired token cannot linger. */
+function removeDesktopTokenCookie(apiBase: string): Promise<void> {
+  return runCookieTask(() => removeDesktopTokenCookieNow(apiBase))
+}
+
+/** How many times the pair of writes may chase a session change before giving up. */
+const COOKIE_SETTLE_ROUNDS = 3
+
+/**
  * Writes the control-plane cookie for the session that is saved right now, then
  * settles it against the store. A sign-out or a newer sign-in can land while the
- * cookie store is accepting the write, and no check before the write can see
- * that. When the saved session changed, the cookie this call wrote holds a token
- * the app no longer uses, so it is taken back and the saved session's own cookie
- * is written in its place.
+ * cookie store is accepting a write, and no check before the write can see that.
+ * Each round writes the cookie for whatever the store holds now and checks
+ * again, so the cookie left in place is the saved session's. A session that kept
+ * changing takes the cookie back instead of leaving one that may belong to an
+ * account the app has left.
  *
  * Returns whether the cookie in place belongs to the session this call was for.
  */
-async function writeDesktopTokenCookie(
+async function writeDesktopTokenCookieNow(
   manager: AuthManager,
   token: string,
   expiresAt: string,
@@ -162,16 +191,31 @@ async function writeDesktopTokenCookie(
   const apiBase = getBaseUrl()
   if (!apiBase) return false
   if (manager.getAuth()?.token !== token) return false
-  await removeDesktopTokenCookie(apiBase)
+  await removeDesktopTokenCookieNow(apiBase)
   // The cookie store can refuse the write. Reporting success after that would
   // tell the caller an authenticated cookie is in place when none is.
   if (!(await setDesktopTokenCookie(token, expiresAt))) return false
-  if (manager.getAuth()?.token === token) return true
-  await removeDesktopTokenCookie(apiBase)
-  const current = manager.getAuth()
-  const currentExpiry = manager.getTokenExpiry()
-  if (current && currentExpiry) await setDesktopTokenCookie(current.token, currentExpiry)
+  let written = token
+  for (let round = 0; round < COOKIE_SETTLE_ROUNDS; round += 1) {
+    const saved = manager.getAuth()
+    if (saved?.token === written) return written === token
+    await removeDesktopTokenCookieNow(apiBase)
+    const expiry = manager.getTokenExpiry()
+    if (!saved || !expiry) return false
+    if (!(await setDesktopTokenCookie(saved.token, expiry))) return false
+    written = saved.token
+  }
+  if (manager.getAuth()?.token !== written) await removeDesktopTokenCookieNow(apiBase)
   return false
+}
+
+/** The queued entry point, so this decision never overlaps another cookie task. */
+function writeDesktopTokenCookie(
+  manager: AuthManager,
+  token: string,
+  expiresAt: string,
+): Promise<boolean> {
+  return runCookieTask(() => writeDesktopTokenCookieNow(manager, token, expiresAt))
 }
 
 /**

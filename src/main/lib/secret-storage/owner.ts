@@ -168,6 +168,9 @@ export function inspectBytes(payload: Buffer): SecretProtection | "unknown" {
 
 /** Stored text columns hold base64 of the bytes a file would hold. */
 export function inspectStoredBase64(payload: string): SecretProtection | "unknown" {
+  // Text this store did not write has no protection to report, which keeps the
+  // status page from describing a value that will not be read.
+  if (!isCanonicalBase64(payload)) return "unknown"
   return inspectBytes(Buffer.from(payload, "base64"))
 }
 
@@ -212,7 +215,25 @@ export function decodeBytes(payload: Buffer, keychain: Keychain, context: string
   }
 }
 
-/** Decodes a base64 text column written by this store or an earlier version. */
+/**
+ * Whether the stored text is exactly a base64 encoding of bytes, rather than
+ * text a decoder would read while ignoring part of it. `Buffer.from` skips
+ * characters outside the alphabet and a bad padding without saying so, so a
+ * corrupted or foreign column could decode into different bytes and be handed
+ * back as a credential. An unpadded payload decodes to the same bytes and is
+ * accepted, because the bytes are what a reader takes from it.
+ */
+function isCanonicalBase64(payload: string): boolean {
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) return false
+  const bytes = Buffer.from(payload, "base64")
+  return bytes.toString("base64").replace(/=+$/, "") === payload.replace(/=+$/, "")
+}
+
+/**
+ * Decodes a base64 text column written by this store or an earlier version.
+ * Text that is not a base64 encoding of the bytes it would decode to is refused
+ * rather than read as whatever the decoder made of part of it.
+ */
 export function decodeStoredBase64(
   payload: string,
   keychain: Keychain,
@@ -220,6 +241,12 @@ export function decodeStoredBase64(
 ): DecodeResult {
   if (!payload) {
     throw new SecretStorageError("ciphertext-unreadable", `${context} is empty`)
+  }
+  if (!isCanonicalBase64(payload)) {
+    throw new SecretStorageError(
+      "ciphertext-unreadable",
+      `${context} is stored in a form this app did not write. The saved value is kept unchanged.`,
+    )
   }
   const bytes = Buffer.from(payload, "base64")
   if (bytes.length === 0) {

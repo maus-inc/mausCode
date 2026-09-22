@@ -77,6 +77,18 @@ describe("secret storage owner", () => {
     )
   })
 
+  it("refuses text whose characters the decoder would ignore", () => {
+    const keychain = fakeKeychain()
+    // Decoding this drops the bang and yields "hello", so a corrupted column
+    // would be handed back as a credential instead of being refused.
+    expect(Buffer.from("aGVsbG8=!", "base64").toString("utf-8")).toBe("hello")
+    expect(() => decodeStoredBase64("aGVsbG8=!", keychain, "The key")).toThrow(SecretStorageError)
+    expect(inspectStoredBase64("aGVsbG8=!")).toBe("unknown")
+    // The same text without the stray character is a value this store wrote.
+    expect(decodeStoredBase64("aGVsbG8=", keychain, "The key").value).toBe("hello")
+    expect(inspectStoredBase64("aGVsbG8=")).toBe("plaintext")
+  })
+
   it("refuses a plaintext write without consent and allows it with consent", () => {
     const keychain = fakeKeychain({ available: false })
     const base = { keychain, context: "This credential" }
