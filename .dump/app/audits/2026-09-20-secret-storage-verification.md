@@ -791,3 +791,31 @@ fixed in `efa8330`; the fourth is declined with the reason recorded here.
 | A refused or failed sign-in save is labeled "Unreadable" | Confirmed. `AuthStore.lastFailure` is set by saves, reads, migrations and removals, and the sign-in row labeled all four the same way | The row names its own failure. The provider rows still say "Unreadable", because their failures come from `providerReadErrors`, which only reports reads |
 | Any value in the app store is labeled "Moved to the app store" | Confirmed. The status lists the keys the store holds, whether they were migrated from browser storage or written there directly | The row says "In the app store" or "Nothing saved", and the caption counts the provider values the store holds without claiming where they came from |
 | Each session keeps a ledger entry for the process lifetime | Declined. The generation number must never be handed out twice: a release from an older turn can be queued after the same session's newer turn has written its keys, and a reused number would make that release clear the newer keys, which is the defect the numbering was added to fix. One string and one number per session is the price, and the comment on the map now says so | Comment on `generations` |
+
+## Round thirteen, four findings on the cookie, the protocol and the release
+
+CodeAnt reviewed `8642017` and left four findings. Three are fixed in the same
+commit; the fourth is fixed one step further than the finding asked.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `src/main/index.ts:168` a stale continuation can recreate the signed-out session's cookie | Confirmed. The session was checked, then the cookie was written, and a sign-out or a newer sign-in landing during the write left the older token in the store | `writeDesktopTokenCookie` re-checks the store after the write. When the saved session changed, the token it wrote is taken back and the saved session's own cookie is written in its place, so the cookie matches the store instead of an account the app has left. The same step now runs on all three cookie paths: startup restore, the deep-link exchange, and the refresh callback, which had the same window and was not reported |
+| `docs/protocol.md:86` the registry does not always prefer an ephemeral key, because the inherited environment is checked first | Confirmed by reading `load_api_key_from_env_or_config`. The environment is read before `ephemeral::lookup`, and before the provider file | The section now states the whole order: process environment, then a held key, then the provider file, and says plainly that a key handed for a variable the daemon inherits is not the one that takes effect. The claim about the two stores keeping a held key ahead of the provider file stands on its own |
+| `docs/protocol.md:97` the persistence invariant is not enforced by the protocol, because message and tool-output fields are free-form | Confirmed as a wording problem. The invariant read as though the wire format carried the guarantee | The bullet is split. One rule says which requests carry values, the other says implementations keep key material out of logs, telemetry, crash reports, persisted transcripts and any other persisted frame, and names the reason the redaction lives there: the wire format cannot inspect free-form message content or tool output |
+| `src/main/lib/runtime/trpc/routers/runtime.ts:262` the release is fire-and-forget, so a transient daemon failure leaves the key held | Confirmed. The turn that asks for the release has already ended, so nothing goes back for the key, and the daemon holds one value per provider variable for its whole life | The release now retries a retained provider up to three times, 250ms apart, re-planning each time through the ledger, which is what keeps ownership of a key the daemon did not clear. After the last attempt the provider stays owned exactly as before, so a later release can still try |
+
+The environment precedence has a consequence worth recording: when the daemon
+inherits `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, the app still hands over the
+stored token for that provider, and the daemon uses the environment value
+instead. Kept as it is, because the effective value is the same either way and
+changing which one the app offers would change what the turn reports. The
+protocol section now says so rather than leaving it to be discovered.
+
+Gates on the tree with all four: biome 968 files clean, `tsc --noEmit` clean,
+vitest 98 files with 1825 passed and 1 skipped, `test:node` 59, contracts 382,
+lint 913 files clean, both ratchets, runtime-client 43, native check
+`claims_ok: true`, skills 50 of 50 locked with 2 unrecorded. The release retry is
+not unit-tested: `credentials.ts` imports the database module, which the node
+test runner cannot strip, so that path stays E4 and needs a daemon that answers
+`set_ephemeral_api_key`. The ledger contract the retry loop relies on is covered
+by the retained-provider test.

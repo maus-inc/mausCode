@@ -209,10 +209,20 @@ async function clearNativeEphemeralCredentials(
   return attempted.filter((provider): provider is string => provider !== null)
 }
 
+/** Attempts a clear gets before the ledger keeps the key owned for a later try. */
+const RELEASE_ATTEMPTS = 3
+/** Wait between attempts, so a daemon that needed a moment can answer. */
+const RELEASE_RETRY_MS = 250
+
 /**
  * Clears the keys one turn applied. A superseded turn cannot clear a provider
  * its replacement wrote, because that slot holds the replacement's value. The
  * slots are read when the clear runs rather than when it was asked for.
+ *
+ * A clear that fails is retried, because the turn that asked for it has already
+ * ended and nothing else comes back for the key. The daemon holds one value per
+ * provider variable for its whole life, so a key left behind there would answer
+ * the next session that hands over nothing.
  */
 async function releaseNativeEphemeralCredentialsNow(
   client: JcodeClient,
@@ -220,11 +230,18 @@ async function releaseNativeEphemeralCredentialsNow(
   providers: readonly string[],
   generation: number,
 ): Promise<void> {
-  const plan = planCredentialRelease(sessionId, generation, providers)
-  if (plan.providers.length === 0) return
-  // A provider the daemon did not clear stays owned, so the ledger does not
-  // record a release that did not happen.
-  plan.settle(await clearNativeEphemeralCredentials(client, sessionId, plan.providers))
+  for (let attempt = 0; attempt < RELEASE_ATTEMPTS; attempt += 1) {
+    const plan = planCredentialRelease(sessionId, generation, providers)
+    if (plan.providers.length === 0) return
+    // A provider the daemon did not clear stays owned, so the ledger does not
+    // record a release that did not happen and this loop may ask again.
+    const retained = await clearNativeEphemeralCredentials(client, sessionId, plan.providers)
+    plan.settle(retained)
+    if (retained.length === 0) return
+    if (attempt < RELEASE_ATTEMPTS - 1) {
+      await new Promise((resolve) => setTimeout(resolve, RELEASE_RETRY_MS))
+    }
+  }
 }
 
 /**

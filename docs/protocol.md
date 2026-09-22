@@ -78,10 +78,15 @@ A runtime that does not implement these answers `unknown_request` with the
 request name and keeps the connection open, which is how a client detects
 support when it has not read the `hello` capability list.
 
-The runtime's credential registry (`jcode-provider-env::ephemeral`) prefers a
-held key over the provider file, so a value written by an earlier run cannot
-shadow what the client supplied. Wiring the harness API path through
-to that registry in the daemon process is the remaining runtime work; until a
+A provider variable resolves in one order: the inherited process environment,
+then a key the client handed over for a session, then the provider file. Because
+the environment comes first, a key a client hands for a variable the daemon
+inherits is not the one that takes effect. Between the two stores, the credential
+registry (`jcode-provider-env::ephemeral`) prefers a held key over the provider
+file, so a value written by an earlier run cannot shadow what the client
+supplied. Wiring
+the harness API path through to that registry in the daemon process is the
+remaining runtime work; until a
 release carries it, mausCode clears the plaintext provider files around the
 daemon lifecycle instead (see `.dump/app/research/2026-09-13-secret-owners.md`).
 
@@ -96,8 +101,13 @@ daemon lifecycle instead (see `.dump/app/research/2026-09-13-secret-owners.md`).
 
 - Credential values cross the protocol only in credential-update requests,
   `set_api_key` and `set_ephemeral_api_key`. Every other operation refers to a
-  credential instead of carrying it, and no key material reaches logs, telemetry,
-  crash reports, persisted transcripts, or any other persisted frame.
+  credential instead of carrying it.
+- Key material stays out of logs, telemetry, crash reports, persisted
+  transcripts, and every other persisted frame. The wire format cannot inspect
+  free-form message content or tool output, so a credential that ends up in one
+  of those fields is the implementing client's or daemon's to redact before the
+  frame is persisted; this client redacts credential-shaped values at its log
+  boundary.
 - Permission policy is deny-by-default with explicit, tested allow rules. Gated
   actions pause individually; the session continues. The inherited
   `bypassPermissions` default is never ported.
