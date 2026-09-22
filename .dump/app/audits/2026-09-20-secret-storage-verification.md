@@ -1037,3 +1037,16 @@ runtime-client build plus 43 passed, 0 failed; audit ratchet unchanged
 (3 critical, 95 high, 111 moderate, 20 low); skills 50 of 50 locked plus the
 two project-owned unrecorded. `ts:check` and the renderer build stay CI-owned
 (OOM in this sandbox).
+
+### Closure of the two Sonar findings on fc6bcae (de720f1)
+
+The analysis of fc6bcae raised S3776 (save() cognitive complexity 23 against
+15, because the read-back and stash logic moved inline) and S1994
+(unusedRecoveryName's stop condition tested the candidate while the
+incrementer updated a separate counter). de720f1 extracted the encrypted
+write, the plaintext replacement, and the quiet temp removal into private
+methods, and stepped the recovery-name candidate inside the body its condition
+tests. The de720f1 analysis closed both keys as FIXED (per-key search
+resolution FIXED, closeDate 22:15:17Z), and the gate comment at 22:25:38Z
+reports 0 new issues, 0 accepted issues, 0 security hotspots, 0.0% duplication
+on new code.
