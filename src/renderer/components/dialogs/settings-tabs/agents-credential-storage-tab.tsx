@@ -16,24 +16,20 @@ import {
 import { Button } from "../../ui/button"
 import { StatusPill } from "../../ui/status-pill"
 import { Switch } from "../../ui/switch"
-
-/**
- * What this page reads from the status query. The assignment in the component
- * is a compile-time check: a field the router stops returning fails there.
- */
-type StatusData = {
-  protection: "os-encryption" | "hardcoded-key" | "plaintext"
-  encryptionAvailable: boolean
-  plaintextConsent: boolean
-  plaintextConsentAt?: string | null
-  reason: string
-  backend: string | null
-  metadataError: string | null
-  signInFailure: string | null
-  providerReadErrors: { provider: string; error: string }[]
-  rendererError: string | null
-  rendererKeysStored: string[]
-}
+import {
+  browserState,
+  describeRendererStorage,
+  type ProtectionVerdict,
+  protectionDetail,
+  protectionHeadline,
+  protectionVerdict,
+  type RowState,
+  type StatusData,
+  storedDetail,
+  storedState,
+  UNKNOWN_DETAIL,
+  UNKNOWN_STATE,
+} from "./credential-storage-state"
 
 /**
  * One page for every credential the app holds and how it is protected.
@@ -47,20 +43,18 @@ export function AgentsCredentialStorageTab() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const status = trpc.secretStorage.status.useQuery()
   const setConsent = trpc.secretStorage.setPlaintextConsent.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // The mutation answers with the state it wrote, so the page shows that
+      // answer rather than the cached one while the status query refetches.
+      utils.secretStorage.status.setData(undefined, (old) => (old ? { ...old, ...result } : old))
       void utils.secretStorage.status.invalidate()
       void utils.secretStorage.rendererSecrets.invalidate()
     },
   })
 
   const data: StatusData | undefined = status.data
-  const protectedByOs = data?.protection === "os-encryption" && data.encryptionAvailable === true
-  const consentOn = data?.plaintextConsent === true
-  // The page states a verdict only from a status the main process confirmed. A
-  // query that failed leaves the previous answer in the cache, and presenting
-  // that as the current state would report a keyring decision the app cannot
-  // stand behind now, next to the error that says the read failed.
-  const unknown = data === undefined || status.error !== null
+  // The page states a verdict only from a status the main process confirmed.
+  const verdict = protectionVerdict(data, status.error)
 
   return (
     <div className="space-y-6">
@@ -74,22 +68,15 @@ export function AgentsCredentialStorageTab() {
 
       <ProtectionCard
         isLoading={status.isLoading}
-        unknown={unknown}
+        verdict={verdict}
         loadError={status.error instanceof Error ? status.error.message : null}
-        protectedByOs={protectedByOs}
-        consentOn={consentOn}
         data={data}
         pending={setConsent.isPending}
         onEnable={() => setConfirmOpen(true)}
         onDisable={() => setConsent.mutate({ consent: false })}
       />
 
-      <InventoryCard
-        protectedByOs={protectedByOs}
-        consentOn={consentOn}
-        unknown={unknown}
-        data={data}
-      />
+      <InventoryCard verdict={verdict} data={data} />
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
@@ -152,29 +139,26 @@ export function AgentsCredentialStorageTab() {
 
 function ProtectionCard({
   isLoading,
-  unknown,
+  verdict,
   loadError,
-  protectedByOs,
-  consentOn,
   data,
   pending,
   onEnable,
   onDisable,
 }: {
   readonly isLoading: boolean
-  /** True while the status query has no result, so no verdict can be stated. */
-  readonly unknown: boolean
+  /** The state the main process confirmed, with no verdict while it has not. */
+  readonly verdict: ProtectionVerdict
   /** Message from a failed status query, which is not a keyring verdict. */
   readonly loadError: string | null
-  readonly protectedByOs: boolean
-  readonly consentOn: boolean
   readonly data: StatusData | undefined
   readonly pending: boolean
   readonly onEnable: () => void
   readonly onDisable: () => void
 }) {
-  const headline = protectionHeadline(isLoading, unknown, protectedByOs, consentOn)
-  const detail = protectionDetail(isLoading, unknown, loadError, protectedByOs, data)
+  const { unknown, protectedByOs, consentOn } = verdict
+  const headline = protectionHeadline(isLoading, verdict)
+  const detail = protectionDetail(isLoading, verdict, loadError, data)
 
   return (
     <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -183,13 +167,18 @@ function ProtectionCard({
           <div
             className={cn(
               "mt-0.5 flex h-8 w-8 items-center justify-center rounded-md",
-              protectedByOs ? "bg-emerald-500/10" : "bg-amber-500/10",
+              unknown ? "bg-muted" : protectedByOs ? "bg-emerald-500/10" : "bg-amber-500/10",
             )}
           >
             {protectedByOs ? (
               <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             ) : (
-              <ShieldOff className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <ShieldOff
+                className={cn(
+                  "h-4 w-4",
+                  unknown ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400",
+                )}
+              />
             )}
           </div>
           <div className="flex flex-col space-y-1">
@@ -210,10 +199,13 @@ function ProtectionCard({
             tells you why. With it, that credential is written in the clear.
           </span>
         </div>
+        {/* Without a status there is no answer to show and no verdict to act on,
+            so the switch waits for one rather than display a state the app has
+            not read. */}
         <Switch
           id="plaintext-consent"
           checked={consentOn}
-          disabled={pending}
+          disabled={pending || unknown}
           aria-describedby="plaintext-consent-description"
           onCheckedChange={(checked) => (checked ? onEnable() : onDisable())}
         />
@@ -235,56 +227,15 @@ function ProtectionCard({
   )
 }
 
-function protectionHeadline(
-  isLoading: boolean,
-  unknown: boolean,
-  protectedByOs: boolean,
-  consentOn: boolean,
-): string {
-  if (isLoading) return "Checking the OS keyring..."
-  // A query that has not answered, or one that failed, says nothing about the
-  // keyring. Claiming it cannot encrypt would state a verdict the app has not
-  // reached.
-  if (unknown) return "The OS keyring state is not known"
-  if (protectedByOs) return "New credentials are encrypted by the operating system"
-  if (consentOn) return "New credentials are stored in plaintext because you allowed it"
-  return "The operating system cannot encrypt new credentials"
-}
-
-/**
- * The sentence under the headline. Nothing is said about protection until the
- * main process has answered, because a refusal reason shown while the query is
- * still running reads as a verdict the app has not reached yet.
- */
-function protectionDetail(
-  isLoading: boolean,
-  unknown: boolean,
-  loadError: string | null,
-  protectedByOs: boolean,
-  data: StatusData | undefined,
-): string {
-  if (loadError) return loadError
-  if (isLoading || unknown || data === undefined) {
-    return "Reading the protection state from the main process."
-  }
-  if (protectedByOs) {
-    return "The app writes sign-in tokens and provider keys through the OS keyring. Existing credentials keep working."
-  }
-  return describeRefusal(data.reason, data.backend, data.metadataError ?? null)
-}
-
 function InventoryCard({
-  protectedByOs,
-  consentOn,
-  unknown,
+  verdict,
   data,
 }: {
-  readonly protectedByOs: boolean
-  readonly consentOn: boolean
-  /** True while the status query has no result, so the rows state no verdict. */
-  readonly unknown: boolean
+  /** The state the main process confirmed, with no verdict while it has not. */
+  readonly verdict: ProtectionVerdict
   readonly data: StatusData | undefined
 }) {
+  const { unknown } = verdict
   const stored = data?.rendererKeysStored?.length ?? 0
   const rendererDetail = describeRendererStorage(data?.rendererError ?? null, stored)
   const providerReadErrors = data?.providerReadErrors ?? []
@@ -306,20 +257,13 @@ function InventoryCard({
             (unknown
               ? UNKNOWN_DETAIL
               : storedDetail(
-                  protectedByOs,
-                  consentOn,
+                  verdict,
                   "The next sign-in is encrypted by the OS keyring.",
                   "The next sign-in is written in plaintext, because you allowed it.",
                   "A new sign-in is not written when it cannot be encrypted.",
                 ))
           }
-          state={storedState(
-            protectedByOs,
-            consentOn,
-            data?.signInFailure ?? null,
-            "Failed",
-            unknown,
-          )}
+          state={storedState(verdict, data?.signInFailure ?? null, "Failed")}
         />
         <StorageRow
           label="Provider keys and accounts"
@@ -328,14 +272,13 @@ function InventoryCard({
             (unknown
               ? UNKNOWN_DETAIL
               : storedDetail(
-                  protectedByOs,
-                  consentOn,
+                  verdict,
                   "New keys are encrypted by the OS keyring.",
                   "New keys are written in plaintext, because you allowed it.",
                   "Existing keys stay readable; new ones are refused.",
                 ))
           }
-          state={storedState(protectedByOs, consentOn, providerIssue, "Unreadable", unknown)}
+          state={storedState(verdict, providerIssue, "Unreadable")}
         />
         <StorageRow
           label="Claude CLI credentials"
@@ -355,91 +298,6 @@ function InventoryCard({
       </ul>
     </div>
   )
-}
-
-/** One pill for every row: the tone names the state, the label names it in words. */
-type RowState = { tone: "ok" | "warn" | "bad" | "mute"; label: string }
-
-/**
- * What a row says before the status query answers. The flags the rows read are
- * false without data, and a row that stated a verdict from those would report a
- * refusal the app has not made.
- */
-const UNKNOWN_STATE: RowState = { tone: "warn", label: "Unknown" }
-const UNKNOWN_DETAIL = "Reading the storage state from the main process."
-
-/**
- * The state of the next write, not a claim about what is already saved: the
- * main process reports stored read errors rather than a protection level per
- * file, and a value written before this policy existed keeps working.
- *
- * `failureLabel` names the failure for the row it belongs to. The provider rows
- * only report read errors, while the sign-in row reports anything the session
- * store last refused or failed to do, a refused save included, so calling that
- * one unreadable would name the wrong problem.
- */
-function storedState(
-  protectedByOs: boolean,
-  consentOn: boolean,
-  error: string | null,
-  failureLabel: string,
-  unknown: boolean,
-): RowState {
-  if (error) return { tone: "bad", label: failureLabel }
-  if (unknown) return UNKNOWN_STATE
-  if (protectedByOs) return { tone: "ok", label: "New: encrypted" }
-  return consentOn
-    ? { tone: "warn", label: "New: plaintext" }
-    : { tone: "warn", label: "New: refused" }
-}
-
-function browserState(error: string | null, stored: number): RowState {
-  if (error) return { tone: "bad", label: "Unreadable" }
-  // The app store holds whatever was saved there, migrated or written directly,
-  // so the pill names the location rather than how the value arrived.
-  return stored > 0
-    ? { tone: "ok", label: "In the app store" }
-    : { tone: "mute", label: "Nothing saved" }
-}
-
-function describeRendererStorage(error: string | null, stored: number): string {
-  if (error) return error
-  if (stored > 0) {
-    return `${stored} provider value(s) are saved in this app's store, which is not browser storage`
-  }
-  return "No provider value is saved in this app's store"
-}
-
-function storedDetail(
-  protectedByOs: boolean,
-  consentOn: boolean,
-  encrypted: string,
-  allowed: string,
-  refused: string,
-): string {
-  if (protectedByOs) return encrypted
-  return consentOn ? allowed : refused
-}
-
-function describeRefusal(
-  reason: string | undefined,
-  backend: string | null | undefined,
-  detail: string | null,
-): string {
-  switch (reason) {
-    case "hardcoded-key-backend":
-      return "This Linux session uses the keyring's basic_text backend, which encrypts with a fixed key that is not a secret. New credentials are treated as unprotected."
-    case "metadata-unreadable":
-      return detail ?? "The plaintext setting could not be read, so no new credential is written."
-    case "encryption-unavailable":
-      return backend
-        ? `The OS keyring (${backend}) is not available right now. Unlock it and check again; saved credentials are untouched.`
-        : "No OS keyring is available right now. Sign in to the keyring and check again; saved credentials are untouched."
-    case "ready":
-      return "The OS keyring is available."
-    default:
-      return "The state of the OS keyring could not be read."
-  }
 }
 
 function StorageRow({

@@ -114,6 +114,20 @@ describe("file secret", () => {
     expect(() => clearFileSecret(fixture(home))).not.toThrow()
   })
 
+  it("clears a temporary file an unfinished write left behind", () => {
+    const home = makeHome("mauscode-file-secret-")
+    const secret = fixture(home)
+    saveFileSecret(secret, "synthetic-token")
+    // A write that stopped between its temporary file and its rename leaves the
+    // credential under a name reads never look at, from a process that is gone.
+    const orphan = `${secret.filePath}.tmp-999999`
+    const orphanCompanion = `${secret.plaintextPath}.tmp-999999`
+    writeFileSync(orphan, readFileSync(secret.filePath))
+    writeFileSync(orphanCompanion, JSON.stringify({ token: "synthetic-token" }))
+    clearFileSecret(secret)
+    expect(readdirSync(join(home, "data"))).toHaveLength(0)
+  })
+
   it("clears the stashed ciphertext copy too", () => {
     const home = makeHome("mauscode-file-secret-")
     saveFileSecret(fixture(home), "first-token")

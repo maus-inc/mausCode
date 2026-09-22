@@ -224,6 +224,17 @@ export function clearFileSecret(secret: FileSecret): void {
   } catch {
     failed.push(`${dirname(secret.filePath)} (stashed copies could not be listed)`)
   }
+  // A write that stopped before its rename leaves the credential under a
+  // temporary name next to the file it was replacing, and the process that
+  // created it may never run again, so sign-out sweeps those too.
+  for (const path of targets) {
+    try {
+      failed.push(...removeStaleTemps(path))
+    } catch (error) {
+      failed.push(path)
+      console.error(`[SecretStore] Could not list the files next to ${path}:`, error)
+    }
+  }
   for (const path of targets) {
     try {
       if (existsSync(path)) unlinkSync(path)

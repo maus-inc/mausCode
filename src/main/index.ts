@@ -26,6 +26,7 @@ import {
 import { installCli, isCliInstalled, parseLaunchDirectory, uninstallCli } from "./lib/cli"
 import { getApiUrl } from "./lib/config"
 import { closeDatabase, initDatabase } from "./lib/db"
+import { type DesktopCookieStore, DesktopCookieWriter } from "./lib/desktop-cookie"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
 import { recoverQueuedSends } from "./lib/queue"
@@ -99,124 +100,49 @@ export function getAuthManager(): AuthManager {
 }
 
 // Handle auth code from deep link (exported for IPC handlers)
-/**
- * Writes the control-plane token cookie for this run.
- *
- * With no `expirationDate` Electron keeps this a session cookie, so the token
- * is never written to the cookie store on disk. The app re-issues it at
- * startup from the encrypted session and again whenever the token refreshes,
- * so nothing needs to survive a restart. A token that has already expired is
- * not written, and any cookie an earlier version left behind is removed.
- */
-async function setDesktopTokenCookie(token: string, expiresAt: string): Promise<boolean> {
-  const apiBase = getBaseUrl()
-  if (!apiBase) return false
-  const expiry = new Date(expiresAt).getTime()
-  if (Number.isFinite(expiry) && expiry <= Date.now()) {
-    // The direct call: this runs inside the queued write when a token is
-    // already expired, and the queued form would wait on its own task.
-    await removeDesktopTokenCookieNow(apiBase)
-    return false
-  }
-  try {
-    await session.fromPartition("persist:main").cookies.set({
-      url: apiBase,
-      name: "x-desktop-token",
-      value: token,
-      httpOnly: false,
-      secure: apiBase.startsWith("https"),
-      sameSite: "lax" as const,
-    })
-    return true
-  } catch (error) {
-    // The cookie carries control-plane requests; the session itself is already
-    // saved in the store, and the next refresh retries this. A caller that
-    // reports what happened needs to know the store refused it.
-    console.warn("[Auth] Desktop token cookie could not be set:", error)
-    return false
-  }
-}
-
-/** Drops the control-plane cookie. Callers inside a queued task use this one. */
-async function removeDesktopTokenCookieNow(apiBase: string): Promise<void> {
-  try {
-    await session.fromPartition("persist:main").cookies.remove(apiBase, "x-desktop-token")
-  } catch (error) {
-    console.warn("[Auth] Desktop token cookie could not be removed:", error)
-  }
+/** The cookie store, as the writer uses it. Nothing here decides anything. */
+const desktopCookieStore: DesktopCookieStore = {
+  async set(token: string, _expiresAt: string): Promise<boolean> {
+    const apiBase = getBaseUrl()
+    if (!apiBase) return false
+    try {
+      // The expiry argument tells this store which token to write, and it is
+      // unused here on purpose: with no `expirationDate` Electron keeps this a
+      // session cookie, so the token is never written to the on-disk store.
+      await session.fromPartition("persist:main").cookies.set({
+        url: apiBase,
+        name: "x-desktop-token",
+        value: token,
+        httpOnly: false,
+        secure: apiBase.startsWith("https"),
+        sameSite: "lax" as const,
+      })
+      return true
+    } catch (error) {
+      console.warn("[Auth] Desktop token cookie could not be set:", error)
+      return false
+    }
+  },
+  async remove(): Promise<void> {
+    const apiBase = getBaseUrl()
+    if (!apiBase) return
+    try {
+      await session.fromPartition("persist:main").cookies.remove(apiBase, "x-desktop-token")
+    } catch (error) {
+      console.warn("[Auth] Desktop token cookie could not be removed:", error)
+    }
+  },
 }
 
 /**
- * Cookie work runs one task at a time. A write, the check that follows it and
- * the fallback write are a single decision, and two of them interleaving their
- * removes and sets would leave whichever cookie store command happened to run
- * last, which is not necessarily the session that is saved. Tasks run through
- * `cookieTasks`, and the `...Now` helpers run inside one.
+ * The writer for this run's cookie. The saved session is read through this
+ * function rather than captured, because it can change while a write is in
+ * flight, which is the case the writer settles against.
  */
-let cookieTasks: Promise<unknown> = Promise.resolve()
-
-function runCookieTask<T>(task: () => Promise<T>): Promise<T> {
-  const result = cookieTasks.then(task, task)
-  cookieTasks = result.then(
-    () => {},
-    () => {},
-  )
-  return result
-}
-
-/** Drops the control-plane cookie, so a rotated or expired token cannot linger. */
-function removeDesktopTokenCookie(apiBase: string): Promise<void> {
-  return runCookieTask(() => removeDesktopTokenCookieNow(apiBase))
-}
-
-/** How many times the pair of writes may chase a session change before giving up. */
-const COOKIE_SETTLE_ROUNDS = 3
-
-/**
- * Writes the control-plane cookie for the session that is saved right now, then
- * settles it against the store. A sign-out or a newer sign-in can land while the
- * cookie store is accepting a write, and no check before the write can see that.
- * Each round writes the cookie for whatever the store holds now and checks
- * again, so the cookie left in place is the saved session's. A session that kept
- * changing takes the cookie back instead of leaving one that may belong to an
- * account the app has left.
- *
- * Returns whether the cookie in place belongs to the session this call was for.
- */
-async function writeDesktopTokenCookieNow(
-  manager: AuthManager,
-  token: string,
-  expiresAt: string,
-): Promise<boolean> {
-  const apiBase = getBaseUrl()
-  if (!apiBase) return false
-  if (manager.getAuth()?.token !== token) return false
-  await removeDesktopTokenCookieNow(apiBase)
-  // The cookie store can refuse the write. Reporting success after that would
-  // tell the caller an authenticated cookie is in place when none is.
-  if (!(await setDesktopTokenCookie(token, expiresAt))) return false
-  let written = token
-  for (let round = 0; round < COOKIE_SETTLE_ROUNDS; round += 1) {
-    const saved = manager.getAuth()
-    if (saved?.token === written) return written === token
-    await removeDesktopTokenCookieNow(apiBase)
-    const expiry = manager.getTokenExpiry()
-    if (!saved || !expiry) return false
-    if (!(await setDesktopTokenCookie(saved.token, expiry))) return false
-    written = saved.token
-  }
-  if (manager.getAuth()?.token !== written) await removeDesktopTokenCookieNow(apiBase)
-  return false
-}
-
-/** The queued entry point, so this decision never overlaps another cookie task. */
-function writeDesktopTokenCookie(
-  manager: AuthManager,
-  token: string,
-  expiresAt: string,
-): Promise<boolean> {
-  return runCookieTask(() => writeDesktopTokenCookieNow(manager, token, expiresAt))
-}
+const desktopCookie = new DesktopCookieWriter(desktopCookieStore, () => {
+  const saved = authManager?.getAuth() ?? null
+  return { token: saved?.token ?? null, expiresAt: saved ? authManager.getTokenExpiry() : null }
+})
 
 /**
  * Issues this run's cookie from the saved session. A previous run's session
@@ -224,11 +150,10 @@ function writeDesktopTokenCookie(
  * a restart, and a refresh inside `getValidToken` writes the new one again.
  */
 function restoreDesktopTokenCookie(manager: AuthManager): void {
-  const apiBase = getBaseUrl()
   if (!manager.isAuthenticated()) {
     // A session this run cannot use still leaves the cookie an earlier version
     // wrote with an expiry in the on-disk store, so it goes before anything else.
-    if (apiBase) void removeDesktopTokenCookie(apiBase)
+    void desktopCookie.remove()
     return
   }
   void manager
@@ -242,12 +167,12 @@ function restoreDesktopTokenCookie(manager: AuthManager): void {
         // Resolving the token can fail into a sign-out, and the session that
         // started this run is gone. A cookie an earlier version wrote with an
         // expiry is still usable from disk, so it goes with the session.
-        if (apiBase && !manager.isAuthenticated()) await removeDesktopTokenCookie(apiBase)
+        if (!manager.isAuthenticated()) await desktopCookie.remove()
         return undefined
       }
       const expiresAt = manager.getTokenExpiry()
       if (!expiresAt) return undefined
-      return writeDesktopTokenCookie(manager, token, expiresAt)
+      return desktopCookie.write(token, expiresAt)
     })
     .catch((error) => {
       console.warn("[Auth] Could not restore the desktop token cookie:", error)
@@ -281,11 +206,7 @@ export async function handleAuthCode(code: string): Promise<void> {
     // after the newer one stored its session. The cookie belongs to the session
     // the manager kept, so a superseded exchange does not overwrite it with the
     // account that just signed out of the app's state.
-    const cookieWritten = await writeDesktopTokenCookie(
-      authManager,
-      authData.token,
-      authData.expiresAt,
-    )
+    const cookieWritten = await desktopCookie.write(authData.token, authData.expiresAt)
     if (cookieWritten) console.log("[Auth] Desktop token cookie set")
 
     // Notify all windows and reload them to show app
@@ -1062,7 +983,7 @@ if (gotTheLock) {
       // The callback runs once the store accepted the refreshed token, and a
       // sign-out can still land while the cookie is written, so this path takes
       // the same settle-against-the-store step as the other two.
-      const written = await writeDesktopTokenCookie(authManager, authData.token, authData.expiresAt)
+      const written = await desktopCookie.write(authData.token, authData.expiresAt)
       if (written) console.log("[Auth] Token refreshed, cookie updated")
     })
 

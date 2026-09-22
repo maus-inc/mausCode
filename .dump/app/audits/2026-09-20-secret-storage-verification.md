@@ -899,3 +899,71 @@ Gates: biome 968 files clean, `tsc --noEmit` clean, vitest 98 files with 1829
 passed and 1 skipped, `test:node` 59, contracts 382, lint 913 files clean, both
 ratchets, runtime-client 43, native check `claims_ok: true`, skills 50 of 50
 locked with 2 unrecorded.
+
+## Bounded self-review pass, the three clusters
+
+The human asked whether to merge or review again, and authorized one bounded
+pass before the decision: hunt the three clusters every earlier round's findings
+landed in, convert E4 audit items to tests where feasible, then merge only if the
+pass finds nothing new, CodeAnt scans the final head clean and the gates stay
+green. Running-app verification and the Rust compile were agreed as non-blockers.
+Three findings came out of the pass, two of them fixed and one flagged.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| `file-secret.ts` `clearFileSecret` left the credential behind in a temporary file: `writeCredentialTempFile` exists because a write can stop between its temporary file and its rename, `removeStaleTemps` exists to sweep those, and the sign-out path of the provider stores never called it. `AuthStore.clear` swept its own temporary files and the keyed store sweeps them on every rewrite, so this was the one removal path that did not | Confirmed by a test written first, which failed: after `clearFileSecret` the data directory still held `github-auth.dat.tmp-999999`, a byte copy of the ciphertext the OS keyring can decrypt, and `github-auth.json.tmp-999999`, a copy of the plaintext token. The comment in `owner.ts` claims a clear sweeps them, which was true of the session store and not of this one | `clearFileSecret` now sweeps the temporary files next to both the `.dat` and the companion `.json`, and what cannot be removed is reported through the same failure list as the files themselves, so a sign-out that could not finish still says so |
+| The settings page stated three verdicts from a cached answer after a failed status query. Round fifteen gated the headline and the rows on `unknown`, and the flag consumers were left: `consentOn` still drove the amber "Plaintext permission is on" banner, `protectedByOs` still chose the icon tile and its tint, and the consent switch still showed a state the app had not read and could be operated from it | Confirmed by reading the flag consumers rather than the headline. With a cached `plaintextConsent: true` and a failed refetch, the page said the state was not known and, directly under it, that plaintext permission was on. The switch was also the only control on the page that acted on a state the page had just called unknown | Both verdict flags are now false while the status is not confirmed, so no consumer of them can state the cached answer; the icon tile is muted while unknown, and the consent switch is disabled while unknown, matching the row and headline rule that no verdict is stated without a confirmed status |
+| The consent switch showed the pre-mutation value between a successful `setPlaintextConsent` and the refetch that followed it, because `isPending` clears before the invalidated query answers. A user who toggled plaintext on could see the switch sit at off, and the page only showed the new state after a second round trip | Confirmed by reading the mutation and the query lifecycles. The mutation already answers with the status it wrote and the page threw that answer away | `onSuccess` merges the returned status into the query cache before invalidating, so the switch and the banner show the state the main process wrote, and the refetch then confirms the rest of the page |
+
+The cookie sequence, which rounds thirteen, fourteen and fifteen all left at E4
+because it needed a running app, is now a module with tests. The writer is
+`src/main/lib/desktop-cookie.ts`: the queue, the settle loop and the expiry rule
+live there against an injected cookie store, and `index.ts` supplies the Electron
+one and the saved-session reader. `desktop-cookie.test.ts` has nine cases, one
+per interleaving the reviewers raised: a refused write reports failure, a
+sign-out during the write takes the cookie back, a replacement sign-in during the
+write settles on the new session, a session that keeps changing ends with the
+cookie removed rather than holding a session that may be gone, an expired token
+is never stored, a session the store no longer holds is not written at all, and
+two writers never interleave or land a removal inside a write. Non-vacuity was
+probed line by line: removing the store guard, the refusal return, the settle
+loop's success return, the post-loop removal, the expiry check or either queue
+fails its own test and no unrelated one. One detail for the record:
+`desktopCookieStore.set` names its second parameter `_expiresAt` because the
+cookie is a session cookie with no expiry, and the comment says so.
+
+The page's rules moved out of the component into
+`credential-storage-state.ts` with `credential-storage-state.test.ts`: 17 cases
+covering the unknown precedence, the headline, every refusal reason the main
+process reports, the row states and their sentences. That logic was E4 for three
+rounds because it needed a rendered app; the extraction is a pure move plus the
+two fixes above, and the page keeps the same markup.
+
+Judged and left alone: the direct `session.fromPartition("persist:main").cookies
+.remove` in `auth:logout` runs outside the writer's queue. The handler clears the
+session store before it removes the cookie, so every interleaving is reconciled
+by the settle loop, including the one where the removal lands between the
+writer's own removal and its write. Routing it through the writer would couple
+the window module to the auth module for no behavioural gain, so it stays.
+
+Flagged rather than fixed, because a fix is a change across three layers:
+`removePlaintextCompanion` in `file-secret.ts` logs and continues when the
+plaintext companion cannot be deleted after a successful encrypted write. The
+value is saved and the `.dat` is the only source reads use, so nothing is broken,
+but plaintext bytes can stay on disk while the page reports the encrypted store
+as current, and the user sees no signal. `AuthStore` reports its equivalent
+warning through `lastFailure`, and the provider stores have no such channel. The
+honest fix is a warning path from `saveFileSecret` through `KeyedAuthStore` into
+the status the page reads, which is application behaviour rather than a
+correction, so it is recorded here for the human and the CTO instead of being
+smuggled into this pass.
+
+Gates on this tree: biome 972 files clean, `tsc --noEmit` clean, vitest 100 files
+with 1856 passed and 1 skipped, `test:node` 59, contracts 382, lint 917 files
+clean, typecheck ratchet 0 <= 0, audit ratchet pass, runtime-client 43,
+`build:runtime-client` clean, native check `claims_ok: true`, skills 50 of 50
+locked with 2 unrecorded. Evidence levels: the cookie writer, the store fix and
+the page rules are E1 with tests that fail when each fix is reverted; the
+settings page's rendering is still E4 because the app cannot be launched here;
+the Rust handoff, `ts:check`, the renderer build and `package:mac` are unchanged
+E4 and owned by CI or the human.
