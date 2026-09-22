@@ -10,6 +10,7 @@
  *   legacy column decodes to the same value. It stays readable.
  * - Anything else is unreadable and is reported, never returned as a value.
  */
+import { randomBytes } from "node:crypto"
 import {
   existsSync,
   readdirSync,
@@ -50,22 +51,37 @@ const STASH_SUFFIX = ".unreadable-"
 const TEMP_INFIX = ".tmp-"
 
 /**
- * Writes a credential's temporary file and removes it again when the write
- * itself fails. A write can stop partway, after the file exists and before all
- * of its bytes are on disk, and nothing else would sweep that file until the
- * next write or sign-out.
+ * Writes a credential's temporary file and returns the path it wrote, so the
+ * caller renames the very file that holds the bytes. The name carries the
+ * process id and random bytes, so it cannot be guessed ahead of time, and the
+ * open creates exclusively, so a file or a link another process placed at a
+ * name never receives the bytes. A write can stop partway, after the file
+ * exists and before all of its bytes are on disk, and nothing else would sweep
+ * that file until the next write or sign-out, so a failure removes it.
  */
-export function writeCredentialTempFile(temp: string, contents: string | Buffer): void {
+export function writeCredentialTempFile(filePath: string, contents: string | Buffer): string {
+  const temp = `${filePath}${TEMP_INFIX}${process.pid}-${randomBytes(4).toString("hex")}`
   try {
-    writeFileSync(temp, contents, { mode: 0o600 })
+    writeFileSync(temp, contents, { mode: 0o600, flag: "wx" })
+    return temp
   } catch (error) {
-    try {
-      if (existsSync(temp)) unlinkSync(temp)
-    } catch {
-      // The failure worth reporting is the one that stopped the write.
+    // A name that was already taken belongs to someone else and stays. Any
+    // other failure stopped a write this function started, so the partial file
+    // is removed. Either way the write fails closed instead of saving less.
+    if (!isExistError(error)) {
+      try {
+        if (existsSync(temp)) unlinkSync(temp)
+      } catch {
+        // The failure worth reporting is the one that stopped the write.
+      }
     }
     throw error
   }
+}
+
+/** An open that creates exclusively reports a taken name with this error. */
+function isExistError(error: unknown): boolean {
+  return error instanceof Error && "code" in error && (error as { code?: string }).code === "EEXIST"
 }
 
 /**
@@ -79,19 +95,17 @@ export function writeCredentialTempFile(temp: string, contents: string | Buffer)
  *
  * Returns the paths that could not be removed.
  */
-export function removeStaleTemps(filePath: string, keepPath?: string): string[] {
+export function removeStaleTemps(filePath: string): string[] {
   const dir = dirname(filePath)
   if (!existsSync(dir)) return []
   const prefix = `${basename(filePath)}${TEMP_INFIX}`
   const left: string[] = []
   for (const name of readdirSync(dir)) {
     if (!name.startsWith(prefix)) continue
-    const candidate = join(dir, name)
-    if (candidate === keepPath) continue
     try {
-      unlinkSync(candidate)
+      unlinkSync(join(dir, name))
     } catch {
-      left.push(candidate)
+      left.push(join(dir, name))
     }
   }
   return left
@@ -110,6 +124,19 @@ export function stashedCiphertextPaths(filePath: string): string[] {
   return readdirSync(dir)
     .filter((name) => name.startsWith(prefix))
     .map((name) => join(dir, name))
+}
+
+/**
+ * The first name at or after `base` that holds nothing. Two moves in the same
+ * millisecond build the same timestamped name, and the second rename would
+ * replace the bytes the first one kept, so a taken name steps to the next one.
+ */
+export function unusedRecoveryName(base: string): string {
+  let candidate = base
+  for (let step = 2; existsSync(candidate); step += 1) {
+    candidate = `${base}-${step}`
+  }
+  return candidate
 }
 
 /**
@@ -137,7 +164,7 @@ export function stashUnreadableCiphertext(
       throw new Error("no usable keyring")
     } catch {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-")
-      const target = `${filePath}${STASH_SUFFIX}${stamp}`
+      const target = unusedRecoveryName(`${filePath}${STASH_SUFFIX}${stamp}`)
       renameSync(filePath, target)
       console.warn(
         `[SecretStore] ${context} could not be decrypted, so the file was kept at ${target} and is no longer read.`,

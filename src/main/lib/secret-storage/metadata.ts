@@ -3,8 +3,9 @@
  * userData beside the stores it governs. A malformed file is preserved rather
  * than overwritten, so an unreadable state can never silently grant consent.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs"
 import { dirname, join } from "node:path"
+import { unusedRecoveryName, writeCredentialTempFile } from "./owner"
 import { EMPTY_METADATA, type SecretStorageMetadata } from "./types"
 
 export const METADATA_FILE_NAME = "secret-storage.json"
@@ -68,13 +69,12 @@ export function writeMetadata(userDataPath: string, metadata: SecretStorageMetad
   if (previous.error) {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-")
     try {
-      renameSync(path, `${path}.invalid-${stamp}`)
+      renameSync(path, unusedRecoveryName(`${path}.invalid-${stamp}`))
     } catch {
       // The original stays in place when it cannot be moved.
     }
   }
-  const temp = `${path}.tmp-${process.pid}`
-  writeFileSync(temp, `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 })
+  const temp = writeCredentialTempFile(path, `${JSON.stringify(metadata, null, 2)}\n`)
   renameSync(temp, path)
 }
 

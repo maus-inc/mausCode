@@ -12,11 +12,11 @@ vi.mock("./lib/secret-storage/owner", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./lib/secret-storage/owner")>()
   return {
     ...actual,
-    removeStaleTemps: (filePath: string, keepPath?: string) => {
+    removeStaleTemps: (filePath: string) => {
       if (failListFor !== null && filePath === failListFor) {
         throw new Error("EACCES: permission denied, scandir")
       }
-      return actual.removeStaleTemps(filePath, keepPath)
+      return actual.removeStaleTemps(filePath)
     },
   }
 })

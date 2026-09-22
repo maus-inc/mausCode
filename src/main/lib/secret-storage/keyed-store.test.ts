@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
-import { describe, expect, it } from "vitest"
+import { dirname, join } from "node:path"
+import { describe, expect, it, vi } from "vitest"
 import {
   keyedStorePath,
   readKeyedSecret,
@@ -112,18 +112,28 @@ describe("keyed secret store", () => {
     expect(readKeyedSecret(keyed(store), "a")).toBe("1")
   })
 
-  it("puts the unreadable file back when the replacement never lands", () => {
-    const store = keyedStore(true, false)
-    const path = keyedStorePath(store.userDataPath)
-    mkdirSync(join(store.userDataPath, "data"), { recursive: true })
-    writeFileSync(path, "{ this is not json")
-    // A directory where this write's temporary file belongs makes the write
-    // fail after the unreadable file was already moved aside.
-    mkdirSync(`${path}.tmp-${process.pid}`)
-    expect(() => writeKeyedSecret(keyed(store), "a", "1")).toThrow()
-    // The bytes are back where reads look for them, instead of surviving only
-    // under a recovery name this version never reads.
-    expect(readFileSync(path, "utf-8")).toBe("{ this is not json")
+  it("keeps both copies when the recovery name is already taken", () => {
+    vi.useFakeTimers({ now: new Date("2026-09-22T12:00:00.000Z") })
+    try {
+      const store = keyedStore()
+      const path = keyedStorePath(store.userDataPath)
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, "{ this is not json")
+      // An earlier move already holds the name this move builds from the clock.
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+      const taken = `${path}.unreadable-${stamp}`
+      writeFileSync(taken, "an older recovery copy")
+
+      writeKeyedSecret(keyed(store), "agents:openai-api-key", "sk-value")
+
+      expect(readFileSync(taken, "utf-8")).toBe("an older recovery copy")
+      expect(readKeyedSecret(keyed(store), "agents:openai-api-key")).toBe("sk-value")
+      expect(
+        readdirSync(dirname(path)).filter((name) => name.includes(".unreadable-")),
+      ).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("sweeps the temporary file an unfinished write left", () => {

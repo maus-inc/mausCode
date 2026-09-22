@@ -111,14 +111,23 @@ export class AuthStore {
       // Throws when the value may not be stored, so nothing is written.
       const prepared = this.store.prepare("The sign-in token", value)
       if (prepared.ciphertext) {
-        const temp = `${this.filePath}.tmp-${process.pid}`
-        writeCredentialTempFile(temp, prepared.ciphertext)
-        const verified = this.store.read(readFileSync(temp), "The sign-in token") === value
-        if (!verified) {
-          unlinkSync(temp)
-          throw new Error("The saved sign-in token could not be read back after encryption.")
+        const temp = writeCredentialTempFile(this.filePath, prepared.ciphertext)
+        try {
+          const verified = this.store.read(readFileSync(temp), "The sign-in token") === value
+          if (!verified) {
+            throw new Error("The saved sign-in token could not be read back after encryption.")
+          }
+          renameSync(temp, this.filePath)
+        } catch (error) {
+          // A read-back or a rename that did not land leaves the session in
+          // the temporary file, so those bytes are removed here.
+          try {
+            if (existsSync(temp)) unlinkSync(temp)
+          } catch {
+            // The failure worth reporting is the one that stopped the save.
+          }
+          throw error
         }
-        renameSync(temp, this.filePath)
         warnings.push(...this.removePlaintextCopies())
       } else {
         // The new value lands before the ciphertext moves: the ciphertext is the
@@ -154,15 +163,15 @@ export class AuthStore {
 
   /** Writes the session to the plaintext companion through a temporary file. */
   private writePlaintext(value: string): void {
-    const temp = `${this.plaintextPath}.tmp-${process.pid}`
+    const temp = writeCredentialTempFile(this.plaintextPath, `${value}\n`)
     try {
-      writeCredentialTempFile(temp, `${value}\n`)
       renameSync(temp, this.plaintextPath)
     } catch (error) {
+      // A rename that did not land leaves the session in the temporary file.
       try {
         if (existsSync(temp)) unlinkSync(temp)
       } catch {
-        // The failure worth reporting is the one that stopped the write.
+        // The failure worth reporting is the one that stopped the rename.
       }
       throw error
     }

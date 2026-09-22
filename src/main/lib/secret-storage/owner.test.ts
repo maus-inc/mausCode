@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
   buildStatus,
   decodeBytes,
@@ -11,6 +11,7 @@ import {
   readAvailability,
   resolveProtection,
   stashUnreadableCiphertext,
+  writeCredentialTempFile,
 } from "./owner"
 import { fakeKeychain, makeHome } from "./test-support"
 import { EMPTY_METADATA, SecretStorageError, type SecretStorageMetadata } from "./types"
@@ -166,6 +167,53 @@ describe("secret storage owner", () => {
     writeFileSync(file, usable.encryptString("sk-live-value"))
     expect(stashUnreadableCiphertext(file, usable, "The GitHub token").stashed).toBe(false)
     expect(readFileSync(file).subarray(0, 3).toString("latin1")).toBe("v10")
+  })
+
+  it("keeps both copies when two moves land in the same millisecond", () => {
+    vi.useFakeTimers({ now: new Date("2026-09-22T12:00:00.000Z") })
+    try {
+      const home = makeHome("mauscode-owner-")
+      const file = join(home, "data", "github-auth.dat")
+      mkdirSync(join(home, "data"), { recursive: true })
+      const usable = fakeKeychain()
+      writeFileSync(file, usable.encryptString("sk-first-value"))
+      // An earlier move already holds the name this move builds from the clock.
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+      const taken = `${file}.unreadable-${stamp}`
+      writeFileSync(taken, usable.encryptString("sk-even-older-value"))
+
+      const hardcoded = fakeKeychain({ available: true, backend: "basic_text" })
+      const result = stashUnreadableCiphertext(file, hardcoded, "The GitHub token")
+
+      expect(result.stashed).toBe(true)
+      expect(result.path).toBe(`${taken}-2`)
+      // The copy that held the name keeps its bytes, and the moved file is
+      // under the next free name.
+      expect(usable.decryptString(readFileSync(taken))).toBe("sk-even-older-value")
+      expect(usable.decryptString(readFileSync(result.path ?? ""))).toBe("sk-first-value")
+      expect(existsSync(file)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("never writes a temporary file through a planted link", () => {
+    const home = makeHome("mauscode-owner-")
+    mkdirSync(home, { recursive: true })
+    const file = join(home, "auth.dat")
+    // The name an older version used was predictable, so a link placed there
+    // could redirect the bytes. The write must not use it at all.
+    const planted = `${file}.tmp-${process.pid}`
+    const outside = join(home, "attacker-target")
+    symlinkSync(outside, planted)
+
+    const temp = writeCredentialTempFile(file, "v10-credential-bytes")
+
+    expect(temp).not.toBe(planted)
+    expect(temp.startsWith(`${file}.tmp-`)).toBe(true)
+    expect(readFileSync(temp, "utf-8")).toBe("v10-credential-bytes")
+    expect(existsSync(outside)).toBe(false)
+    expect(lstatSync(planted).isSymbolicLink()).toBe(true)
   })
 
   it("names why a file it could not move aside stayed", () => {

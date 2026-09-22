@@ -4,7 +4,7 @@
  * the app was asked to save, so the file has to go. These tests interrupt the
  * write at that point, because a real full disk cannot be arranged from a test.
  */
-import { existsSync, readdirSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import { AuthStore } from "../../auth-store"
@@ -157,6 +157,24 @@ describe("a credential write that fails partway", () => {
     expect(existsSync(secret.filePath)).toBe(true)
     expect(loadFileSecret(secret)).toBe("sk-first-value")
     expect(filesStartingWith(join(home, "data"), "github-auth.dat.unreadable-")).toEqual([])
+  })
+
+  it("puts the unreadable keyed file back when the replacement stops", () => {
+    const store = makeStore(makeHome("mauscode-temp-write-"), { available: true })
+    const filePath = keyedStorePath(store.userDataPath)
+    mkdirSync(dirname(filePath), { recursive: true })
+    writeFileSync(filePath, "{ this is not json")
+    failNextWriteWhen = (file) => file.includes(`${filePath}.tmp-`)
+
+    expect(() =>
+      writeKeyedSecret({ filePath, store }, "agents:openai-api-key", "sk-value"),
+    ).toThrow(/no space left/)
+
+    // The bytes are back where reads look for them, instead of surviving only
+    // under a recovery name this version never reads.
+    expect(readFileSync(filePath, "utf-8")).toBe("{ this is not json")
+    expect(filesStartingWith(dirname(filePath), "renderer-secrets.json.unreadable-")).toEqual([])
+    expect(filesStartingWith(dirname(filePath), "renderer-secrets.json.tmp-")).toEqual([])
   })
 
   it("leaves no temporary file behind when the keyed store write stops", () => {

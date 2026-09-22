@@ -6,7 +6,7 @@
  * (Apache-2.0, © the 1Code contributors).
  */
 import { execFileSync, execSync, spawn } from "node:child_process"
-import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
 import { homedir, userInfo } from "node:os"
 import { join } from "node:path"
 import { buildExtendedPath, isWindows } from "./platform"
@@ -356,11 +356,20 @@ function writeToCredentialsFile(creds: ClaudeOAuthCredential): boolean {
     const credentialsPath = credentialsFilePath()
     mkdirSync(join(homedir(), ".claude"), { recursive: true })
     // Replace the file in one step. Writing over it directly would leave the CLI
-    // with a truncated credential if the process stopped mid-write.
-    const temp = `${credentialsPath}.tmp-${process.pid}`
-    removeStaleTemps(credentialsPath, temp)
-    writeCredentialTempFile(temp, serialized.plaintext ?? "")
-    renameSync(temp, credentialsPath)
+    // with a truncated credential if the process stopped mid-write. A temp file
+    // a failed rename leaves behind holds the credential, so it is removed.
+    removeStaleTemps(credentialsPath)
+    const temp = writeCredentialTempFile(credentialsPath, serialized.plaintext ?? "")
+    try {
+      renameSync(temp, credentialsPath)
+    } catch (error) {
+      try {
+        unlinkSync(temp)
+      } catch {
+        // The failure worth reporting is the one that stopped the rename.
+      }
+      throw error
+    }
     return true
   } catch (error) {
     console.warn("[claude-token] Failed to update credentials file:", error)

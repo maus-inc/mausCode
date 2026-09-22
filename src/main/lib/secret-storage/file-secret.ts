@@ -57,9 +57,8 @@ export function saveFileSecret(secret: FileSecret, value: string): void {
  * temporary file, because it holds the credential.
  */
 function saveEncryptedSecret(secret: FileSecret, value: string, ciphertext: Buffer): void {
-  const temp = `${secret.filePath}.tmp-${process.pid}`
-  removeStaleTemps(secret.filePath, temp)
-  writeCredentialTempFile(temp, ciphertext)
+  removeStaleTemps(secret.filePath)
+  const temp = writeCredentialTempFile(secret.filePath, ciphertext)
   try {
     verifyReadBack(secret, value, temp)
     renameSync(temp, secret.filePath)
@@ -139,9 +138,8 @@ function restoreStashedCiphertext(secret: FileSecret, stashedPath: string | null
 /** Replaces the companion through a temporary file, so a failed write cannot truncate it. */
 function savePlaintextCompanion(secret: FileSecret, value: string): void {
   const payload = `${JSON.stringify({ [secret.field]: value })}\n`
-  const temp = `${secret.plaintextPath}.tmp-${process.pid}`
-  removeStaleTemps(secret.plaintextPath, temp)
-  writeCredentialTempFile(temp, payload)
+  removeStaleTemps(secret.plaintextPath)
+  const temp = writeCredentialTempFile(secret.plaintextPath, payload)
   try {
     if (readFileSync(temp, "utf-8") !== payload) {
       throw new Error(`${secret.context} could not be read back after it was written.`)

@@ -6,7 +6,12 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { removeStaleTemps, stashedCiphertextPaths, writeCredentialTempFile } from "./owner"
+import {
+  removeStaleTemps,
+  stashedCiphertextPaths,
+  unusedRecoveryName,
+  writeCredentialTempFile,
+} from "./owner"
 import type { SecretProtection, SecretWriter } from "./types"
 
 export const KEYED_SECRET_FILE = "renderer-secrets.json"
@@ -110,9 +115,8 @@ export function readKeyedSecret(store: KeyedStore, key: string): string | null {
 function writeFile(path: string, file: StoredFile, verify?: (written: StoredFile) => void): void {
   const dir = dirname(path)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
-  const temp = `${path}.tmp-${process.pid}`
-  removeStaleTemps(path, temp)
-  writeCredentialTempFile(temp, `${JSON.stringify(file, null, 2)}\n`)
+  removeStaleTemps(path)
+  const temp = writeCredentialTempFile(path, `${JSON.stringify(file, null, 2)}\n`)
   try {
     const written = readFile(temp)
     if (written.error) throw new Error(written.error)
@@ -176,7 +180,7 @@ export function writeKeyedSecret(store: KeyedStore, key: string, value: string):
  */
 function setAsideUnreadableFile(path: string): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-")
-  const target = `${path}.unreadable-${stamp}`
+  const target = unusedRecoveryName(`${path}.unreadable-${stamp}`)
   renameSync(path, target)
   console.warn(
     `[SecretStore] ${KEYED_SECRET_FILE} could not be read, so it was kept at ${target} and a new file was written`,

@@ -989,3 +989,51 @@ import nothing this commit touches, and the same step passed on every earlier
 head including `b06a2ca`. The working conclusion is environmental. A new head is
 pushed to obtain a fresh run, since a re-run is not available, and this note is
 what the new head carries.
+
+## Round 17 — CodeAnt scan of 4068d71 (2026-09-22 21:27Z) and a deeper pass
+
+Three inline findings, all validated against the code, all fixed.
+
+1. `owner.ts:141` — recovery names carried only a millisecond stamp, so two
+   moves in one millisecond renamed onto the same name and the second replaced
+   the bytes the first kept. `stashUnreadableCiphertext`, the keyed store's
+   `setAsideUnreadableFile`, and the metadata `.invalid-` move now take the
+   first free name from `unusedRecoveryName` (`owner.ts`). Tests:
+   owner.test.ts "keeps both copies when two moves land in the same
+   millisecond" (fake clock, pre-taken name), keyed-store.test.ts "keeps both
+   copies when the recovery name is already taken".
+
+2. `owner.ts:61` — `writeFileSync` followed an existing link at a predictable
+   temporary name, which let another local process aim credential bytes at any
+   file. `writeCredentialTempFile` now builds the name with the process id and
+   four random bytes and opens with `wx`, so a taken name refuses the write
+   instead of following it; the consent metadata file moved to the same
+   primitive. `removeStaleTemps` lost its `keepPath` argument, which only
+   existed to protect a predictable in-flight name. The Claude CLI credential
+   file write joined the primitive and gained temp cleanup on a failed rename,
+   as did both auth-store saves. Tests: owner.test.ts "never writes a
+   temporary file through a planted link", temp-write-failure.test.ts "puts
+   the unreadable keyed file back when the replacement stops" (replacing a
+   keyed-store test whose planted-directory trick only worked with
+   predictable names).
+
+3. `renderer-secrets.ts:187` — a refused write left the new value in memory,
+   so the app ran on a credential that was never saved. The storage now tracks
+   the newest value the store confirmed (or loaded) and puts it back when a
+   write or a removal is refused; a first refused write falls back to the
+   atom's initial value, and a refused legacy migration keeps the legacy value
+   because browser storage still holds it. The monitored flows (codex, openai)
+   keep their own restore and toast; the storage revert makes the unmonitored
+   paths honest too. Tests: renderer-secrets.test.ts, four cases.
+
+Deeper pass over the same seams found one more instance of class one, the
+metadata `.invalid-` rename, fixed above, and nothing new in the cookie queue,
+the store failure branches, or the settings page state.
+
+Gate evidence on the fixed tree: biome 973 files clean; lint 918 files clean;
+`tsc --noEmit` clean; typecheck ratchet 0 <= 0; vitest 101 files, 1864 passed,
+1 skipped; `test:node` 59 passed, 0 failed; contracts 382 passed;
+runtime-client build plus 43 passed, 0 failed; audit ratchet unchanged
+(3 critical, 95 high, 111 moderate, 20 low); skills 50 of 50 locked plus the
+two project-owned unrecorded. `ts:check` and the renderer build stay CI-owned
+(OOM in this sandbox).
