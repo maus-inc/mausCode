@@ -189,11 +189,14 @@ export function forgetRendererSecret(key: RendererSecretKey): void {
   const previousRaw = cache.get(key)
   cache.delete(key)
   edited.add(key)
-  browserStore()?.removeItem(key)
   void chainWrite(key, () =>
     trpcClient.secretStorage.removeRendererSecret
       .mutate({ key })
       .then((): RendererSecretWrite => {
+        // The legacy copy stays until the store confirms the removal, the same
+        // rule a migration write follows: a refused or failed removal must not
+        // destroy the only copy left.
+        browserStore()?.removeItem(key)
         confirmed.delete(key)
         return { ok: true }
       })

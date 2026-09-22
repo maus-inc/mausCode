@@ -124,6 +124,41 @@ describe("renderer secret storage", () => {
     expect(freshStorage.getItem("agents:openai-api-key", "fallback")).toBe("legacy-key")
   })
 
+  it("keeps the legacy copy until the store confirms the removal", async () => {
+    const legacy = new Map<string, string>([
+      ["agents:openai-api-key", JSON.stringify("legacy-key")],
+    ])
+    ;(globalThis as Record<string, unknown>).localStorage = {
+      getItem: (key: string) => legacy.get(key) ?? null,
+      removeItem: (key: string) => {
+        legacy.delete(key)
+      },
+      setItem: (key: string, value: string) => {
+        legacy.set(key, value)
+      },
+    }
+    mocks.query.mockResolvedValue({
+      values: { "agents:openai-api-key": JSON.stringify("stored-key") },
+      error: null,
+    })
+    const storage = mod.createRendererSecretStorage<string>("agents:openai-api-key")
+    storage.getItem("agents:openai-api-key", "fallback")
+    await settle()
+
+    mocks.remove.mockRejectedValue(new Error("no usable keyring"))
+    storage.removeItem("agents:openai-api-key")
+    const refused = await mod.whenRendererSecretSaved("agents:openai-api-key")
+    expect(refused.ok).toBe(false)
+    // A removal the store did not confirm must not destroy the only copy left.
+    expect(legacy.has("agents:openai-api-key")).toBe(true)
+
+    mocks.remove.mockResolvedValue(undefined)
+    storage.removeItem("agents:openai-api-key")
+    await mod.whenRendererSecretSaved("agents:openai-api-key")
+    // Once the store confirms, the legacy copy goes with it.
+    expect(legacy.has("agents:openai-api-key")).toBe(false)
+  })
+
   it("drops a refused first write instead of keeping a value nothing stored", async () => {
     const storage = mod.createRendererSecretStorage<string>("agents:openai-api-key")
     storage.getItem("agents:openai-api-key", "fallback")

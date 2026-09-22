@@ -1050,3 +1050,28 @@ tests. The de720f1 analysis closed both keys as FIXED (per-key search
 resolution FIXED, closeDate 22:15:17Z), and the gate comment at 22:25:38Z
 reports 0 new issues, 0 accepted issues, 0 security hotspots, 0.0% duplication
 on new code.
+
+## Round 18 — CodeAnt scan of df2b0d4 (2026-09-22 22:39Z trigger)
+
+Two findings.
+
+1. `claude-token.ts:424` — concurrent callers sharing `refreshInFlight`
+   "across accounts". Not valid against the model this code runs in:
+   `readExistingClaudeCredential()` returns the one credential this OS user
+   holds, keychain entry first, otherwise the single `claudeAiOauth` object in
+   `~/.claude/.credentials.json`. There is no account selector and no second
+   credential anywhere in the path, so concurrent callers are callers of the
+   same credential, and sharing the in-flight refresh is the documented intent:
+   two rotations of one refresh token would leave the CLI holding a token the
+   server already replaced. Replied on the thread with that evidence.
+
+2. `renderer-secrets.ts:192` — `forgetRendererSecret` removed the legacy
+   browser copy before the store confirmed the removal, against the module's
+   own rule that a legacy copy goes only after the store confirms. Fixed: the
+   removal now happens in the success handler, and a new test holds the legacy
+   copy through a refused removal and releases it once the store confirms.
+
+Gate evidence on the fixed tree: biome 973 files clean; lint 918 files clean;
+`tsc --noEmit` clean; typecheck ratchet 0 <= 0; vitest 101 files, 1865 passed,
+1 skipped; `test:node` 59 passed, 0 failed; contracts 382 passed;
+runtime-client build plus 43 passed, 0 failed; audit ratchet unchanged.
