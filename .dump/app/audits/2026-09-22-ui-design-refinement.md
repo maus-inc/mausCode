@@ -118,3 +118,33 @@ grep. The numbers above are the verified ones.
   which is what makes the `sm:` and `min-w-0` work above load-bearing rather than theoretical.
 - Tap targets stay at the recorded `size="sm"` (32 px) because every settings action button
   in the app uses it. Changing that is an app-wide decision, not this page's.
+
+## Second pass, after the refinement landed
+
+The same eleven files, hunting the one class every earlier round kept finding: a claim on
+the page that the app cannot stand behind in every reachable state. Three findings, all in
+strings rather than in behavior, all fixed.
+
+| Location | Claim as written | What the code does | Now |
+| --- | --- | --- | --- |
+| `agents-credential-storage-tab.tsx`, runtime row | "so a key does not survive a run" | The clear runs when a manager is created (`lib/runtime/index.ts:59`) and when the daemon stops (`:86`, reached from `src/main/index.ts:1073` in `before-quit`). A daemon the manager restarts itself after a crash does not pass either point, and this pull request's own known-gap list names that hole | "The app clears that folder before the runtime starts and after it stops. If the runtime restarts itself after a crash, that file can stay until you quit the app." |
+| Same file, plaintext banner | "until you remove them or sign out" | Sign-out runs `authManager.logout()` into `AuthStore.clear()` (`src/main/auth-store.ts:250`), which removes the session file, its plaintext companion, the legacy copy and the leftover temps. Provider stores are untouched (`src/main/windows/main.ts:536`), so a provider key written under the permission survives sign-out | "Files written under this permission stay on disk after you turn it off. Signing out removes the sign-in files; provider keys stay until you remove them." |
+| `renderer-secrets.ts`, module comment | the store "encrypts them at rest or refuses the write" | `writeKeyedSecret` writes a `protection: "plaintext"` entry whenever the store prepared no ciphertext, which is the consent path (`src/main/lib/secret-storage/keyed-store.ts:135-146`) | The comment names the three outcomes, encrypt, plaintext under consent, refuse |
+
+Judged and left alone:
+
+- The runtime row's pill reads `Plaintext during a run`. It is a summary of the row, and the
+  detail now carries the exception, so the pill does not need to grow.
+- The protection detail says the app writes sign-in tokens and provider keys through the OS
+  keyring. That is the app's own write path, and the runtime row in the same card states the
+  runtime's separate plaintext file, so the pair is the full picture.
+- `browserState`, `describeRendererStorage` and `UNKNOWN_STATE` are still exported, but they
+  are called inside the module by `browserRow` and `storedState` and exercised by the test
+  file, so nothing was deleted.
+
+Gate evidence on the fixed tree: biome 972 files, lint 917 files, typecheck and the typecheck
+ratchet clean at 0, vitest 1857 passed with 1 skipped in 100 files, `test:node` 59 passed,
+contracts 382 passed, runtime-client 43 passed including its build, audit ratchet unchanged,
+skills 50 of 50 locked plus the two project-owned unrecorded, and
+`openspec validate refactor-secret-storage-owner --strict` valid. Six other openspec changes
+fail the repo-wide strict run in the base tree as well, and none of them is this change.

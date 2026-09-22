@@ -2,8 +2,9 @@
  * Persistence for the renderer values that hold provider credentials.
  *
  * Browser storage keeps nothing secret. Values live in memory and are written
- * through the app secret store in the main process, which encrypts them at rest
- * or refuses the write. A value saved by an earlier version is still read from
+ * through the app secret store in the main process, which encrypts them at rest,
+ * writes them in the clear when the user allowed plaintext storage, or refuses
+ * the write. A value saved by an earlier version is still read from
  * browser storage and moved into the secret store once it can be stored there.
  */
 import type { SyncStorage } from "jotai/vanilla/utils/atomWithStorage"

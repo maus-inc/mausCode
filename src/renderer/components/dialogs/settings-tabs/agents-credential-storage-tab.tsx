@@ -215,13 +215,16 @@ function ProtectionCard({
 
       {consentOn && (
         <div className="border-t border-border bg-amber-500/10 p-4">
+          {/* Sign-out removes the session files and their plaintext companion.
+              Provider files written under this permission are untouched, so the
+              sentence names which files sign-out reaches. */}
           <p className="text-xs text-foreground break-words">
             Plaintext permission is on
             {data?.plaintextConsentAt
               ? `, granted ${new Date(data.plaintextConsentAt).toLocaleString()}`
               : ""}
-            . Files written under this permission stay on disk after you turn it off, until you
-            remove them or sign out.
+            . Files written under this permission stay on disk after you turn it off. Signing out
+            removes the sign-in files; provider keys stay until you remove them.
           </p>
         </div>
       )}
@@ -288,9 +291,12 @@ function InventoryCard({
           detail="Owned by the Claude CLI. Renewal writes to its own store, and a plaintext credential file is only updated when plaintext storage is allowed."
           state={{ tone: "mute", label: "CLI-owned" }}
         />
+        {/* The app clears this folder before the daemon starts and after it
+            stops, but a daemon the manager restarts after a crash is not cleared
+            again, so this sentence claims only the bound that holds every time. */}
         <StorageRow
           label="Runtime provider files"
-          detail="The native runtime writes a key it is handed as a plaintext file in the app's private folder. The app clears that folder before the runtime starts and after it stops, so a key does not survive a run."
+          detail="The native runtime writes a key it is handed as a plaintext file in the app's private folder. The app clears that folder before the runtime starts and after it stops. If the runtime restarts itself after a crash, that file can stay until you quit the app."
           state={{ tone: "warn", label: "Plaintext during a run" }}
         />
         <StorageRow label="App credential store" detail={store.detail} state={store.state} />
