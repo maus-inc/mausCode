@@ -148,3 +148,19 @@ contracts 382 passed, runtime-client 43 passed including its build, audit ratche
 skills 50 of 50 locked plus the two project-owned unrecorded, and
 `openspec validate refactor-secret-storage-owner --strict` valid. Six other openspec changes
 fail the repo-wide strict run in the base tree as well, and none of them is this change.
+
+## A gap of the same class, measured outside this diff
+
+Four provider login pages tell the user the key is stored encrypted on the device:
+`cline-login-content.tsx:216`, `openclaw-login-content.tsx:193`, `qwen-login-content.tsx:209`
+and `roo-login-content.tsx:193`, each with the matching sentence in its hook's module comment.
+Each of those pages saves through `trpc.<provider>.saveCredentials`, which stores
+`encryptToken(apiKey)` in the app database, and `encodeForDatabase` returns the ciphertext only
+when the store prepared one. With plaintext permission granted and no usable keyring it returns
+the base64 of the plaintext instead (`src/main/lib/secret-storage/store.ts:78-82`), so the
+sentence is false in exactly the state the Credential storage page's own banner describes.
+
+This is not a regression from this pull request. Before it, the same call quietly stored base64
+whenever the keyring was unavailable, so the sentence was false in more states then. The pass
+did not rewrite the four pages because they are outside the eleven changed files and the wording
+is a product decision for whichever pass owns those surfaces. Recorded here so it is not lost.
