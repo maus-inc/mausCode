@@ -181,9 +181,10 @@ function ProtectionCard({
             )}
           </div>
           <div className="flex min-w-0 flex-col space-y-1">
-            <span role="status" className="text-sm font-medium text-foreground">
-              {headline}
-            </span>
+            {/* `<output>` carries the implicit status role, which is what the
+                announcement needs, and it is the element SonarCloud's S6819 asks
+                for in place of the explicit attribute. */}
+            <output className="text-sm font-medium text-foreground">{headline}</output>
             <span className="text-xs text-muted-foreground break-words">{detail}</span>
           </div>
         </div>
