@@ -967,3 +967,17 @@ the page rules are E1 with tests that fail when each fix is reverted; the
 settings page's rendering is still E4 because the app cannot be launched here;
 the Rust handoff, `ts:check`, the renderer build and `package:mac` are unchanged
 E4 and owned by CI or the human.
+
+### CI on the pass, one unreadable failure
+
+The quality job on `700aeeb` failed in its node:test step while vitest, lint and
+the other jobs passed. The failure cannot be read: every job in that run returns
+EOF from the log storage endpoint, including the passing ones, so it is an
+outage rather than a property of this commit, and re-running the job or
+dispatching the workflow is refused for this token (403, Resource not
+accessible by integration). The exact CI command, `bun run test:node`, passes
+three times in a row on this tree locally with 59 of 59, the runtime suites
+import nothing this commit touches, and the same step passed on every earlier
+head including `b06a2ca`. The working conclusion is environmental. A new head is
+pushed to obtain a fresh run, since a re-run is not available, and this note is
+what the new head carries.
