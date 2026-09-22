@@ -7,8 +7,9 @@ The human asked for deep multi-pass refinement of every changed or new UI surfac
 not a redesign. `DESIGN.md` and `docs/design-system-baseline.md` stay normative, and the
 incumbent identity, behavior and copy stay unless a recorded value is violated.
 
-Audited base `8a77cb2a70d9f6a55bea9d822ef87b6641f2d79b`, head `3d4b0b4` plus the edits below.
-The eleven changed UI files are the whole scope.
+Audited base `8a77cb2a70d9f6a55bea9d822ef87b6641f2d79b`, starting head `3d4b0b4`. The code
+landed in `acca10d` and `d099125`, with the record commits after them. The eleven changed UI
+files are the whole scope.
 
 ## Sources loaded, and what could not run
 
@@ -37,7 +38,7 @@ desktop app, so this pass kept ENERGY 2, RHYTHM 2, MOTION 1 and changed no motio
 | --- | --- | --- |
 | antislop Delivery Gate, rule ids | Pass after the fixes below | Block 1: no em dash left in a user-visible string or a comment in the changed files (R-02, checked by `grep -P` for U+2014); no contrast below 4.5:1 for the pairs this pass controls (R-25, computed figures in the table below); loading, error and empty states all present (R-27); keyboard reachability comes from the shared Radix primitives and native controls (R-32); no fabricated claim, and the page states only what the main process answered (R-36, R-38). Blocks 2 and 4: no gradient, glow, shadow, capsule badge, template icon, pill-shaped-everything or generic CTA in the changed files (R-01, R-04, R-09, R-12, R-13, R-15, R-16, R-11); the accent count and the radius set are unchanged (R-29, R-31). The R-35 answer is in "Not verified" below |
 | Baseline mirror check | Pass | The pill is one implementation used by two pages (baseline section 3.5 plus the `DESIGN.md` badge paragraph); the tab root, header, card shell, `p-4` rows, `divide-y` row list, `size="sm"` outline button with an `h-4 w-4 mr-2` icon, and the shared `AlertDialog` all match the sibling tabs. The inline error moved to the recorded destructive-text pair `text-red-600 dark:text-red-400` (`DESIGN.md` line 271) |
-| unslop copy pass | Pass | Every string in the changed files was read against `.agents/skills/unslop/SKILL.md` and the copywriting checklist. Three user-visible em dashes and one `…` character were removed, two vague strings were rewritten (below), and no new string names a fact the app has not checked |
+| unslop copy pass | Pass | Every string in the changed files was read against `.agents/skills/unslop/SKILL.md` and the copywriting checklist. The changed files held seven em dash glyphs, four in user-visible strings and three in comments, and all seven are gone along with one `…` character; two vague strings were rewritten (below), and no new string names a fact the app has not checked |
 | Motion check | Pass | No new motion. The only animations are the incumbent `animate-spin` on `RefreshCw` and `Loader2`, matching the debug tab's Reload button, and the transition classes already in the sidebar row. Nothing was added from outside `src/renderer/lib/motion.ts` |
 | Accessibility pass | Pass for what source can show | The headline is an `<output>`, whose implicit status role announces a state change and which cleared SonarCloud S6819; the refresh button carries `aria-busy` next to its `disabled`; the switch keeps its `label for` and `aria-describedby` pair; the confirm stays on the shared Radix `AlertDialog`, which supplies focus trap, `Esc` and focus restore; every icon-only or text control keeps a text label |
 | Skill report | This file | Findings, measurements, decisions and the accepted record change are below |
@@ -61,7 +62,7 @@ a third-party reviewer, so it is a second opinion, not the gate.
 | Same file, store row label | unslop | The row was labelled "Browser storage" while its pill and detail reported the app's own store | Label `App credential store`, pill `Saved here` | P2 |
 | `credential-storage-state.ts` | DRY | The store row's sentence and pill were assembled in JSX, where only a running app could exercise them | `browserRow` returns both, and the module now has 18 tests | P2 |
 | `agents-backends-tab.tsx` | R-02, R-25 | An em dash was the empty-list placeholder, `Loading backends…` broke the `...` rule, and an error line used `text-red-500` at 3.76:1 | `none`, `...`, `text-red-600 dark:text-red-400` | P1 |
-| `agents-models-tab.tsx` | R-02, unslop | Two user-visible em dashes, "saved by the app" where the store has a name, and a restore toast that told the user to "Check it again" without saying what to check | Commas and one conjunction, `saved in this app's store`, "The OpenAI API key could not be put back. Try saving it again." | P2 |
+| `agents-models-tab.tsx` | R-02, unslop | Three user-visible em dashes, "saved by the app" where the store has a name, and a restore toast that told the user to "Check it again" without saying what to check | Commas and one conjunction, `saved in this app's store`, "The OpenAI API key could not be put back. Try saving it again." | P2 |
 | `settings-sidebar.tsx` | R-04 | The new tab's icon alias claimed a filled icon for an outline one, in a file whose other icons are custom filled SVGs | Alias `KeyRound as KeyIcon`. The sidebar already mixes lucide outline and custom filled icons through `ServerIcon` | P3 |
 | `settings-content.tsx`, `use-codex-login-flow.ts`, `lib/atoms/index.ts`, `renderer-secrets.ts` | none | No recorded value or rule violated | Left unchanged | none |
 
