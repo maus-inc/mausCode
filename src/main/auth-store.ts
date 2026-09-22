@@ -111,53 +111,64 @@ export class AuthStore {
       // Throws when the value may not be stored, so nothing is written.
       const prepared = this.store.prepare("The sign-in token", value)
       if (prepared.ciphertext) {
-        const temp = writeCredentialTempFile(this.filePath, prepared.ciphertext)
-        try {
-          const verified = this.store.read(readFileSync(temp), "The sign-in token") === value
-          if (!verified) {
-            throw new Error("The saved sign-in token could not be read back after encryption.")
-          }
-          renameSync(temp, this.filePath)
-        } catch (error) {
-          // A read-back or a rename that did not land leaves the session in
-          // the temporary file, so those bytes are removed here.
-          try {
-            if (existsSync(temp)) unlinkSync(temp)
-          } catch {
-            // The failure worth reporting is the one that stopped the save.
-          }
-          throw error
-        }
+        this.writeEncryptedSession(value, prepared.ciphertext)
         warnings.push(...this.removePlaintextCopies())
       } else {
-        // The new value lands before the ciphertext moves: the ciphertext is the
-        // only readable candidate until then, so a failed write must leave it in
-        // place rather than sign the user out.
-        this.writePlaintext(value)
-        // The saved ciphertext cannot be read without a keyring, and leaving it
-        // in place would keep this new value from ever being loaded. Keep it
-        // aside instead of deleting it.
-        const stashed = stashUnreadableCiphertext(
-          this.filePath,
-          this.store.keychain,
-          "The saved sign-in session",
-        )
-        // The same rule as the file secret store: while a file sits at this
-        // path it is the only source reads use, so the new session does not load
-        // until it moves aside, and that has to be reported rather than cleared.
-        if (!stashed.stashed && existsSync(this.filePath)) {
-          const reason = stashed.reason ? ` (${stashed.reason}).` : "."
-          warnings.push(
-            `The older sign-in session is still saved at ${basename(this.filePath)} and was ` +
-              `not moved aside, so the new session will not load while that file is there${reason}`,
-          )
-        }
+        this.replaceWithPlaintextSession(value, warnings)
       }
       this.lastFailure = warnings.length > 0 ? warnings.join(" ") : null
     } catch (error) {
       this.lastFailure = error instanceof Error ? error.message : String(error)
       console.error("[AuthStore] Failed to save the sign-in session:", this.lastFailure)
       throw error
+    }
+  }
+
+  /**
+   * Writes the encrypted session through a temporary file and replaces the
+   * saved file only after a read-back verified the bytes, so a failed save
+   * never destroys a working session.
+   */
+  private writeEncryptedSession(value: string, ciphertext: Buffer): void {
+    const temp = writeCredentialTempFile(this.filePath, ciphertext)
+    try {
+      const verified = this.store.read(readFileSync(temp), "The sign-in token") === value
+      if (!verified) {
+        throw new Error("The saved sign-in token could not be read back after encryption.")
+      }
+      renameSync(temp, this.filePath)
+    } catch (error) {
+      // A read-back or a rename that did not land leaves the session in the
+      // temporary file, so those bytes are removed here.
+      this.removeTempQuietly(temp)
+      throw error
+    }
+  }
+
+  /**
+   * Writes a session that may only be stored in the clear. The new value lands
+   * before the ciphertext moves: the ciphertext is the only readable candidate
+   * until then, so a failed write must leave it in place rather than sign the
+   * user out. The saved ciphertext cannot be read without a keyring, and
+   * leaving it in place would keep this new value from ever being loaded, so
+   * it is kept aside instead of deleted.
+   */
+  private replaceWithPlaintextSession(value: string, warnings: string[]): void {
+    this.writePlaintext(value)
+    const stashed = stashUnreadableCiphertext(
+      this.filePath,
+      this.store.keychain,
+      "The saved sign-in session",
+    )
+    // The same rule as the file secret store: while a file sits at this path it
+    // is the only source reads use, so the new session does not load until it
+    // moves aside, and that has to be reported rather than cleared.
+    if (!stashed.stashed && existsSync(this.filePath)) {
+      const reason = stashed.reason ? ` (${stashed.reason}).` : "."
+      warnings.push(
+        `The older sign-in session is still saved at ${basename(this.filePath)} and was ` +
+          `not moved aside, so the new session will not load while that file is there${reason}`,
+      )
     }
   }
 
@@ -168,12 +179,16 @@ export class AuthStore {
       renameSync(temp, this.plaintextPath)
     } catch (error) {
       // A rename that did not land leaves the session in the temporary file.
-      try {
-        if (existsSync(temp)) unlinkSync(temp)
-      } catch {
-        // The failure worth reporting is the one that stopped the rename.
-      }
+      this.removeTempQuietly(temp)
       throw error
+    }
+  }
+
+  private removeTempQuietly(temp: string): void {
+    try {
+      if (existsSync(temp)) unlinkSync(temp)
+    } catch {
+      // The failure worth reporting is the one that stopped the write.
     }
   }
 

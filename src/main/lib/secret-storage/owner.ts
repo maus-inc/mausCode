@@ -133,8 +133,10 @@ export function stashedCiphertextPaths(filePath: string): string[] {
  */
 export function unusedRecoveryName(base: string): string {
   let candidate = base
-  for (let step = 2; existsSync(candidate); step += 1) {
+  let step = 2
+  while (existsSync(candidate)) {
     candidate = `${base}-${step}`
+    step += 1
   }
   return candidate
 }
