@@ -93,12 +93,18 @@ records them as a gap for their own pass. The 600 step in plain text without a w
 
 ## A recorded gap this pass measured
 
-The baseline records the error box as `border-destructive/20 bg-destructive/10 text-destructive`
-and the token is `0 84.2% 60.2%`, which is about 3.4 to 1 on that wash at `text-xs`, below the
-4.5 floor. Nine login components use that box, all outside this PR's diff, and the same tone on
-a plain surface measures 3.79 to 1. The pass did not change them, because a recorded value is
-not this PR's to move without the same kind of decision the pill step got. The gap is recorded
-here so the next pass or the human can decide it.
+The baseline records the error box as `border-destructive/20 bg-destructive/10 text-destructive`,
+and `DESIGN.md` line 27 gives the token as `#ef4444`, which is about 3.4 to 1 on that wash. Below
+the 4.5 floor for small text, and 14px does not clear it either. Eleven surfaces use the box, all
+outside this PR's diff: the seven `*-login-content.tsx` components at `text-xs`,
+`claude-login-modal.tsx`, `onboarding-error.tsx`, and the setup-error boxes in
+`isolated-message-group.tsx` and `messages-list.tsx` at `text-sm`. The same tone on a plain
+surface measures 3.79 to 1. The pass did not change them, because a recorded value is not this
+PR's to move without the same kind of decision the pill step got. The gap is recorded here for
+the next pass and for the human.
+
+The count in the commit message that recorded this note said nine, from a first pass over the
+grep. The numbers above are the verified ones.
 
 ## Not verified here
 
