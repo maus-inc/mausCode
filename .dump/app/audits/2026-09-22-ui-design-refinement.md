@@ -91,6 +91,15 @@ consequence. Two older pills outside this PR's diff still use the 600 step on a 
 records them as a gap for their own pass. The 600 step in plain text without a wash, as in
 `agent-diff-view.tsx:726` to `745`, follows the recorded destructive-text pair and is correct.
 
+## A recorded gap this pass measured
+
+The baseline records the error box as `border-destructive/20 bg-destructive/10 text-destructive`
+and the token is `0 84.2% 60.2%`, which is about 3.4 to 1 on that wash at `text-xs`, below the
+4.5 floor. Nine login components use that box, all outside this PR's diff, and the same tone on
+a plain surface measures 3.79 to 1. The pass did not change them, because a recorded value is
+not this PR's to move without the same kind of decision the pill step got. The gap is recorded
+here so the next pass or the human can decide it.
+
 ## Not verified here
 
 - No rendered check ran. Every layout claim is source-level, and the accessibility pass
