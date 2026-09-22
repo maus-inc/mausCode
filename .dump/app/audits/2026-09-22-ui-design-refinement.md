@@ -42,6 +42,10 @@ desktop app, so this pass kept ENERGY 2, RHYTHM 2, MOTION 1 and changed no motio
 | Accessibility pass | Pass for what source can show | The headline is an `<output>`, whose implicit status role announces a state change and which cleared SonarCloud S6819; the refresh button carries `aria-busy` next to its `disabled`; the switch keeps its `label for` and `aria-describedby` pair; the confirm stays on the shared Radix `AlertDialog`, which supplies focus trap, `Esc` and focus restore; every icon-only or text control keeps a text label |
 | Skill report | This file | Findings, measurements, decisions and the accepted record change are below |
 
+An outside check agrees with the pass. The `Buoy Design Review` check on `d099125` answers
+"No actionable design drift", and `Socket Security` reports no net dependency change. Buoy is
+a third-party reviewer, so it is a second opinion, not the gate.
+
 ## Findings and changes
 
 | Location | Rule | Consequence before | Smallest fix | Priority |
