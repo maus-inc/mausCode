@@ -211,9 +211,17 @@ function isUtf8Text(payload: Buffer): boolean {
 }
 
 /**
- * Decodes stored bytes. Prefixed bytes are ciphertext and must decrypt.
+ * Decodes stored bytes. Prefixed bytes are ciphertext whenever they decrypt.
  * Anything else is a value a previous version wrote in the clear, which stays
  * readable. An unresolvable payload raises instead of returning a wrong value.
+ *
+ * A plaintext value an earlier version wrote can itself begin with the cipher
+ * prefix, and the tell that separates it from real ciphertext is that
+ * ciphertext never decodes as text while such a value always does: encrypted
+ * bytes are random and carry nulls, so they fail the text check. Decryption is
+ * tried first and wins whenever it succeeds, so a real ciphertext is never
+ * misread; the text reading is only the fallback for prefixed bytes the keyring
+ * cannot open.
  */
 export function decodeBytes(payload: Buffer, keychain: Keychain, context: string): DecodeResult {
   if (payload.length === 0) {
@@ -228,20 +236,23 @@ export function decodeBytes(payload: Buffer, keychain: Keychain, context: string
       `${context} is neither ciphertext nor readable text. The saved value is kept unchanged.`,
     )
   }
-  if (!keychain.isEncryptionAvailable()) {
-    throw new SecretStorageError(
-      "ciphertext-unreadable",
-      `${context} is encrypted and no OS keyring can decrypt it. The saved value is kept unchanged.`,
-    )
+  if (keychain.isEncryptionAvailable()) {
+    try {
+      return { value: keychain.decryptString(payload), protection: "os-encryption" }
+    } catch {
+      // The bytes may be a legacy plaintext value that begins with the cipher
+      // prefix; fall through to the text check before reporting them.
+    }
   }
-  try {
-    return { value: keychain.decryptString(payload), protection: "os-encryption" }
-  } catch {
-    throw new SecretStorageError(
-      "ciphertext-unreadable",
-      `${context} could not be decrypted with the current OS keyring. The saved value is kept unchanged.`,
-    )
+  if (isUtf8Text(payload)) {
+    return { value: payload.toString("utf-8"), protection: "plaintext" }
   }
+  throw new SecretStorageError(
+    "ciphertext-unreadable",
+    keychain.isEncryptionAvailable()
+      ? `${context} could not be decrypted with the current OS keyring. The saved value is kept unchanged.`
+      : `${context} is encrypted and no OS keyring can decrypt it. The saved value is kept unchanged.`,
+  )
 }
 
 /** The characters a base64 column may hold, in the standard alphabet. */

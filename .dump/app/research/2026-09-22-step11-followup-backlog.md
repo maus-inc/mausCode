@@ -4,8 +4,36 @@ Everything here was deliberately kept out of pull request 68. The PR merged the
 storage policy, the settings page, and the runtime mitigation; these are the
 items recorded along the way as real but out of scope, plus the one conditional
 fix waiting on a review decision. Order is suggested priority, not commitment.
+A deep independent review of PR 68 on 2026-09-22 re-prioritized this list: the
+crash-restart clear hole and the `removePlaintextCompanion` surfacing moved to
+the top because the reviewer called them the two items with real security or
+user-visible weight, and the three low findings it logged are folded in below.
 
-## 1. Four login pages say "stored encrypted" when the store may hold plaintext
+## 1. The daemon's supervised crash-restart skips the credential-file clear
+
+`RuntimeManager` restarts a crashed daemon with backoff
+(`runtime/manager.ts`, the `restarts` path around the `start()` recall) and
+that restart never passes the two clear points: manager creation
+(`runtime/index.ts:59`) and shutdown (`:86`). A plaintext provider file the
+crashed daemon wrote can therefore stay on disk until the app quits, which is
+the known gap the PR body names. The deep review rates this the highest
+priority item because it is an actual plaintext-at-rest hole, not a polish
+gap. The fix belongs in the manager's restart seam, before it calls `start()`
+again: run the same fail-closed `clearPrivateCredentialFiles` the creation
+path runs, because the app re-applies credentials for every turn and nothing
+needs to survive.
+
+## 2. `removePlaintextCompanion` failures are log-only
+
+`file-secret.ts` reports a companion it could not remove with `console.error`
+and nothing else. A plaintext companion that survives an encrypted write is
+the kind of remnant step 11 exists to eliminate; the failure should surface
+in the storage status or the sign-out warnings the auth store already
+collects, so the user learns the file is still there. The deep review pairs
+this with item 1 as the second priority, because a leftover plaintext file the
+user is never told about defeats the whole point of the migration.
+
+## 3. Four login pages say "stored encrypted" when the store may hold plaintext
 
 `cline-login-content.tsx:216`, `openclaw-login-content.tsx:193`,
 `qwen-login-content.tsx:209`, and `roo-login-content.tsx:193` each tell the
@@ -20,19 +48,41 @@ decision: either a neutral claim ("stored by the app's secret store on this
 device") or a live claim driven by the storage status the page already
 exposes.
 
-## 2. The daemon's supervised crash-restart skips the credential-file clear
+## 4. Keychain reads and writes block the main process
 
-`RuntimeManager` restarts a crashed daemon with backoff
-(`runtime/manager.ts`, the `restarts` path around the `start()` recall) and
-that restart never passes the two clear points: manager creation
-(`runtime/index.ts:59`) and shutdown (`:86`). A plaintext provider file the
-crashed daemon wrote can therefore stay on disk until the app quits, which is
-the known gap the PR body names. The fix belongs in the manager's restart
-seam, before it calls `start()` again: run the same fail-closed
-`clearPrivateCredentialFiles` the creation path runs, because the app
-re-applies credentials for every turn and nothing needs to survive.
+`electron-keychain.ts` is the only module that calls Electron `safeStorage`,
+and every method it wraps, `isEncryptionAvailable`, `encryptString`,
+`decryptString`, and `getSelectedStorageBackend`, is synchronous and runs on
+the main process. Each credential read or write therefore blocks the main
+process while the OS keyring is consulted. This is pre-existing and not
+introduced by PR 68, and Electron offers no asynchronous `safeStorage` API, so
+the honest options are to move credential work off the critical path or to
+measure how long the keyring calls actually take before optimizing. Recorded
+as the deep review's low finding rather than fixed here because it predates
+the PR and has no observed symptom.
 
-## 3. Eleven error boxes sit on `text-destructive` at about 3.4:1
+## 5. The credential ledger's `generations` map is never cleaned
+
+`runtime/credential-ledger.ts:53` keeps a module-level `generations` map keyed
+by session id. `beginCredentialTurn` adds an entry for every session that opens
+a turn (`:97-98`) and `planCredentialRelease` reads it (`:124`), but nothing
+ever deletes an entry, so the map grows one entry per session for the life of
+the process. Each entry is a short string and a number, so this is a slow,
+low-severity leak rather than a defect, but a long-lived app that opens many
+sessions should eventually prune sessions it no longer tracks. Recorded from
+the deep review's low findings.
+
+## 6. The release retry in `runtime/credentials.ts` stays an E4 audit item
+
+The retry path imports `../db`, which `node --test --experimental-strip-types`
+cannot load, so it has no binary-free test. Either rework the import or move
+the case into the vitest suite; the handoff is labelled unshipped until a
+jcode release carries it, but the seam should still be tested. The deep review
+flags the same spot as its fire-and-forget retry finding: a release that fails
+once is retried without a durable record, so a gap between the last attempt and
+process exit is not surfaced.
+
+## 7. Eleven error boxes sit on `text-destructive` at about 3.4:1
 
 Seven `*-login-content.tsx` boxes at `text-xs`, `claude-login-modal.tsx`,
 `onboarding-error.tsx`, and two setup-error boxes at `text-sm` all use
@@ -42,7 +92,7 @@ decision to record in DESIGN.md is between extending that pattern surface by
 surface and lifting the `destructive` token itself to a 700/400 step pair the
 way the status pill did.
 
-## 4. Two older status pills still sit on the 600 step
+## 8. Two older status pills still sit on the 600 step
 
 `all-projects-page.tsx:96` at 11px and `agent-diff-view.tsx:142` use the
 600-step wash the pill decision measured as failing (2.95:1 to 4.23:1). The
@@ -50,36 +100,23 @@ sanctioned values from `decisions/2026-09-22-status-pill-step.md` are 700
 light and 400 dark with the mute at `text-foreground/60`; these two are the
 only surfaces left short of it.
 
-## 5. `removePlaintextCompanion` failures are log-only
-
-`file-secret.ts` reports a companion it could not remove with `console.error`
-and nothing else. A plaintext companion that survives an encrypted write is
-the kind of remnant step 11 exists to eliminate; the failure should surface
-in the storage status or the sign-out warnings the auth store already
-collects, so the user learns the file is still there.
-
-## 6. The release retry in `runtime/credentials.ts` stays an E4 audit item
-
-The retry path imports `../db`, which `node --test --experimental-strip-types`
-cannot load, so it has no binary-free test. Either rework the import or move
-the case into the vitest suite; the handoff is labelled unshipped until a
-jcode release carries it, but the seam should still be tested.
-
-## 7. The memory-only handoff protects nothing until a runtime release adopts it
+## 9. The memory-only handoff protects nothing until a runtime release adopts it
 
 The vendored Rust patch is additive and capability-negotiated, the upstream
 `set_api_key` disk semantics stay intact for other clients, and the key
 registry holds one value per provider variable rather than per session
 (`docs/protocol.md` 3.1). The residual risk is stated in the PR; the action is
-coordination with whichever jcode release lands first, not more code here.
+coordination with whichever jcode release lands first, not more code here. The
+Rust change cannot be compiled in this sandbox, so the `cargo check` it needs
+remains owned by the human or a toolchain that has one.
 
-## 8. The manual keyring-disabled pass still needs a running app
+## 10. The manual keyring-disabled pass still needs a running app
 
 Connect, restart, and disk inspection on Linux with the keyring disabled were
 always human- or running-app-owned; static gates cannot exercise them. This is
 the verification the step file asks for and the sandbox cannot provide.
 
-## 9. Conditional: a credential-keyed single-flight, only if the rebuttal is rejected
+## 11. Conditional: a credential-keyed single-flight, only if the rebuttal is rejected
 
 CodeAnt's scan of `df2b0d4` called the shared `refreshInFlight` promise a
 cross-account race. The rebuttal stands: this OS user holds one Claude
@@ -106,7 +143,7 @@ refresh; the refresh token as a key is already held in memory by the same
 structure. Do not implement this unless the rebuttal is rejected, because
 implementing it now would concede a point the code does not owe.
 
-## 10. Optional polish: the Claude custom-config save gives no visible message on refusal
+## 12. Optional polish: the Claude custom-config save gives no visible message on refusal
 
 `agents-models-tab.tsx`'s blur save for `customClaudeConfigAtom` does not
 await the write result, so a refusal reverts the fields (the storage puts the

@@ -69,13 +69,39 @@ describe("secret storage owner", () => {
     expect(() => decodeBytes(Buffer.from([0xff, 0xfe, 0x00, 0x01]), keychain, "The key")).toThrow(
       SecretStorageError,
     )
-    expect(() => decodeBytes(Buffer.from("v10broken", "utf-8"), keychain, "The key")).toThrow(
-      SecretStorageError,
-    )
+    // Prefixed bytes that are not readable text stay unreadable: the text
+    // fallback is for legacy plaintext values, and this is not one.
+    const prefixedBinary = Buffer.concat([Buffer.from("v10", "latin1"), Buffer.from([0xff, 0x00])])
+    expect(() => decodeBytes(prefixedBinary, keychain, "The key")).toThrow(SecretStorageError)
     expect(() => decodeBytes(Buffer.alloc(0), keychain, "The key")).toThrow(SecretStorageError)
     expect(() => decodeStoredBase64("!!!not base64!!!", keychain, "The key")).toThrow(
       SecretStorageError,
     )
+  })
+
+  it("reads a legacy plaintext value that begins with the cipher prefix", () => {
+    // A value an earlier version wrote in the clear can itself start with v10.
+    // It must stay readable whether or not a keyring is present, because it is
+    // text, and a real ciphertext never is.
+    const available = fakeKeychain({ available: true })
+    const unavailable = fakeKeychain({ available: false })
+    const prefixed = Buffer.from("v10legacy-plaintext-token", "utf-8")
+    expect(decodeBytes(prefixed, available, "The key")).toEqual({
+      value: "v10legacy-plaintext-token",
+      protection: "plaintext",
+    })
+    expect(decodeBytes(prefixed, unavailable, "The key").value).toBe("v10legacy-plaintext-token")
+    const column = prefixed.toString("base64")
+    expect(decodeStoredBase64(column, available, "The key").value).toBe("v10legacy-plaintext-token")
+    expect(decodeStoredBase64(column, unavailable, "The key").value).toBe(
+      "v10legacy-plaintext-token",
+    )
+    // Decryption still wins when it works: real ciphertext is never misread.
+    const ciphertext = fakeKeychain().encryptString("sk-live-value")
+    expect(decodeBytes(ciphertext, available, "The key")).toEqual({
+      value: "sk-live-value",
+      protection: "os-encryption",
+    })
   })
 
   it("refuses text whose characters the decoder would ignore", () => {
@@ -88,6 +114,15 @@ describe("secret storage owner", () => {
     // The same text without the stray character is a value this store wrote.
     expect(decodeStoredBase64("aGVsbG8=", keychain, "The key").value).toBe("hello")
     expect(inspectStoredBase64("aGVsbG8=")).toBe("plaintext")
+  })
+
+  it("refuses a column that is nothing but padding", () => {
+    const keychain = fakeKeychain()
+    // The padding guard runs before the body is sliced, so an all-padding
+    // column is refused rather than underflowing the slice. Pin the order.
+    expect(() => decodeStoredBase64("====", keychain, "The key")).toThrow(SecretStorageError)
+    expect(() => decodeStoredBase64("===", keychain, "The key")).toThrow(SecretStorageError)
+    expect(inspectStoredBase64("====")).toBe("unknown")
   })
 
   it("round trips a large column without scanning it quadratically", () => {
