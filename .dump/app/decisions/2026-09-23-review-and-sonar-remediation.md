@@ -4,7 +4,8 @@ Roadmap step 12, issue #14, PR #69 on `arena/01a0cbec-mauscode`, review round of
 2026-09-23 against head `eb4a2bf`. This is the record of every finding the round
 produced, what each one was worth, and what was done about it, so the next reader
 does not have to re-judge a bot's opinion or re-derive why two findings were left
-standing.
+standing. A second round follows it: the duplication sweep instructed after head
+`2c8be15`, recorded under its own heading below against head `dbb9457`.
 
 AGENTS.md still says no review bot is configured. That is now false in three
 directions: Sourcery, CodeAnt and Buoy all review here, and SonarQube Cloud runs a
@@ -59,6 +60,110 @@ lines, and the two transports can no longer drift on the question lifecycle.
 `session-init` deliberately stays per transport, because the native runtime reads a
 cached snapshot and fills the gaps while the CLI reports the full set on init.
 
+## Round 2: taking the duplication to zero, and where zero stops being the goal
+
+The instruction after head `2c8be15` was "eliminate all code duplication
+correctly". Round 1 removed the two blocks a reviewer would have pointed at; this
+round removed what was left that could be removed honestly, and writes down what
+stayed and why. The measure is a windowed scan over the whole tree at 4- and
+6-line windows, keeping only blocks whose copies contain lines this PR added —
+stricter than the gate it feeds, since Sonar's CPD threshold for TypeScript is
+about 100 tokens and a six-line window of short object entries is well under it.
+
+### `ALL_FEATURES_OFF` replaces `TURN_CONTROLS_OFF`
+
+`TURN_CONTROLS_OFF` named four of the thirteen flags, so every manifest still
+restated the other nine and the shared default covered a third of the object. The
+flags are not four. They are thirteen booleans that default off, because a
+capability nobody proved is a capability this app must not advertise — round 1's
+rule, applied to the whole object instead of to the slice that had just grown:
+
+- `FeatureFlags` is now `z.infer<typeof featureFlagsSchema>`, exported in place of a
+  hand-named partial, so the type cannot drift from the schema.
+- `ALL_FEATURES_OFF` spells all thirteen `false` under `satisfies FeatureFlags`.
+  Adding a flag to the schema is a compile error there until its default is chosen
+  deliberately, and off is the only default that needs no edit.
+- Each manifest reads `features: { ...ALL_FEATURES_OFF, <what this CLI proved> }`.
+  A flag that is off because nobody proved it is no longer written at all; a flag
+  that is off *for a reason* keeps its reason inline — grok's undocumented `-r`
+  composition, cline's broken `--id`, openclaw's missing session ids, roo's
+  rejected prompt, the two unverified skills claims.
+
+The direction of the default did not move, so neither did the fail-safe:
+`ALL_FEATURES_OFF` is a superset of `TURN_CONTROLS_OFF`, and no provider gained a
+control it did not have. That was verified rather than assumed. The effective flag
+matrix parsed out of every manifest at `2c8be15` was compared key by key against
+the rewritten tree: 130 values across 10 providers, 0 differences; the default
+itself checked for 13 keys, all `false`, covering every schema flag with none
+outside it. Net: −77/+47 lines across eleven files, most of it deleted negatives.
+
+### One hook for the Claude half of the model picker
+
+`chat-input-area.tsx` and `new-chat-form.tsx` each carried a byte-identical
+37-line `useAvailableModels`, an identical connection test and an identical
+26-line `claude={{ ... }}` block — about 110 duplicated lines that had already
+drifted once, when the effort rows were added to both surfaces by hand in the
+round that shipped adaptive thinking. This duplication predates step 12; step 12
+added to it, which is what made it worth ending.
+
+`hooks/use-claude-model-picker.ts` now owns the model list and the offline-Ollama
+overlay, the custom-config test, the connection test, the resolved Ollama model,
+extended thinking, and the capability-driven effort rows. It returns the list plus
+a ready props object typed against `AgentModelSelectorProps["claude"]`, exported
+from the selector for the purpose, so the block cannot drift from the component it
+feeds: add a prop to the selector and the shared object fails typecheck until it
+supplies one. The connection test travels inside that object rather than in the
+return, because neither surface reads it apart from the picker.
+
+Two things stay with each surface on purpose: `selectedModelId` and
+`onSelectModel`. They are the only lines that differ — the composer also stamps the
+sub-chat model id — and pulling them into the hook would mean passing callbacks
+back out, which is the same coupling wearing a different hat. Net across the two
+surfaces: −177/+22, and the drift class is gone rather than merely smaller.
+
+### The transports take the SDK's own options type
+
+Both chat transports restated
+`sendMessages(options: { messages: UIMessage[]; abortSignal?: AbortSignal })` and
+then repeated the same three lines reading the last user message. Both classes
+`implements ChatTransport<UIMessage>`, so the shape was the library's all along,
+and restating it did not merely duplicate it — it narrowed it: the real options
+carry `trigger`, `chatId`, `messageId` and `ChatRequestOptions`, none of which
+either transport could see.
+
+`chat-chunk-atoms.ts`, which already holds the shared transport helpers, now also
+holds `SendMessagesOptions = Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]`
+and `lastUserPrompt(messages)`. Each transport declares the derived type and reads
+the turn once. This is the one duplication the compiler was already holding equal —
+an implementation that stops matching its interface does not typecheck — and it was
+still worth removing, because what the copies shared was a loss of contract.
+
+### Left standing, with reasons
+
+1. **Import statements.** `import { ALL_FEATURES_OFF, type ProviderCapability } from
+   "../../../shared/provider-capabilities"` is identical in ten manifests, and the
+   two surfaces share atom import lines. These are references, not behaviour:
+   nothing inside them can drift out of step with anything, and the only way to
+   "share" an import is a barrel module whose entire job is being imported.
+2. **Declarative manifest data.** Seven manifests share
+   `contextWindow: null, latencyClass: "cloud", usageSurface: "native"`, and the two
+   that share `usageSurface: "none"` share it for the same reason. Unlike the flags,
+   these have no fail-safe default: a spread that quietly handed a new provider
+   cloud latency or a native usage surface would be a wrong value inherited
+   silently, where an off flag is a safe one. Restating a fact per provider is what
+   a capability table is for.
+3. **Call sites of the new abstractions.** `const { availableModels, ... } =
+   useClaudeModelPicker(hiddenModels)` and `claude={{ ...claudePickerProps, ... }}`
+   appear in both surfaces because both surfaces use the shared thing. Two call
+   sites of one hook are the point, not the residue.
+4. **Coincidental windows with pre-existing code.** A `break / default: / break`
+   switch tail in `transform.ts` matches three unrelated files; two providers'
+   comment prose matches. Neither is a copy of anything this step wrote.
+
+After this round the scan reports no duplicated block of six or more lines in which
+both copies contain lines this PR added, other than the manifest data and the call
+sites itemised above. The same scan before round 2 reported 21 such groups.
+
 ## The two complexity findings this step does not take
 
 | Function | Reported | What this PR changed inside it | What clearing it needs |
@@ -103,18 +208,19 @@ renamed tools take their predecessors' classes.
 
 ## Verification in this sandbox
 
+Re-run in full against the round-2 head `dbb9457`; every row below is that run.
 2 CPU, 3.9 GB, no Electron binary (the postinstall download is intercepted) and no
 local build or package.
 
 | Gate | Result |
 | --- | --- |
-| `biome check .` | 977 files, 0 findings |
+| `biome check .` | 978 files, 0 findings |
 | `tsc --noEmit` | 0 errors, after building `packages/runtime-client` for its `dist` types |
 | `ratchet:typecheck` | passed, 0 errors against a 0 baseline |
 | `vitest run` | 103 files, 1891 passed, 1 skipped |
 | `npm run test:node` | 59 passed, 0 failed |
 | `npm run test:contracts` | 23 files, 382 passed |
-| `npm run lint` | 922 files checked, no findings |
+| `npm run lint` | 923 files checked, no findings |
 | `ratchet:audit` | passed, 3 critical baseline, no new critical advisories |
 | `skills:verify` | 50 of 50 locked skills verified, 2 unrecorded project-owned (pre-existing) |
 | `build`, `package:linux` | not runnable here; CI runs them and the results are recorded on the PR |
