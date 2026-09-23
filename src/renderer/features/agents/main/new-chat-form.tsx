@@ -5,6 +5,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import { AlignJustify, Plus } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { EFFORT_LEVELS } from "../../../../shared/effort"
 import { permissionFloorFor } from "../../../../shared/provider-capabilities"
 import { Button } from "../../../components/ui/button"
 import {
@@ -81,6 +82,7 @@ import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
   chatSourceModeAtom,
+  claudeEffortAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
@@ -370,6 +372,12 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
     lastSelectedGeminiModelIdAtom,
   )
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+
+  // The effort rows come from the backend's own capability profile, so a
+  // provider that reports no effort control shows no sub-menu.
+  const { data: claudeCapability } = trpc.providers.get.useQuery({ id: "claude" })
+  const claudeEfforts = claudeCapability?.features.effort ? EFFORT_LEVELS : []
+  const [selectedClaudeEffort, setSelectedClaudeEffort] = useAtom(claudeEffortAtom)
   const { data: geminiAuth } = trpc.gemini.getAuthStatus.useQuery()
   const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
   const isGeminiConnected =
@@ -2210,6 +2218,9 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
                               isConnected: isClaudeConnected,
                               thinkingEnabled,
                               onThinkingChange: setThinkingEnabled,
+                              efforts: claudeEfforts,
+                              selectedEffort: selectedClaudeEffort,
+                              onSelectEffort: setSelectedClaudeEffort,
                             }}
                             codex={{
                               models: codexUiModels,

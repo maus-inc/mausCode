@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
+import type { EffortLevel } from "../../../shared/effort"
 import { desktopViewAtom as _desktopViewAtom } from "../../features/agents/atoms"
 import { createRendererSecretStorage } from "../renderer-secrets"
 import { DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID } from "../themes/builtin-themes"
@@ -346,6 +347,27 @@ export const activeConfigAtom = atom((get) => {
 export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
   "preferences:extended-thinking-enabled",
   true,
+  undefined,
+  { getOnInit: true },
+)
+
+// Preferences - Claude reasoning effort
+// The levels come from `src/shared/effort.ts`, the one vocabulary the main
+// process validates a request against. `null` means the chat never picked one
+// and the CLI decides, which is the behaviour before this setting existed.
+export const claudeEffortAtom = atomWithStorage<EffortLevel | null>(
+  "preferences:claude-effort",
+  null,
+  undefined,
+  { getOnInit: true },
+)
+
+// Preferences - Prompt suggestions
+// Off by default: turning it on asks the backend for a suggested next prompt at
+// the end of a turn and puts one clickable row above the composer.
+export const promptSuggestionsEnabledAtom = atomWithStorage<boolean>(
+  "preferences:prompt-suggestions-enabled",
+  false,
   undefined,
   { getOnInit: true },
 )

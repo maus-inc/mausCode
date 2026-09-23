@@ -72,6 +72,12 @@ export function getCodexCapability(): ProviderCapability {
       skills: false,
       structuredOutput: false,
       fileCheckpointing: false,
+      // True only where a turn can actually carry the value end to end; the
+      // evidence per backend is in
+      // `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
+      effort: true,
+      adaptiveThinking: false,
+      promptSuggestions: false,
     },
     notes: [
       "Approvals auto-grant session-wide (parity with the former ACP path).",

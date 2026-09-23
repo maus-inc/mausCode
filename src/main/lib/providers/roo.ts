@@ -69,6 +69,12 @@ export function getRooCapability(): ProviderCapability {
       skills: false,
       structuredOutput: false,
       fileCheckpointing: false,
+      // True only where a turn can actually carry the value end to end; the
+      // evidence per backend is in
+      // `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
+      effort: false,
+      adaptiveThinking: false,
+      promptSuggestions: false,
     },
     notes: [
       "Streams NDJSON events per turn (text deltas, thinking, tool calls, command output, cost).",

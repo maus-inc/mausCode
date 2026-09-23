@@ -72,6 +72,12 @@ export function getOpenclawCapability(): ProviderCapability {
       skills: false,
       structuredOutput: false,
       fileCheckpointing: false,
+      // True only where a turn can actually carry the value end to end; the
+      // evidence per backend is in
+      // `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
+      effort: false,
+      adaptiveThinking: false,
+      promptSuggestions: false,
     },
     notes: [
       "One JSON envelope per turn — no streaming; progress appears only when the turn settles.",

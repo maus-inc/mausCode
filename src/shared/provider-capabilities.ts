@@ -72,6 +72,12 @@ export const featureFlagsSchema = z.object({
   skills: z.boolean(),
   structuredOutput: z.boolean(),
   fileCheckpointing: z.boolean(),
+  /** The backend accepts a reasoning-effort level from `src/shared/effort.ts` on a turn. */
+  effort: z.boolean(),
+  /** The backend can pick its own thinking budget per turn instead of being handed one. */
+  adaptiveThinking: z.boolean(),
+  /** The backend can suggest a next prompt after it finishes a turn. */
+  promptSuggestions: z.boolean(),
 })
 
 export const providerCapabilitySchema = z.object({

@@ -13,12 +13,14 @@ import {
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
   type CustomClaudeConfig,
+  claudeEffortAtom,
   claudeLoginModalConfigAtom,
   customClaudeConfigAtom,
   enableTasksAtom,
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
   normalizeCustomClaudeConfig,
+  promptSuggestionsEnabledAtom,
   selectedOllamaModelAtom,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
@@ -33,6 +35,7 @@ import {
   pendingAuthRetryMessageAtom,
   pendingUserQuestionsAtom,
   subChatModelIdAtomFamily,
+  subChatPromptSuggestionAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
@@ -151,10 +154,15 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     // Read extended thinking setting dynamically (so toggle applies to existing chats)
     const thinkingEnabled = appStore.get(extendedThinkingEnabledAtom)
-    // Max thinking tokens for extended thinking mode
-    // SDK adds +1 internally, so 64000 becomes 64001 which exceeds Opus 4.5 limit
-    // Using 32000 to stay safely under the 64000 max output tokens limit
-    const maxThinkingTokens = thinkingEnabled ? 32_000 : undefined
+    // Adaptive lets the model pick its own budget; disabled is what the toggle
+    // off has always meant but could not say while the field was a token count.
+    const thinking = thinkingEnabled
+      ? ({ type: "adaptive" } as const)
+      : ({ type: "disabled" } as const)
+    // null is "let the CLI choose", so a chat that never opened the picker keeps
+    // the model's own default instead of a level this app guessed.
+    const effort = appStore.get(claudeEffortAtom)
+    const promptSuggestions = appStore.get(promptSuggestionsEnabledAtom)
     const historyEnabled = appStore.get(historyEnabledAtom)
     const enableTasks = appStore.get(enableTasksAtom)
 
@@ -194,7 +202,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             projectPath: this.config.projectPath, // Original project path for MCP config lookup
             mode: currentMode,
             sessionId,
-            ...(maxThinkingTokens && { maxThinkingTokens }),
+            thinking,
+            ...(effort && { effort }),
+            ...(promptSuggestions && { promptSuggestions: true }),
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
             ...(selectedOllamaModel && { selectedOllamaModel }),
@@ -340,6 +350,17 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
 
               // Handle retry notification - show friendly toast instead of scary error
+              // A suggestion is not part of the assistant message, so it goes
+              // to the composer atom for this sub-chat and is never enqueued as
+              // a stream chunk the AI SDK would not recognize.
+              if (chunk.type === "prompt-suggestion") {
+                appStore.set(
+                  subChatPromptSuggestionAtomFamily(this.config.subChatId),
+                  chunk.suggestion,
+                )
+                return
+              }
+
               if (chunk.type === "retry-notification") {
                 toast.info("Retrying request", {
                   description: chunk.message || "Request was unsuccessful, trying again...",

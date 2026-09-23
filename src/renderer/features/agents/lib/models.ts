@@ -8,7 +8,6 @@ export {
   CODEX_MODELS,
   CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
   type CodexThinkingLevel,
-  formatCodexThinkingLabel,
 } from "../../../../shared/codex-model-id"
 
 export const CLAUDE_MODELS = [

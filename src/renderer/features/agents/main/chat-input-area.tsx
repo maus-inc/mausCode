@@ -9,10 +9,11 @@
  */
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ChevronDown, Zap } from "lucide-react"
+import { ChevronDown, Sparkles, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import { EFFORT_LEVELS } from "../../../../shared/effort"
 import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
 import { permissionFloorFor } from "../../../../shared/provider-capabilities"
 import { Button } from "../../../components/ui/button"
@@ -33,6 +34,7 @@ import {
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
+  claudeEffortAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
@@ -83,6 +85,7 @@ import {
   subChatModelIdAtomFamily,
   subChatOpenclawModelIdAtomFamily,
   subChatOpenRouterModelIdAtomFamily,
+  subChatPromptSuggestionAtomFamily,
   subChatQwenModelIdAtomFamily,
   subChatRooModelIdAtomFamily,
 } from "../atoms"
@@ -469,6 +472,12 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Model dropdown state
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
+  const promptSuggestionAtom = useMemo(
+    () => subChatPromptSuggestionAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [promptSuggestion, setPromptSuggestion] = useAtom(promptSuggestionAtom)
+
   const subChatModelIdAtom = useMemo(() => subChatModelIdAtomFamily(subChatId), [subChatId])
   const [selectedSubChatModelId, setSelectedSubChatModelId] = useAtom(subChatModelIdAtom)
   const subChatCodexModelIdAtom = useMemo(
@@ -799,6 +808,12 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Extended thinking (reasoning) toggle
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+
+  // The effort rows come from the backend's own capability profile, so a
+  // provider that reports no effort control shows no sub-menu.
+  const { data: claudeCapability } = trpc.providers.get.useQuery({ id: "claude" })
+  const claudeEfforts = claudeCapability?.features.effort ? EFFORT_LEVELS : []
+  const [selectedClaudeEffort, setSelectedClaudeEffort] = useAtom(claudeEffortAtom)
 
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
@@ -1869,6 +1884,29 @@ export const ChatInputArea = memo(function ChatInputArea({
                 ) : null
               }
             >
+              {promptSuggestion && (
+                <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left transition-colors hover:text-foreground"
+                    onClick={() => {
+                      editorRef.current?.setValue(promptSuggestion)
+                      editorRef.current?.focus()
+                      setPromptSuggestion(null)
+                    }}
+                  >
+                    {promptSuggestion}
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 transition-colors hover:text-foreground"
+                    onClick={() => setPromptSuggestion(null)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
               <PromptInputContextItems />
               <div className="relative">
                 <AgentsMentionsEditor
@@ -2056,6 +2094,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                         isConnected: isClaudeConnected,
                         thinkingEnabled,
                         onThinkingChange: setThinkingEnabled,
+                        efforts: claudeEfforts,
+                        selectedEffort: selectedClaudeEffort,
+                        onSelectEffort: setSelectedClaudeEffort,
                       }}
                       codex={{
                         models: codexUiModels,

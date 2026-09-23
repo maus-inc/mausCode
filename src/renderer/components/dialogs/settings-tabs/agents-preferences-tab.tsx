@@ -38,6 +38,7 @@ import {
   localOnlyModeAtom,
   notifyWhenFocusedAtom,
   preferredEditorAtom,
+  promptSuggestionsEnabledAtom,
   soundNotificationsEnabledAtom,
 } from "../../../lib/atoms"
 
@@ -140,6 +141,9 @@ function useIsNarrowScreen(): boolean {
 
 export function AgentsPreferencesTab() {
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+  const [promptSuggestionsEnabled, setPromptSuggestionsEnabled] = useAtom(
+    promptSuggestionsEnabledAtom,
+  )
   const [soundEnabled, setSoundEnabled] = useAtom(soundNotificationsEnabledAtom)
   const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useAtom(
     desktopNotificationsEnabledAtom,
@@ -208,6 +212,19 @@ export function AgentsPreferencesTab() {
             </span>
           </div>
           <Switch checked={thinkingEnabled} onCheckedChange={setThinkingEnabled} />
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">Prompt Suggestions</span>
+            <span className="text-xs text-muted-foreground">
+              Ask Claude for one suggested next prompt when a turn finishes, and show it above the
+              composer. <span className="text-foreground/70">Off by default.</span>
+            </span>
+          </div>
+          <Switch
+            checked={promptSuggestionsEnabled}
+            onCheckedChange={setPromptSuggestionsEnabled}
+          />
         </div>
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">

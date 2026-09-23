@@ -637,6 +637,19 @@ export const subChatRooModelIdAtomFamily = atomFamily((subChatId: string) =>
   ),
 )
 
+/**
+ * The one prompt suggestion the last finished turn produced for this sub-chat.
+ * Not persisted: a suggestion belongs to the turn that produced it, so a
+ * reloaded chat starts with none instead of offering a stale next step. The
+ * transport writes it when the SDK sends `prompt_suggestion`, and the composer
+ * renders it and clears it on use or dismiss. The key is the sub-chat the
+ * suggestion belongs to; jotai does the keying, so the created atom itself has
+ * nothing to read from it.
+ */
+export const subChatPromptSuggestionAtomFamily = atomFamily((_subChatId: string) =>
+  atom<string | null>(null),
+)
+
 export const subChatCodexThinkingAtomFamily = atomFamily((subChatId: string) =>
   atom(
     (get) => {
