@@ -9,6 +9,7 @@
  * selecting one means there.
  */
 import { useAtom, useAtomValue } from "jotai"
+import { useMemo } from "react"
 import { EFFORT_LEVELS } from "../../../../shared/effort"
 import {
   anthropicOnboardingCompletedAtom,
@@ -74,7 +75,21 @@ function useAvailableModels() {
 }
 
 export function useClaudeModelPicker(hiddenModels: readonly string[]) {
-  const availableModels = useAvailableModels()
+  const modelSets = useAvailableModels()
+  // Every other provider reads its selection from the list the hidden-model
+  // setting has already been applied to (`codexUiModels`, `rooUiModels` and the
+  // rest), and Claude was the exception: the picker received a filtered list
+  // while the selection, the label and the id written back to the sub-chat all
+  // read the unfiltered one, so hiding a model left it selected, displayed and
+  // sent. One list, the visible one, so the two cannot disagree. When every
+  // Claude model is hidden the list is empty and both surfaces fall back on
+  // their own — the composer offers nothing, the new-chat form sends its
+  // existing `?? "opus"` default — which is what hiding them all means.
+  const models = useMemo(
+    () => modelSets.models.filter((model) => !hiddenModels.includes(model.id)),
+    [modelSets.models, hiddenModels],
+  )
+  const availableModels = { ...modelSets, models }
 
   // A custom config counts as connected: the turn goes to the endpoint it names
   // rather than to an account this app signed into.
@@ -104,7 +119,7 @@ export function useClaudeModelPicker(hiddenModels: readonly string[]) {
   const [selectedClaudeEffort, setSelectedClaudeEffort] = useAtom(claudeEffortAtom)
 
   const props: SharedClaudePickerProps = {
-    models: availableModels.models.filter((model) => !hiddenModels.includes(model.id)),
+    models,
     hasCustomModelConfig: hasCustomClaudeConfig,
     isOffline: availableModels.isOffline && availableModels.hasOllama,
     ollamaModels: availableModels.ollamaModels,

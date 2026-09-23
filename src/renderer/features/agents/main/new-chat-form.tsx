@@ -338,18 +338,14 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
     retry: 1,
   })
 
-  const [selectedModel, setSelectedModel] = useState(
+  // Derived from the visible list, as the other nine providers derive theirs,
+  // so a model hidden in settings cannot stay selected for the next chat.
+  const selectedModel = useMemo(
     () =>
-      availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[0],
+      availableModels.models.find((model) => model.id === lastSelectedModelId) ||
+      availableModels.models[0],
+    [availableModels.models, lastSelectedModelId],
   )
-
-  // Sync selectedModel when atom value changes (e.g., after localStorage hydration)
-  useEffect(() => {
-    const model = availableModels.models.find((m) => m.id === lastSelectedModelId)
-    if (model && model.id !== selectedModel.id) {
-      setSelectedModel(model)
-    }
-  }, [lastSelectedModelId, selectedModel.id, availableModels.models.find])
 
   const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
   const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
@@ -2141,7 +2137,6 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
                                   availableModels.models.find((m) => m.id === modelId) ||
                                   availableModels.models[0]
                                 if (!model) return
-                                setSelectedModel(model)
                                 setLastSelectedModelId(model.id)
                               },
                             }}

@@ -521,19 +521,17 @@ export const ChatInputArea = memo(function ChatInputArea({
     currentOllamaModel,
     props: claudePickerProps,
   } = useClaudeModelPicker(hiddenModels)
-  const [selectedModel, setSelectedModel] = useState(
+  // Derived from the visible list, the way every other provider derives its
+  // selection (`codexUiModels.find(...) || codexUiModels[0]` and the rest). Local
+  // state plus a sync effect kept a model that the picker no longer offers: hide
+  // one mid-session and it stayed selected, labelled and sent until the next
+  // mount, because the effect only ever moved towards a model it could find.
+  const selectedModel = useMemo(
     () =>
-      availableModels.models.find((m) => m.id === selectedSubChatModelId) ||
+      availableModels.models.find((model) => model.id === selectedSubChatModelId) ||
       availableModels.models[0],
+    [availableModels.models, selectedSubChatModelId],
   )
-
-  // Sync selectedModel when per-subChat atom value changes (e.g., after localStorage hydration)
-  useEffect(() => {
-    const model = availableModels.models.find((m) => m.id === selectedSubChatModelId)
-    if (model && model.id !== selectedModel.id) {
-      setSelectedModel(model)
-    }
-  }, [availableModels.models, selectedModel.id, selectedSubChatModelId])
 
   // Materialize the resolved Claude model into per-subChat storage once mounted.
   // This prevents later global default changes from affecting existing sub-chats.
@@ -2015,7 +2013,6 @@ export const ChatInputArea = memo(function ChatInputArea({
                             availableModels.models.find((item) => item.id === modelId) ||
                             availableModels.models[0]
                           if (!model) return
-                          setSelectedModel(model)
                           setSelectedSubChatModelId(model.id)
                           setLastSelectedModelId(model.id)
                         },
