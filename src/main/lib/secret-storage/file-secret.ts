@@ -1,0 +1,257 @@
+/**
+ * One credential kept as encrypted bytes in a `.dat` file, with a JSON
+ * companion used by earlier versions for the plaintext fallback. Every write
+ * is verified by reading it back before it replaces the saved file, and the
+ * plaintext companion is only removed after an encrypted write succeeded.
+ */
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
+import { basename, dirname, join } from "node:path"
+import {
+  removeStaleTemps,
+  stashedCiphertextPaths,
+  stashUnreadableCiphertext,
+  writeCredentialTempFile,
+} from "./owner"
+import { type Keychain, SecretStorageError, type SecretWriter } from "./types"
+
+export type FileSecret = {
+  /** Encrypted bytes, for example `github-auth.dat`. */
+  filePath: string
+  /** Plaintext JSON companion, for example `github-auth.json`. */
+  plaintextPath: string
+  /** Field name inside the JSON companion. */
+  field: string
+  /** Human label used in errors and logs. Never a value. */
+  context: string
+  store: SecretWriter
+  /** Needed to tell an unreadable ciphertext from a readable one. */
+  keychain: Keychain
+}
+
+function ensureDir(path: string): void {
+  const dir = dirname(path)
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
+}
+
+function removeQuietly(path: string): void {
+  try {
+    if (existsSync(path)) unlinkSync(path)
+  } catch {
+    // The failure worth reporting is the one that stopped the write.
+  }
+}
+
+export function saveFileSecret(secret: FileSecret, value: string): void {
+  const prepared = secret.store.prepare(secret.context, value)
+  ensureDir(secret.filePath)
+  if (prepared.ciphertext) {
+    saveEncryptedSecret(secret, value, prepared.ciphertext)
+    return
+  }
+  savePlaintextSecret(secret, value)
+}
+
+/**
+ * Writes the ciphertext through a temporary file, reads it back, and only then
+ * replaces the stored file. A write or a rename that does not land removes the
+ * temporary file, because it holds the credential.
+ */
+function saveEncryptedSecret(secret: FileSecret, value: string, ciphertext: Buffer): void {
+  removeStaleTemps(secret.filePath)
+  const temp = writeCredentialTempFile(secret.filePath, ciphertext)
+  try {
+    verifyReadBack(secret, value, temp)
+    renameSync(temp, secret.filePath)
+  } catch (error) {
+    // The temporary file holds this credential, encrypted, at a name reads
+    // never look at. A write or a rename that did not land leaves those bytes
+    // behind unless they are removed here.
+    removeQuietly(temp)
+    throw error
+  }
+  removePlaintextCompanion(secret)
+}
+
+function verifyReadBack(secret: FileSecret, value: string, temp: string): void {
+  const readBack = secret.store.read(readFileSync(temp), secret.context)
+  if (readBack === value) return
+  throw new Error(`${secret.context} could not be read back after encryption. Nothing was changed.`)
+}
+
+/** The encrypted file is the only source reads use, so the companion goes with it. */
+function removePlaintextCompanion(secret: FileSecret): void {
+  if (!existsSync(secret.plaintextPath)) return
+  try {
+    unlinkSync(secret.plaintextPath)
+  } catch (error) {
+    console.error(`[SecretStore] Could not remove ${secret.plaintextPath}:`, error)
+  }
+}
+
+/**
+ * Writes a value that may only be stored in the clear. A stored file the current
+ * keyring cannot protect would keep winning on read, so it is kept aside rather
+ * than deleted. When it cannot be moved, the old bytes would keep the new value
+ * from ever loading, so this write stops instead of saving a value the app will
+ * not read. A file at this path is the only source reads use, and the write
+ * below targets the companion instead, so the new value would never load while
+ * it is still there. The stash declines to move a file it does not recognise as
+ * ciphertext, and that refusal has to be reported rather than overwritten.
+ */
+function savePlaintextSecret(secret: FileSecret, value: string): void {
+  const stashed = stashUnreadableCiphertext(secret.filePath, secret.keychain, secret.context)
+  if (!stashed.stashed && existsSync(secret.filePath)) {
+    const reason = stashed.reason ? `: ${stashed.reason}` : "."
+    throw new SecretStorageError(
+      "ciphertext-unreadable",
+      `The saved ${secret.context} is still in ${basename(secret.filePath)} and was not ` +
+        `moved aside, so the new value was not saved${reason}`,
+    )
+  }
+  ensureDir(secret.plaintextPath)
+  try {
+    savePlaintextCompanion(secret, value)
+  } catch (error) {
+    restoreStashedCiphertext(secret, stashed.path)
+    throw error
+  }
+}
+
+/**
+ * Puts a file that was moved aside back at the path reads use. The new value did
+ * not land, so the credential would otherwise sit under a recovery name nothing
+ * reads while the app reports nothing saved.
+ */
+function restoreStashedCiphertext(secret: FileSecret, stashedPath: string | null): void {
+  if (stashedPath === null || existsSync(secret.filePath)) return
+  try {
+    renameSync(stashedPath, secret.filePath)
+  } catch (restoreError) {
+    console.warn(
+      `[SecretStore] The saved ${secret.context} could not be put back at ` +
+        `${secret.filePath}, so it stays at ${stashedPath}:`,
+      restoreError,
+    )
+  }
+}
+
+/** Replaces the companion through a temporary file, so a failed write cannot truncate it. */
+function savePlaintextCompanion(secret: FileSecret, value: string): void {
+  const payload = `${JSON.stringify({ [secret.field]: value })}\n`
+  removeStaleTemps(secret.plaintextPath)
+  const temp = writeCredentialTempFile(secret.plaintextPath, payload)
+  try {
+    if (readFileSync(temp, "utf-8") !== payload) {
+      throw new Error(`${secret.context} could not be read back after it was written.`)
+    }
+    renameSync(temp, secret.plaintextPath)
+  } catch (error) {
+    removeQuietly(temp)
+    throw error
+  }
+}
+
+export type FileSecretRead = {
+  value: string | null
+  /** Set when a stored file exists but cannot be read. Never holds the value. */
+  error: string | null
+}
+
+/**
+ * Reads the credential and says whether a stored file was unreadable, so a
+ * caller that reports status can tell "nothing saved" from "cannot be read".
+ * Once the encrypted file exists it is the only source, and an unreadable
+ * payload is never replaced by a plaintext copy.
+ */
+export function readFileSecret(secret: FileSecret): FileSecretRead {
+  if (existsSync(secret.filePath)) {
+    try {
+      const value = secret.store.read(readFileSync(secret.filePath), secret.context)
+      return { value: value.length > 0 ? value : null, error: null }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`[SecretStore] Could not read ${secret.context}:`, message)
+      return { value: null, error: message }
+    }
+  }
+
+  if (!existsSync(secret.plaintextPath)) return { value: null, error: null }
+  let value: string
+  try {
+    const parsed = JSON.parse(readFileSync(secret.plaintextPath, "utf-8")) as Record<
+      string,
+      unknown
+    >
+    const field = parsed[secret.field]
+    if (typeof field !== "string") {
+      return {
+        value: null,
+        error: `${secret.context} is saved in a file with an unrecognized shape.`,
+      }
+    }
+    value = field
+  } catch {
+    const message = `${secret.context} is saved in a file that could not be read.`
+    console.error(`[SecretStore] ${message}`, secret.plaintextPath)
+    return { value: null, error: message }
+  }
+
+  try {
+    saveFileSecret(secret, value)
+  } catch (error) {
+    console.error(
+      `[SecretStore] Keeping ${secret.plaintextPath} because it could not move to encrypted storage:`,
+      error instanceof Error ? error.message : error,
+    )
+  }
+  return { value, error: null }
+}
+
+/** The value alone, for callers that treat an unreadable file as absent. */
+export function loadFileSecret(secret: FileSecret): string | null {
+  return readFileSecret(secret).value
+}
+
+export function clearFileSecret(secret: FileSecret): void {
+  const failed: string[] = []
+  const targets = new Set([secret.filePath, secret.plaintextPath])
+  try {
+    // A stashed copy is the same credential under a recovery name. Sign-out that
+    // left one behind would leave the credential recoverable on disk.
+    for (const path of stashedCiphertextPaths(secret.filePath)) targets.add(path)
+  } catch {
+    failed.push(`${dirname(secret.filePath)} (stashed copies could not be listed)`)
+  }
+  // A write that stopped before its rename leaves the credential under a
+  // temporary name next to the file it was replacing, and the process that
+  // created it may never run again, so sign-out sweeps those too.
+  for (const path of targets) {
+    try {
+      failed.push(...removeStaleTemps(path))
+    } catch (error) {
+      failed.push(path)
+      console.error(`[SecretStore] Could not list the files next to ${path}:`, error)
+    }
+  }
+  for (const path of targets) {
+    try {
+      if (existsSync(path)) unlinkSync(path)
+    } catch {
+      failed.push(path)
+    }
+  }
+  if (failed.length > 0) {
+    console.error(`[SecretStore] Could not remove ${failed.join(", ")}`)
+    throw new Error(`${secret.context} could not be removed from disk and may still be stored.`)
+  }
+}
+
+export function fileSecretPaths(
+  userDataPath: string,
+  name: string,
+): Pick<FileSecret, "filePath" | "plaintextPath"> {
+  return {
+    filePath: join(userDataPath, "data", `${name}-auth.dat`),
+    plaintextPath: join(userDataPath, "data", `${name}-auth.json`),
+  }
+}

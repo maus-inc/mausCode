@@ -126,6 +126,20 @@ pub enum ApiRequest {
     /// notify the daemon to reload it. OAuth tokens are intentionally excluded.
     SetApiKey { provider: String, api_key: String },
 
+    /// Hold an API key for one session in memory only, without writing it to
+    /// the provider store. Additive extension: a runtime that does not carry it
+    /// answers with an explicit unsupported-operation error and keeps the
+    /// connection open, so a client falls back to `SetApiKey`. Advertised as
+    /// `ephemeral_api_key` in `HelloOk` once a runtime implements the handling.
+    SetEphemeralApiKey {
+        session_id: String,
+        provider: String,
+        api_key: String,
+    },
+
+    /// Drop a key held in memory for one session. Never touches the store.
+    ClearEphemeralApiKey { session_id: String, provider: String },
+
     /// Remove a previously persisted API-key credential.
     ClearApiKey { provider: String },
 

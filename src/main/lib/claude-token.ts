@@ -6,10 +6,11 @@
  * (Apache-2.0, © the 1Code contributors).
  */
 import { execFileSync, execSync, spawn } from "node:child_process"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs"
 import { homedir, userInfo } from "node:os"
 import { join } from "node:path"
 import { buildExtendedPath, isWindows } from "./platform"
+import { getSecretStore, removeStaleTemps, writeCredentialTempFile } from "./secret-storage"
 
 interface ClaudeCredentials {
   claudeAiOauth?: {
@@ -204,18 +205,40 @@ function readFromCredentialsFile(): ClaudeOAuthCredential | null {
   return null
 }
 
+/** Which store a credential came from, so a write can target the same one. */
+export type ClaudeCredentialSource = "keychain" | "file"
+
+/**
+ * The store a read from the platform's credential store actually came from. The
+ * Windows reader reads the CLI's credentials file, so a credential it returns is
+ * file-backed rather than held by a store this app can write.
+ */
+export function credentialSourceForRead(
+  platform: NodeJS.Platform = process.platform,
+): ClaudeCredentialSource {
+  return platform === "win32" ? "file" : "keychain"
+}
+
+/**
+ * The stored credential and the store it came from. Reads prefer the system
+ * credential store, which is where the CLI keeps them on macOS, Windows and
+ * Linux; the credentials file is the fallback.
+ */
+function readExistingClaudeCredential(): {
+  creds: ClaudeOAuthCredential
+  source: ClaudeCredentialSource
+} | null {
+  const keychainCreds = readFromKeychain()
+  if (keychainCreds) return { creds: keychainCreds, source: credentialSourceForRead() }
+  const fileCreds = readFromCredentialsFile()
+  return fileCreds ? { creds: fileCreds, source: "file" } : null
+}
+
 /**
  * Get existing Claude OAuth credentials from keychain or credentials file
  */
 export function getExistingClaudeCredentials(): ClaudeOAuthCredential | null {
-  // Try keychain first (macOS, Windows, Linux)
-  const keychainCreds = readFromKeychain()
-  if (keychainCreds) {
-    return keychainCreds
-  }
-
-  // Fall back to credentials file
-  return readFromCredentialsFile()
+  return readExistingClaudeCredential()?.creds ?? null
 }
 
 /**
@@ -264,11 +287,89 @@ function writeToMacOSKeychain(creds: ClaudeOAuthCredential): boolean {
   }
 }
 
+function credentialsFilePath(): string {
+  return join(homedir(), ".claude", ".credentials.json")
+}
+
+/**
+ * How a refreshed credential can be stored where the Claude CLI will find it.
+ * The macOS keychain is protected by the OS. Elsewhere the CLI only reads a
+ * plaintext file, so that write needs the plaintext permission the user grants
+ * in Credential storage settings before the remote refresh is started.
+ */
+export type ExternalClaudeStoreKind = "keychain" | "plaintext-file"
+
+export function externalClaudeStoreKind(
+  platform: NodeJS.Platform = process.platform,
+): ExternalClaudeStoreKind {
+  return platform === "darwin" ? "keychain" : "plaintext-file"
+}
+
+/**
+ * Checks that a refreshed credential may be written before the network call
+ * that rotates it. A refusal here never rotates the token, so the store the
+ * CLI owns stays exactly as it is.
+ *
+ * `source` is the store the credential was read from. Writing somewhere else
+ * would leave the store that answers later reads holding the token the server
+ * just replaced, so a credential read from a store this platform cannot write
+ * is not refreshed at all.
+ */
+export function canPersistRefreshedClaudeCredential(
+  source: ClaudeCredentialSource = "file",
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (source === "keychain") {
+    if (externalClaudeStoreKind(platform) !== "keychain") {
+      console.warn(
+        "[claude-token] The CLI credential came from the system credential store, which this " +
+          "platform cannot write, so the refresh was not started.",
+      )
+      return false
+    }
+    return true
+  }
+  // A file-backed credential is written back to the file whether or not this
+  // platform has a credential store, so the plaintext permission is checked
+  // here instead of assumed from the platform.
+  try {
+    getSecretStore().prepare("The Claude CLI credential file", "check", true)
+    return true
+  } catch (error) {
+    console.warn(
+      "[claude-token] Refreshed Claude credentials can only be saved to a plaintext file, so the refresh was not started:",
+      error instanceof Error ? error.message : error,
+    )
+    return false
+  }
+}
+
 function writeToCredentialsFile(creds: ClaudeOAuthCredential): boolean {
   try {
-    const credentialsPath = join(homedir(), ".claude", ".credentials.json")
+    // The owner authorizes the write; it throws when plaintext storage is not
+    // permitted, before this file is touched.
+    const serialized = getSecretStore().prepare(
+      "The Claude CLI credential file",
+      serializeCredentials(creds),
+      true,
+    )
+    const credentialsPath = credentialsFilePath()
     mkdirSync(join(homedir(), ".claude"), { recursive: true })
-    writeFileSync(credentialsPath, serializeCredentials(creds), { mode: 0o600 })
+    // Replace the file in one step. Writing over it directly would leave the CLI
+    // with a truncated credential if the process stopped mid-write. A temp file
+    // a failed rename leaves behind holds the credential, so it is removed.
+    removeStaleTemps(credentialsPath)
+    const temp = writeCredentialTempFile(credentialsPath, serialized.plaintext ?? "")
+    try {
+      renameSync(temp, credentialsPath)
+    } catch (error) {
+      try {
+        unlinkSync(temp)
+      } catch {
+        // The failure worth reporting is the one that stopped the rename.
+      }
+      throw error
+    }
     return true
   } catch (error) {
     console.warn("[claude-token] Failed to update credentials file:", error)
@@ -276,8 +377,15 @@ function writeToCredentialsFile(creds: ClaudeOAuthCredential): boolean {
   }
 }
 
-function writeExistingClaudeCredentials(creds: ClaudeOAuthCredential): boolean {
-  if (process.platform === "darwin") {
+function writeExistingClaudeCredentials(
+  creds: ClaudeOAuthCredential,
+  source: ClaudeCredentialSource,
+): boolean {
+  // The write targets the store the credential came from. Writing to the other
+  // one would leave the store that answers later reads holding a token the
+  // server already replaced, and on a platform whose store cannot take the
+  // write the refresh would fail even though the file is writable.
+  if (source === "keychain") {
     return writeToMacOSKeychain(creds)
   }
   return writeToCredentialsFile(creds)
@@ -289,8 +397,9 @@ function writeExistingClaudeCredentials(creds: ClaudeOAuthCredential): boolean {
  * refreshed token so the desktop app does not fail after the CLI token rotates.
  */
 export async function getValidExistingClaudeToken(): Promise<string | null> {
-  const creds = getExistingClaudeCredentials()
-  if (!creds) return null
+  const existing = readExistingClaudeCredential()
+  if (!existing) return null
+  const { creds, source } = existing
 
   if (!isTokenExpired(creds.expiresAt)) {
     return creds.accessToken
@@ -301,9 +410,43 @@ export async function getValidExistingClaudeToken(): Promise<string | null> {
     return isPastExpiresAt(creds.expiresAt) ? null : creds.accessToken
   }
 
+  // Refreshed credentials replace the ones the CLI owns, so the permission for
+  // that write is checked before the token is rotated. Two refreshes racing on
+  // one refresh token would leave the CLI holding a token the server already
+  // replaced, so each token refreshes at most once at a time, and concurrent
+  // callers holding the same token share the in-flight result.
+  if (!canPersistRefreshedClaudeCredential(source)) {
+    return isPastExpiresAt(creds.expiresAt) ? null : creds.accessToken
+  }
+  const refreshKey = `${source}:${creds.refreshToken}`
+  const shared = refreshesInFlight.get(refreshKey)
+  if (shared) return shared
+
+  const refresh = refreshLocalClaudeToken(creds, source).finally(() => {
+    refreshesInFlight.delete(refreshKey)
+  })
+  refreshesInFlight.set(refreshKey, refresh)
+  return refresh
+}
+
+/**
+ * One in-flight refresh per credential, keyed by the token the refresh
+ * rotates. The key makes the single-flight property structural: callers that
+ * hold the same refresh token share one rotation, whichever call arrived
+ * first, and callers that hold different tokens can never receive one
+ * another's result, even if the app ever holds more than one credential. An
+ * entry leaves the map the moment its refresh settles, so the key spends no
+ * more time in memory than the promise it labels.
+ */
+const refreshesInFlight = new Map<string, Promise<string | null>>()
+
+async function refreshLocalClaudeToken(
+  creds: ClaudeOAuthCredential,
+  source: ClaudeCredentialSource,
+): Promise<string | null> {
   try {
     console.log("[claude-token] Refreshing local Claude Code OAuth token")
-    const refreshed = await refreshClaudeToken(creds.refreshToken, creds.scopes)
+    const refreshed = await refreshClaudeToken(creds.refreshToken ?? "", creds.scopes)
     const nextCreds: ClaudeOAuthCredential = {
       accessToken: refreshed.accessToken,
       refreshToken: refreshed.refreshToken || creds.refreshToken,
@@ -312,7 +455,12 @@ export async function getValidExistingClaudeToken(): Promise<string | null> {
       subscriptionType: refreshed.subscriptionType ?? creds.subscriptionType,
       rateLimitTier: refreshed.rateLimitTier ?? creds.rateLimitTier,
     }
-    writeExistingClaudeCredentials(nextCreds)
+    if (!writeExistingClaudeCredentials(nextCreds, source)) {
+      console.warn(
+        "[claude-token] Refreshed Claude credentials could not be saved, keeping the CLI store as it is",
+      )
+      return isPastExpiresAt(creds.expiresAt) ? null : creds.accessToken
+    }
     return nextCreds.accessToken
   } catch (error) {
     console.warn("[claude-token] Failed to refresh Claude OAuth token:", error)

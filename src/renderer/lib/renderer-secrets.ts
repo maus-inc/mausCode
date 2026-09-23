@@ -1,0 +1,258 @@
+/**
+ * Persistence for the renderer values that hold provider credentials.
+ *
+ * Browser storage keeps nothing secret. Values live in memory and are written
+ * through the app secret store in the main process, which encrypts them at rest,
+ * writes them in the clear when the user allowed plaintext storage, or refuses
+ * the write. A refused write puts the newest stored value back, so the app
+ * never keeps using a credential that is not the one on disk. A value saved by
+ * an earlier version is still read from browser storage and moved into the
+ * secret store once it can be stored there.
+ */
+import type { SyncStorage } from "jotai/vanilla/utils/atomWithStorage"
+import { trpcClient } from "./trpc"
+
+export type RendererSecretKey =
+  | "agents:claude-custom-config"
+  | "agents:model-profiles"
+  | "agents:openai-api-key"
+  | "onboarding:codex-api-key"
+
+export const RENDERER_SECRET_KEYS: readonly RendererSecretKey[] = [
+  "agents:claude-custom-config",
+  "agents:model-profiles",
+  "agents:openai-api-key",
+  "onboarding:codex-api-key",
+]
+
+type Listener = (value: unknown) => void
+
+/** What one write did, so a caller can tell the user the truth about it. */
+export type RendererSecretWrite = { ok: true } | { ok: false; error: string }
+
+const cache = new Map<string, string>()
+const listeners = new Map<string, Set<Listener>>()
+/** Keys the user changed in this session, which hydration must not overwrite. */
+const edited = new Set<string>()
+/** One chain per key, so an older write can never land after a newer one. */
+const writes = new Map<string, Promise<RendererSecretWrite>>()
+/** The newest value per key the store holds, for putting it back on refusal. */
+const confirmed = new Map<string, string>()
+/** True once a read succeeded; a failed read leaves this false so it can retry. */
+let started = false
+/** At most one read in flight, so retries cannot pile up queries. */
+let attempt: Promise<void> | null = null
+
+function browserStore(): Storage | null {
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
+}
+
+function emit(key: string, raw: string): void {
+  cache.set(key, raw)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return
+  }
+  for (const listener of listeners.get(key) ?? []) listener(parsed)
+}
+
+async function hydrate(): Promise<void> {
+  let stored: { values: Record<string, string>; error: string | null }
+  try {
+    stored = await trpcClient.secretStorage.rendererSecrets.query()
+  } catch (error) {
+    // Nothing was read and no legacy value was touched, so the next caller may
+    // try again. Without this the first transport error of a session would keep
+    // every stored value out of the app until it restarted.
+    console.error(
+      "[renderer-secrets] stored values could not be read:",
+      error instanceof Error ? error.message : String(error),
+    )
+    return
+  }
+  // The read worked, so this session is done hydrating even when a stored entry
+  // was unreadable, which is the state where the migration must not run.
+  started = true
+
+  for (const [key, raw] of Object.entries(stored.values)) {
+    // The store's copy is the one a refused write has to go back to, even
+    // when a newer in-session edit keeps the display for itself.
+    confirmed.set(key, raw)
+    if (!edited.has(key)) emit(key, raw)
+  }
+
+  // A keyed-store read error means absent and unreadable cannot be told apart,
+  // so nothing is moved: an older browser value must not replace a newer value
+  // that is merely unreadable right now.
+  if (stored.error !== null) {
+    console.error(`[renderer-secrets] stored values could not be read: ${stored.error}`)
+    return
+  }
+
+  const legacy = browserStore()
+  if (!legacy) return
+  const moves: Promise<RendererSecretWrite>[] = []
+  for (const key of RENDERER_SECRET_KEYS) {
+    if (stored.values[key] !== undefined || edited.has(key)) continue
+    const raw = legacy.getItem(key)
+    if (raw === null) continue
+    emit(key, raw)
+    // A migration joins the same per-key chain as a user write, and the legacy
+    // copy is removed only after the store confirmed the write. A refusal puts
+    // this same value back, because browser storage still holds it.
+    moves.push(persist(key, raw, raw))
+  }
+  if (moves.length > 0) await Promise.all(moves)
+}
+
+/** Starts reading stored values. Safe to call more than once. */
+export function startRendererSecretSync(): void {
+  if (started || attempt !== null) return
+  attempt = hydrate().finally(() => {
+    attempt = null
+  })
+}
+
+function recordWriteFailure(key: RendererSecretKey, error: unknown): RendererSecretWrite {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`[renderer-secrets] ${key} was not saved:`, message)
+  return { ok: false, error: message }
+}
+
+function chainWrite(
+  key: RendererSecretKey,
+  task: () => Promise<RendererSecretWrite>,
+): Promise<RendererSecretWrite> {
+  const chain = (writes.get(key) ?? Promise.resolve<RendererSecretWrite>({ ok: true })).then(task)
+  writes.set(key, chain)
+  return chain
+}
+
+/**
+ * Writes one value. Writes for a key are chained, so a newer value is always
+ * sent after the one before it and a slow older request cannot replace it.
+ */
+function persist(
+  key: RendererSecretKey,
+  raw: string,
+  fallbackRaw?: string,
+): Promise<RendererSecretWrite> {
+  return chainWrite(key, () =>
+    trpcClient.secretStorage.setRendererSecret
+      .mutate({ key, value: raw })
+      .then((): RendererSecretWrite => {
+        browserStore()?.removeItem(key)
+        confirmed.set(key, raw)
+        return { ok: true }
+      })
+      .catch((error: unknown) => {
+        const result = recordWriteFailure(key, error)
+        revertRefusedWrite(key, raw, fallbackRaw)
+        return result
+      }),
+  )
+}
+
+/**
+ * Puts the newest stored value back when the write of `raw` was refused, so
+ * the app never keeps using a credential that is not the one on disk. A newer
+ * write may already have replaced the refused one in the chain, and that value
+ * settles for itself, so nothing reverts then.
+ */
+function revertRefusedWrite(key: RendererSecretKey, raw: string, fallbackRaw?: string): void {
+  if (cache.get(key) !== raw) return
+  const known = confirmed.get(key) ?? fallbackRaw
+  if (known === undefined) {
+    // Nothing stored and nothing to fall back to: the value leaves memory too.
+    cache.delete(key)
+    return
+  }
+  if (known !== raw) emit(key, known)
+}
+
+/**
+ * Resolves once the write started for `key` has settled, so a caller that
+ * reports success can wait for the app store to accept the value.
+ */
+export function whenRendererSecretSaved(key: RendererSecretKey): Promise<RendererSecretWrite> {
+  return writes.get(key) ?? Promise.resolve<RendererSecretWrite>({ ok: true })
+}
+
+/** Forgets one stored value everywhere. Used when a value is cleared in the UI. */
+export function forgetRendererSecret(key: RendererSecretKey): void {
+  const previousRaw = cache.get(key)
+  cache.delete(key)
+  edited.add(key)
+  void chainWrite(key, () =>
+    trpcClient.secretStorage.removeRendererSecret
+      .mutate({ key })
+      .then((): RendererSecretWrite => {
+        // The legacy copy stays until the store confirms the removal, the same
+        // rule a migration write follows: a refused or failed removal must not
+        // destroy the only copy left.
+        browserStore()?.removeItem(key)
+        confirmed.delete(key)
+        return { ok: true }
+      })
+      .catch((error: unknown) => {
+        const result = recordWriteFailure(key, error)
+        // The store still holds the value, so the app must not act as if it
+        // were gone.
+        const known = confirmed.get(key) ?? previousRaw
+        if (known !== undefined) emit(key, known)
+        return result
+      }),
+  )
+}
+
+/**
+ * Jotai storage for one secret-bearing value. Reads come from memory, then from
+ * a value an earlier version left in browser storage. Writes go to the
+ * main-process store and never to browser storage.
+ */
+export function createRendererSecretStorage<T>(key: RendererSecretKey): SyncStorage<T> {
+  let initialRaw: string | undefined
+  return {
+    getItem: (_key, initialValue) => {
+      initialRaw ??= JSON.stringify(initialValue)
+      startRendererSecretSync()
+      const raw = cache.get(key) ?? browserStore()?.getItem(key) ?? null
+      if (raw === null) return initialValue
+      try {
+        return JSON.parse(raw) as T
+      } catch {
+        return initialValue
+      }
+    },
+    setItem: (_key, value) => {
+      const raw = JSON.stringify(value)
+      cache.set(key, raw)
+      edited.add(key)
+      void persist(key, raw, initialRaw)
+    },
+    removeItem: () => {
+      forgetRendererSecret(key)
+    },
+    subscribe: (_key, callback) => {
+      startRendererSecretSync()
+      const set = listeners.get(key) ?? new Set<Listener>()
+      set.add(callback as Listener)
+      listeners.set(key, set)
+      const cached = cache.get(key)
+      if (cached !== undefined) {
+        try {
+          callback(JSON.parse(cached) as T)
+        } catch {
+          // A cached value that cannot be parsed stays out of the atom.
+        }
+      }
+      return () => set.delete(callback as Listener)
+    },
+  }
+}

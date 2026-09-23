@@ -24,6 +24,7 @@ import {
   openaiApiKeyAtom,
   pinnedOpenRouterModelsAtom,
 } from "../../../lib/atoms"
+import { whenRendererSecretSaved } from "../../../lib/renderer-secrets"
 import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
 import { OpenRouterModelBrowser } from "./openrouter-model-browser"
 
@@ -301,7 +302,7 @@ function NativeEndpointsSection() {
       if (next.openaiBaseUrl === savedOpenai && next.anthropicBaseUrl === savedAnthropic) return
       setMutation.mutate(next, {
         onSuccess: () => {
-          toast.success("Native endpoints saved — daemon restarted")
+          toast.success("Native endpoints saved and the daemon restarted")
           void trpcUtils.runtime.endpoints.get.invalidate()
         },
         onError: (err) => toast.error(`Failed to save endpoints: ${err.message}`),
@@ -336,7 +337,7 @@ function NativeEndpointsSection() {
         <p className="text-xs text-muted-foreground">
           Daemon-level custom endpoints for the Native engine (applied at daemon start; saving
           restarts the daemon, sessions persist). A native chat's custom base URL must match one of
-          these — or an ambient *_BASE_URL env var — or the turn is refused.
+          these, or an ambient *_BASE_URL env var, or the turn is refused.
         </p>
       </div>
       <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -425,7 +426,7 @@ export function AgentsModelsTab() {
   const codexLogoutMutation = trpc.codex.logout.useMutation()
   const trpcUtils = trpc.useUtils()
 
-  // Gemini API key state (encrypted via Electron safeStorage; never touches localStorage)
+  // Gemini API key state (stored by the app secret store; never touches localStorage)
   const { data: geminiAuth, isLoading: isGeminiAuthLoading } = trpc.gemini.getAuthStatus.useQuery()
   const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
   const setGeminiKeyMutation = trpc.gemini.setApiKey.useMutation()
@@ -493,7 +494,7 @@ export function AgentsModelsTab() {
         savedConfigRef.current = next
       }
     } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
-      // All cleared — reset
+      // All cleared, so reset
       if (
         savedConfigRef.current.model ||
         savedConfigRef.current.token ||
@@ -594,6 +595,14 @@ export function AgentsModelsTab() {
     try {
       setStoredCodexApiKey(normalized)
       setCodexApiKey(normalized)
+      const saved = await whenRendererSecretSaved("onboarding:codex-api-key")
+      if (!saved.ok) {
+        // The value never reached the store, so the old one stays in use.
+        setStoredCodexApiKey(storedCodexApiKey)
+        setCodexApiKey(storedCodexApiKey)
+        toast.error(`Failed to save Codex API key: ${saved.error}`)
+        return
+      }
       await trpcUtils.codex.getIntegration.invalidate()
       toast.success("Codex API key saved")
     } catch {
@@ -608,6 +617,13 @@ export function AgentsModelsTab() {
     try {
       setStoredCodexApiKey("")
       setCodexApiKey("")
+      const removed = await whenRendererSecretSaved("onboarding:codex-api-key")
+      if (!removed.ok) {
+        setStoredCodexApiKey(storedCodexApiKey)
+        setCodexApiKey(storedCodexApiKey)
+        toast.error(`Failed to remove Codex API key: ${removed.error}`)
+        return
+      }
 
       if (codexIntegration?.state === "connected_api_key") {
         await codexLogoutMutation.mutateAsync().catch(() => {
@@ -699,6 +715,27 @@ export function AgentsModelsTab() {
     }
   }
 
+  /**
+   * The main process keeps the session copy of the OpenAI key, so a settings
+   * copy that was refused has to give that copy back too. Otherwise voice would
+   * keep using a key the settings view no longer shows.
+   */
+  const openAIAttemptRef = useRef(0)
+
+  const restoreOpenAIKey = async (previous: string, attempt: number): Promise<boolean> => {
+    // A newer save or removal owns the key by now, so this failure leaving the
+    // older value behind would overwrite what the user actually asked for.
+    if (openAIAttemptRef.current !== attempt) return false
+    setStoredOpenAIKey(previous)
+    try {
+      await setOpenAIKeyMutation.mutateAsync({ key: previous })
+    } catch {
+      toast.error("The OpenAI API key could not be put back. Try saving it again.")
+    }
+    await trpcUtils.voice.isAvailable.invalidate()
+    return true
+  }
+
   const handleSaveOpenAI = async () => {
     if (trimmedOpenAIKey === storedOpenAIKey) return // No change
     if (trimmedOpenAIKey && !trimmedOpenAIKey.startsWith("sk-")) {
@@ -706,9 +743,17 @@ export function AgentsModelsTab() {
       return
     }
 
+    const attempt = openAIAttemptRef.current + 1
+    openAIAttemptRef.current = attempt
     try {
       await setOpenAIKeyMutation.mutateAsync({ key: trimmedOpenAIKey })
       setStoredOpenAIKey(trimmedOpenAIKey)
+      const saved = await whenRendererSecretSaved("agents:openai-api-key")
+      if (!saved.ok) {
+        await restoreOpenAIKey(storedOpenAIKey, attempt)
+        toast.error(`Failed to save OpenAI API key: ${saved.error}`)
+        return
+      }
       // Invalidate voice availability check
       await trpcUtils.voice.isAvailable.invalidate()
       toast.success("OpenAI API key saved")
@@ -718,10 +763,20 @@ export function AgentsModelsTab() {
   }
 
   const handleResetOpenAI = async () => {
+    const attempt = openAIAttemptRef.current + 1
+    openAIAttemptRef.current = attempt
     try {
       await setOpenAIKeyMutation.mutateAsync({ key: "" })
       setStoredOpenAIKey("")
       setOpenaiKey("")
+      const removed = await whenRendererSecretSaved("agents:openai-api-key")
+      if (!removed.ok) {
+        // The field is only put back while this attempt still owns the key, so
+        // a newer edit in the box is not overwritten by an older failure.
+        if (await restoreOpenAIKey(storedOpenAIKey, attempt)) setOpenaiKey(storedOpenAIKey)
+        toast.error(`Failed to remove OpenAI API key: ${removed.error}`)
+        return
+      }
       await trpcUtils.voice.isAvailable.invalidate()
       toast.success("OpenAI API key removed")
     } catch (_err) {
@@ -907,7 +962,7 @@ export function AgentsModelsTab() {
             <h4 className="text-sm font-medium text-foreground">Gemini Account</h4>
             <p className="text-xs text-muted-foreground">
               {hasGeminiKey
-                ? `API key stored encrypted via OS keychain · ${geminiMaskedKey}`
+                ? `API key saved in this app's store · ${geminiMaskedKey}`
                 : hasGeminiCliAuth
                   ? `Gemini CLI connected via ${geminiCliStatus?.authSource ?? "local auth"}`
                   : "Connect a Google AI Studio API key or run `gemini` to sign in"}
@@ -964,7 +1019,7 @@ export function AgentsModelsTab() {
             <h4 className="text-sm font-medium text-foreground">OpenRouter Account</h4>
             <p className="text-xs text-muted-foreground">
               {hasOpenRouterKey
-                ? `API key stored encrypted via OS keychain · ${openRouterMaskedKey}`
+                ? `API key saved in this app's store · ${openRouterMaskedKey}`
                 : "Connect an OpenRouter API key (openrouter.ai/keys)"}
             </p>
           </div>

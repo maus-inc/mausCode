@@ -137,8 +137,9 @@ itself is the tab stop).
 
 - Count pill: `rounded-full bg-primary/10 text-primary` (chat card) — the pill shape reference.
 - Status pill (settings): `inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium`
-  with `/10` wash + solid-500 text (`emerald/amber/red`, `mute` = `bg-foreground/5
-  text-muted-foreground`).
+  with `/10` wash + solid-700 text in light and 400 in dark (`emerald/amber/red`), `mute` =
+  `bg-foreground/5 text-foreground/60`. The light 500 step measured 2.31, 1.99 and 3.29:1 at
+  12px, below the 4.5:1 floor, so the recorded step moved one darker.
 - Corner badge on icons: `absolute -bottom-1 -right-1 w-3 h-3 rounded-full` halo + `w-1.5/w-2.5`
   glyph inside; priority question > loader > plan > unseen.
 - Standalone dots: `w-1.5 h-1.5 rounded-full` (rows), `w-2 h-2` (status wells).

@@ -1,0 +1,116 @@
+[
+  {
+    "width": 360,
+    "theme": "light",
+    "screenshot": "dedicated-360-light.png",
+    "overflow": false,
+    "errors": [],
+    "checks": [
+      "default-approved-direction",
+      "cancel-focus",
+      "tab-trap",
+      "escape-restoration",
+      "cancel-no-save",
+      "consent-then-save",
+      "recovery-keeps-plaintext-label",
+      "revocation",
+      "failed-consent-no-grant",
+      "option-switch"
+    ]
+  },
+  {
+    "width": 360,
+    "theme": "dark",
+    "screenshot": "dedicated-360-dark.png",
+    "overflow": false,
+    "errors": [],
+    "checks": [
+      "default-approved-direction",
+      "cancel-focus",
+      "tab-trap",
+      "escape-restoration",
+      "cancel-no-save",
+      "consent-then-save",
+      "recovery-keeps-plaintext-label",
+      "revocation",
+      "failed-consent-no-grant",
+      "option-switch"
+    ]
+  },
+  {
+    "width": 800,
+    "theme": "light",
+    "screenshot": "dedicated-800-light.png",
+    "overflow": false,
+    "errors": [],
+    "checks": [
+      "default-approved-direction",
+      "cancel-focus",
+      "tab-trap",
+      "escape-restoration",
+      "cancel-no-save",
+      "consent-then-save",
+      "recovery-keeps-plaintext-label",
+      "revocation",
+      "failed-consent-no-grant",
+      "option-switch"
+    ]
+  },
+  {
+    "width": 800,
+    "theme": "dark",
+    "screenshot": "dedicated-800-dark.png",
+    "overflow": false,
+    "errors": [],
+    "checks": [
+      "default-approved-direction",
+      "cancel-focus",
+      "tab-trap",
+      "escape-restoration",
+      "cancel-no-save",
+      "consent-then-save",
+      "recovery-keeps-plaintext-label",
+      "revocation",
+      "failed-consent-no-grant",
+      "option-switch"
+    ]
+  },
+  {
+    "width": 1280,
+    "theme": "light",
+    "screenshot": "dedicated-1280-light.png",
+    "overflow": false,
+    "errors": [],
+    "checks": [
+      "default-approved-direction",
+      "cancel-focus",
+      "tab-trap",
+      "escape-restoration",
+      "cancel-no-save",
+      "consent-then-save",
+      "recovery-keeps-plaintext-label",
+      "revocation",
+      "failed-consent-no-grant",
+      "option-switch"
+    ]
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "screenshot": "dedicated-1280-dark.png",
+    "overflow": false,
+    "errors": [],
+    "checks": [
+      "default-approved-direction",
+      "cancel-focus",
+      "tab-trap",
+      "escape-restoration",
+      "cancel-no-save",
+      "consent-then-save",
+      "recovery-keeps-plaintext-label",
+      "revocation",
+      "failed-consent-no-grant",
+      "option-switch"
+    ]
+  }
+]

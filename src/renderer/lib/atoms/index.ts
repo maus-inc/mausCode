@@ -1,6 +1,7 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 import { desktopViewAtom as _desktopViewAtom } from "../../features/agents/atoms"
+import { createRendererSecretStorage } from "../renderer-secrets"
 import { DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID } from "../themes/builtin-themes"
 
 // ============================================
@@ -174,6 +175,7 @@ export type SettingsTab =
   | "beta"
   | "keyboard"
   | "backends"
+  | "credentials"
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("preferences")
 // Derived atom: maps settings open/close to desktopView navigation
 export const agentsSettingsDialogOpenAtom = atom(
@@ -237,20 +239,23 @@ export const customClaudeConfigAtom = atomWithStorage<CustomClaudeConfig>(
     token: "",
     baseUrl: "",
   },
-  undefined,
+  createRendererSecretStorage<CustomClaudeConfig>("agents:claude-custom-config"),
   { getOnInit: true },
 )
 
 // OpenAI API key for voice transcription (for users without paid subscription)
-export const openaiApiKeyAtom = atomWithStorage<string>("agents:openai-api-key", "", undefined, {
-  getOnInit: true,
-})
+export const openaiApiKeyAtom = atomWithStorage<string>(
+  "agents:openai-api-key",
+  "",
+  createRendererSecretStorage<string>("agents:openai-api-key"),
+  { getOnInit: true },
+)
 
 // New: Model profiles storage
 export const modelProfilesAtom = atomWithStorage<ModelProfile[]>(
   "agents:model-profiles",
   [OFFLINE_PROFILE], // Start with offline profile
-  undefined,
+  createRendererSecretStorage<ModelProfile[]>("agents:model-profiles"),
   { getOnInit: true },
 )
 
@@ -349,7 +354,7 @@ export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
 // When enabled, allow rollback to previous assistant messages
 export const historyEnabledAtom = atomWithStorage<boolean>(
   "preferences:history-enabled",
-  false, // Default OFF — beta feature
+  false, // Default OFF, beta feature
   undefined,
   { getOnInit: true },
 )
@@ -427,7 +432,7 @@ export const betaGitFeaturesEnabledAtom = atomWithStorage<boolean>(
 // When enabled, shows Kanban button in sidebar to view workspaces as a board
 export const betaKanbanEnabledAtom = atomWithStorage<boolean>(
   "preferences:beta-kanban-enabled",
-  true, // Default ON — graduated from beta
+  true, // Default ON, graduated from beta
   undefined,
   { getOnInit: true },
 )
@@ -797,9 +802,12 @@ export const codexOnboardingAuthMethodAtom = atomWithStorage<CodexOnboardingAuth
 )
 
 // App-managed Codex API key (separate from voice OpenAI key)
-export const codexApiKeyAtom = atomWithStorage<string>("onboarding:codex-api-key", "", undefined, {
-  getOnInit: true,
-})
+export const codexApiKeyAtom = atomWithStorage<string>(
+  "onboarding:codex-api-key",
+  "",
+  createRendererSecretStorage<string>("onboarding:codex-api-key"),
+  { getOnInit: true },
+)
 
 export function normalizeCodexApiKey(apiKey: string): string | null {
   const trimmed = apiKey.trim()

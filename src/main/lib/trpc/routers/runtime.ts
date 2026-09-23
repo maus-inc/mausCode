@@ -25,11 +25,13 @@ import {
   getRuntimeManager,
   NATIVE_QUESTION_PREFIX,
   NativeCredentialError,
+  type NativeCredentialResult,
   type NativeEndpoints,
   NativeTranslator,
   normalizeEndpointUrl,
   probeEndpoint,
   readEndpointSettings,
+  releaseNativeEphemeralCredentials,
   resolveNativeMcpSnapshot,
   restartRuntime,
   writeEndpointSettings,
@@ -50,7 +52,13 @@ const imageAttachmentSchema = z.object({
  */
 const activeTurns = new Map<
   string,
-  { cancelled: boolean; completed: boolean; cancelRemote: () => void }
+  {
+    cancelled: boolean
+    completed: boolean
+    cancelRemote: () => void
+    /** Releases runtime-held keys this turn set, if any. */
+    releaseCredentials?: () => void
+  }
 >()
 
 /**
@@ -67,6 +75,7 @@ function registerTurn(subChatId: string): {
   cancelled: boolean
   completed: boolean
   cancelRemote: () => void
+  releaseCredentials?: () => void
 } {
   const existing = activeTurns.get(subChatId)
   if (existing) {
@@ -177,23 +186,28 @@ function emitNativeSessionSnapshot(cwd: string, jcodeHome: string, safeEmit: Nat
 async function prepareNativeCredentials(
   client: JcodeClient,
   input: { customToken?: string; customBaseUrl?: string },
+  sessionId: string,
   hooks: { fail: NativeFail; safeEmit: NativeEmit; safeComplete: () => void },
-): Promise<boolean> {
+): Promise<NativeCredentialResult | null> {
   try {
-    await applyNativeCredentials(client, {
-      customToken: input.customToken,
-      customBaseUrl: input.customBaseUrl,
-    })
-    return true
+    const applied = await applyNativeCredentials(
+      client,
+      {
+        customToken: input.customToken,
+        customBaseUrl: input.customBaseUrl,
+      },
+      sessionId,
+    )
+    return applied
   } catch (error) {
     if (error instanceof NativeCredentialError) {
       // Unsupported configuration, not missing credentials: say so.
       hooks.fail(`NATIVE_INVALID_REQUEST: ${error.message}`)
-      return false
+      return null
     }
     hooks.safeEmit({ type: "auth-error", errorText: "NATIVE_NO_CREDENTIALS" })
     hooks.safeComplete()
-    return false
+    return null
   }
 }
 
@@ -228,7 +242,7 @@ async function setNativeModelWithRetry(
 
 function finishNativeTurnBookkeeping(
   runHandle: RunHandle | null,
-  turn: { cancelled: boolean; completed: boolean },
+  turn: { cancelled: boolean; completed: boolean; releaseCredentials?: () => void },
   subChatId: string,
   streamId: string,
 ): void {
@@ -240,6 +254,11 @@ function finishNativeTurnBookkeeping(
     activeTurns.delete(subChatId)
     // This turn's card is over: a late answer to it must not settle anything.
     pendingNativeApprovals.delete(subChatId)
+  }
+  try {
+    turn.releaseCredentials?.()
+  } catch {
+    // Releasing a memory-only key is best-effort; nothing on disk depends on it.
   }
   try {
     // Clear the marker only when it is still this turn's: a replacement turn
@@ -367,12 +386,22 @@ export const runtimeRouter = router({
             // mcp__server__tool names with toolsUnknown set.
             emitNativeSessionSnapshot(input.cwd, manager.jcodeHome, safeEmit)
 
-            const credentialsReady = await prepareNativeCredentials(client, input, {
+            const credentials = await prepareNativeCredentials(client, input, sessionId, {
               fail,
               safeEmit,
               safeComplete,
             })
-            if (!credentialsReady) return
+            if (!credentials) return
+            // A key held in the runtime's memory is released when this turn
+            // ends; the next turn applies it again.
+            turn.releaseCredentials = () => {
+              void releaseNativeEphemeralCredentials(
+                client,
+                sessionId,
+                credentials.ephemeralProviders,
+                credentials.generation,
+              )
+            }
 
             await setNativeModelWithRetry(client, sessionId, input.model, safeEmit)
 

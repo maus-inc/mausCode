@@ -2,6 +2,7 @@ import { app, type BrowserWindow } from "electron"
 import { type AuthData, AuthStore, type AuthUser } from "./auth-store"
 import { AUTH_SERVER_PORT, PROTOCOL } from "./constants"
 import { getApiUrl, isControlPlaneConfigured } from "./lib/config"
+import { getSecretStore } from "./lib/secret-storage"
 
 // API base URL comes from lib/config.ts (single source of truth).
 // Empty = local-only mode: sign-in is unavailable until the mausCode
@@ -10,11 +11,12 @@ import { getApiUrl, isControlPlaneConfigured } from "./lib/config"
 export class AuthManager {
   private store: AuthStore
   private refreshTimer?: NodeJS.Timeout
+  private refreshInFlight: Promise<boolean> | null = null
   private isDev: boolean
   private onTokenRefresh?: (authData: AuthData) => void
 
   constructor(isDev: boolean = false) {
-    this.store = new AuthStore(app.getPath("userData"))
+    this.store = new AuthStore(app.getPath("userData"), getSecretStore())
     this.isDev = isDev
 
     // Schedule refresh if already authenticated
@@ -91,9 +93,20 @@ export class AuthManager {
   }
 
   /**
-   * Refresh the current session
+   * Refresh the current session. Two refreshes at once would rotate the stored
+   * refresh token twice, so callers that arrive during one wait for its result.
    */
-  async refresh(): Promise<boolean> {
+  refresh(): Promise<boolean> {
+    if (this.refreshInFlight !== null) return this.refreshInFlight
+    const inFlight = this.runRefresh()
+    this.refreshInFlight = inFlight
+    void inFlight.finally(() => {
+      if (this.refreshInFlight === inFlight) this.refreshInFlight = null
+    })
+    return inFlight
+  }
+
+  private async runRefresh(): Promise<boolean> {
     const refreshToken = this.store.getRefreshToken()
     if (!refreshToken) {
       console.warn("No refresh token available")
@@ -123,6 +136,15 @@ export class AuthManager {
         refreshToken: data.refreshToken,
         expiresAt: data.expiresAt,
         user: data.user,
+      }
+
+      // The user may have signed out, or signed in as another account, while
+      // this request was in flight. That session is the one that counts, so
+      // this response is dropped rather than stored over it or handed to the
+      // cookie callback.
+      if (this.store.getRefreshToken() !== refreshToken) {
+        console.warn("[Auth] Discarded a token refresh for a session that was replaced")
+        return false
       }
 
       this.store.save(authData)
@@ -169,6 +191,19 @@ export class AuthManager {
    */
   isAuthenticated(): boolean {
     return this.store.isAuthenticated()
+  }
+
+  /** When the current token stops being valid, or null when there is none. */
+  getTokenExpiry(): string | null {
+    return this.store.getTokenExpiry()
+  }
+
+  /**
+   * Concrete reason the saved session could not be read or written, if any.
+   * The text never contains a token.
+   */
+  lastError(): string | null {
+    return this.store.lastError()
   }
 
   /**

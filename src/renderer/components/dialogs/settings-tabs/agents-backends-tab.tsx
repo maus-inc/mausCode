@@ -1,29 +1,7 @@
 import type { ReactNode } from "react"
 import type { ProviderCapability } from "../../../../shared/provider-capabilities"
 import { trpc } from "../../../lib/trpc"
-import { cn } from "../../../lib/utils"
-
-function Pill({
-  tone,
-  children,
-}: {
-  readonly tone: "ok" | "warn" | "bad" | "mute"
-  readonly children: ReactNode
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        tone === "ok" && "bg-emerald-500/10 text-emerald-500",
-        tone === "warn" && "bg-amber-500/10 text-amber-500",
-        tone === "bad" && "bg-red-500/10 text-red-500",
-        tone === "mute" && "bg-foreground/5 text-muted-foreground",
-      )}
-    >
-      {children}
-    </span>
-  )
-}
+import { StatusPill } from "../../ui/status-pill"
 
 function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
@@ -60,15 +38,17 @@ function ProbePill({
   readonly probe: ProbeFacts | null | undefined
   readonly loading: boolean
 }) {
-  if (loading) return <Pill tone="mute">probing…</Pill>
+  if (loading) return <StatusPill tone="mute">probing...</StatusPill>
   if (!probe?.available) {
-    return <Pill tone="bad">unavailable{probe?.detail ? ` · ${probe.detail}` : ""}</Pill>
+    return (
+      <StatusPill tone="bad">unavailable{probe?.detail ? ` · ${probe.detail}` : ""}</StatusPill>
+    )
   }
   return (
-    <Pill tone="ok">
+    <StatusPill tone="ok">
       available{probe.version ? ` · ${probe.version}` : ""}
       {authSuffix(probe.authenticated)}
-    </Pill>
+    </StatusPill>
   )
 }
 
@@ -80,9 +60,9 @@ function FactHeading({ children }: { readonly children: ReactNode }) {
   )
 }
 
-/** A joined list, or the placeholder this card already used for an empty one. */
+/** A joined list, or `none` when the capability records no value. */
 function joinedOrDash(values: string[]): string {
-  return values.join(", ") || "—"
+  return values.join(", ") || "none"
 }
 
 function permissionFloorLabel(floor: ProviderCapability["security"]["permissionFloor"]): string {
@@ -141,7 +121,7 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
     <div className="rounded-lg border border-border p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="text-base font-semibold text-foreground">{capability.displayName}</h3>
-        <Pill tone="mute">{capability.kind}</Pill>
+        <StatusPill tone="mute">{capability.kind}</StatusPill>
         <ProbePill probe={probeQuery.data} loading={probeQuery.isLoading} />
       </div>
 
@@ -157,9 +137,9 @@ function BackendCard({ capability }: { capability: ProviderCapability }) {
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         {enabledFeatures.map((name) => (
-          <Pill key={name} tone="mute">
+          <StatusPill key={name} tone="mute">
             {name}
-          </Pill>
+          </StatusPill>
         ))}
       </div>
 
@@ -195,9 +175,9 @@ export function AgentsBackendsTab() {
               key={`${violation.severity}-${violation.message}`}
               className="flex items-center gap-2 text-sm"
             >
-              <Pill tone={violation.severity === "block" ? "bad" : "warn"}>
+              <StatusPill tone={violation.severity === "block" ? "bad" : "warn"}>
                 {violation.severity === "block" ? "blocked" : "warning"}
-              </Pill>
+              </StatusPill>
               <span className="text-foreground">{violation.message}</span>
             </div>
           ))}
@@ -205,10 +185,10 @@ export function AgentsBackendsTab() {
       )}
 
       {listQuery.isLoading && (
-        <div className="text-sm text-muted-foreground">Loading backends…</div>
+        <div className="text-sm text-muted-foreground">Loading backends...</div>
       )}
       {listQuery.isError && (
-        <div className="text-sm text-red-500">
+        <div className="text-sm text-red-600 dark:text-red-400">
           Could not load backends: {listQuery.error.message}
         </div>
       )}
