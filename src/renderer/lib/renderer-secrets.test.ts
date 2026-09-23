@@ -46,6 +46,22 @@ function settle(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+// Stubs `globalThis.localStorage` over an in-memory map holding one legacy
+// value, and returns the map so a test can assert the copy survives or goes.
+function stubLegacyLocalStorage(key: string, value: string): Map<string, string> {
+  const legacy = new Map<string, string>([[key, JSON.stringify(value)]])
+  ;(globalThis as Record<string, unknown>).localStorage = {
+    getItem: (storedKey: string) => legacy.get(storedKey) ?? null,
+    removeItem: (storedKey: string) => {
+      legacy.delete(storedKey)
+    },
+    setItem: (storedKey: string, storedValue: string) => {
+      legacy.set(storedKey, storedValue)
+    },
+  }
+  return legacy
+}
+
 describe("renderer secret storage", () => {
   it("puts the stored value back when the store refuses a write", async () => {
     mocks.query.mockResolvedValue({
@@ -88,18 +104,7 @@ describe("renderer secret storage", () => {
   })
 
   it("leaves a legacy value in place when its move into the store is refused", async () => {
-    const legacy = new Map<string, string>([
-      ["agents:openai-api-key", JSON.stringify("legacy-key")],
-    ])
-    ;(globalThis as Record<string, unknown>).localStorage = {
-      getItem: (key: string) => legacy.get(key) ?? null,
-      removeItem: (key: string) => {
-        legacy.delete(key)
-      },
-      setItem: (key: string, value: string) => {
-        legacy.set(key, value)
-      },
-    }
+    const legacy = stubLegacyLocalStorage("agents:openai-api-key", "legacy-key")
     mocks.set.mockRejectedValue(new Error("no usable keyring"))
 
     const storage = mod.createRendererSecretStorage<string>("agents:openai-api-key")
@@ -125,18 +130,7 @@ describe("renderer secret storage", () => {
   })
 
   it("keeps the legacy copy until the store confirms the removal", async () => {
-    const legacy = new Map<string, string>([
-      ["agents:openai-api-key", JSON.stringify("legacy-key")],
-    ])
-    ;(globalThis as Record<string, unknown>).localStorage = {
-      getItem: (key: string) => legacy.get(key) ?? null,
-      removeItem: (key: string) => {
-        legacy.delete(key)
-      },
-      setItem: (key: string, value: string) => {
-        legacy.set(key, value)
-      },
-    }
+    const legacy = stubLegacyLocalStorage("agents:openai-api-key", "legacy-key")
     mocks.query.mockResolvedValue({
       values: { "agents:openai-api-key": JSON.stringify("stored-key") },
       error: null,
