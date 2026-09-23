@@ -2,7 +2,16 @@
 
 import { useAtomValue } from "jotai"
 import { ListTree, MoreHorizontal } from "lucide-react"
-import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import {
+  memo,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { normalizeCodexToolPart } from "../../../../shared/codex-tool-normalizer"
 import {
   DropdownMenu,
@@ -595,6 +604,359 @@ function areMessagePropsEqual(
   return true
 }
 
+/** One plan-file operation this message carries, in the order it arrived. */
+type PlanOperation = { type: "write" | "edit"; part: NormalizedPart; index: number }
+
+/** What the plan-file pass found across the whole message. */
+type PlanOpsSummary = {
+  operations: PlanOperation[]
+  hasAnyPlanOperation: boolean
+  isStreaming: boolean
+  lastOperationType: "write" | "edit" | null
+}
+
+/**
+ * Everything a part renderer reads that is not the part itself: this message's
+ * identity and stream state, the grouping its parts implied, and how it
+ * collapses. One object instead of eighteen closure reads, which is what lets
+ * the dispatch and the renderers live at module scope, be read one branch at a
+ * time, and be tested without the component that owns the values.
+ */
+type PartRenderContext = {
+  messageId: string
+  status: string
+  isStreaming: boolean
+  isLastMessage: boolean
+  subChatId: string
+  projectPath: string | undefined
+  onOpenFile: ReturnType<typeof useFileOpen>
+  nestedToolsMap: Map<string, NormalizedPart[]>
+  nestedToolIds: Set<string>
+  /** Nested calls whose parent task part never arrived. */
+  orphans: {
+    toolCallIds: Set<string>
+    firstToolCallIds: Set<string>
+    taskGroups: Map<string, { parts: NormalizedPart[]; firstToolCallId: string }>
+  }
+  planOps: PlanOpsSummary
+  collapse: {
+    shouldCollapse: boolean
+    collapseBeforeIndex: number
+    visibleStepsCount: number
+    lastCollapsedPlanOp: PlanOperation | null
+  }
+}
+
+type PartRenderer = (part: NormalizedPart, idx: number, ctx: PartRenderContext) => ReactNode
+
+/**
+ * A nested call under a parent that never arrived, which is not the first of its
+ * group: the first one stands in for the missing parent and renders the rest
+ * inside itself, so the others are suppressed where they sit.
+ */
+function isSuppressedOrphan(part: NormalizedPart, ctx: PartRenderContext): boolean {
+  const { toolCallIds, firstToolCallIds } = ctx.orphans
+  if (!part.toolCallId || !toolCallIds.has(part.toolCallId)) return false
+  return !firstToolCallIds.has(part.toolCallId)
+}
+
+/** The incomplete task the first orphaned nested call of a group stands in for. */
+function renderOrphanTaskGroup(
+  part: NormalizedPart,
+  idx: number,
+  ctx: PartRenderContext,
+): ReactNode {
+  const { toolCallIds, firstToolCallIds, taskGroups } = ctx.orphans
+  if (!part.toolCallId || !toolCallIds.has(part.toolCallId)) return null
+  if (!firstToolCallIds.has(part.toolCallId)) return null
+  const parentId = part.toolCallId.split(":")[0]
+  const group = taskGroups.get(parentId)
+  if (!group) return null
+  return (
+    <AgentTaskTool
+      key={idx}
+      part={{
+        type: "tool-Task",
+        toolCallId: parentId,
+        input: { subagent_type: "unknown-agent", description: "Incomplete task" },
+      }}
+      nestedTools={group.parts}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+function renderTextPart(
+  part: NormalizedPart,
+  idx: number,
+  isFinal: boolean,
+  ctx: PartRenderContext,
+): ReactNode {
+  const { messageId, isLastMessage, isStreaming, collapse } = ctx
+  const { collapseBeforeIndex, visibleStepsCount } = collapse
+  if (!part.text?.trim()) return null
+  const isFinalText = isFinal && idx === collapseBeforeIndex
+  const isTextStreaming = isLastMessage && isStreaming
+  return (
+    <MemoizedTextPart
+      key={idx}
+      text={part.text}
+      messageId={messageId}
+      partIndex={idx}
+      isFinalText={isFinalText}
+      visibleStepsCount={visibleStepsCount}
+      isStreaming={isTextStreaming}
+    />
+  )
+}
+
+function renderSubagentTask(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  const nestedTools = ctx.nestedToolsMap.get(part.toolCallId ?? "") || []
+  return <AgentTaskTool key={idx} part={part} nestedTools={nestedTools} chatStatus={ctx.status} />
+}
+
+function renderBashTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentBashTool
+      key={idx}
+      part={part}
+      messageId={ctx.messageId}
+      partIndex={idx}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+function renderThinkingTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentThinkingTool
+      key={idx}
+      part={toThinkingToolPart(part, ctx.messageId, idx)}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+/** A Write or Edit whose target is a plan file, which the transcript shows as plan steps. */
+function isPlanOperationPart(part: NormalizedPart): boolean {
+  if (part.type !== "tool-Write" && part.type !== "tool-Edit") return false
+  const toolInput = part.input as { file_path?: string } | null | undefined
+  return isPlanFile(toolInput?.file_path || "")
+}
+
+/**
+ * Plan files: unified handling
+ * - In collapsed steps: all show mini indicator, last collapsed op's card shown separately after finalParts
+ * - In final parts: all but last show mini indicator, last shows full card
+ */
+function renderPlanOperation(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  const { planOps, status, subChatId, isStreaming, isLastMessage, collapse } = ctx
+  const { shouldCollapse, collapseBeforeIndex, lastCollapsedPlanOp } = collapse
+
+  // Use part.toolCallId to find operation since idx may be adjusted for collapsed parts
+  const opIndex = planOps.operations.findIndex((op) => op.part.toolCallId === part.toolCallId)
+  if (opIndex === -1) return null
+
+  const originalIndex = planOps.operations[opIndex]?.index ?? -1
+  const isInCollapsedSteps =
+    shouldCollapse && collapseBeforeIndex !== -1 && originalIndex < collapseBeforeIndex
+  const isLastCollapsedOp = lastCollapsedPlanOp?.part.toolCallId === part.toolCallId
+  const isLastOperation = opIndex === planOps.operations.length - 1
+
+  // If this is the last collapsed plan op, hide it here (card shown after CollapsibleSteps)
+  if (isInCollapsedSteps && isLastCollapsedOp) {
+    return null
+  }
+
+  // Show mini indicator for:
+  // - All operations in collapsed steps (except last collapsed, handled above)
+  // - All operations except last in final parts
+  const showMiniIndicator = isInCollapsedSteps || !isLastOperation
+
+  if (showMiniIndicator) {
+    const isWrite = part.type === "tool-Write"
+    const { isPending } = getToolStatus(part, status)
+    const isOpStreaming =
+      isPending || (part.state === "input-streaming" && isStreaming && isLastMessage)
+
+    return (
+      <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5">
+        <span className="text-xs text-muted-foreground">
+          {isOpStreaming ? (
+            <TextShimmer as="span" duration={1.2}>
+              {isWrite ? "Creating plan..." : "Updating plan..."}
+            </TextShimmer>
+          ) : isWrite ? (
+            "Created plan"
+          ) : (
+            "Updated plan"
+          )}
+        </span>
+      </div>
+    )
+  }
+
+  // Last operation in final parts: show full card
+  return (
+    <AgentPlanFileTool
+      key={idx}
+      part={part as AgentPlanFileToolProps["part"]}
+      chatStatus={status}
+      subChatId={subChatId}
+      isEdit={part.type === "tool-Edit"}
+    />
+  )
+}
+
+/** A file edit that is not a plan step: Write and Edit render the same card. */
+function renderFileEditTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentEditTool
+      key={idx}
+      part={part}
+      messageId={ctx.messageId}
+      partIndex={idx}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+function renderWebSearch(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return <AgentWebSearchCollapsible key={idx} part={part} chatStatus={ctx.status} />
+}
+
+function renderWebFetch(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return <AgentWebFetchTool key={idx} part={part} chatStatus={ctx.status} />
+}
+
+function renderPlanWrite(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentPlanTool key={idx} part={part as AgentPlanToolProps["part"]} chatStatus={ctx.status} />
+  )
+}
+
+function renderTodoList(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentTodoTool
+      key={idx}
+      part={part as AgentTodoToolProps["part"]}
+      chatStatus={ctx.status}
+      subChatId={ctx.subChatId}
+    />
+  )
+}
+
+function renderQuestionTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  const { isPending, isError } = getToolStatus(part, ctx.status)
+  return (
+    <AgentAskUserQuestionTool
+      key={idx}
+      input={part.input as AgentAskUserQuestionToolProps["input"]}
+      result={part.result as AgentAskUserQuestionToolProps["result"]}
+      errorText={part.errorText || (typeof part.error === "string" ? part.error : undefined)}
+      state={isPending ? "call" : "result"}
+      isError={isError}
+      isStreaming={ctx.isStreaming && ctx.isLastMessage}
+      toolCallId={part.toolCallId}
+    />
+  )
+}
+
+/** A tool the registry knows: one row, clickable when it was a file read. */
+function renderRegistryTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  const { onOpenFile, projectPath, status } = ctx
+  const meta = AgentToolRegistry[part.type]
+  const { isPending, isError } = getToolStatus(part, status)
+  // Make Read tool clickable to open file in viewer
+  // Capture the path at render: part objects can be mutated in place during streaming.
+  const toolInput = part.input as { file_path?: string } | null | undefined
+  const readFilePath =
+    part.type === "tool-Read" && onOpenFile ? (toolInput?.file_path ?? null) : null
+  const handleClick = readFilePath && onOpenFile ? () => onOpenFile(readFilePath) : undefined
+  return (
+    <AgentToolCall
+      key={idx}
+      icon={meta.icon}
+      title={meta.title(part as ToolDisplayPart)}
+      subtitle={meta.subtitle?.(part as ToolDisplayPart)}
+      tooltipContent={meta.tooltipContent?.(part as ToolDisplayPart, projectPath)}
+      isPending={isPending}
+      isError={isError}
+      onClick={handleClick}
+    />
+  )
+}
+
+/** A tool nobody registered: an MCP call by its server and tool, else its bare name. */
+function renderUnlistedTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  // MCP tool calls (pattern: tool-mcp__<server>__<tool>)
+  const mcpInfo = parseMcpToolType(part.type)
+  if (mcpInfo) {
+    return <AgentMcpToolCall key={idx} part={part} mcpInfo={mcpInfo} chatStatus={ctx.status} />
+  }
+
+  if (part.type?.startsWith("tool-")) {
+    return (
+      <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
+        {part.type.replace("tool-", "")}
+      </div>
+    )
+  }
+
+  return null
+}
+
+/**
+ * The part types with a renderer of their own. Order does not matter here
+ * because the keys are distinct; what does matter is that the dispatcher consults
+ * this table only after the shapes that claim a type before its own renderer —
+ * a sub-agent task, and a Write or Edit aimed at a plan file.
+ */
+const PART_RENDERERS: Record<string, PartRenderer> = {
+  "tool-Bash": renderBashTool,
+  reasoning: renderThinkingTool,
+  "tool-Thinking": renderThinkingTool,
+  "tool-Write": renderFileEditTool,
+  "tool-Edit": renderFileEditTool,
+  "tool-WebSearch": renderWebSearch,
+  "tool-WebFetch": renderWebFetch,
+  "tool-PlanWrite": renderPlanWrite,
+  // ExitPlanMode tool is hidden - plan is shown in sidebar instead
+  "tool-ExitPlanMode": () => null,
+  "tool-TodoWrite": renderTodoList,
+  "tool-AskUserQuestion": renderQuestionTool,
+}
+
+/**
+ * What one part of a message looks like, decided in the order the transcript has
+ * always decided it: the suppressions first, then text, then the two shapes that
+ * claim a type before its own renderer does, then the table, then the registry,
+ * then the shapes nobody registered.
+ */
+function renderMessagePart(
+  part: NormalizedPart,
+  idx: number,
+  isFinal: boolean,
+  ctx: PartRenderContext,
+): ReactNode {
+  if (part.type === "step-start") return null
+  if (isSuppressedOrphan(part, ctx)) return null
+
+  const orphanTask = renderOrphanTaskGroup(part, idx, ctx)
+  if (orphanTask) return orphanTask
+
+  if (part.toolCallId && ctx.nestedToolIds.has(part.toolCallId)) return null
+  if (part.type === "exploring-group") return null
+  if (part.type === "text") return renderTextPart(part, idx, isFinal, ctx)
+  if (isSubagentToolType(part.type)) return renderSubagentTask(part, idx, ctx)
+  if (isPlanOperationPart(part)) return renderPlanOperation(part, idx, ctx)
+
+  const renderer = PART_RENDERERS[part.type]
+  if (renderer) return renderer(part, idx, ctx)
+  if (part.type in AgentToolRegistry) return renderRegistryTool(part, idx, ctx)
+  return renderUnlistedTool(part, idx, ctx)
+}
+
 export const AssistantMessageItem = memo(function AssistantMessageItem({
   message,
   isLastMessage,
@@ -799,239 +1161,33 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
 
   const msgMetadata = message?.metadata as AgentMessageMetadata
 
-  const renderPart = useCallback(
-    (part: NormalizedPart, idx: number, isFinal = false) => {
-      const toolInput = part.input as { file_path?: string } | null | undefined
-      if (part.type === "step-start") return null
-
-      if (part.toolCallId && orphanToolCallIds.has(part.toolCallId)) {
-        if (!orphanFirstToolCallIds.has(part.toolCallId)) return null
-        const parentId = part.toolCallId.split(":")[0]
-        const group = orphanTaskGroups.get(parentId)
-        if (group) {
-          return (
-            <AgentTaskTool
-              key={idx}
-              part={{
-                type: "tool-Task",
-                toolCallId: parentId,
-                input: { subagent_type: "unknown-agent", description: "Incomplete task" },
-              }}
-              nestedTools={group.parts}
-              chatStatus={status}
-            />
-          )
-        }
-      }
-
-      if (part.toolCallId && nestedToolIds.has(part.toolCallId)) return null
-      if (part.type === "exploring-group") return null
-
-      if (part.type === "text") {
-        if (!part.text?.trim()) return null
-        const isFinalText = isFinal && idx === collapseBeforeIndex
-        const isTextStreaming = isLastMessage && isStreaming
-        return (
-          <MemoizedTextPart
-            key={idx}
-            text={part.text}
-            messageId={message.id}
-            partIndex={idx}
-            isFinalText={isFinalText}
-            visibleStepsCount={visibleStepsCount}
-            isStreaming={isTextStreaming}
-          />
-        )
-      }
-
-      if (isSubagentToolType(part.type)) {
-        const nestedTools = nestedToolsMap.get(part.toolCallId ?? "") || []
-        return <AgentTaskTool key={idx} part={part} nestedTools={nestedTools} chatStatus={status} />
-      }
-
-      if (part.type === "tool-Bash")
-        return (
-          <AgentBashTool
-            key={idx}
-            part={part}
-            messageId={message.id}
-            partIndex={idx}
-            chatStatus={status}
-          />
-        )
-      if (part.type === "reasoning" || part.type === "tool-Thinking") {
-        return (
-          <AgentThinkingTool
-            key={idx}
-            part={toThinkingToolPart(part, message?.id, idx)}
-            chatStatus={status}
-          />
-        )
-      }
-
-      // Plan files: unified handling
-      // - In collapsed steps: all show mini indicator, last collapsed op's card shown separately after finalParts
-      // - In final parts: all but last show mini indicator, last shows full card
-      if (part.type === "tool-Write" || part.type === "tool-Edit") {
-        const filePath = toolInput?.file_path || ""
-        if (isPlanFile(filePath)) {
-          // Use part.toolCallId to find operation since idx may be adjusted for collapsed parts
-          const opIndex = planOpsSummary.operations.findIndex(
-            (op) => op.part.toolCallId === part.toolCallId,
-          )
-          if (opIndex === -1) return null
-
-          const originalIndex = planOpsSummary.operations[opIndex]?.index ?? -1
-          const isInCollapsedSteps =
-            shouldCollapse && collapseBeforeIndex !== -1 && originalIndex < collapseBeforeIndex
-          const isLastCollapsedOp = lastCollapsedPlanOp?.part.toolCallId === part.toolCallId
-          const isLastOperation = opIndex === planOpsSummary.operations.length - 1
-
-          // If this is the last collapsed plan op, hide it here (card shown after CollapsibleSteps)
-          if (isInCollapsedSteps && isLastCollapsedOp) {
-            return null
-          }
-
-          // Show mini indicator for:
-          // - All operations in collapsed steps (except last collapsed, handled above)
-          // - All operations except last in final parts
-          const showMiniIndicator = isInCollapsedSteps || !isLastOperation
-
-          if (showMiniIndicator) {
-            const isWrite = part.type === "tool-Write"
-            const { isPending } = getToolStatus(part, status)
-            const isOpStreaming =
-              isPending || (part.state === "input-streaming" && isStreaming && isLastMessage)
-
-            return (
-              <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5">
-                <span className="text-xs text-muted-foreground">
-                  {isOpStreaming ? (
-                    <TextShimmer as="span" duration={1.2}>
-                      {isWrite ? "Creating plan..." : "Updating plan..."}
-                    </TextShimmer>
-                  ) : isWrite ? (
-                    "Created plan"
-                  ) : (
-                    "Updated plan"
-                  )}
-                </span>
-              </div>
-            )
-          }
-
-          // Last operation in final parts: show full card
-          return (
-            <AgentPlanFileTool
-              key={idx}
-              part={part as AgentPlanFileToolProps["part"]}
-              chatStatus={status}
-              subChatId={subChatId}
-              isEdit={part.type === "tool-Edit"}
-            />
-          )
-        }
-      }
-
-      if (part.type === "tool-Edit")
-        return (
-          <AgentEditTool
-            key={idx}
-            part={part}
-            messageId={message.id}
-            partIndex={idx}
-            chatStatus={status}
-          />
-        )
-      if (part.type === "tool-Write")
-        return (
-          <AgentEditTool
-            key={idx}
-            part={part}
-            messageId={message.id}
-            partIndex={idx}
-            chatStatus={status}
-          />
-        )
-      if (part.type === "tool-WebSearch")
-        return <AgentWebSearchCollapsible key={idx} part={part} chatStatus={status} />
-      if (part.type === "tool-WebFetch")
-        return <AgentWebFetchTool key={idx} part={part} chatStatus={status} />
-      if (part.type === "tool-PlanWrite")
-        return (
-          <AgentPlanTool key={idx} part={part as AgentPlanToolProps["part"]} chatStatus={status} />
-        )
-
-      // ExitPlanMode tool is hidden - plan is shown in sidebar instead
-      if (part.type === "tool-ExitPlanMode") {
-        return null
-      }
-
-      if (part.type === "tool-TodoWrite") {
-        return (
-          <AgentTodoTool
-            key={idx}
-            part={part as AgentTodoToolProps["part"]}
-            chatStatus={status}
-            subChatId={subChatId}
-          />
-        )
-      }
-
-      if (part.type === "tool-AskUserQuestion") {
-        const { isPending, isError } = getToolStatus(part, status)
-        return (
-          <AgentAskUserQuestionTool
-            key={idx}
-            input={part.input as AgentAskUserQuestionToolProps["input"]}
-            result={part.result as AgentAskUserQuestionToolProps["result"]}
-            errorText={part.errorText || (typeof part.error === "string" ? part.error : undefined)}
-            state={isPending ? "call" : "result"}
-            isError={isError}
-            isStreaming={isStreaming && isLastMessage}
-            toolCallId={part.toolCallId}
-          />
-        )
-      }
-
-      if (part.type in AgentToolRegistry) {
-        const meta = AgentToolRegistry[part.type]
-        const { isPending, isError } = getToolStatus(part, status)
-        // Make Read tool clickable to open file in viewer
-        // Capture the path at render: part objects can be mutated in place during streaming.
-        const readFilePath =
-          part.type === "tool-Read" && onOpenFile ? (toolInput?.file_path ?? null) : null
-        const handleClick = readFilePath && onOpenFile ? () => onOpenFile(readFilePath) : undefined
-        return (
-          <AgentToolCall
-            key={idx}
-            icon={meta.icon}
-            title={meta.title(part as ToolDisplayPart)}
-            subtitle={meta.subtitle?.(part as ToolDisplayPart)}
-            tooltipContent={meta.tooltipContent?.(part as ToolDisplayPart, projectPath)}
-            isPending={isPending}
-            isError={isError}
-            onClick={handleClick}
-          />
-        )
-      }
-
-      // MCP tool calls (pattern: tool-mcp__<server>__<tool>)
-      const mcpInfo = parseMcpToolType(part.type)
-      if (mcpInfo) {
-        return <AgentMcpToolCall key={idx} part={part} mcpInfo={mcpInfo} chatStatus={status} />
-      }
-
-      if (part.type?.startsWith("tool-")) {
-        return (
-          <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
-            {part.type.replace("tool-", "")}
-          </div>
-        )
-      }
-
-      return null
-    },
+  // One context object, so the dispatch and every renderer it calls can live at
+  // module scope: this component says what this message's values are, and
+  // renderMessagePart decides what each part looks like.
+  const partContext = useMemo<PartRenderContext>(
+    () => ({
+      messageId: message.id,
+      status,
+      isStreaming,
+      isLastMessage,
+      subChatId,
+      projectPath,
+      onOpenFile,
+      nestedToolsMap,
+      nestedToolIds,
+      orphans: {
+        toolCallIds: orphanToolCallIds,
+        firstToolCallIds: orphanFirstToolCallIds,
+        taskGroups: orphanTaskGroups,
+      },
+      planOps: planOpsSummary,
+      collapse: {
+        shouldCollapse,
+        collapseBeforeIndex,
+        visibleStepsCount,
+        lastCollapsedPlanOp,
+      },
+    }),
     [
       nestedToolsMap,
       nestedToolIds,
@@ -1051,6 +1207,12 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       projectPath,
       onOpenFile,
     ],
+  )
+
+  const renderPart = useCallback(
+    (part: NormalizedPart, idx: number, isFinal = false) =>
+      renderMessagePart(part, idx, isFinal, partContext),
+    [partContext],
   )
 
   // Detect when the assistant's final text part is a question awaiting user input.
