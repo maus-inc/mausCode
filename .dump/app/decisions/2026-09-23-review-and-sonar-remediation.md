@@ -164,7 +164,35 @@ After this round the scan reports no duplicated block of six or more lines in wh
 both copies contain lines this PR added, other than the manifest data and the call
 sites itemised above. The same scan before round 2 reported 21 such groups.
 
-## The two complexity findings this step does not take
+### The gate after the sweep
+
+SonarQube Cloud on head `b75064c`: quality gate passed, duplication on new code
+0.5% — 7 duplicated lines out of 1284 new ones — against the 3% limit, the 4.2%
+that failed it, and the 1.0% round 1 reached. Security hotspots 0. New issues 1,
+down from 2, for the reason recorded in the complexity section below. CodeAnt's
+five gates pass and it approved this head. All fifteen substantive GitHub Actions
+checks pass: Build on ubuntu-24.04, macos-14 and windows-2022, Package unsigned on
+ubuntu-24.04 and macos-14, the lint/test/typecheck quality gates, the security
+gates, both Socket reports and CodeRabbit; Buoy, Sourcery and DeepSource skip as
+before. Buoy re-posted the same two `min-h-[32px]` → `min-h-8` suggestions and they
+are declined again on the evidence already recorded here: the arbitrary form appears
+14 times across `src/**/*.tsx`, the token form zero times.
+
+Sonar's per-file measure says where the 7 lines are, and it is one line in each of
+seven provider manifests — cline, codex, cursor, grok, hermes, opencode, qwen. Every
+file an abstraction touched reports zero duplicated new lines: both surfaces, the new
+hook, the selector, both transports, the shared chunk helpers,
+`provider-capabilities.ts`, `transform.ts`, `types.ts`, every test file and
+`package.json`. The two manifests that report zero are openclaw and roo, which are
+the two whose feature blocks carry reasoned false flags with comments — the comment
+lines break the window. One duplicated line per manifest is consistent with the two
+things the local scan also flags there, the data tail
+(`latencyClass: "cloud", usageSurface: "native"`) and the spread line
+(`features: { ...ALL_FEATURES_OFF, chat: true`), and with nothing else those files
+contain. Neither is a decision stated twice, which is what item 2 above argues, and
+0.5% is what is left when the decisions are each stated once.
+
+## The complexity findings this step does not take
 
 | Function | Reported | What this PR changed inside it | What clearing it needs |
 | --- | --- | --- | --- |
@@ -178,6 +206,17 @@ dependency-pin pull request, and there is no test coverage to make the rewrite
 safe. They are named here so they are handed off rather than quietly dropped, and
 the transport refactor is the model for how to do them — one handler per side
 effect, an explicit context, and a single exit path.
+
+**Update from round 2.** One of the two no longer stands, and nothing attacked it:
+SonarCloud's issue list for this PR now returns a single issue, `typescript:S3776`
+on `assistant-message-item.tsx:803`. Moving the picker wiring out of `NewChatForm`
+(`e57175b`) took the ternary that fed the effort rows and the `||` chains that
+resolved the custom config, the connection state and the Ollama model with it, and
+the component came out under the threshold. A component that stops owning a decision
+stops paying for its branches — the same argument as the transport refactor, arrived
+at from the other end, and a reason to expect the `renderPart` split to be worth
+doing on its own terms rather than as gate relief. `renderPart` is untouched by this
+round and stands at 70 against 15.
 
 ## What was declined, and why
 
