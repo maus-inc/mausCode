@@ -61,16 +61,20 @@ measure how long the keyring calls actually take before optimizing. Recorded
 as the deep review's low finding rather than fixed here because it predates
 the PR and has no observed symptom.
 
-## 5. The credential ledger's `generations` map is never cleaned
+## 5. The credential ledger's `generations` map is never cleaned, on purpose
 
-`runtime/credential-ledger.ts:53` keeps a module-level `generations` map keyed
-by session id. `beginCredentialTurn` adds an entry for every session that opens
-a turn (`:97-98`) and `planCredentialRelease` reads it (`:124`), but nothing
-ever deletes an entry, so the map grows one entry per session for the life of
-the process. Each entry is a short string and a number, so this is a slow,
-low-severity leak rather than a defect, but a long-lived app that opens many
-sessions should eventually prune sessions it no longer tracks. Recorded from
-the deep review's low findings.
+The deep review logged this as a low finding: `runtime/credential-ledger.ts:53`
+keeps a module-level `generations` map keyed by session id that
+`beginCredentialTurn` grows (`:97-98`) and nothing deletes. Checked against the
+code and the earlier review record, this is deliberate, not a leak to fix. A
+generation number must never be handed out twice: a release from an older turn
+can be queued after the same session's newer turn has already written its keys,
+and a reused number would make that stale release match the newer keys and
+clear them. Pruning the map is what would reintroduce the defect the numbering
+exists to prevent. One short string and one number per session for the process
+lifetime is the stated price of that guarantee, and the comment at `:47-53`
+records it. This finding was already declined on 2026-09-21 for exactly this
+reason. No action; do not prune.
 
 ## 6. The release retry in `runtime/credentials.ts` stays an E4 audit item
 
