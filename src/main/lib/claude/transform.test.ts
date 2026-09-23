@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createTransformer, INTERNAL_STREAM_MESSAGE_TYPES } from "./transform"
-import type { ClaudeStreamMessage } from "./types"
+import type { ClaudeStreamMessage, UIMessageChunk } from "./types"
 
 const U1 = "00000000-0000-4000-8000-000000000001"
 const U2 = "00000000-0000-4000-8000-000000000002"
@@ -18,6 +18,16 @@ function translate(...messages: ClaudeStreamMessage[]): string[] {
   const out: string[] = []
   for (const msg of messages) {
     for (const chunk of transform(msg)) out.push(chunk.type)
+  }
+  return out
+}
+
+/** The whole chunk, for the two mappings whose payload is the point. */
+function translateChunks(...messages: ClaudeStreamMessage[]): UIMessageChunk[] {
+  const transform = createTransformer()
+  const out: UIMessageChunk[] = []
+  for (const msg of messages) {
+    for (const chunk of transform(msg)) out.push(chunk)
   }
   return out
 }
@@ -301,8 +311,65 @@ describe("claude transform", () => {
     // runtime surface a new SDK member must join.
     expect([...INTERNAL_STREAM_MESSAGE_TYPES].sort()).toEqual([
       "auth_status",
+      "conversation_reset",
+      "rate_limit_event",
       "tool_progress",
       "tool_use_summary",
     ])
+  })
+
+  it("turns an api_retry into one readable retry notification", () => {
+    const chunks = translateChunks({
+      type: "system",
+      subtype: "api_retry",
+      attempt: 2,
+      max_retries: 5,
+      retry_delay_ms: 4200,
+      error_status: 429,
+      error: "rate_limit",
+      uuid: U1,
+      session_id: "sess-1",
+    })
+    expect(chunks.map((chunk) => chunk.type)).toEqual(["start", "start-step", "retry-notification"])
+    const retry = chunks[2]
+    expect(retry?.type === "retry-notification" && retry.message).toBe(
+      "Claude API retry: rate limit (HTTP 429), attempt 2 of 5, waiting 4s",
+    )
+  })
+
+  it("leaves the status out of a retry that carries no HTTP code", () => {
+    const chunks = translateChunks({
+      type: "system",
+      subtype: "api_retry",
+      attempt: 1,
+      max_retries: 3,
+      retry_delay_ms: 400,
+      error_status: null,
+      error: "overloaded",
+      uuid: U2,
+      session_id: "sess-1",
+    })
+    const retry = chunks[2]
+    expect(retry?.type === "retry-notification" && retry.message).toBe(
+      "Claude API retry: overloaded, attempt 1 of 3, waiting 1s",
+    )
+  })
+
+  it("maps a prompt suggestion to one bounded composer chunk", () => {
+    const chunks = translateChunks({
+      type: "prompt_suggestion",
+      suggestion: `  ${"x".repeat(2500)}  `,
+      uuid: U3,
+      session_id: "sess-9",
+    })
+    const suggestion = chunks.find((chunk) => chunk.type === "prompt-suggestion")
+    expect(suggestion?.type === "prompt-suggestion" && suggestion.suggestion).toHaveLength(2000)
+    expect(suggestion?.type === "prompt-suggestion" && suggestion.sessionId).toBe("sess-9")
+  })
+
+  it("drops an empty prompt suggestion instead of showing an empty row", () => {
+    expect(
+      translate({ type: "prompt_suggestion", suggestion: "   ", uuid: U4, session_id: "sess-9" }),
+    ).toEqual(["start", "start-step"])
   })
 })
