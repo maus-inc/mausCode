@@ -13,7 +13,6 @@ import { ChevronDown, Sparkles, Zap } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
-import { EFFORT_LEVELS } from "../../../../shared/effort"
 import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
 import { permissionFloorFor } from "../../../../shared/provider-capabilities"
 import { Button } from "../../../components/ui/button"
@@ -32,21 +31,13 @@ import {
 import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
-  anthropicOnboardingCompletedAtom,
-  apiKeyOnboardingCompletedAtom,
-  claudeEffortAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
-  customClaudeConfigAtom,
   customHotkeysAtom,
-  extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
-  normalizeCustomClaudeConfig,
   pinnedOpenRouterModelsAtom,
-  selectedOllamaModelAtom,
   sessionInfoAtom,
-  showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import {
   blobToBase64,
@@ -93,11 +84,11 @@ import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentModelSelector, type AgentProviderId } from "../components/agent-model-selector"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
+import { useClaudeModelPicker } from "../hooks/use-claude-model-picker"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 import { clearSubChatDraft, saveSubChatDraftWithAttachments } from "../lib/drafts"
 import { getModeIcon, getModeLabel, getModeTooltip } from "../lib/mode-display"
 import {
-  CLAUDE_MODELS,
   CLINE_MODELS,
   CODEX_MODELS,
   CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
@@ -126,44 +117,6 @@ import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
 import { handlePasteEvent } from "../utils/paste-text"
-
-// Hook to get available models (including offline models if Ollama is available and debug enabled)
-function useAvailableModels() {
-  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
-  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
-    refetchInterval: showOfflineFeatures ? 30000 : false,
-    enabled: showOfflineFeatures, // Only query Ollama when offline mode is enabled
-  })
-
-  const baseModels = CLAUDE_MODELS
-
-  const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
-  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
-  const ollamaModels = ollamaStatus?.ollama.models || []
-  const recommendedModel = ollamaStatus?.ollama.recommendedModel
-
-  // Only show offline models if:
-  // 1. Debug flag is enabled (showOfflineFeatures)
-  // 2. Ollama is available with models
-  // 3. User is actually offline
-  if (showOfflineFeatures && hasOllama && isOffline) {
-    return {
-      models: baseModels,
-      ollamaModels,
-      recommendedModel,
-      isOffline,
-      hasOllama: true,
-    }
-  }
-
-  return {
-    models: baseModels,
-    ollamaModels: [] as string[],
-    recommendedModel: undefined as string | undefined,
-    isOffline,
-    hasOllama: false,
-  }
-}
 
 export interface ChatInputAreaProps {
   // Editor ref - passed from parent for external access
@@ -559,8 +512,15 @@ export const ChatInputArea = memo(function ChatInputArea({
     refetchOnWindowFocus: false,
     retry: 1,
   })
-  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
-  const availableModels = useAvailableModels()
+  const hiddenModels = useAtomValue(hiddenModelsAtom)
+  // The Claude half of the picker is shared with the new-chat form; which model
+  // is selected, and what selecting one does, belong to this surface alone.
+  const {
+    availableModels,
+    hasCustomClaudeConfig,
+    currentOllamaModel,
+    props: claudePickerProps,
+  } = useClaudeModelPicker(hiddenModels)
   const [selectedModel, setSelectedModel] = useState(
     () =>
       availableModels.models.find((m) => m.id === selectedSubChatModelId) ||
@@ -583,13 +543,8 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatModelId(selectedModel.id)
   }, [provider, selectedModel?.id, setSelectedSubChatModelId])
 
-  const hiddenModels = useAtomValue(hiddenModelsAtom)
-
   // Connection status for providers
-  const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
-  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const { data: claudeCodeIntegration } = trpc.claudeCode.getIntegration.useQuery()
   const { data: cursorIntegration } = trpc.cursor.getIntegration.useQuery()
   const { data: grokIntegration } = trpc.grok.getIntegration.useQuery()
   const { data: qwenIntegration } = trpc.qwen.getIntegration.useQuery()
@@ -787,33 +742,12 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatRooModelId(selectedRooModel.id)
   }, [provider, selectedRooModel?.id, setSelectedSubChatRooModelId])
 
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig = normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
-  const isClaudeConnected =
-    Boolean(claudeCodeIntegration?.isConnected) ||
-    anthropicOnboardingCompleted ||
-    apiKeyOnboardingCompleted ||
-    hasCustomClaudeConfig
   const isCursorConnected = Boolean(cursorIntegration?.isConnected)
   const isGrokConnected = Boolean(grokIntegration?.isConnected)
   const isQwenConnected = Boolean(qwenIntegration?.isConnected)
   const isClineConnected = Boolean(clineIntegration?.isConnected)
   const isOpenclawConnected = Boolean(openclawIntegration?.isConnected)
   const isRooConnected = Boolean(rooIntegration?.isConnected)
-
-  // Determine current Ollama model (selected or recommended)
-  const currentOllamaModel =
-    selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
-
-  // Extended thinking (reasoning) toggle
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
-
-  // The effort rows come from the backend's own capability profile, so a
-  // provider that reports no effort control shows no sub-menu.
-  const { data: claudeCapability } = trpc.providers.get.useQuery({ id: "claude" })
-  const claudeEfforts = claudeCapability?.features.effort ? EFFORT_LEVELS : []
-  const [selectedClaudeEffort, setSelectedClaudeEffort] = useAtom(claudeEffortAtom)
 
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
@@ -2074,7 +2008,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                         setSettingsOpen(true)
                       }}
                       claude={{
-                        models: availableModels.models.filter((m) => !hiddenModels.includes(m.id)),
+                        ...claudePickerProps,
                         selectedModelId: selectedModel?.id,
                         onSelectModel: (modelId) => {
                           const model =
@@ -2085,18 +2019,6 @@ export const ChatInputArea = memo(function ChatInputArea({
                           setSelectedSubChatModelId(model.id)
                           setLastSelectedModelId(model.id)
                         },
-                        hasCustomModelConfig: hasCustomClaudeConfig,
-                        isOffline: availableModels.isOffline && availableModels.hasOllama,
-                        ollamaModels: availableModels.ollamaModels,
-                        selectedOllamaModel: currentOllamaModel,
-                        recommendedOllamaModel: availableModels.recommendedModel,
-                        onSelectOllamaModel: setSelectedOllamaModel,
-                        isConnected: isClaudeConnected,
-                        thinkingEnabled,
-                        onThinkingChange: setThinkingEnabled,
-                        efforts: claudeEfforts,
-                        selectedEffort: selectedClaudeEffort,
-                        onSelectEffort: setSelectedClaudeEffort,
                       }}
                       codex={{
                         models: codexUiModels,

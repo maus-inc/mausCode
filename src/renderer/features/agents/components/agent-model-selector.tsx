@@ -134,7 +134,7 @@ type RooModelOption = {
   name: string
 }
 
-interface AgentModelSelectorProps {
+export interface AgentModelSelectorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedAgentId: AgentProviderId
