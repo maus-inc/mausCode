@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveQwenCliLaunch } from "../qwen-binary"
 import { probeQwenStoredAuth } from "../qwen-print/auth-config"
 import type { BackendProbe } from "./types"
@@ -53,6 +53,7 @@ export function getQwenCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       // read_file reads images/PDFs by path; attachments are staged to
       // temp files and referenced from the prompt (cursor posture).
@@ -65,11 +66,7 @@ export function getQwenCapability(): ProviderCapability {
       // agent/task delegation flows through the same tool projector as
       // any other tool call (same posture as the claude backend).
       subagents: true,
-      cron: false,
       skills: true,
-      structuredOutput: false,
-      fileCheckpointing: false,
-      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Images travel as prompt path references the agent reads via tools.",

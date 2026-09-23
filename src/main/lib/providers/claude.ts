@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
 import { existsSync } from "node:fs"
 import { eq } from "drizzle-orm"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { getBundledClaudeBinaryPath } from "../claude/env"
 import { getExistingClaudeCredentials } from "../claude-token"
 import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../db"
@@ -91,16 +91,14 @@ export function getClaudeCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
       fork: true,
       mcp: true,
       subagents: true,
-      cron: false,
       skills: true,
-      structuredOutput: false,
-      fileCheckpointing: false,
       // All three on: the 0.3.270 pin carries `Options.effort`, adaptive
       // thinking and `Options.promptSuggestions` through a turn end to end.
       effort: true,

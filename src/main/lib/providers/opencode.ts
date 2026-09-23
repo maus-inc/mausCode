@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import type { BackendProbe } from "./types"
 
 function runBinary(
@@ -48,17 +48,12 @@ export function getOpencodeCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
-      fork: false,
       mcp: true,
       subagents: true,
-      cron: false,
-      skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
-      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Permissions auto-reply session-wide; opencode.json can tighten per-tool policy.",

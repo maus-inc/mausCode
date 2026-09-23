@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveOpenclawCliLaunch } from "../openclaw-binary"
 import { readOpenclawModelsStatus, summarizeModelsStatusAuth } from "../openclaw-print/auth-config"
 import type { BackendProbe } from "./types"
@@ -56,6 +56,7 @@ export function getOpenclawCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       // No image input surface on exec — attachments travel as prompt
       // path references the agent reads via tools (cline posture).
@@ -63,16 +64,10 @@ export function getOpenclawCapability(): ProviderCapability {
       // Exec accepts no session id: each turn is a fresh session with
       // bounded transcript context.
       resume: false,
-      fork: false,
       mcp: true,
-      subagents: false,
-      cron: false,
       // Upstream skills exist but exec-run skill loading is
       // unverified from here.
       skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
-      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "One JSON envelope per turn — no streaming; progress appears only when the turn settles.",

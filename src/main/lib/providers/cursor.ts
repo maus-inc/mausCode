@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveCursorAgentCliLaunch } from "../cursor-agent-binary"
 import type { BackendProbe } from "./types"
 
@@ -51,18 +51,13 @@ export function getCursorCapability(): ProviderCapability {
       usageSurface: "none",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
-      fork: false,
       mcp: true,
       // Task/subagent delegation drains before print runs exit.
       subagents: true,
-      cron: false,
-      skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
-      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Images travel as prompt path references the agent reads via tools.",

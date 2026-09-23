@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveGrokCliLaunch, resolveGrokHome } from "../grok-binary"
 import type { BackendProbe } from "./types"
 
@@ -57,6 +57,7 @@ export function getGrokCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
@@ -67,11 +68,6 @@ export function getGrokCapability(): ProviderCapability {
       // Task-tool delegation flows through the same tool projector as any
       // other tool call (same posture as the cursor backend).
       subagents: true,
-      cron: false,
-      skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
-      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Images travel as prompt path references the agent reads via tools.",

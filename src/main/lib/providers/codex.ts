@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
 import { join } from "node:path"
 import { app } from "electron"
-import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import type { BackendProbe } from "./types"
 
 function resolveCodexBinary(): string {
@@ -62,17 +62,11 @@ export function getCodexCapability(): ProviderCapability {
       usageSurface: "session-files",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
-      fork: false,
       mcp: true,
-      subagents: false,
-      cron: false,
-      skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
-      ...TURN_CONTROLS_OFF,
       // The app-server takes a reasoning effort on a turn; Codex chooses its
       // own thinking budget and sends no prompt suggestion.
       effort: true,

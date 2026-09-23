@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { getClaudeShellEnvironment } from "../claude/env"
 import { resolveRooCliLaunch } from "../roo-binary"
 import { resolveRooAmbientAuth } from "../roo-print/auth-config"
@@ -53,6 +53,7 @@ export function getRooCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       // No image input surface on print — attachments travel as prompt
       // path references the agent reads via tools (cline posture).
@@ -60,16 +61,10 @@ export function getRooCapability(): ProviderCapability {
       // Resume rejects prompt upstream: each turn is a fresh session
       // with bounded transcript context.
       resume: false,
-      fork: false,
       mcp: true,
-      subagents: false,
-      cron: false,
       // Upstream custom tools exist but print-run skill loading is
       // unverified from here.
       skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
-      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Streams NDJSON events per turn (text deltas, thinking, tool calls, command output, cost).",

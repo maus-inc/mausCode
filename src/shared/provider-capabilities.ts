@@ -99,26 +99,39 @@ export type ProviderCapability = z.infer<typeof providerCapabilitySchema>
 /** The two answers to "who enforces the permission floor of roadmap step 10". */
 export type PermissionFloor = ProviderCapability["security"]["permissionFloor"]
 
-/** The three turn-shaping features the 0.3.270 SDK pin made expressible. */
-export type TurnControlFeatures = Pick<
-  ProviderCapability["features"],
-  "effort" | "adaptiveThinking" | "promptSuggestions"
->
+/** The feature flags themselves, so a manifest can be typed against them. */
+export type FeatureFlags = z.infer<typeof featureFlagsSchema>
 
 /**
- * The "when in doubt, false" rule above, stated once for those three features.
- * A manifest spreads this and then names only what its own backend carries end
- * to end, so eight backends that support none of them cannot drift to eight
- * hand-written copies of the same default, and a fourth flag added to the
- * schema fails typecheck here rather than being silently missing from one
- * manifest. The per-backend evidence is in
- * `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
+ * Every feature at the rule above's own answer: false.
+ *
+ * A manifest spreads this and then claims what its backend carries end to end,
+ * so the flags nothing in mausCode wires for any backend yet are stated once
+ * here instead of once per manifest, and a claim reads as a claim. Forgetting
+ * one fails safe, which is the direction the rule already asks for: the UI must
+ * not offer what a manifest did not say. A flag added to the schema fails
+ * typecheck here rather than going silently missing from one manifest.
+ *
+ * A negative claim that was investigated keeps its own line and its reason in
+ * the manifest — `grok` forks, `openclaw` does not resume — because that is
+ * evidence about a backend, not a default. The evidence behind the three
+ * turn-shaping flags is in `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
  */
-export const TURN_CONTROLS_OFF: TurnControlFeatures = {
+export const ALL_FEATURES_OFF = {
+  chat: false,
+  images: false,
+  resume: false,
+  fork: false,
+  mcp: false,
+  subagents: false,
+  cron: false,
+  skills: false,
+  structuredOutput: false,
+  fileCheckpointing: false,
   effort: false,
   adaptiveThinking: false,
   promptSuggestions: false,
-}
+} satisfies FeatureFlags
 
 /**
  * The floor behind a sub-chat provider id, which is the vocabulary the chat UI

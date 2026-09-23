@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveClineCliLaunch } from "../cline-binary"
 import { probeClineStoredAuth } from "../cline-print/auth-config"
 import type { BackendProbe } from "./types"
@@ -53,6 +53,7 @@ export function getClineCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       // `@./path.png` image mentions exist upstream, but headless
       // image support is unverified — attachments travel as prompt
@@ -61,16 +62,11 @@ export function getClineCapability(): ProviderCapability {
       // --id resume is broken in all headless paths (v3.0.61):
       // continuity comes from transcript-in-prompt instead.
       resume: false,
-      fork: false,
       mcp: true,
       // spawn_agent / team_* tools exist upstream and flow through
       // the tool projector; multi-agent orchestration is CLI-managed.
       subagents: true,
-      cron: false,
       skills: true,
-      structuredOutput: false,
-      fileCheckpointing: false,
-      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Images travel as prompt path references the agent reads via tools.",
