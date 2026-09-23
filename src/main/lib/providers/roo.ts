@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
 import { getClaudeShellEnvironment } from "../claude/env"
 import { resolveRooCliLaunch } from "../roo-binary"
 import { resolveRooAmbientAuth } from "../roo-print/auth-config"
@@ -69,12 +69,7 @@ export function getRooCapability(): ProviderCapability {
       skills: false,
       structuredOutput: false,
       fileCheckpointing: false,
-      // True only where a turn can actually carry the value end to end; the
-      // evidence per backend is in
-      // `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
-      effort: false,
-      adaptiveThinking: false,
-      promptSuggestions: false,
+      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Streams NDJSON events per turn (text deltas, thinking, tool calls, command output, cost).",

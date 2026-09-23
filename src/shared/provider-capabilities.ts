@@ -99,6 +99,27 @@ export type ProviderCapability = z.infer<typeof providerCapabilitySchema>
 /** The two answers to "who enforces the permission floor of roadmap step 10". */
 export type PermissionFloor = ProviderCapability["security"]["permissionFloor"]
 
+/** The three turn-shaping features the 0.3.270 SDK pin made expressible. */
+export type TurnControlFeatures = Pick<
+  ProviderCapability["features"],
+  "effort" | "adaptiveThinking" | "promptSuggestions"
+>
+
+/**
+ * The "when in doubt, false" rule above, stated once for those three features.
+ * A manifest spreads this and then names only what its own backend carries end
+ * to end, so eight backends that support none of them cannot drift to eight
+ * hand-written copies of the same default, and a fourth flag added to the
+ * schema fails typecheck here rather than being silently missing from one
+ * manifest. The per-backend evidence is in
+ * `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
+ */
+export const TURN_CONTROLS_OFF: TurnControlFeatures = {
+  effort: false,
+  adaptiveThinking: false,
+  promptSuggestions: false,
+}
+
 /**
  * The floor behind a sub-chat provider id, which is the vocabulary the chat UI
  * holds. The manifests are keyed by backend id and live in main, so the renderer

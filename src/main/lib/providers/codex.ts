@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
 import { join } from "node:path"
 import { app } from "electron"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
 import type { BackendProbe } from "./types"
 
 function resolveCodexBinary(): string {
@@ -72,12 +72,10 @@ export function getCodexCapability(): ProviderCapability {
       skills: false,
       structuredOutput: false,
       fileCheckpointing: false,
-      // True only where a turn can actually carry the value end to end; the
-      // evidence per backend is in
-      // `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
+      ...TURN_CONTROLS_OFF,
+      // The app-server takes a reasoning effort on a turn; Codex chooses its
+      // own thinking budget and sends no prompt suggestion.
       effort: true,
-      adaptiveThinking: false,
-      promptSuggestions: false,
     },
     notes: [
       "Approvals auto-grant session-wide (parity with the former ACP path).",

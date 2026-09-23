@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
 import { resolveGrokCliLaunch, resolveGrokHome } from "../grok-binary"
 import type { BackendProbe } from "./types"
 
@@ -71,12 +71,7 @@ export function getGrokCapability(): ProviderCapability {
       skills: false,
       structuredOutput: false,
       fileCheckpointing: false,
-      // True only where a turn can actually carry the value end to end; the
-      // evidence per backend is in
-      // `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
-      effort: false,
-      adaptiveThinking: false,
-      promptSuggestions: false,
+      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Images travel as prompt path references the agent reads via tools.",

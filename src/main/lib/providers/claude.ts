@@ -101,9 +101,8 @@ export function getClaudeCapability(): ProviderCapability {
       skills: true,
       structuredOutput: false,
       fileCheckpointing: false,
-      // True only where a turn can actually carry the value end to end; the
-      // evidence per backend is in
-      // `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
+      // All three on: the 0.3.270 pin carries `Options.effort`, adaptive
+      // thinking and `Options.promptSuggestions` through a turn end to end.
       effort: true,
       adaptiveThinking: true,
       promptSuggestions: true,

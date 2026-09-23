@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { type ProviderCapability, TURN_CONTROLS_OFF } from "../../../shared/provider-capabilities"
 import type { BackendProbe } from "./types"
 
 function runBinary(
@@ -58,12 +58,7 @@ export function getOpencodeCapability(): ProviderCapability {
       skills: false,
       structuredOutput: false,
       fileCheckpointing: false,
-      // True only where a turn can actually carry the value end to end; the
-      // evidence per backend is in
-      // `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
-      effort: false,
-      adaptiveThinking: false,
-      promptSuggestions: false,
+      ...TURN_CONTROLS_OFF,
     },
     notes: [
       "Permissions auto-reply session-wide; opencode.json can tighten per-tool policy.",
