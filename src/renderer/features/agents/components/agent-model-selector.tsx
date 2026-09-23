@@ -246,7 +246,7 @@ function EffortSubMenu<TLevel extends EffortLevel>({
   selectedThinking,
   onSelectThinking,
   onClear,
-}: {
+}: Readonly<{
   thinkings: readonly TLevel[]
   selectedThinking: TLevel | null
   onSelectThinking: (thinking: TLevel) => void
@@ -257,7 +257,7 @@ function EffortSubMenu<TLevel extends EffortLevel>({
    * so it passes nothing and the row does not appear.
    */
   onClear?: () => void
-}) {
+}>) {
   const triggerRef = useRef<HTMLDivElement>(null)
   const subMenuRef = useRef<HTMLDivElement>(null)
   const [showSub, setShowSub] = useState(false)
