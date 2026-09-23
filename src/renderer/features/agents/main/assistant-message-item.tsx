@@ -19,6 +19,7 @@ import { cn } from "../../../lib/utils"
 import { selectedProjectAtom, showMessageJsonAtom } from "../atoms"
 import { isAssistantMessageQuestion } from "../lib/is-question"
 import { playQuestionSound } from "../lib/play-question-sound"
+import { isSubagentToolType } from "../lib/subagent-tool-types"
 import { useFileOpen } from "../mentions"
 import type { Message } from "../stores/message-store"
 import {
@@ -638,7 +639,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       messageParts
         .filter(
           (p): p is NormalizedPart & { toolCallId: string } =>
-            p.type === "tool-Task" && !!p.toolCallId,
+            isSubagentToolType(p.type) && !!p.toolCallId,
         )
         .map((p) => p.toolCallId),
     )
@@ -746,7 +747,6 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       shouldCollapse && collapseBeforeIndex !== -1 ? messageParts.slice(0, collapseBeforeIndex) : []
     const visibleStepsCount = stepParts.filter((p) => {
       if (p.type === "step-start") return false
-      if (p.type === "tool-TaskOutput") return false
       if (p.type === "tool-ExitPlanMode") return false
       if (p.toolCallId && nestedToolIds.has(p.toolCallId)) return false
       if (
@@ -803,7 +803,6 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     (part: NormalizedPart, idx: number, isFinal = false) => {
       const toolInput = part.input as { file_path?: string } | null | undefined
       if (part.type === "step-start") return null
-      if (part.type === "tool-TaskOutput") return null
 
       if (part.toolCallId && orphanToolCallIds.has(part.toolCallId)) {
         if (!orphanFirstToolCallIds.has(part.toolCallId)) return null
@@ -845,7 +844,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
         )
       }
 
-      if (part.type === "tool-Task") {
+      if (isSubagentToolType(part.type)) {
         const nestedTools = nestedToolsMap.get(part.toolCallId ?? "") || []
         return <AgentTaskTool key={idx} part={part} nestedTools={nestedTools} chatStatus={status} />
       }
