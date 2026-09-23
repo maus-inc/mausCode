@@ -745,6 +745,16 @@ function isPlanOperationPart(part: NormalizedPart): boolean {
 }
 
 /**
+ * What a plan operation's one-line indicator says: the verb its own tool carries,
+ * in the tense the stream state asks for. Four strings behind two questions,
+ * which reads as a table here and as a ternary inside a ternary inside JSX there.
+ */
+function planOperationLabel(isWrite: boolean, isOpStreaming: boolean): string {
+  if (isOpStreaming) return isWrite ? "Creating plan..." : "Updating plan..."
+  return isWrite ? "Created plan" : "Updated plan"
+}
+
+/**
  * Plan files: unified handling
  * - In collapsed steps: all show mini indicator, last collapsed op's card shown separately after finalParts
  * - In final parts: all but last show mini indicator, last shows full card
@@ -778,18 +788,17 @@ function renderPlanOperation(part: NormalizedPart, idx: number, ctx: PartRenderC
     const { isPending } = getToolStatus(part, status)
     const isOpStreaming =
       isPending || (part.state === "input-streaming" && isStreaming && isLastMessage)
+    const label = planOperationLabel(isWrite, isOpStreaming)
 
     return (
       <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5">
         <span className="text-xs text-muted-foreground">
           {isOpStreaming ? (
             <TextShimmer as="span" duration={1.2}>
-              {isWrite ? "Creating plan..." : "Updating plan..."}
+              {label}
             </TextShimmer>
-          ) : isWrite ? (
-            "Created plan"
           ) : (
-            "Updated plan"
+            label
           )}
         </span>
       </div>

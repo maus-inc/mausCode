@@ -3,17 +3,21 @@
  * What the transcript renderer produces, pinned before it is restructured.
  *
  * `renderPart` in `assistant-message-item.tsx` decides what every kind of
- * message part looks like. It is a ~250-line dispatcher at a cognitive
- * complexity SonarQube reports as 70 against a threshold of 15, and until this
+ * message part looks like. It was a ~250-line dispatcher at a cognitive
+ * complexity SonarQube reported as 70 against a threshold of 15, and until this
  * file existed nothing in the suite rendered any of it: the vitest environment
- * is `node`, so the dispatcher's behaviour was verified by reading it.
+ * is `node`, so the dispatcher's behaviour was verified by reading it. It is now
+ * `renderMessagePart` plus one module-scope function per shape — a change this
+ * file made safe rather than a change this file describes.
  *
  * These snapshots are the golden output for one message per branch of that
- * dispatcher, written against the code as it stands and committed before the
- * split, so the restructuring can be checked against what the renderer actually
- * produced rather than against a reviewer's memory of it. Nothing here asserts
- * intent or good taste. It records output, and the only acceptable result after
- * a refactor is that it does not change.
+ * dispatcher, written against the code as it stood and committed before the
+ * split, so the restructuring could be checked against what the renderer
+ * actually produced rather than against a reviewer's memory of it. The split
+ * landed one commit later and changed no byte of them. Nothing here asserts
+ * intent or good taste. It records output, and it stands as the guard on the
+ * next change to any of these branches, where the acceptable result is a diff
+ * somebody meant.
  */
 import { render } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -222,6 +226,56 @@ describe("AssistantMessageItem, one message per branch of the part dispatcher", 
           new_string: "# Second",
         }),
       ]),
+    ).toMatchSnapshot()
+  })
+
+  it("renders a plan operation that is still streaming as a shimmer", () => {
+    expect(
+      renderParts(
+        [
+          {
+            type: "tool-Write",
+            toolCallId: "toolu_plan_4",
+            state: "input-streaming",
+            input: { file_path: "/repo/plans-arriving-plan.md", content: "# Still arriving\n" },
+          },
+          tool("tool-Edit", "toolu_plan_5", {
+            file_path: "/repo/plans-arriving-plan.md",
+            old_string: "# Still arriving",
+            new_string: "# Arrived",
+          }),
+        ],
+        true,
+      ),
+    ).toMatchSnapshot()
+  })
+
+  it("renders the four things a plan operation's indicator can say", () => {
+    expect(
+      renderParts(
+        [
+          {
+            type: "tool-Edit",
+            toolCallId: "toolu_plan_6",
+            state: "input-streaming",
+            input: {
+              file_path: "/repo/plans-labels-plan.md",
+              old_string: "",
+              new_string: "# Arriving",
+            },
+          },
+          tool("tool-Edit", "toolu_plan_7", {
+            file_path: "/repo/plans-labels-plan.md",
+            old_string: "# Arriving",
+            new_string: "# Arrived",
+          }),
+          tool("tool-Write", "toolu_plan_8", {
+            file_path: "/repo/plans-labels-plan.md",
+            content: "# Arrived, and last, so a card\n",
+          }),
+        ],
+        true,
+      ),
     ).toMatchSnapshot()
   })
 
