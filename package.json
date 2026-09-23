@@ -180,7 +180,8 @@
       "output": "release"
     },
     "files": [
-      "out/**/*"
+      "out/**/*",
+      "!node_modules/@anthropic-ai/claude-agent-sdk-*"
     ],
     "extraResources": [
       {
