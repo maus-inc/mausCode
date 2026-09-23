@@ -1,25 +1,8 @@
-import { execFile } from "node:child_process"
 import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveClineCliLaunch } from "../cline-binary"
 import { probeClineStoredAuth } from "../cline-print/auth-config"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
-
-function runLaunch(
-  command: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(command, args, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
-}
 
 export function getClineCapability(): ProviderCapability {
   return {
@@ -102,7 +85,7 @@ export async function probeCline(): Promise<BackendProbe> {
   } catch {
     return { available: false, detail: "cline CLI binary not found" }
   }
-  const version = await runLaunch(launch.command, launch.args)
+  const version = await runProbeCommand(launch.command, launch.args)
   if (version.exitCode === null) {
     // Spawn failure (missing/not executable, e.g. a broken $CLINE_BINARY).
     return {

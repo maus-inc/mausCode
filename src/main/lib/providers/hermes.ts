@@ -1,23 +1,6 @@
-import { execFile } from "node:child_process"
 import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
-
-function runBinary(
-  binary: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(binary, args, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
-}
 
 export function getHermesCapability(): ProviderCapability {
   return {
@@ -67,12 +50,12 @@ export function getHermesCapability(): ProviderCapability {
 }
 
 export async function probeHermes(): Promise<BackendProbe> {
-  const version = await runBinary("hermes", ["--version"])
+  const version = await runProbeCommand("hermes", ["--version"])
   if (version.exitCode !== 0) {
     return { available: false, detail: "hermes binary not found" }
   }
-  const check = await runBinary("hermes", ["acp", "--check"])
-  const auth = await runBinary("hermes", ["auth", "status"])
+  const check = await runProbeCommand("hermes", ["acp", "--check"])
+  const auth = await runProbeCommand("hermes", ["auth", "status"])
   return {
     available: true,
     version: `${version.stdout} ${version.stderr}`.trim(),
