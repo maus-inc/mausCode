@@ -1,8 +1,10 @@
 /**
- * NOTE (transplant): inlined question/compact chunk handling, stale-question
- * clearing fix, extractText/extractImages, and log removals were transplanted
- * from erenbertr/1code (Apache-2.0). Their auth-error toast replacement was
- * NOT taken — this tree keeps the login-modal retry flow.
+ * NOTE (transplant): the question/compact chunk handling, the stale-question
+ * clearing fix, the prompt and image extraction, and the log removals were
+ * transplanted from erenbertr/1code (Apache-2.0). The first three now live in
+ * `./chat-chunk-atoms`, which both transports share, and the provenance record
+ * is NOTICE and UPSTREAM.md. Their auth-error toast replacement was NOT taken
+ * — this tree keeps the login-modal retry flow.
  */
 
 import * as Sentry from "@sentry/electron/renderer"
@@ -28,18 +30,23 @@ import {
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
 import {
-  askUserQuestionResultsAtom,
-  compactingSubChatsAtom,
-  expiredUserQuestionsAtom,
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
-  pendingUserQuestionsAtom,
   subChatModelIdAtomFamily,
   subChatPromptSuggestionAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
-import type { LooseUIPart, SubscriptionChunk } from "./chat-chunk-atoms"
+import {
+  applyCompactingChunks,
+  applyQuestionChunks,
+  type ChatChunkContext,
+  clearStalePendingQuestion,
+  extractPromptImages,
+  extractPromptText,
+  type ImageAttachment,
+  type SubscriptionChunk,
+} from "./chat-chunk-atoms"
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -127,13 +134,6 @@ type IPCChatTransportConfig = {
   model?: string
 }
 
-// Image attachment type matching the tRPC schema
-type ImageAttachment = {
-  base64Data: string
-  mediaType: string
-  filename?: string
-}
-
 /** The session id off a `message-metadata` chunk, whose payload the subscription
  * types as unknown. */
 function hasSessionId(value: unknown): value is { sessionId: string } {
@@ -152,12 +152,11 @@ function hasSessionId(value: unknown): value is { sessionId: string } {
 type ChunkOutcome = "enqueue" | "consumed" | "failed"
 
 /**
- * What a handler needs besides the chunk: the ids and the turn this transport
- * was built with, plus the session id the stream reports about itself.
+ * What a handler needs besides the chunk: the shared question context both
+ * transports pass, widened with the turn this transport was built with and the
+ * session id the stream reports about itself.
  */
-type ChunkContext = {
-  chatId: string
-  subChatId: string
+type ChunkContext = ChatChunkContext & {
   /** The last 8 characters of the sub-chat id, which is what the stream logs tag. */
   subId: string
   cwd: string
@@ -170,75 +169,11 @@ type ChunkContext = {
 
 type ChunkController = ReadableStreamDefaultController<SDKUIMessageChunk>
 
-/** A question the agent is asking now: pending, and no longer expired. */
-function recordPendingQuestion(chunk: SubscriptionChunk, ctx: ChunkContext): void {
-  if (chunk.type !== "ask-user-question") return
-  const newMap = new Map(appStore.get(pendingUserQuestionsAtom))
-  newMap.set(ctx.subChatId, {
-    subChatId: ctx.subChatId,
-    parentChatId: ctx.chatId,
-    toolUseId: chunk.toolUseId,
-    questions: chunk.questions,
-  })
-  appStore.set(pendingUserQuestionsAtom, newMap)
-
-  // Clear any expired question (new question replaces it)
-  const currentExpired = appStore.get(expiredUserQuestionsAtom)
-  if (!currentExpired.has(ctx.subChatId)) return
-  const newExpiredMap = new Map(currentExpired)
-  newExpiredMap.delete(ctx.subChatId)
-  appStore.set(expiredUserQuestionsAtom, newExpiredMap)
-}
-
-/** A question that timed out: out of pending, kept on screen as expired. */
-function expirePendingQuestion(chunk: SubscriptionChunk, ctx: ChunkContext): void {
-  if (chunk.type !== "ask-user-question-timeout") return
-  const currentMap = appStore.get(pendingUserQuestionsAtom)
-  const pending = currentMap.get(ctx.subChatId)
-  if (!pending || pending.toolUseId !== chunk.toolUseId) return
-
-  const newPendingMap = new Map(currentMap)
-  newPendingMap.delete(ctx.subChatId)
-  appStore.set(pendingUserQuestionsAtom, newPendingMap)
-
-  // Move to expired (so the UI keeps showing the question)
-  const newExpiredMap = new Map(appStore.get(expiredUserQuestionsAtom))
-  newExpiredMap.set(ctx.subChatId, pending)
-  appStore.set(expiredUserQuestionsAtom, newExpiredMap)
-}
-
-/** An answer, stored for the real-time updates the question UI reads. */
-function storeQuestionResult(chunk: SubscriptionChunk): void {
-  if (chunk.type !== "ask-user-question-result") return
-  const newResults = new Map(appStore.get(askUserQuestionResultsAtom))
-  newResults.set(chunk.toolUseId, chunk.result)
-  appStore.set(askUserQuestionResultsAtom, newResults)
-}
-
-function isCompactingStart(chunk: SubscriptionChunk): boolean {
-  return (
-    (chunk.type === "tool-input-start" || chunk.type === "tool-input-available") &&
-    chunk.toolName === "Compact"
-  )
-}
-
-function isCompactingEnd(chunk: SubscriptionChunk): boolean {
-  return (
-    (chunk.type === "tool-output-available" || chunk.type === "tool-output-error") &&
-    Boolean(chunk.toolCallId?.startsWith("compact-"))
-  )
-}
-
-/** The compaction state the chat header reads while the CLI rewrites history. */
-function updateCompactingState(chunk: SubscriptionChunk, ctx: ChunkContext): void {
-  if (!isCompactingStart(chunk) && !isCompactingEnd(chunk)) return
-  const next = new Set(appStore.get(compactingSubChatsAtom))
-  if (isCompactingStart(chunk)) next.add(ctx.subChatId)
-  else next.delete(ctx.subChatId)
-  appStore.set(compactingSubChatsAtom, next)
-}
-
-/** What this session opened with: tools, MCP servers, plugins, skills. */
+/**
+ * What this session opened with. `chat-chunk-atoms.ts` leaves this one in each
+ * transport on purpose: the native runtime reads a cached snapshot and fills
+ * the gaps, while the Claude CLI reports the full set on init.
+ */
 function recordSessionInfo(chunk: SubscriptionChunk): void {
   if (chunk.type !== "session-init") return
   appStore.set(sessionInfoAtom, {
@@ -248,32 +183,6 @@ function recordSessionInfo(chunk: SubscriptionChunk): void {
     skills: chunk.skills,
   })
 }
-
-/**
- * A pending question goes stale once the agent has moved on, but not while it is
- * still building the tool input that asks it, so the question chunks, tool input
- * and stream start all keep it.
- */
-function clearStaleQuestion(chunk: SubscriptionChunk, ctx: ChunkContext): void {
-  const shouldClearOnChunk =
-    chunk.type !== "ask-user-question" &&
-    chunk.type !== "ask-user-question-timeout" &&
-    chunk.type !== "ask-user-question-result" &&
-    !chunk.type.startsWith("tool-input") && // Don't clear while input is being built
-    chunk.type !== "start" &&
-    chunk.type !== "start-step"
-  if (!shouldClearOnChunk) return
-
-  // NOTE: Do NOT clear expired questions here. After a timeout, the agent
-  // continues and emits new chunks — that's expected. Expired questions should
-  // persist until the user answers, dismisses, or sends a new message.
-  const currentMap = appStore.get(pendingUserQuestionsAtom)
-  if (!currentMap.has(ctx.subChatId)) return
-  const newMap = new Map(currentMap)
-  newMap.delete(ctx.subChatId)
-  appStore.set(pendingUserQuestionsAtom, newMap)
-}
-
 /**
  * An auth failure keeps this tree's modal-and-retry flow rather than a toast:
  * park the turn so the modal can resend it after OAuth, then error the stream
@@ -447,12 +356,10 @@ function routeChunk(
   ctx: ChunkContext,
   controller: ChunkController,
 ): ChunkOutcome {
-  recordPendingQuestion(chunk, ctx)
-  expirePendingQuestion(chunk, ctx)
-  storeQuestionResult(chunk)
-  updateCompactingState(chunk, ctx)
+  applyQuestionChunks(chunk, ctx)
+  applyCompactingChunks(chunk, ctx.subChatId)
   recordSessionInfo(chunk)
-  clearStaleQuestion(chunk, ctx)
+  clearStalePendingQuestion(chunk, ctx.subChatId)
 
   if (chunk.type === "auth-error") return failTurnForAuth(ctx, controller)
   const suggestion = routePromptSuggestion(chunk, ctx)
@@ -472,8 +379,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
   }): Promise<ReadableStream<SDKUIMessageChunk>> {
     // Extract prompt and images from last user message
     const lastUser = [...options.messages].reverse().find((m) => m.role === "user")
-    const prompt = this.extractText(lastUser)
-    const images = this.extractImages(lastUser)
+    const prompt = extractPromptText(lastUser)
+    const images = extractPromptImages(lastUser)
 
     // Get sessionId for resume (server preserves sessionId on abort so
     // the next message can resume with full conversation context)
@@ -604,54 +511,5 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
   async reconnectToStream(): Promise<ReadableStream<SDKUIMessageChunk> | null> {
     return null // Not needed for local app
-  }
-
-  private extractText(msg: UIMessage | undefined): string {
-    if (!msg) return ""
-    if (msg.parts) {
-      const textParts: string[] = []
-      const fileContents: string[] = []
-
-      for (const p of msg.parts) {
-        const part = p as LooseUIPart
-        if (part.type === "text" && part.text) {
-          textParts.push(part.text)
-        } else if (part.type === "file-content") {
-          // Hidden file content - add to prompt but not displayed in UI
-          const fileName = part.filePath?.split("/").pop() || part.filePath || "file"
-          fileContents.push(`\n--- ${fileName} ---\n${part.content}`)
-        }
-      }
-
-      // Combine text and file contents
-      return textParts.join("\n") + fileContents.join("")
-    }
-    return ""
-  }
-
-  /**
-   * Extract images from message parts
-   * Looks for parts with type "data-image" that have base64Data
-   */
-  private extractImages(msg: UIMessage | undefined): ImageAttachment[] {
-    if (!msg?.parts) return []
-
-    const images: ImageAttachment[] = []
-
-    for (const part of msg.parts) {
-      // Check for data-image parts with base64 data
-      const data = (part as LooseUIPart).data
-      if (part.type === "data-image" && data) {
-        if (data.base64Data && data.mediaType) {
-          images.push({
-            base64Data: data.base64Data,
-            mediaType: data.mediaType,
-            filename: data.filename,
-          })
-        }
-      }
-    }
-
-    return images
   }
 }
