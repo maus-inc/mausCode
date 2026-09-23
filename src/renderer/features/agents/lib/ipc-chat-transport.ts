@@ -134,6 +134,16 @@ type ImageAttachment = {
   filename?: string
 }
 
+/** The session id off a `message-metadata` chunk, whose payload the subscription
+ * types as unknown. */
+function hasSessionId(value: unknown): value is { sessionId: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { sessionId?: unknown }).sessionId === "string"
+  )
+}
+
 export class IPCChatTransport implements ChatTransport<UIMessage> {
   constructor(private config: IPCChatTransportConfig) {}
 
@@ -186,10 +196,19 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
         .allSubChats.find((subChat) => subChat.id === this.config.subChatId)?.mode ||
       this.config.mode
 
+    // A suggestion belongs to the turn that produced it, so starting a turn
+    // clears the last one: the composer must not offer a previous request's next
+    // step, and clicking it must not insert that into this prompt.
+    appStore.set(subChatPromptSuggestionAtomFamily(this.config.subChatId), null)
+
     // Stream tracking
     const subId = this.config.subChatId.slice(-8)
     let _chunkCount = 0
     let _lastChunkType = ""
+    // The session this stream belongs to, learned from its own metadata, so a
+    // suggestion from an aborted or older run in the same sub-chat is dropped
+    // instead of overwriting the current turn's.
+    let streamSessionId: string | null = null
 
     return new ReadableStream({
       start: (controller) => {
@@ -349,11 +368,19 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 return
               }
 
-              // Handle retry notification - show friendly toast instead of scary error
+              // Learn the session before the suggestion that follows it, then
+              // fall through: this chunk still belongs to the AI SDK. The
+              // subscription's chunk type carries the metadata as unknown, so it
+              // is read through a predicate rather than a cast at the use site.
+              if (chunk.type === "message-metadata" && hasSessionId(chunk.messageMetadata)) {
+                streamSessionId = chunk.messageMetadata.sessionId
+              }
+
               // A suggestion is not part of the assistant message, so it goes
               // to the composer atom for this sub-chat and is never enqueued as
               // a stream chunk the AI SDK would not recognize.
               if (chunk.type === "prompt-suggestion") {
+                if (streamSessionId && chunk.sessionId !== streamSessionId) return
                 appStore.set(
                   subChatPromptSuggestionAtomFamily(this.config.subChatId),
                   chunk.suggestion,
