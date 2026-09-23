@@ -1,5 +1,7 @@
+import { mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { describe, expect, it, vi } from "vitest"
+import { join } from "node:path"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // claude-token pulls in the secret store, which binds to the running Electron
 // app. The paths that store builds are never touched by these assertions.
@@ -29,8 +31,12 @@ vi.mock("./secret-storage", async (importOriginal) => {
 })
 
 const { makeHome, makeStore } = await import("./secret-storage/test-support")
-const { canPersistRefreshedClaudeCredential, credentialSourceForRead, externalClaudeStoreKind } =
-  await import("./claude-token")
+const {
+  canPersistRefreshedClaudeCredential,
+  credentialSourceForRead,
+  externalClaudeStoreKind,
+  getValidExistingClaudeToken,
+} = await import("./claude-token")
 
 describe("claude token refresh store", () => {
   // A rotated token written into a different store than the one that answers
@@ -80,4 +86,89 @@ describe("claude token store choice", () => {
     expect(canPersistRefreshedClaudeCredential("keychain", "linux")).toBe(false)
     expect(canPersistRefreshedClaudeCredential("keychain", "darwin")).toBe(true)
   })
+})
+
+describe("claude token single-flight", () => {
+  // These cases drive the real refresh path against a stubbed token endpoint,
+  // with the Linux file fallback as the store, so the test owns every byte
+  // the refresh reads and writes.
+  let home = ""
+  let savedHome: string | undefined
+  const fetchTokens: string[] = []
+
+  const tokenEndpoint = async (_url: URL | RequestInfo, init?: RequestInit): Promise<Response> => {
+    const body = JSON.parse(String(init?.body)) as { refresh_token?: string }
+    fetchTokens.push(body.refresh_token ?? "")
+    return new Response(
+      JSON.stringify({
+        access_token: `access-for-${body.refresh_token}`,
+        refresh_token: `rotated-${body.refresh_token}`,
+        expires_in: 3600,
+      }),
+      { status: 200 },
+    )
+  }
+
+  const writeClaudeCredential = (refreshToken: string) => {
+    writeFileSync(
+      join(home, ".claude", ".credentials.json"),
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: `access-${refreshToken}`,
+          refreshToken,
+          expiresAt: Date.now() - 60_000,
+          scopes: [],
+        },
+      }),
+      "utf-8",
+    )
+  }
+
+  beforeEach(() => {
+    home = makeHome("mauscode-claude-home-")
+    mkdirSync(join(home, ".claude"), { recursive: true })
+    savedHome = process.env.HOME
+    process.env.HOME = home
+    storeHome = makeHome("mauscode-claude-store-")
+    plaintextAllowed = true
+    fetchTokens.length = 0
+    vi.stubGlobal("fetch", tokenEndpoint)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    process.env.HOME = savedHome
+  })
+
+  it.runIf(process.platform === "linux")(
+    "shares one rotation across concurrent callers holding the same token",
+    async () => {
+      writeClaudeCredential("refresh-one")
+      const first = getValidExistingClaudeToken()
+      const second = getValidExistingClaudeToken()
+      expect(await Promise.all([first, second])).toEqual([
+        "access-for-refresh-one",
+        "access-for-refresh-one",
+      ])
+      // One refresh token rotates once, however many callers awaited it.
+      expect(fetchTokens).toEqual(["refresh-one"])
+    },
+  )
+
+  it.runIf(process.platform === "linux")(
+    "never shares a rotation between callers holding different tokens",
+    async () => {
+      writeClaudeCredential("refresh-one")
+      const first = getValidExistingClaudeToken()
+      // The stored credential changes while the first rotation is in flight.
+      // The second caller must rotate its own token, not join the first one.
+      writeClaudeCredential("refresh-two")
+      const second = getValidExistingClaudeToken()
+      expect(await Promise.all([first, second])).toEqual([
+        "access-for-refresh-one",
+        "access-for-refresh-two",
+      ])
+      expect(fetchTokens).toEqual(["refresh-one", "refresh-two"])
+    },
+  )
 })

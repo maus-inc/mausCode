@@ -413,19 +413,32 @@ export async function getValidExistingClaudeToken(): Promise<string | null> {
   // Refreshed credentials replace the ones the CLI owns, so the permission for
   // that write is checked before the token is rotated. Two refreshes racing on
   // one refresh token would leave the CLI holding a token the server already
-  // replaced, so this session runs at most one at a time.
+  // replaced, so each token refreshes at most once at a time, and concurrent
+  // callers holding the same token share the in-flight result.
   if (!canPersistRefreshedClaudeCredential(source)) {
     return isPastExpiresAt(creds.expiresAt) ? null : creds.accessToken
   }
-  if (refreshInFlight) return refreshInFlight
+  const refreshKey = `${source}:${creds.refreshToken}`
+  const shared = refreshesInFlight.get(refreshKey)
+  if (shared) return shared
 
-  refreshInFlight = refreshLocalClaudeToken(creds, source).finally(() => {
-    refreshInFlight = null
+  const refresh = refreshLocalClaudeToken(creds, source).finally(() => {
+    refreshesInFlight.delete(refreshKey)
   })
-  return refreshInFlight
+  refreshesInFlight.set(refreshKey, refresh)
+  return refresh
 }
 
-let refreshInFlight: Promise<string | null> | null = null
+/**
+ * One in-flight refresh per credential, keyed by the token the refresh
+ * rotates. The key makes the single-flight property structural: callers that
+ * hold the same refresh token share one rotation, whichever call arrived
+ * first, and callers that hold different tokens can never receive one
+ * another's result, even if the app ever holds more than one credential. An
+ * entry leaves the map the moment its refresh settles, so the key spends no
+ * more time in memory than the promise it labels.
+ */
+const refreshesInFlight = new Map<string, Promise<string | null>>()
 
 async function refreshLocalClaudeToken(
   creds: ClaudeOAuthCredential,

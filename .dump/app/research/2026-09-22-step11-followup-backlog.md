@@ -2,8 +2,8 @@
 
 Everything here was deliberately kept out of pull request 68. The PR merged the
 storage policy, the settings page, and the runtime mitigation; these are the
-items recorded along the way as real but out of scope, plus the one conditional
-fix waiting on a review decision. Order is suggested priority, not commitment.
+items recorded along the way as real but out of scope. Order is suggested
+priority, not commitment.
 A deep independent review of PR 68 on 2026-09-22 re-prioritized this list: the
 crash-restart clear hole and the `removePlaintextCompanion` surfacing moved to
 the top because the reviewer called them the two items with real security or
@@ -120,32 +120,22 @@ Connect, restart, and disk inspection on Linux with the keyring disabled were
 always human- or running-app-owned; static gates cannot exercise them. This is
 the verification the step file asks for and the sandbox cannot provide.
 
-## 11. Conditional: a credential-keyed single-flight, only if the rebuttal is rejected
+## 11. Done: the Claude refresh single-flight is keyed by the token it rotates
 
 CodeAnt's scan of `df2b0d4` called the shared `refreshInFlight` promise a
-cross-account race. The rebuttal stands: this OS user holds one Claude
-credential and there is no account selector in the path. If the reviewer
-rejects that argument anyway, the insurance is cheap: replace the singleton
-with a `Map` keyed by the credential the refresh belongs to, so a shared slot
-is impossible by construction.
-
-```ts
-const refreshesInFlight = new Map<string, Promise<string | null>>()
-
-const key = `${source}:${creds.refreshToken}`
-const existing = refreshesInFlight.get(key)
-if (existing) return existing
-const promise = refreshLocalClaudeToken(creds, source).finally(() => {
-  refreshesInFlight.delete(key)
-})
-refreshesInFlight.set(key, promise)
-return promise
-```
-
-Same token, same slot, so two different credentials can never share a
-refresh; the refresh token as a key is already held in memory by the same
-structure. Do not implement this unless the rebuttal is rejected, because
-implementing it now would concede a point the code does not owe.
+cross-account race. The rebuttal stands as a fact about the data model: this
+OS user holds one Claude credential and there is no account selector in the
+path. The owner's call on 2026-09-23 was to make the property structural
+anyway, because a guard that does not depend on its assumptions is worth more
+than the argument that the assumptions hold. The singleton in
+`claude-token.ts` is now a map keyed by the source and the refresh token
+being rotated. Callers holding the same token still share one in-flight
+refresh, which is the guard against rotating one token twice, and callers
+holding different tokens can no longer share a slot even in principle. An
+entry leaves the map the moment its refresh settles. Two regression tests
+drive concurrent refreshes through the real path against a stubbed token
+endpoint and hold both properties; the second test fails against the old
+singleton, so it pins the change. Landed in the same commit as this record.
 
 ## 12. Optional polish: the Claude custom-config save gives no visible message on refusal
 
