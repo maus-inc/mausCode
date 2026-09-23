@@ -28,8 +28,8 @@ import {
   applyCompactingChunks,
   applyQuestionChunks,
   clearStalePendingQuestion,
-  extractPromptImages,
-  extractPromptText,
+  lastUserPrompt,
+  type SendMessagesOptions,
   type SubscriptionChunk,
 } from "./chat-chunk-atoms"
 
@@ -74,13 +74,8 @@ const NATIVE_ERROR_TOAST_CONFIG: Record<string, { title: string; description: st
 export class NativeChatTransport implements ChatTransport<UIMessage> {
   constructor(private config: NativeChatTransportConfig) {}
 
-  async sendMessages(options: {
-    messages: UIMessage[]
-    abortSignal?: AbortSignal
-  }): Promise<ReadableStream<SDKUIMessageChunk>> {
-    const lastUser = [...options.messages].reverse().find((m) => m.role === "user")
-    const prompt = extractPromptText(lastUser)
-    const images = extractPromptImages(lastUser)
+  async sendMessages(options: SendMessagesOptions): Promise<ReadableStream<SDKUIMessageChunk>> {
+    const { prompt, images } = lastUserPrompt(options.messages)
 
     // Read model selection dynamically per sub-chat (so split panes stay independent)
     const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))

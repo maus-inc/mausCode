@@ -42,9 +42,9 @@ import {
   applyQuestionChunks,
   type ChatChunkContext,
   clearStalePendingQuestion,
-  extractPromptImages,
-  extractPromptText,
   type ImageAttachment,
+  lastUserPrompt,
+  type SendMessagesOptions,
   type SubscriptionChunk,
 } from "./chat-chunk-atoms"
 
@@ -373,14 +373,8 @@ function routeChunk(
 export class IPCChatTransport implements ChatTransport<UIMessage> {
   constructor(private config: IPCChatTransportConfig) {}
 
-  async sendMessages(options: {
-    messages: UIMessage[]
-    abortSignal?: AbortSignal
-  }): Promise<ReadableStream<SDKUIMessageChunk>> {
-    // Extract prompt and images from last user message
-    const lastUser = [...options.messages].reverse().find((m) => m.role === "user")
-    const prompt = extractPromptText(lastUser)
-    const images = extractPromptImages(lastUser)
+  async sendMessages(options: SendMessagesOptions): Promise<ReadableStream<SDKUIMessageChunk>> {
+    const { prompt, images } = lastUserPrompt(options.messages)
 
     // Get sessionId for resume (server preserves sessionId on abort so
     // the next message can resume with full conversation context)
