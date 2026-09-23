@@ -6,6 +6,9 @@ produced, what each one was worth, and what was done about it, so the next reade
 does not have to re-judge a bot's opinion or re-derive why two findings were left
 standing. A second round follows it: the duplication sweep instructed after head
 `2c8be15`, recorded under its own heading below against head `dbb9457`.
+A third round follows that one: every finding and every SonarCloud state still
+open taken to either a fix or a decline carrying its evidence, against heads
+`19ffbe1` to `cacd3db`.
 
 AGENTS.md still says no review bot is configured. That is now false in three
 directions: Sourcery, CodeAnt and Buoy all review here, and SonarQube Cloud runs a
@@ -192,6 +195,215 @@ things the local scan also flags there, the data tail
 contain. Neither is a decision stated twice, which is what item 2 above argues, and
 0.5% is what is left when the decisions are each stated once.
 
+## Round 3: every finding to a fix or an evidenced decline
+
+The instruction after head `19ffbe1` was to take all of the new review findings and
+all of the new SonarCloud states and work through them, leaving each with either a
+fix or a decline that carries its evidence. Six commits: `41688f4`,
+`e5b602a`, `5a98fb4`, `1900d14`, `cacd3db`, `97f4327`. Five findings were fixed
+and three declined, and one of the three names a real defect that belongs to a
+different contract rather than to this one.
+
+| Source | Finding | Verdict | Where it landed |
+| --- | --- | --- | --- |
+| CodeAnt | `availableModels` includes hidden Claude models while the picker filters them (`chat-input-area.tsx:519`) | Real, and round 2's own making | `41688f4` |
+| CodeAnt | `claudePickerProps` hides configured models but `selectedModel` comes from the unfiltered list (`new-chat-form.tsx:2137`) | The same defect on the other surface | `41688f4` |
+| CodeAnt | The materialize effect leaves a stale model id stored when every Claude model is hidden (`chat-input-area.tsx:542`) | Declined — pre-existing, unreachable as described, and the guard is load-bearing | reply `r4086282209` |
+| Buoy | `min-h-[32px]` → `min-h-8`, twice, re-posted on lines this PR does not touch | Declined again, with the numbers | replies `r4086282510`, `r4086282751` |
+| SonarCloud | Seven duplicated lines, one in each of seven provider manifests | Real block, wrong suspect: it was the probe, not the flags | `e5b602a` |
+| SonarCloud | `renderPart` cognitive complexity 70 against 15 | Fixed, harness first | `5a98fb4`, `1900d14` |
+| SonarCloud | `typescript:S3358` nested ternary in `probe-command.ts:37` | Real, introduced by `e5b602a` | `cacd3db` |
+| SonarCloud | `typescript:S3358` nested ternary in the plan indicator | Real, and surfaced by the split: moved lines count as new | `97f4327` |
+| SonarCloud | The seven duplicated manifest lines that remain | Declined — the shape of the table is what repeats, and no constant can hold it | below |
+
+### The picker's selection came from a list the picker did not show
+
+Round 2 extracted one hook for the Claude half of the picker and left each surface
+the two props that were genuinely its own: which model is selected, and what
+selecting one does. CodeAnt found what that left behind. The hook returned
+`availableModels` exactly as `useAvailableModels` has always returned it —
+`CLAUDE_MODELS`, unfiltered — and `props.models` filtered by `hiddenModels`. Each
+surface kept a `selectedModel` reading the unfiltered one, so the picker offered
+three models while the selection, the trigger label and the id written to
+per-sub-chat storage could all be a fourth, hidden one. That is the drift the hook
+was extracted to end, reintroduced one level up by returning both lists.
+
+`41688f4` filters once, inside the hook, and returns the filtered list as
+`availableModels.models`, so there is one list and no surface can read the other.
+Both surfaces then derive their selection from it the way every other provider in
+both files already derives its own — `codexUiModels.find(...) || codexUiModels[0]`
+and the rest — which replaces a `useState` plus a sync effect that could only ever
+move towards a model it could find. Net −24/+31 across the hook and the two
+surfaces.
+
+### The duplicated block on the manifests was the probe, not the flags
+
+Sonar's duplication endpoint on this PR named two block sets across the manifests.
+The second, the one carrying the new lines, is a 37-line window starting at the
+head of each capability object; the first is a sixteen-line `execFile` wrapper that
+all ten manifests carried byte-identically, eight as `runBinary` and two as
+`runLaunch`, differing only in the bound — fifteen seconds in eight, thirty in
+openclaw and roo. Ten copies of one rule about what a capability probe may do: run
+a CLI once, bounded, and resolve rather than reject, because the ordinary failure
+is a binary that is not installed, and read `error.code` as a string errno for a
+spawn failure versus a number for a non-zero exit.
+
+`providers/probe-command.ts` holds it once (`e5b602a`, −193/+74 across eleven
+files), with the bound as a named export and the two longer-bound manifests passing
+it explicitly. `cacd3db` then takes the one issue the extraction itself drew —
+S3358 on `error ? (typeof error.code === "number" ? error.code : null) : 0`, three
+outcomes in one expression with the reason for the middle test sitting in a comment
+above it — and puts the rule in `exitCodeOf(error)`, where the explanation and the
+branch are the same thing.
+
+**What stays duplicated there, and why no constant can fix it.** One line per
+manifest still reports as duplicated, inside the capability-object window. Sonar's
+CPD normalizes TypeScript string literals, so what matches across those files is
+not a value stated twice — the values differ per provider — but the *shape* the
+`ProviderCapability` type mandates: the same field names, in the same order,
+because that is what makes the ten manifests one table. Extracting the shared lines
+into a constant would mean either a spread whose defaults are silently wrong for
+the provider that inherits them (the fail-safe argument already recorded for the
+feature flags does not hold for `latencyClass` or `usageSurface`) or a partial type
+that stops being a capability table. Seven lines out of 1284, 0.5% against a 3%
+limit, is what is left when each decision is stated once and the shape of the table
+is what repeats.
+
+### Nothing rendered the transcript dispatcher, so the output was recorded first
+
+`renderPart` was the last standing complexity finding: 70 against 15, a
+`useCallback` inside `AssistantMessageItem` holding eighteen branch decisions,
+eighteen closure reads and the JSX for each one. Round 2 declined it on the grounds
+that nothing tested the file, and that a pins pull request cannot also rewrite a
+legacy renderer safely. The first half of that was fixable, which changed the
+answer: the instruction for this round was to work the findings, and the way to
+make a 250-line dispatcher safe to restructure is to write down what it currently
+produces.
+
+`5a98fb4` adds 28 snapshot tests, one message per branch — text, whitespace-only
+text, step-start, a part that is neither text nor tool, Bash success and Bash
+failure, reasoning, a completed thinking tool, Edit with its patch, Write, a plan
+file as a card, a second plan operation as a mini indicator, web search, web fetch,
+PlanWrite, ExitPlanMode, a todo list, a question awaiting an answer, a registry
+tool, the renamed TaskOutput, a sub-agent task with nested tools, an orphaned
+nested group, an MCP call, an unregistered tool, the collapsed-steps path, the
+streaming path, the exploring group and the usage badges. No child component
+reaches for trpc, the router, Sentry or electron, so the only context a render
+needs is the tooltip provider the agents layout already supplies; the question
+chime is mocked because jsdom has no `Audio` and a sound is not part of the output.
+The message id is reset per test because it lands in the rendered DOM, so a
+snapshot cannot depend on how many tests ran before it. Baseline stability was
+checked rather than assumed: 28 snapshots written, then a second run with 0 written
+and 0 obsoleted.
+
+Three devDependencies come with that, in a PR that otherwise only moves pins:
+`jsdom` 30.1.1, `@testing-library/react` 16.3.3 and its `@testing-library/dom`
+10.4.2 peer. Exact pins, no carets, and the lockfile was regenerated by bun 1.4.2 —
+the version CI's `oven-sh/setup-bun` pins — so `bun install --frozen-lockfile`
+accepts it. Five entries the diff removes reappear in it unchanged (`ansi-styles`,
+`entities`, `lru-cache`, `parse5`, `yallist`): bun re-sorted sections rather than
+re-resolving anything, and no existing dependency changed version. The vitest
+environment stays `node` globally; this one file declares jsdom for itself, and the
+include list gains `*.test.tsx`.
+
+`1900d14` then does the split, and the branch bodies do not change. They move to
+module scope as one function per shape — text, sub-agent task, Bash, thinking, plan
+operation, file edit, web search, web fetch, plan write, todo list, question,
+registry row, unregistered tool — each taking the part, its index and one
+`PartRenderContext` carrying what only the component knows. `renderMessagePart`
+dispatches in the order it always did, which is the part that carries meaning: a
+sub-agent `Task` and a Write to a plan file both claim a type the dispatch table
+also names, and they have to win. Two things fall out — Write and Edit rendered the
+identical `AgentEditTool` in two branches, so one function serves both table
+entries, and the closure's eighteen-entry deps list becomes a `useMemo` around the
+context with `renderPart` depending on that single object.
+
+The evidence that it worked is the absence of a diff: `git diff` reports no change
+to the `.snap` file, and vitest wrote 0 and obsoleted 0 against the baseline
+recorded one commit earlier. This is the model the round-2 record predicted — one
+function per decision, an explicit context, a single dispatch — applied to a
+renderer instead of a transport, and the reason the harness came first is that
+"the snapshots still pass" is only evidence if they existed before the change.
+
+SonarCloud agreed on the analysis after `1900d14`: the S3776 report on
+`renderPart` is gone, new technical debt fell from 60 minutes to 10, and the same
+analysis raised something worth recording — `typescript:S3358` on the plan
+indicator, a ternary inside a ternary inside JSX choosing between four strings.
+It had sat in `renderPart` unreported for as long as the function existed,
+because Sonar analyses a pull request against its new code and those lines were
+old. Moving a line makes it new. `97f4327` puts the four strings and the two
+questions in `planOperationLabel(isWrite, isOpStreaming)` and leaves the JSX one
+ternary, and adds the two snapshots that pin the strings no fixture covered —
+"Updating plan..." and "Updated plan" — so all four are now recorded. The
+snapshot diff for that commit is additions only, 0 removed lines, which is the
+same evidence as the split: 30 tests, 1 written, 0 updated.
+
+**Where the round ended.** SonarQube Cloud on head `97f4327`: quality gate passed,
+**0 new issues**, **0 minutes** of new technical debt, 0 security hotspots, and
+duplication on new code at **0.3%** — 7 lines out of 2302, the same seven manifest
+lines argued above. Across the round the issue count went 1 → 2 → 1 → 0 and the debt
+60 → 10 → 5 → 0 minutes, each step a commit: the probe extraction added the second
+S3358, `cacd3db` removed it, the split removed the S3776 and surfaced the first
+one on moved lines, and `97f4327` removed that. All ten substantive GitHub Actions
+checks pass on the same head.
+
+That is a general hazard of this kind of remediation and it is worth stating
+plainly: extracting code in a pull request re-reports whatever the extracted lines
+already carried. The choice is between leaving a 70-complexity dispatcher alone
+and finding out what else lives in it. Both findings found this way were five
+minutes of work and one made the renderer better.
+
+### Declined: a stale id that nothing can read as a stale model
+
+CodeAnt, Major, on the materialize effect: when every Claude model is hidden,
+`selectedModel` is undefined, the effect returns early, and the old id stays in
+per-sub-chat storage, "so the next request still sends a hidden model". Declined,
+on four facts (reply `r4086282209`):
+
+1. The effect is byte-identical at this PR's base (`33475d8`,
+   `chat-input-area.tsx:569-575`), early return included. Nothing here introduced
+   it.
+2. Neither transport consults `hiddenModels`; both are untouched by this PR and both
+   resolve `MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP.opus`
+   (`ipc-chat-transport.ts:400`, `native-chat-transport.ts:81`). In the state the
+   finding describes *every* Claude model is hidden, so a cleared id resolves to
+   opus — also hidden. No value the effect could store makes the next request send
+   a visible model.
+3. The early return is load-bearing. `models` is a synchronous filter over a static
+   list, so it is empty only when the user hid them all, never transiently. Leave
+   storage alone and the preference survives the cycle: hide everything, unhide
+   Sonnet and Opus, and `find(stored) || models[0]` lands back on the model they
+   chose. Write a default on the empty path and the same cycle lands on
+   `models[0]`, because the stored id no longer matches anything.
+4. What `41688f4` did change is the part that was wrong: at base `selectedModel`
+   was `useState` seeded from the unfiltered list, so a hidden model stayed
+   selected, stayed in the trigger label and was written back on mount. It now
+   derives from the visible list, the label reads `"Select model"`
+   (`chat-input-area.tsx:792-794`), and nothing is written.
+
+The finding does name a real gap, one level down: hiding a model hides it from the
+picker and not from the wire. Closing that means filtering at send time in the two
+transports, which changes which model runs for every existing chat, mid-session,
+and is a contract of its own rather than a line in a pins PR. It is recorded here
+and in the PR body as a follow-up. This token cannot open an issue (403 on both
+create and comment), so it is handed off in writing rather than filed.
+
+### Declined again: `min-h-[32px]`
+
+Buoy re-posted the same two suggestions on `agent-model-selector.tsx:367` and `:381`
+after the earlier decline, on lines this PR does not touch. The decline stands and
+now carries the arithmetic (replies `r4086282510`, `r4086282751`): tailwindcss is
+`^3.4.17`, `tailwind.config.js` only `extend`s — no `spacing`, `minHeight` or
+`fontSize` override — and nothing sets a root `font-size` (every `font-size` rule in
+`globals.css` is scoped to a component), so `min-h-8` is `2rem` is `32px` and the
+swap changes no computed style. `min-h-[32px]` appears 16 times under `src/`,
+`min-h-8` appears 0 times, and 5 of the 16 are in the flagged file, so taking the
+token on two lines leaves 14 arbitrary sites and introduces a second spelling of
+one value. Both classNames also carry `py-[5px]` and `w-[calc(100%-8px)]`, neither
+of which has a token form — 5px falls between `1`/4px and `1.5`/6px — so the line
+stays arbitrary-valued either way. A repo-wide move to spacing tokens is a styling
+sweep of its own.
+
 ## The complexity findings this step does not take
 
 | Function | Reported | What this PR changed inside it | What clearing it needs |
@@ -218,6 +430,16 @@ at from the other end, and a reason to expect the `renderPart` split to be worth
 doing on its own terms rather than as gate relief. `renderPart` is untouched by this
 round and stands at 70 against 15.
 
+**Update from round 3.** The other one is gone as well, and this time something
+attacked it. `5a98fb4` wrote down what `renderPart` renders — 28 snapshots, one
+message per branch — and `1900d14` moved the branches to module scope against one
+explicit context, leaving a dispatcher of eleven increments where a single function
+carried seventy. The snapshots pass byte-identically, which is what makes the split
+a refactor rather than a rewrite. The table above keeps its round-2 wording because
+the reasoning that deferred it was sound when it was written, and what changed it
+was not a better argument but a test file: "no coverage to make the rewrite safe"
+was the load-bearing half of the decline, and that half was removable.
+
 ## What was declined, and why
 
 Buoy asked for `min-h-8` in place of `min-h-[32px]` on two rows of the effort
@@ -227,6 +449,13 @@ two flagged lines is pre-existing Codex code this PR only generalized, and adopt
 the token here would make this component the single exception while leaving the
 other 14 arbitrary values in place. A repo-wide move to spacing tokens is a
 formatting contract of its own.
+
+**Corrected in round 3.** The count at head `cacd3db` is 16 occurrences of
+`min-h-[32px]` under `src/` and 0 of `min-h-8`, not 14 — the earlier number
+counted `src/**/*.tsx` only. Buoy re-posted both suggestions after the decline and
+they were declined again with the arithmetic and with the reason the swap cannot
+even buy a token-only line: the same two classNames carry `py-[5px]` and
+`w-[calc(100%-8px)]`, which have no token form. Round 3 records it in full.
 
 ## One finding this step must not fix
 
@@ -263,3 +492,20 @@ local build or package.
 | `ratchet:audit` | passed, 3 critical baseline, no new critical advisories |
 | `skills:verify` | 50 of 50 locked skills verified, 2 unrecorded project-owned (pre-existing) |
 | `build`, `package:linux` | not runnable here; CI runs them and the results are recorded on the PR |
+
+### Round 3, re-run in full against head `97f4327`
+
+| Gate | Result |
+| --- | --- |
+| `biome check .` | 980 files, 0 findings |
+| `npm run lint` | 925 files checked, no findings |
+| `ratchet:typecheck` | passed, 0 errors against a 0 baseline |
+| `vitest run` | 104 files, 1921 passed, 1 skipped |
+| the render harness alone | 30 snapshots, stable across runs; the 28 recorded before the split pass byte-identically after it, and `git diff` on the `.snap` file is empty for the split and additions-only for the two tests added with the label extraction |
+| `bun install --frozen-lockfile` | accepted the lock regenerated with the three new devDependencies; the five entries the diff removes reappear unchanged, so no existing dependency moved |
+| `npm run test:node` | 59 passed, 0 failed |
+| `npm run test:contracts` | 382 passed |
+| `ratchet:audit` | passed, no new critical advisories against a 3-critical baseline |
+| `skills:verify` | 50 of 50 locked skills verified, 2 unrecorded project-owned |
+| GitHub Actions | Build ubuntu-24.04, macos-14, windows-2022; Package unsigned ubuntu-24.04, macos-14; quality gates; security gates; both Socket reports; CodeRabbit — all pass. Buoy, Sourcery, DeepSource skip |
+| SonarQube Cloud | quality gate passed, 0 new issues, 0 debt, 0 hotspots, 0.3% duplication on 2302 new lines |
