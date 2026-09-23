@@ -56,6 +56,23 @@ describe("agent tool registry: renamed sub-agent and background task tools", () 
     expect(AgentToolRegistry["tool-KillShell"]).toBeDefined()
   })
 
+  // The pinned CLI's normalization table folds these six names into the two it
+  // emits, so each one has to reach the same meta or a persisted call renders as
+  // an unnamed generic row. Listed here rather than derived from the registry:
+  // dropping a key from the registry must fail this test, not shrink it.
+  it.each(["tool-BashOutput", "tool-BashOutputTool", "tool-AgentOutput", "tool-AgentOutputTool"])(
+    "routes %s to the TaskOutput meta",
+    (alias) => {
+      expect(AgentToolRegistry[alias]).toBe(AgentToolRegistry["tool-TaskOutput"])
+    },
+  )
+
+  it.each(["tool-KillShell", "tool-KillBash"])("routes %s to the shell-stopping meta", (alias) => {
+    expect(AgentToolRegistry[alias]).toBe(AgentToolRegistry["tool-KillShell"])
+    // The current name says task, because what it stops may be a sub-agent.
+    expect(AgentToolRegistry[alias]).not.toBe(AgentToolRegistry["tool-TaskStop"])
+  })
+
   it("titles a sub-agent by state", () => {
     const meta = AgentToolRegistry["tool-Agent"]
     expect(meta.title(streamingSubagent)).toBe("Preparing agent")

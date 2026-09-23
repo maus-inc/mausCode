@@ -554,12 +554,18 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
     },
   },
 
-  // Shell and background task management. The first name in each pair is the one
-  // the pinned CLI emits, the second the one older transcripts carry.
+  // Shell and background task management. The pinned CLI emits `TaskOutput` and
+  // `TaskStop`; every other key here is a name its own normalization table folds
+  // into one of those two, kept because a transcript persisted before the bump
+  // still carries the old spelling and would otherwise render as a generic row.
   "tool-TaskOutput": backgroundOutputTool,
   "tool-BashOutput": backgroundOutputTool,
+  "tool-BashOutputTool": backgroundOutputTool,
+  "tool-AgentOutput": backgroundOutputTool,
+  "tool-AgentOutputTool": backgroundOutputTool,
   "tool-TaskStop": stopTaskTool,
   "tool-KillShell": stopShellTool,
+  "tool-KillBash": stopShellTool,
 
   // Note: ListMcpResources, ReadMcpResource and their "Tool"-suffixed variants
   // are handled by AgentMcpToolCall via parseMcpToolType() for richer output display
