@@ -179,6 +179,21 @@ function apiRetryMessage(
   return `Claude API retry: ${reason}${status}, attempt ${msg.attempt} of ${msg.max_retries}, waiting ${waitSeconds}s`
 }
 
+/**
+ * A suggested next prompt, asked for with `Options.promptSuggestions` and sent
+ * after the result message. Bounded here because the string is
+ * provider-authored and crosses IPC into the composer. Module scope: it reads
+ * only its own message, so holding a slot in the transformer closure would just
+ * re-create it per stream.
+ */
+function* handlePromptSuggestion(
+  msg: Extract<ClaudeStreamMessage, { type: "prompt_suggestion" }>,
+): Generator<UIMessageChunk> {
+  const suggestion = msg.suggestion.trim().slice(0, 2000)
+  if (!suggestion) return
+  yield { type: "prompt-suggestion", suggestion, sessionId: msg.session_id }
+}
+
 /** Resolve a tool result's output payload, preferring the CLI's own result. */
 function resolveToolResultOutput(
   block: ClaudeToolResultBlock,
@@ -761,19 +776,6 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       }
       lastCompactId = null // Clear for next compacting cycle
     }
-  }
-
-  /**
-   * A suggested next prompt, asked for with `Options.promptSuggestions` and sent
-   * after the result message. Bounded here because the string is
-   * provider-authored and crosses IPC into the composer.
-   */
-  function* handlePromptSuggestion(
-    msg: Extract<ClaudeStreamMessage, { type: "prompt_suggestion" }>,
-  ): Generator<UIMessageChunk> {
-    const suggestion = msg.suggestion.trim().slice(0, 2000)
-    if (!suggestion) return
-    yield { type: "prompt-suggestion", suggestion, sessionId: msg.session_id }
   }
 
   function* handleResultMessage(msg: SDKResultMessage): Generator<UIMessageChunk> {
