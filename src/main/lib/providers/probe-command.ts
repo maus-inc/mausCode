@@ -16,10 +16,14 @@ export const PROBE_TIMEOUT_MS = 15_000
 
 /**
  * The code a probe ended with. `0` when the process ran and exited cleanly, its
- * numeric code when it ran and did not, and `null` when it never ran at all:
- * `execFile` reports a spawn failure as a string errno (`ENOENT`) on
- * `error.code` and a non-zero exit as a number, so only the number is an exit
- * code and callers read `null` as "the binary is not there".
+ * numeric code when it ran and did not, and `null` when `execFile` reported no
+ * numeric code at all — a spawn failure arrives as a string errno (`ENOENT`,
+ * but also `EACCES`), and a timeout, a signal and a max-buffer cut arrive with
+ * a non-numeric `error.code` too. `null` therefore means "no usable exit
+ * code", which callers may read as "the binary is not there" only knowing the
+ * ENOENT case is the one this helper can name; the cause lives on the error
+ * itself, and collapsing it here is the classification the follow-up replaces
+ * with a structured result.
  */
 function exitCodeOf(error: ExecFileException | null): number | null {
   if (!error) return 0

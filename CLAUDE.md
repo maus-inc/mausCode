@@ -80,8 +80,8 @@ npm run db:generate      # generate a migration from the schema
 npm run db:push          # push the schema directly, dev only
 
 # Bundled agent binaries, version pinned in the script
-npm run claude:download  # 2.1.45
-npm run codex:download   # 0.137.0
+npm run claude:download  # 2.1.270
+npm run codex:download   # 0.154.0
 ```
 
 Three scripts need a note.
@@ -204,7 +204,7 @@ Versions are the ones `bun.lock` resolves.
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
 | Backend | tRPC over Electron IPC, Drizzle ORM, better-sqlite3 |
-| AI | `@anthropic-ai/claude-agent-sdk` 0.2.45, plus the Codex app-server adapter |
+| AI | `@anthropic-ai/claude-agent-sdk` 0.3.270, plus the Codex app-server adapter |
 | Schemas | Effect 4.0.0-rc.112, an exact pin, load bearing for `src/shared/contracts` |
 | Lint and format | Biome 2.5.13, every rule at error |
 | Tests | Vitest 4.1.11 and `node --test` |
