@@ -222,6 +222,7 @@ export function AgentsPreferencesTab() {
             </span>
           </div>
           <Switch
+            aria-label="Prompt Suggestions"
             checked={promptSuggestionsEnabled}
             onCheckedChange={setPromptSuggestionsEnabled}
           />
