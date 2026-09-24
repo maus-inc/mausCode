@@ -582,3 +582,44 @@ round), test:node 59, test:contracts 382, audit ratchet at the 3-critical
 baseline, skills:verify 50 of 50. Pushes after `5e24490` are queued locally —
 the session's GitHub token expired mid-round (401 on REST and GraphQL) — and
 the replies to the twenty-one threads post when the connection is restored.
+
+## Round 5: five new threads, five fixes, and the Sonar leak period
+
+Kilo's reconciliation at 16:01Z opened five new inline findings against
+`5e24490` (the twelve already-discussed rows in that summary were answers to
+the round-4 threads). Each was verified in the code before anything was
+touched; all five were real; all five were fixed:
+
+| Thread | Claim | Commit |
+| --- | --- | --- |
+| `qwen-print/session.ts` | Settling a malformed line left the child running; stdout kept feeding a dead turn | `c84a571` — settled turns refuse further lines; catch escalates SIGINT→SIGTERM→SIGKILL |
+| `ipc-chat-transport.ts:506` | Provider `error` chunks never hit subscription `onError`, so a stored suggestion survived the failure | `e429440` — `error`/`auth-error` chunks clear under the generation guard |
+| `suggestion-ownership.ts:42` | `suggestionIsCurrent` asked engine and turn but not the preference; off→on resurrected a withdrawn row | `3c3500e` — preference is the third argument the render gate passes |
+| `agent-tool-utils.ts:171` | `nestedChildren` identity defeated task-row memo on every stream render | `faae395` — nesting map compared by content, not callback identity |
+| `agent-tool-call.tsx:19` | Tooltip-only subtitles lost keyboard access when role/tabindex were removed | `8b0ee3d` — tab stop with no role, only when a tooltip exists |
+
+Replies posted on each thread; summary comment `5818332768`.
+
+### Sonar on the same heads
+
+After the round-4/5 pushes the leak period carried **10 open issues** (gate
+still passed: 0 hotspots, 0.7% duplication on new code). Nine were cleared in
+`1fe7cf9` — both S3776s by extraction (`openNativeTurnSession` /
+`applyNativeEffort`, `buildNestingIndex`), the S3358 by hoisting the
+max-retries half, S7755/S6582/S6551/S5906×2 as one-liners, and S6819 by
+making the action subtitle a native `<button type="button">` with a style
+reset. **S6845 is left open deliberately**: `TooltipTrigger` hangs off
+focus, a bare tab stop is not a button, and Biome carries the suppression
+with that reason. Comment `5818550916` records the table.
+
+### Where the round stood
+
+Commits `5e24490` → `1fe7cf9` are pushed. Round-4's five queued commits were
+rebuilt after a sandbox reset wiped `.git` (tree matched the staged content
+exactly: `8a1d177`); round-4's 21 replies and both summary comments post
+once the token was restored. The issue-#14 backlink comment remains a 403 —
+this integration cannot comment on issues — so linkage stays `Closes #14`
+in the PR body alone. One CI job (`Package (macos-14, unsigned)` on the
+duplicate pull_request-triggered run at `8b0ee3d`) failed fetching bundled
+agent binaries; the push-triggered run on the same SHA passed every job
+including that package. Re-run is a 403 on this token.
