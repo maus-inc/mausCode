@@ -185,12 +185,11 @@ function fingerprintSegmentOf(mapKey: string, part: ToolPartLike): string {
   const key = typeof part.toolCallId === "string" ? part.toolCallId : ""
   const prev = fingerprintSegmentCache.get(key)
   if (
-    prev !== undefined &&
-    prev.mapKey === mapKey &&
-    prev.state === part.state &&
-    prev.input === part.input &&
-    prev.output === part.output &&
-    isTerminalStateString(prev.state)
+    prev?.mapKey === mapKey &&
+    prev?.state === part.state &&
+    prev?.input === part.input &&
+    prev?.output === part.output &&
+    isTerminalStateString(prev?.state)
   ) {
     return prev.segment // settled: same terminal state, same references
   }
