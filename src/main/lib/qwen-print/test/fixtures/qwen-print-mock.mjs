@@ -64,6 +64,17 @@ if (mode === "never") {
     permission_denials: [],
     error: { message: "Missing API key for OpenAI-compatible auth." },
   })
+} else if (mode === "malformed") {
+  init()
+  // `content` is truthy but not iterable: the assistant handler throws on
+  // `for (const block of content)`, so the boundary catch has to settle the
+  // turn instead of letting the throw escape the stdout callback.
+  line({
+    type: "assistant",
+    uuid: "uuid-malformed",
+    session_id: SID,
+    message: { id: "m1", type: "message", role: "assistant", model: "test-model", content: 42 },
+  })
 } else if (mode === "denials") {
   init({ permission_mode: "default" })
   line({

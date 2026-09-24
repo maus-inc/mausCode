@@ -32,6 +32,16 @@ function translateChunks(...messages: ClaudeStreamMessage[]): UIMessageChunk[] {
   return out
 }
 
+/**
+ * A record exactly as `toClaudeStreamMessage` lets it through: any value
+ * carrying a string `type`, whatever else it holds. The malformed-fixture
+ * tests below are this and nothing more, which is the point — the handlers
+ * must survive what the boundary accepts.
+ */
+function asProviderLine(line: Record<string, unknown>): ClaudeStreamMessage {
+  return line as unknown as ClaudeStreamMessage
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -371,5 +381,56 @@ describe("claude transform", () => {
     expect(
       translate({ type: "prompt_suggestion", suggestion: "   ", uuid: U4, session_id: "sess-9" }),
     ).toEqual(["start", "start-step"])
+  })
+
+  it("drops a prompt suggestion whose text is not a string", () => {
+    expect(
+      translate(
+        asProviderLine({
+          type: "prompt_suggestion",
+          suggestion: 42,
+          uuid: U4,
+          session_id: "sess-9",
+        }),
+      ),
+    ).toEqual(["start", "start-step"])
+  })
+
+  it("drops a prompt suggestion that names no session to belong to", () => {
+    expect(
+      translate(
+        asProviderLine({ type: "prompt_suggestion", suggestion: "Next: ship it", uuid: U4 }),
+      ),
+    ).toEqual(["start", "start-step"])
+  })
+
+  it("reports a retry record that carries none of the documented fields", () => {
+    const chunks = translateChunks(
+      asProviderLine({ type: "system", subtype: "api_retry", uuid: U1, session_id: "sess-1" }),
+    )
+    const retry = chunks.find((chunk) => chunk.type === "retry-notification")
+    expect(retry?.type === "retry-notification" && retry.message).toBe(
+      "Claude API retry: request failed, waiting 1s",
+    )
+  })
+
+  it("keeps the attempt numbers out of a retry that has them wrong-typed", () => {
+    const chunks = translateChunks(
+      asProviderLine({
+        type: "system",
+        subtype: "api_retry",
+        error: "overloaded_error",
+        error_status: 529,
+        attempt: "2",
+        max_retries: "5",
+        retry_delay_ms: 400,
+        uuid: U2,
+        session_id: "sess-1",
+      }),
+    )
+    const retry = chunks.find((chunk) => chunk.type === "retry-notification")
+    expect(retry?.type === "retry-notification" && retry.message).toBe(
+      "Claude API retry: overloaded error (HTTP 529), waiting 1s",
+    )
   })
 })

@@ -333,15 +333,27 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
       sessionId = parsed.session_id
       opts.onSessionId?.(parsed.session_id)
     }
-    premapQwenLine(parsed)
-    if (isRecord(parsed) && parsed.type === "result") {
-      handleResultLine(parsed)
-      return
-    }
-    const message = toClaudeStreamMessage(parsed)
-    if (!message) return
-    for (const chunk of transform(message)) {
-      emit(chunk)
+    try {
+      premapQwenLine(parsed)
+      if (isRecord(parsed) && parsed.type === "result") {
+        handleResultLine(parsed)
+        return
+      }
+      const message = toClaudeStreamMessage(parsed)
+      if (!message) return
+      for (const chunk of transform(message)) {
+        emit(chunk)
+      }
+    } catch (error) {
+      // The child's stdout is an untrusted boundary. A line the transform
+      // cannot read must settle the turn with that line's failure rather
+      // than throw out of the `data` callback and take the main process
+      // with it; `settle` is idempotent, so a later result line cannot
+      // resurrect a turn that already ended.
+      const detail = error instanceof Error ? error.message : String(error)
+      const errorMessage = `Malformed provider message: ${detail}`
+      emit({ type: "error", errorText: errorMessage })
+      settle({ status: "error", errorMessage, sessionId })
     }
   }
 

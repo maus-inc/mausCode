@@ -153,6 +153,20 @@ it("turns error envelopes into held error chunks (no finish)", async () => {
   assert.ok(!chunks.map((c) => c.type).includes("finish"))
 })
 
+it("settles the turn when a provider line the parser rejects would otherwise escape", async () => {
+  const { chunks, done } = runTurn("malformed")
+  const result = await done
+  assert.strictEqual(result.status, "error")
+  assert.ok(result.errorMessage?.includes("Malformed provider message"))
+  const errorChunk = requireChunk(
+    chunks.find((c) => c.type === "error"),
+    "error",
+  )
+  assert.ok(errorChunk.errorText?.includes("Malformed provider message"))
+  // The turn ends on the spot: no finish follows a line that broke the stream.
+  assert.ok(!chunks.map((c) => c.type).includes("finish"))
+})
+
 it("reports stderr diagnostics when the CLI exits nonzero", async () => {
   const { done } = runTurn("error-exit")
   const result = await done

@@ -173,10 +173,22 @@ function toolResultErrorText(content: ClaudeToolResultBlock["content"]): string 
 function apiRetryMessage(
   msg: Extract<ClaudeStreamMessage, { type: "system"; subtype: "api_retry" }>,
 ): string {
-  const reason = msg.error.replaceAll("_", " ")
-  const status = msg.error_status == null ? "" : ` (HTTP ${msg.error_status})`
-  const waitSeconds = Math.max(1, Math.round(msg.retry_delay_ms / 1000))
-  return `Claude API retry: ${reason}${status}, attempt ${msg.attempt} of ${msg.max_retries}, waiting ${waitSeconds}s`
+  // The line reaches this through `toClaudeStreamMessage`, which proves only
+  // that the record carries a string `type`, so every field read here is
+  // checked against the shape the SDK documents. A record written in another
+  // dialect still yields one readable line instead of throwing inside the
+  // child's stdout callback.
+  const reason = typeof msg.error === "string" ? msg.error.replaceAll("_", " ") : "request failed"
+  const status = typeof msg.error_status === "number" ? ` (HTTP ${msg.error_status})` : ""
+  const attempt =
+    typeof msg.attempt === "number"
+      ? `, attempt ${msg.attempt}${
+          typeof msg.max_retries === "number" ? ` of ${msg.max_retries}` : ""
+        }`
+      : ""
+  const waitSeconds =
+    typeof msg.retry_delay_ms === "number" ? Math.max(1, Math.round(msg.retry_delay_ms / 1000)) : 1
+  return `Claude API retry: ${reason}${status}${attempt}, waiting ${waitSeconds}s`
 }
 
 /**
@@ -189,6 +201,11 @@ function apiRetryMessage(
 function* handlePromptSuggestion(
   msg: Extract<ClaudeStreamMessage, { type: "prompt_suggestion" }>,
 ): Generator<UIMessageChunk> {
+  // Same untrusted boundary as the retry line: unless both fields are the
+  // strings the SDK documents, the record is dropped rather than thrown on —
+  // and a suggestion with no session id has no turn to be attributed to, so
+  // there is nothing to render even if the text were well-formed.
+  if (typeof msg.suggestion !== "string" || typeof msg.session_id !== "string") return
   const suggestion = msg.suggestion.trim().slice(0, 2000)
   if (!suggestion) return
   yield { type: "prompt-suggestion", suggestion, sessionId: msg.session_id }
