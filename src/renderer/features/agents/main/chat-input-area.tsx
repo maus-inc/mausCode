@@ -87,6 +87,7 @@ import { AgentSendButton } from "../components/agent-send-button"
 import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
 import { useClaudeModelPicker } from "../hooks/use-claude-model-picker"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
+import { mergeDraftWithSuggestion } from "../lib/composer-text"
 import { clearSubChatDraft, saveSubChatDraftWithAttachments } from "../lib/drafts"
 import { getModeIcon, getModeLabel, getModeTooltip } from "../lib/mode-display"
 import {
@@ -1170,9 +1171,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       if (result.text?.trim()) {
         const current = (editorRef.current?.getValue() || "").trim()
         const transcribed = result.text.trim()
-        const needsSpace = current.length > 0 && !/\s$/.test(current)
-        const newValue = current + (needsSpace ? " " : "") + transcribed
-        editorRef.current?.setValue(newValue)
+        editorRef.current?.setValue(mergeDraftWithSuggestion(current, transcribed))
         editorRef.current?.focus()
       } else {
         toast.info("No speech detected")
@@ -1834,7 +1833,12 @@ export const ChatInputArea = memo(function ChatInputArea({
                     type="button"
                     className="min-w-0 flex-1 truncate text-left transition-colors hover:text-foreground"
                     onClick={() => {
-                      editorRef.current?.setValue(promptSuggestion.text)
+                      // Replace only what is not there: a typed draft is
+                      // kept and the suggestion joins it, never overwrites it.
+                      const draft = editorRef.current?.getValue() ?? ""
+                      editorRef.current?.setValue(
+                        mergeDraftWithSuggestion(draft, promptSuggestion.text),
+                      )
                       editorRef.current?.focus()
                       setPromptSuggestion(null)
                     }}
