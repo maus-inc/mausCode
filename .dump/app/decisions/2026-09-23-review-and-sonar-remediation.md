@@ -509,3 +509,76 @@ local build or package.
 | `skills:verify` | 50 of 50 locked skills verified, 2 unrecorded project-owned |
 | GitHub Actions | Build ubuntu-24.04, macos-14, windows-2022; Package unsigned ubuntu-24.04, macos-14; quality gates; security gates; both Socket reports; CodeRabbit — all pass. Buoy, Sourcery, DeepSource skip |
 | SonarQube Cloud | quality gate passed, 0 new issues, 0 debt, 0 hotspots, 0.3% duplication on 2302 new lines |
+
+## Round 4: the independent review, twenty-one threads
+
+A fourth reviewer — `kilo-code-bot`, six multipass reviews plus targeted
+confirmations — opened twenty-one inline threads against head `5ea0b64` with a
+`CHANGES_REQUESTED` review: five Major, six Moderate (later ten), five Low
+across three addenda, plus a mediation roadmap in the PR thread. Each claim was
+checked against the pinned SDK's own `.d.ts`, the installed bundle, this
+repo's code and its recorded snapshots before anything was touched; the
+disposition table below is the round's result. Nothing was accepted on the
+reviewer's word alone, and nothing was declined without evidence in the reply.
+
+### Fixed — sixteen of twenty-one
+
+| Thread | What it claimed | What settled it | Commit |
+| --- | --- | --- | --- |
+| MCP peer contract (Moderate) | SDK 0.3.270 declares `@modelcontextprotocol/sdk` `^1.29.0`; the graph resolves `1.25.3` | Reproduced: `npm ls` → `invalid: "^1.29.0"`, `ELSPROBLEMS`. Exact `1.30.1` pinned, newest in range | `dfe7044` |
+| Transform throws on malformed lines (Major) | `apiRetryMessage` and `handlePromptSuggestion` trust fields `toClaudeStreamMessage` proved only have a string `type`; qwen `feedLine` has no catch, so the throw escapes into the main process | Both handlers read only documented shapes; `feedLine` wraps premap/result/transform in a boundary that settles the turn. Claude router already caught; qwen was the process-killer | `ead68c1` |
+| Launch rendered as completion (Major) | `AgentOutput.status` is `completed \| async_launched \| remote_launched`; the row asked only "streaming?" | `sdk-tools.d.ts` confirms the union; `isLaunchedAgentOutput` branches the title and the registry phrase. Three statuses pinned in a snapshot | `6804c04` |
+| Nested ancestry orphaned (Major) | Grouping resolved a child's parent by first id segment among top-level tasks only, so `B:C` never found `A:B` | The transform composes `parentOriginal:childOriginal` from the SDK's immediate `parent_tool_use_id`; lookup now goes through every task's original id, keys children by the parent's full id, self-parent skipped as the cycle guard, recursive rows capped at three levels | `6804c04` |
+| Inert focusable subtitles (Moderate) | Every registry subtitle wore `role="button"` and a tab stop; TaskOutput rows have no action | Our own snapshot contained `<span role="button" tabindex="0">Task: task_1</span>`; button semantics now require a handler. Snapshot deltas verified as exactly those two attribute deletions | `b4c9ebb` |
+| `shell_id` dropped (Low) | `TaskStopInput` accepts the deprecated `shell_id`; the shared reader took only `task_id`/`taskId` | `sdk-tools.d.ts:920` confirms; reader takes `shell_id` under the same `Task:` label; registry test pins it | `b4c9ebb` |
+| Effort is global (Major) | One `claudeEffortAtom` for every pane while the model beside it is per-sub-chat | Mirrored the Codex thinking family: `subChatClaudeEffortAtomFamily` + `lastSelected` keeping the old storage key; `in` not `??` so an explicit null stays that chat's answer. Five tests including migration | `07bf80a` |
+| Native sends no effort (Moderate) | The picker shows effort on the Native engine; the transport omits the field | Contract verified before building: the pinned runtime-client exposes `setReasoningEffort` (`set_reasoning_effort`). Router validates `z.enum(EFFORT_LEVELS)` and applies it best-effort after `set_model` | `7f7a8f9` |
+| Stale suggestion survives turn/engine (Moderate ×2) | Session equality stood in for turn ownership; native never cleared; abort/error left the row | `{text, turn, engine}` entry, per-sub-chat generation bumped by both transports at send, store-time and render-time gates, guarded clears on abort/error. Seven tests on the pure rules | `34ea81b` |
+| Preference not authoritative (Moderate) | Option sent only when true, so an inherited `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION` decided | Env var overridden both directions from the toggle (the SDK documents env beating settings), `promptSuggestions: false` sent as explicitly as true, store refuses chunks while off | `34ea81b` |
+| Click erases draft (Moderate) | `setValue(suggestion)` clears and rebuilds the editor | `mergeDraftWithSuggestion`: replace only an empty/whitespace draft, otherwise append after one space, draft byte-stable. Five tests; voice path uses the same join | `5e24490` |
+| Switch has no name (Moderate) | Sibling `<span>`, no `aria-label`; 31 switches, 0 labelled | `aria-label="Prompt Suggestions"` on the new control; test queries `getByRole("switch", { name: ... })` | `7e2c988` |
+| NaN claim (Low) | JS coerces `null` to 0; the transform normalizes with `?? 0` | Verified on Node 22; research record rewritten to the real contract | `2456829` |
+| Benchmark counts (Low) | Row says 103 files / 1885 tests; head CI reports more | Row labelled as the pre-harness measurement it is, with CI named as the live count | `2456829` |
+| Stale version strings (Low) | CLAUDE.md, openspec/project.md, permission-hook comment still name 0.2.45 / 2.1.45 / 0.137.0 | All three moved to 0.3.270 / 2.1.270 / 0.154.0; the hook's `["deny", "ask"]` claim re-read in the 0.3.270 bundle before the number moved; roadmap §16 added ratifying every lockfile addition | `2456829` |
+| Probe `null` doc (Low) | `null` also follows timeout, signal, EACCES, max-buffer — not only "never ran" | Comment narrowed to "no usable exit code", naming ENOENT as the one case the helper can prove; behavior deliberately unchanged (pre-existing, deferred with the structured-result follow-up) | `2456829` |
+
+### Declined — four threads, evidence in each reply
+
+- **`conversation_reset` (Major).** `/clear` is a client-side builtin in this
+  app — it "creates new sub-chat" (`builtin-commands.ts`) — so the CLI's reset
+  event never reaches the transformer from any path the app owns. The
+  router lines the thread cites are unreachable for it.
+- **Per-model capability matrix (Major).** `src/shared/effort.ts` already
+  records the SDK's documented clamp ("an effort above a model's
+  `maxEffortLevel` is clamped to it") and files per-model
+  `supportedEffortLevels` as the named follow-up; no model-info source exists
+  in-repo to build the matrix from. The engine half of the same thread was
+  fixed instead (native now sends effort), and the "hidden control still
+  sent" premise was checked: nothing hides the effort rows for custom or
+  offline — `efforts` is passed unconditionally — so there is no hidden
+  control to disagree with.
+- **`TaskOutput` in `READ_ONLY_TOOLS` (Moderate).** The classifier belongs to
+  the sibling permissions lane; checked `arena/01a0bb80-mauscode` at push time
+  — still `BashOutput` only — so the handoff stands as a handoff, and touching
+  it here would collide with the lane that owns it.
+- **Packaged artifact size (Moderate).** The benchmark already lists packaged
+  and bundle size as *needs `bun run package:linux`* rows owned by CI and step
+  30; this sandbox cannot produce the artifact, and the record says so rather
+  than claiming a measurement it does not have.
+
+Two sub-asks rode along declined with their threads: capping the raw qwen line
+before `JSON.parse` (identical feedLine at base, outside the diff cause, and
+JSON.parse was already guarded) and restructuring the probe's null into a
+structured result (behavior inherited from the base wrappers; the comment now
+says what it proves, the follow-up keeps the redesign).
+
+### Where the round stood
+
+Ten commits from `5ea0b64` to `2456829`, every gate re-run in full at each of
+the three code commits that needed it and at the docs commit: biome 987 files
+0 findings, typecheck ratchet 0 errors against a 0 baseline, lint 932 files
+clean, vitest 109 files / 1951 passed / 1 skipped (29 new tests across the
+round), test:node 59, test:contracts 382, audit ratchet at the 3-critical
+baseline, skills:verify 50 of 50. Pushes after `5e24490` are queued locally —
+the session's GitHub token expired mid-round (401 on REST and GraphQL) — and
+the replies to the twenty-one threads post when the connection is restored.
