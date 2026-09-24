@@ -612,3 +612,68 @@ describe("AssistantMessageItem, one message per branch of the part dispatcher", 
     expect(renderMessage(message, false)).toMatchSnapshot()
   })
 })
+
+describe("AssistantMessageItem, the outer memo against in-place mutation", () => {
+  /**
+   * Round 8's claim, verified: `areMessagePropsEqual` snapshots text lengths,
+   * every part's state, and — before this round — only the last part's input,
+   * so a NON-last nested tool mutating its input in place with an unchanged
+   * state let the outer memo skip the render, and every row memo behind it
+   * (fingerprint included) never ran. The nested Read below prints its file
+   * name from its input; a trailing tool keeps it out of the last-part slot,
+   * which is exactly the hole the old snapshot had.
+   */
+  it("re-renders when a non-last nested tool mutates its input in place", () => {
+    const child: MessagePart = tool("tool-Read", "A:B", { file_path: "src/one.ts" })
+    const parts: MessagePart[] = [
+      { type: "text", text: "Working on it." },
+      tool(
+        "tool-Task",
+        "A",
+        { subagent_type: "Explore", description: "walk" },
+        { status: "completed" },
+      ),
+      child,
+      // Trailing tool: the last part's input is unchanged by the mutation
+      // below, so the old last-part-only tracking has nothing to see.
+      tool("tool-Bash", "Z", { command: "ls" }, { stdout: "", exitCode: 0 }),
+    ]
+    const message: Message = { id: `msg-${++messageSequence}`, role: "assistant", parts }
+
+    // A fresh element per render: reusing one element object would let React
+    // bail on identical props before the memo comparator is ever consulted.
+    const ui = () => (
+      <TooltipProvider delayDuration={300}>
+        <AssistantMessageItem
+          message={message}
+          isLastMessage={false}
+          isStreaming={false}
+          status="ready"
+          isMobile={false}
+          subChatId="sub-chat-1"
+          chatId="chat-1"
+        />
+      </TooltipProvider>
+    )
+
+    const { container, rerender } = render(ui())
+
+    // Expand the task row so the nested Read is in the DOM at all.
+    const toggle = container.querySelector('[role="button"][aria-expanded]')
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle as Element)
+    expect(container.innerHTML).toContain("one.ts")
+
+    // Prime the per-message snapshot with the pre-mutation state: the first
+    // comparison caches, whichever branch it takes.
+    rerender(ui())
+
+    // The AI SDK mutates the part in place: same part object, same
+    // "output-available" state, new input value.
+    child.input = { file_path: "src/two.ts" }
+    rerender(ui())
+
+    expect(container.innerHTML).toContain("two.ts")
+    expect(container.innerHTML).not.toContain("one.ts")
+  })
+})

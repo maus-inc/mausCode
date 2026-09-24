@@ -569,7 +569,15 @@ export interface AssistantMessageItemProps {
 interface MessageStateSnapshot {
   textLengths: number[]
   partStates: (string | undefined)[]
-  lastPartInputJson: string | undefined
+  /**
+   * Every part's input and output, stringified. A nested tool can mutate
+   * either in place while its state and every text length around it stay
+   * unchanged, and nothing downstream of this memo runs when it skips a
+   * render — the task-row fingerprint included — so the row would never see
+   * the streamed update. Replaces the last-part-only input tracking: the last
+   * part is covered by this the same way, and one array is not two rules.
+   */
+  partIOJsons: (string | undefined)[]
 }
 const messageStateCache = new Map<string, MessageStateSnapshot>()
 
@@ -629,14 +637,18 @@ function areMessagePropsEqual(
 
   // Get current message state from parts
   const nextParts = next.message?.parts || []
-  const lastPart = nextParts[nextParts.length - 1]
 
   const currentState: MessageStateSnapshot = {
     textLengths: nextParts.map((p) => getTrackedPartTextLength(p)),
     // Track ALL part states - critical for detecting Edit plan file streaming!
     partStates: nextParts.map((p) => p.state),
-    // Track tool input changes - this is critical for tool streaming!
-    lastPartInputJson: lastPart?.input ? JSON.stringify(lastPart.input) : undefined,
+    // Track every part's input AND output — tool streaming arrives as in-place
+    // mutation of both, on non-last parts too (parallel calls, nested tools).
+    partIOJsons: nextParts.map((p) =>
+      p.input === undefined && p.output === undefined
+        ? undefined
+        : JSON.stringify([p.input, p.output]),
+    ),
   }
 
   // Get cached state from previous render
@@ -662,10 +674,13 @@ function areMessagePropsEqual(
     }
   }
 
-  // Compare last part's input (detects tool input streaming!)
-  if (cachedState.lastPartInputJson !== currentState.lastPartInputJson) {
-    messageStateCache.set(cacheKey, currentState)
-    return false // Tool input changed
+  // Compare every part's input/output (detects in-place tool streaming the
+  // state and text-length checks cannot see)
+  for (let i = 0; i < currentState.partIOJsons.length; i++) {
+    if (cachedState.partIOJsons?.[i] !== currentState.partIOJsons[i]) {
+      messageStateCache.set(cacheKey, currentState)
+      return false // A part's input or output changed
+    }
   }
 
   // Compare ALL part states (detects Edit plan file streaming!)
