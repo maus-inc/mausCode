@@ -179,46 +179,51 @@ const fingerprintSegmentCache = new Map<string, FingerprintSegment>()
  * component; the row comparators only ever read the returned string, so the
  * single-consumer property that motivated the fingerprint is untouched.
  */
+function fingerprintSegmentOf(mapKey: string, part: ToolPartLike): string {
+  // A part without a usable toolCallId keys under "" — which is never stored,
+  // so it never reads a cached segment either: it serializes every time.
+  const key = typeof part.toolCallId === "string" ? part.toolCallId : ""
+  const prev = fingerprintSegmentCache.get(key)
+  if (
+    prev !== undefined &&
+    prev.mapKey === mapKey &&
+    prev.state === part.state &&
+    prev.input === part.input &&
+    prev.output === part.output &&
+    isTerminalStateString(prev.state)
+  ) {
+    return prev.segment // settled: same terminal state, same references
+  }
+  // JSON.stringify the tuple rather than join(): `state` is `unknown`, and
+  // join() would fall back to Object's default stringification for any
+  // non-string it meets, collapsing two different objects into one
+  // "[object Object]" and hiding a change behind it.
+  const segment = JSON.stringify([
+    mapKey,
+    part.type,
+    part.toolCallId,
+    part.state,
+    part.input,
+    part.output,
+  ])
+  if (key !== "") {
+    fingerprintSegmentCache.set(key, {
+      mapKey,
+      state: part.state,
+      input: part.input,
+      output: part.output,
+      segment,
+    })
+  }
+  return segment
+}
+
 export function nestingFingerprintOf(map: NestedToolsMapLike | undefined): string {
   if (!map || map.size === 0) return ""
   const segments: string[] = []
   for (const [id, parts] of map) {
     for (const part of parts) {
-      const key = typeof part.toolCallId === "string" ? part.toolCallId : undefined
-      const prev = key !== undefined ? fingerprintSegmentCache.get(key) : undefined
-      if (
-        prev !== undefined &&
-        prev.mapKey === id &&
-        prev.state === part.state &&
-        prev.input === part.input &&
-        prev.output === part.output &&
-        isTerminalStateString(prev.state)
-      ) {
-        segments.push(prev.segment) // settled: same terminal state, same references
-        continue
-      }
-      // JSON.stringify the tuple rather than join(): `state` is `unknown`, and
-      // join() would fall back to Object's default stringification for any
-      // non-string it meets, collapsing two different objects into one
-      // "[object Object]" and hiding a change behind it.
-      const segment = JSON.stringify([
-        id,
-        part.type,
-        part.toolCallId,
-        part.state,
-        part.input,
-        part.output,
-      ])
-      segments.push(segment)
-      if (key !== undefined) {
-        fingerprintSegmentCache.set(key, {
-          mapKey: id,
-          state: part.state,
-          input: part.input,
-          output: part.output,
-          segment,
-        })
-      }
+      segments.push(fingerprintSegmentOf(id, part))
     }
   }
   return segments.join("\u0001")
