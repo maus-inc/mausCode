@@ -10,13 +10,28 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/
  * lies: keyboard and screen-reader users can focus it, it announces itself as
  * interactive, and nothing happens — which is every `TaskOutput` and
  * `TaskStop` row, since neither offers an action beyond being read.
+ *
+ * Without an action but WITH a tooltip, the span still takes a tab stop:
+ * `TooltipTrigger` hangs off focus, and a truncated path that only a mouse
+ * can reveal is not keyboard-accessible. A bare tab stop is not a button —
+ * no role, no Enter/Space handler — so it does not claim an affordance it
+ * does not have; it only lets focus open the tooltip that is already there.
  */
 function subtitleSpan(
   content: React.ReactNode,
   className: string,
   onClick?: () => void,
+  tooltipFocusable = false,
 ): React.ReactElement {
-  if (!onClick) return <span className={className}>{content}</span>
+  if (!onClick) {
+    if (!tooltipFocusable) return <span className={className}>{content}</span>
+    return (
+      /* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard entry point for the tooltip trigger; focus opens it, and the span deliberately claims no interactive role. */
+      <span className={className} tabIndex={0}>
+        {content}
+      </span>
+    )
+  }
   return (
     /* biome-ignore lint/a11y/useSemanticElements: compact inline action; a native button would require style resets. */
     <span
@@ -91,7 +106,10 @@ export const AgentToolCall = memo(
     const subtitleClass = `text-muted-foreground/60 font-normal truncate min-w-0${clickableClass}`
 
     const subtitleElement = subtitleContent
-      ? subtitleWithTooltip(subtitleSpan(subtitleContent, subtitleClass, onClick), tooltipContent)
+      ? subtitleWithTooltip(
+          subtitleSpan(subtitleContent, subtitleClass, onClick, Boolean(tooltipContent)),
+          tooltipContent,
+        )
       : null
 
     return (

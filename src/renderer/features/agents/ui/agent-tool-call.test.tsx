@@ -12,11 +12,16 @@
 import { render } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { EyeIcon } from "../../../components/ui/icons"
+import { TooltipProvider } from "../../../components/ui/tooltip"
 import { AgentToolCall } from "./agent-tool-call"
 
+function renderCall(ui: React.ReactElement) {
+  return render(<TooltipProvider delayDuration={300}>{ui}</TooltipProvider>)
+}
+
 describe("AgentToolCall subtitle affordance", () => {
-  it("is plain text when the row has no action", () => {
-    const { getByText } = render(
+  it("is plain text when the row has no action and no tooltip", () => {
+    const { getByText } = renderCall(
       <AgentToolCall
         icon={EyeIcon}
         title="Got output"
@@ -30,8 +35,26 @@ describe("AgentToolCall subtitle affordance", () => {
     expect(subtitle.getAttribute("tabindex")).toBeNull()
   })
 
+  it("is a focusable non-button when only a tooltip needs a keyboard entry", () => {
+    // TooltipTrigger hangs off focus; a truncated path that only a mouse can
+    // reveal is not keyboard-accessible. Focusable is not the same as a button.
+    const { getByText } = renderCall(
+      <AgentToolCall
+        icon={EyeIcon}
+        title="Bash"
+        subtitle="src/very/long/path/to/file.ts"
+        tooltipContent="/abs/src/very/long/path/to/file.ts"
+        isPending={false}
+        isError={false}
+      />,
+    )
+    const subtitle = getByText("src/very/long/path/to/file.ts")
+    expect(subtitle.getAttribute("role")).toBeNull()
+    expect(subtitle.getAttribute("tabindex")).toBe("0")
+  })
+
   it("is a button when the row has an action to press", () => {
-    const { getByText } = render(
+    const { getByText } = renderCall(
       <AgentToolCall
         icon={EyeIcon}
         title="Read"
