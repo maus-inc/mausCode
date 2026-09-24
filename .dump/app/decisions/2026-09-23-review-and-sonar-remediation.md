@@ -623,3 +623,55 @@ in the PR body alone. One CI job (`Package (macos-14, unsigned)` on the
 duplicate pull_request-triggered run at `8b0ee3d`) failed fetching bundled
 agent binaries; the push-triggered run on the same SHA passed every job
 including that package. Re-run is a 403 on this token.
+
+## Round 6 — the S4782s the S3776 split moved
+
+Re-analysis at `8071737` (the record you are reading) reported **5 new
+issues**: four S4782s on the `openNativeTurnSession` input that `1fe7cf9` had
+just extracted (`model?: string | undefined` and three siblings — `?` already
+carries the option), and one S6845 which is the accepted false positive above.
+The four unions were dropped in `1e415ee`; Sonar's next analysis confirmed it,
+from 5 down to **1 open issue (S6845 only)** with the gate passing at 0.6%
+duplication and 0 hotspots. The S6845 line moved during the split, so it read
+as new; it stays open on the same argument as before.
+
+## Round 7 — the regression round 5 introduced
+
+Kilo thread `4096408265` against `1e415ee` claimed that `nestedMapsEqual`
+walked every map part through `arePartsEqual`, which advances the
+module-level `toolStateCache` — so the first task row's comparator consumed
+every in-place mutation and later rows saw a clean cache and skipped
+re-rendering a grandchild that had changed. **Verified real**: the full
+message-level map became shared across all rows in `faae395` (round 5's own
+memo fix), which turned the pre-existing single-consumer cache design into a
+multi-consumer one.
+
+Fixed in `5683525`, taking the thread's first suggestion (keep the descendant
+comparison pure):
+
+- `nestingFingerprintOf` snapshots the map once per render in
+  `AssistantMessageItem` — `state`/`input`/`output` plus identity fields, the
+  same fields `getToolStateSnapshot` records — into one immutable string, no
+  cache interaction.
+- `areTaskToolPropsEqual` compares that string by `===`. Every row reads the
+  same value; neither writes anything.
+- `arePartsEqual` stays for each row's own `part`/`nestedTools`, where each
+  `toolCallId` has exactly one consuming row, as before `faae395`.
+
+New `agent-tool-utils.test.ts` (9 tests): fingerprint empty/absent cases,
+stable across rebuilds with equal content, changes on in-place grandchild
+mutation and on a state move, and the regression itself — the same
+before/after pair rejects **twice in a row**, where the old comparator's
+second call returned `true` because the first had eaten the change. Testing
+note: `arePartsEqual` seeds its cache on first sight and early-returns, so
+the accept-expectations prime the cache with two warm-up passes.
+
+Reply `4097288538` posted on the thread; all 27 Kilo roots are answered.
+Gates at `5683525`: biome 988/0, typecheck ratchet 0 ≤ 0, lint 933 clean,
+vitest 110 files 1962 passed 1 skipped, test:node 59, contracts 382,
+audit ratchet, skills 50/50. `tsgo` ran `--singleThreaded` after the
+sandbox's 3.7 GiB cgroup OOM-killed the default parallel mode twice; it
+passed in default mode earlier on this tree, and the single-threaded run
+was sanity-checked against a deliberate type error. CI on `5683525`: both
+runs success, 18 checks passed, 2 skipped (DeepSource, Sourcery), 0 failed.
+The issue-#14 comment retried a fourth time — still 403.
