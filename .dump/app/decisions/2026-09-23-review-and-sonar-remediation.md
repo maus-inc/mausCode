@@ -723,3 +723,50 @@ pull_request-triggered run failed its vitest step after 30s. Its merge ref
 (`git diff HEAD origin/pr-69-merge` is empty), log storage is unreachable
 from this sandbox, and `gh run rerun` refuses — so the failure reads as
 environmental and the re-triggered run is the arbiter.
+
+## Round 9 — S6845 fixed, and the round-8 fix's own price
+
+Sonar's leak period closed on one issue: **S6845**, the bare `tabIndex="0"`
+on the tool-call header subtitle (`agent-tool-call.tsx:35`) — every subtitle
+was a tab stop, plain-text ones included, with nothing for a keyboard user to
+reach. The fix reverses the round-4 ruling that kept bare spans: that call
+assumed a click handler existed to protect, and it rests on native buttons
+never overriding appearance — Radix's `TooltipTrigger` default is a button,
+which the snapshot change records. `920a934` renders a span only when the
+subtitle has neither an `onClick` nor a tooltip, otherwise a native
+`<button type="button">` (same tab stops, no `tabIndex` anywhere, no role
+overrides) with `cursor-default` when it only opens a tooltip. One snapshot
+line changed, span to button; 38 targeted cases green.
+
+Three new perf reviews then attacked what round 8 introduced: kilo
+`4098403950` and CodeAnt `4098800130` on the outer memo serializing every
+part's `input`+`output` on every comparison — quadratic in transcript size,
+transient strings per stream tick — and CodeAnt `4098801144` on
+`nestingFingerprintOf` doing the same per render. **Verified real**; round 8
+chose correctness over cost without bounding either.
+
+`646b8e8` bounds both with one settled-part rule. A part whose state string
+is terminal (`output-available`/`output-error`/`result`/`error` — the new
+shared `isTerminalStateString`, the state string alone, so an output that
+arrived before its state caught up stays live) and whose input/output
+references are unchanged reuses its cached string in O(1): the SDK does not
+reopen a completed part. Only live parts serialize per comparison, bounded
+by the active tool's payload instead of the transcript's. The fingerprint's
+reuse lives in a private segment cache keyed by `toolCallId`, cleared in
+`clearToolStateCachesByToolCallIds`, written once per render so row
+comparators keep round 7's single-consumer property. Tests pin both halves:
+a streaming grandchild deep-mutating through one input object still changes
+the fingerprint, and a settled terminal part holds its segment until a
+reference moves. Replies `4098985226`, `4098985453`, `4098985725`.
+
+The fifth sandbox reset struck between gates — HEAD back at base, and this
+time `node_modules`, `bun`, and the runtime-client `dist` gone with it.
+Recovered via stash checkout of the three S6845 files, reinstalled bun
+through npm, `bun install --frozen-lockfile --ignore-scripts` (1228
+packages), rebuilt the dist. Battery re-run over both changes at once:
+biome 0 findings, lint-changed clean, tsc 0 errors, tsgo `--singleThreaded`
+0, vitest 1964 passed / 1 skipped (110 files), test:node 59 pass,
+contracts 382 passed, audit ratchet clean, skills 50 of 50, typecheck
+ratchet 0 <= 0 — both commits pushed, queue regenerated to 55 patches.
+Issue #14 `Linked PR: #69` retried an eighth time, same 403: the App
+installation token lacks Issues write on this repository.
