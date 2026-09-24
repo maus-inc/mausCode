@@ -309,10 +309,10 @@ async function openNativeTurnSession(
   input: {
     subChatId: string
     cwd: string
-    model?: string | undefined
-    effort?: EffortLevel | undefined
-    customToken?: string | undefined
-    customBaseUrl?: string | undefined
+    model?: string
+    effort?: EffortLevel
+    customToken?: string
+    customBaseUrl?: string
   },
   turn: { cancelled: boolean; completed: boolean; releaseCredentials?: () => void },
   hooks: { fail: NativeFail; safeEmit: NativeEmit; safeComplete: () => void },
