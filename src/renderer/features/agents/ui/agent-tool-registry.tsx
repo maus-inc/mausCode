@@ -56,6 +56,8 @@ export type ToolDisplayPart = {
     status?: string
     taskId?: string | number
     task_id?: string | number
+    /** `TaskStopInput`'s deprecated spelling of `task_id`; same value. */
+    shell_id?: string | number
     pid?: string | number
     text?: string
     plan?: { status?: string; title?: string; steps?: { status?: string }[] }
@@ -189,7 +191,10 @@ const subagentTool: ToolMeta = {
 function backgroundTaskSubtitle(part: ToolDisplayPart): string {
   const pid = part.input?.pid
   if (pid) return `PID: ${pid}`
-  const taskId = part.input?.task_id ?? part.input?.taskId
+  // `shell_id` is `TaskStopInput`'s deprecated spelling of `task_id` — the
+  // same identifier under the name older transcripts carry — so a stop that
+  // sends only it still says which task it stopped.
+  const taskId = part.input?.task_id ?? part.input?.taskId ?? part.input?.shell_id
   return taskId ? `Task: ${taskId}` : ""
 }
 

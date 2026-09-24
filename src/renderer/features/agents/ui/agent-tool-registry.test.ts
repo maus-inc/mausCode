@@ -125,6 +125,14 @@ describe("agent tool registry: renamed sub-agent and background task tools", () 
     expect(AgentToolRegistry["tool-KillShell"].title(taskOutputById)).toBe("Stopped shell")
     // Both read the same subtitle, so a task id renders under either name.
     expect(AgentToolRegistry["tool-TaskStop"].subtitle?.(taskOutputById)).toBe("Task: bg_7")
+    // `shell_id` is TaskStopInput's deprecated spelling of `task_id`: a call
+    // that carries only it still has to say which task it stopped.
+    expect(
+      AgentToolRegistry["tool-TaskStop"].subtitle?.({
+        state: "output-available",
+        input: { shell_id: "shell_1" },
+      }),
+    ).toBe("Task: shell_1")
   })
 
   it("counts the sub-agent family and leaves the background task family out", () => {

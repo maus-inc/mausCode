@@ -497,6 +497,23 @@ describe("AssistantMessageItem, one message per branch of the part dispatcher", 
     expect(html).toMatchSnapshot()
   })
 
+  it("keeps a non-actionable subtitle out of the tab order", () => {
+    const container = renderPartsDom([
+      tool("tool-TaskOutput", "toolu_taskoutput_1", { task_id: "task_1" }, { output: "done" }),
+    ])
+    // TaskOutput's subtitle identifies the output and does nothing else, so
+    // it must be plain text: no role, no tab stop. (The positive case — a
+    // subtitle with an action — is pinned in agent-tool-call.test.tsx; here
+    // the transcript renders without the file-open provider, so no row would
+    // have an action to assert.)
+    const inert = Array.from(container.querySelectorAll("span")).find(
+      (s) => s.textContent === "Task: task_1",
+    )
+    expect(inert).toBeTruthy()
+    expect(inert?.getAttribute("role")).toBeNull()
+    expect(inert?.getAttribute("tabindex")).toBeNull()
+  })
+
   it("renders a three-level subagent chain once each level is expanded", () => {
     const container = renderPartsDom([
       tool("tool-Agent", "toolu_agent_1", {

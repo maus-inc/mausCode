@@ -4,6 +4,59 @@ import { memo } from "react"
 import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 
+/**
+ * The subtitle span, wearing button semantics only when there is an action to
+ * press. A `role="button"` whose Enter and Space do nothing is a control that
+ * lies: keyboard and screen-reader users can focus it, it announces itself as
+ * interactive, and nothing happens — which is every `TaskOutput` and
+ * `TaskStop` row, since neither offers an action beyond being read.
+ */
+function subtitleSpan(
+  content: React.ReactNode,
+  className: string,
+  onClick?: () => void,
+): React.ReactElement {
+  if (!onClick) return <span className={className}>{content}</span>
+  return (
+    /* biome-ignore lint/a11y/useSemanticElements: compact inline action; a native button would require style resets. */
+    <span
+      role="button"
+      className={className}
+      onClick={onClick}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+    >
+      {content}
+    </span>
+  )
+}
+
+/** The subtitle, wrapped in its tooltip when the meta describes one. */
+function subtitleWithTooltip(
+  span: React.ReactElement,
+  tooltipContent?: string,
+): React.ReactElement {
+  if (!tooltipContent) return span
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{span}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        className="px-2 py-1.5 max-w-none flex items-center justify-center"
+      >
+        <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap leading-none">
+          {tooltipContent}
+        </span>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 interface AgentToolCallProps {
   icon: React.ComponentType<{ className?: string }>
   title: string
@@ -31,58 +84,15 @@ export const AgentToolCall = memo(
     const titleStr = String(title)
     const subtitleContent = subtitle ? subtitle : undefined
 
-    // Render subtitle with optional tooltip
+    // Render subtitle with optional tooltip; only an actionable one is a button.
     const clickableClass = onClick
       ? " cursor-pointer hover:text-muted-foreground transition-colors"
       : ""
+    const subtitleClass = `text-muted-foreground/60 font-normal truncate min-w-0${clickableClass}`
 
-    const subtitleElement = subtitleContent ? (
-      tooltipContent ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* biome-ignore lint/a11y/useSemanticElements: compact inline action; a native button would require style resets. */}
-            <span
-              role="button"
-              className={`text-muted-foreground/60 font-normal truncate min-w-0${clickableClass}`}
-              onClick={onClick}
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault()
-                  onClick?.()
-                }
-              }}
-            >
-              {subtitleContent}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent
-            side="top"
-            className="px-2 py-1.5 max-w-none flex items-center justify-center"
-          >
-            <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap leading-none">
-              {tooltipContent}
-            </span>
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        /* biome-ignore lint/a11y/useSemanticElements: compact inline action; a native button would require style resets. */
-        <span
-          className={`text-muted-foreground/60 font-normal truncate min-w-0${clickableClass}`}
-          onClick={onClick}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault()
-              onClick?.()
-            }
-          }}
-        >
-          {subtitleContent}
-        </span>
-      )
-    ) : null
+    const subtitleElement = subtitleContent
+      ? subtitleWithTooltip(subtitleSpan(subtitleContent, subtitleClass, onClick), tooltipContent)
+      : null
 
     return (
       <div className={`flex items-start gap-1.5 py-0.5 ${isNested ? "px-2.5" : "rounded-md px-2"}`}>
