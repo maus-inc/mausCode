@@ -32,19 +32,35 @@ describe("suggestionIsCurrent", () => {
     engine: "legacy",
   }
 
-  it("keeps a suggestion while its engine and turn are still the composer's", () => {
-    expect(suggestionIsCurrent(entry, { engineNow: "legacy", turnNow: 7 })).toBe(true)
+  it("keeps a suggestion while its engine, turn and preference still allow it", () => {
+    expect(
+      suggestionIsCurrent(entry, { engineNow: "legacy", turnNow: 7, preferenceOn: true }),
+    ).toBe(true)
   })
 
   it("hides a suggestion after the sub-chat switched engines", () => {
-    expect(suggestionIsCurrent(entry, { engineNow: "native", turnNow: 7 })).toBe(false)
+    expect(
+      suggestionIsCurrent(entry, { engineNow: "native", turnNow: 7, preferenceOn: true }),
+    ).toBe(false)
   })
 
   it("hides a suggestion once another turn has started", () => {
-    expect(suggestionIsCurrent(entry, { engineNow: "legacy", turnNow: 8 })).toBe(false)
+    expect(
+      suggestionIsCurrent(entry, { engineNow: "legacy", turnNow: 8, preferenceOn: true }),
+    ).toBe(false)
+  })
+
+  it("hides a stored suggestion once the preference is turned off", () => {
+    // Turning Prompt Suggestions off withdraws what is already in the atom;
+    // turning it back on must not resurrect a row the user dismissed.
+    expect(
+      suggestionIsCurrent(entry, { engineNow: "legacy", turnNow: 7, preferenceOn: false }),
+    ).toBe(false)
   })
 
   it("treats an empty atom as nothing to show", () => {
-    expect(suggestionIsCurrent(null, { engineNow: "legacy", turnNow: 7 })).toBe(false)
+    expect(suggestionIsCurrent(null, { engineNow: "legacy", turnNow: 7, preferenceOn: true })).toBe(
+      false,
+    )
   })
 })

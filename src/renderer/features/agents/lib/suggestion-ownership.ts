@@ -36,12 +36,19 @@ export function mayStoreSuggestion(args: {
 
 /**
  * Whether a stored suggestion still describes the composer it would insert
- * into: same engine (a switch mid-flight changed who the next prompt would be
- * addressed to) and same turn (something newer has started since).
+ * into: the preference is still on (turning Prompt Suggestions off withdraws
+ * whatever is already stored — and turning it back on must not resurrect it),
+ * same engine (a switch mid-flight changed who the next prompt would be
+ * addressed to), and same turn (something newer has started since).
  */
 export function suggestionIsCurrent(
   entry: PromptSuggestionEntry | null,
-  args: { engineNow: SubChatEngine; turnNow: number },
+  args: { engineNow: SubChatEngine; turnNow: number; preferenceOn: boolean },
 ): entry is PromptSuggestionEntry {
-  return entry !== null && entry.engine === args.engineNow && entry.turn === args.turnNow
+  return (
+    entry !== null &&
+    args.preferenceOn &&
+    entry.engine === args.engineNow &&
+    entry.turn === args.turnNow
+  )
 }

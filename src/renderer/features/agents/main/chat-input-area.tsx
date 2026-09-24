@@ -37,6 +37,7 @@ import {
   hiddenModelsAtom,
   normalizeCodexApiKey,
   pinnedOpenRouterModelsAtom,
+  promptSuggestionsEnabledAtom,
   sessionInfoAtom,
 } from "../../../lib/atoms"
 import {
@@ -439,6 +440,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   const turnGeneration = useAtomValue(
     useMemo(() => subChatTurnGenerationAtomFamily(subChatId), [subChatId]),
   )
+  // Turning the switch off withdraws whatever suggestion is already stored;
+  // the render gate asks for the preference so a re-enable cannot resurrect it.
+  const promptSuggestionsOn = useAtomValue(promptSuggestionsEnabledAtom)
 
   const subChatModelIdAtom = useMemo(() => subChatModelIdAtomFamily(subChatId), [subChatId])
   const [selectedSubChatModelId, setSelectedSubChatModelId] = useAtom(subChatModelIdAtom)
@@ -1826,6 +1830,7 @@ export const ChatInputArea = memo(function ChatInputArea({
               {suggestionIsCurrent(promptSuggestion, {
                 engineNow: engine,
                 turnNow: turnGeneration,
+                preferenceOn: promptSuggestionsOn,
               }) && (
                 <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
                   <Sparkles className="h-3.5 w-3.5 shrink-0" />
