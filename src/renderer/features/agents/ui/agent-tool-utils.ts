@@ -131,34 +131,48 @@ export function areToolPropsEqual(
  */
 /**
  * A subagent's own children by its id, and the message-level map that stands
- * behind it. The map's CONTENT is what the memo compares: a grandchild is not
- * in this task's own `nestedTools`, and only a change under some other key
- * says it moved. Identity of either is useless here — `messageParts` is
- * rebuilt every render (the AI SDK mutates parts in place), so the map and
- * any callback over it are fresh objects with unchanged contents.
+ * behind it. A grandchild is not in this task's own `nestedTools`, and only a
+ * change under some other key says it moved. Identity of either is useless
+ * here — `messageParts` is rebuilt every render (the AI SDK mutates parts in
+ * place), so the map and any callback over it are fresh objects with
+ * unchanged contents. What the memo compares is `nestingFingerprintOf`'s
+ * snapshot of that map: one string, every row, no cache writes.
  */
 export type NestedToolsLookup = (toolCallId: string) => ToolPartLike[]
 export type NestedToolsMapLike = ReadonlyMap<string, readonly ToolPartLike[]>
 
-function nestedMapsEqual(
-  prev: NestedToolsMapLike | undefined,
-  next: NestedToolsMapLike | undefined,
-): boolean {
-  if (prev === next) return true
-  const prevSize = prev?.size ?? 0
-  const nextSize = next?.size ?? 0
-  if (prevSize !== nextSize) return false
-  if (!prev || !next) return prevSize === 0
-  for (const [id, prevParts] of prev) {
-    const nextParts = next.get(id)
-    if (nextParts?.length !== prevParts.length) return false
-    for (let i = 0; i < prevParts.length; i++) {
-      if (!arePartsEqual(prevParts[i] as ToolPartLike, nextParts[i] as ToolPartLike)) {
-        return false
-      }
+/**
+ * An immutable snapshot of the message-level nesting map, as one string.
+ *
+ * The map itself cannot be compared by content through `arePartsEqual`: that
+ * comparator advances the module-level `toolStateCache`, so the first task row
+ * to walk the map would consume every mutation and the rows after it would
+ * see a clean cache and skip a grandchild that changed. Computed ONCE per
+ * render in the message component and carried as a plain string, the compare
+ * is pure — two rows asking "did anything under the tree move?" both get the
+ * same answer, because neither of them writes anything.
+ *
+ * Reads the same fields the tool-state snapshot records (`state`, `input`,
+ * `output`) plus the identity fields, deliberately without touching the cache.
+ */
+export function nestingFingerprintOf(map: NestedToolsMapLike | undefined): string {
+  if (!map || map.size === 0) return ""
+  const segments: string[] = []
+  for (const [id, parts] of map) {
+    for (const part of parts) {
+      segments.push(
+        [
+          id,
+          part.type,
+          part.toolCallId ?? "",
+          part.state ?? "",
+          JSON.stringify(part.input ?? {}),
+          JSON.stringify(part.output ?? {}),
+        ].join("\u0000"),
+      )
     }
   }
-  return true
+  return segments.join("\u0001")
 }
 
 /**
@@ -178,7 +192,7 @@ export function areTaskToolPropsEqual(
     part: ToolPartLike
     nestedTools: ToolPartLike[]
     nestedChildren?: NestedToolsLookup
-    nestedToolsMap?: NestedToolsMapLike
+    nestingFingerprint?: string
     depth?: number
     chatStatus?: string
   },
@@ -186,21 +200,21 @@ export function areTaskToolPropsEqual(
     part: ToolPartLike
     nestedTools: ToolPartLike[]
     nestedChildren?: NestedToolsLookup
-    nestedToolsMap?: NestedToolsMapLike
+    nestingFingerprint?: string
     depth?: number
     chatStatus?: string
   },
 ): boolean {
-  // Descendants beyond this task's own `nestedTools` are only visible through
-  // the message-level map. Compare it by CONTENT — the map (and the lookup
-  // over it) is rebuilt every render, so identity would reject every time and
-  // undo the memo this comparator exists to protect. Checked first so the
-  // completed short circuit below cannot hide a grandchild change.
-  if (!nestedMapsEqual(prevProps.nestedToolsMap, nextProps.nestedToolsMap)) return false
-  // Fallback for callers that offer a lookup without the map.
+  // Descendants beyond this task's own `nestedTools` are visible only through
+  // the message-level map. Compare the render's fingerprint of it — a pure
+  // string, so two rows can both see the same grandchild mutation without
+  // either consuming the other's change out of the tool-state cache. Checked
+  // first so the completed short circuit below cannot hide it.
+  if ((prevProps.nestingFingerprint ?? "") !== (nextProps.nestingFingerprint ?? "")) return false
+  // Fallback for callers that offer a lookup without a fingerprint.
   if (
-    prevProps.nestedToolsMap === undefined &&
-    nextProps.nestedToolsMap === undefined &&
+    prevProps.nestingFingerprint === undefined &&
+    nextProps.nestingFingerprint === undefined &&
     prevProps.nestedChildren !== nextProps.nestedChildren
   ) {
     return false

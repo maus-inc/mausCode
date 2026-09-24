@@ -54,7 +54,7 @@ import {
   parseMcpToolType,
   type ToolDisplayPart,
 } from "../ui/agent-tool-registry"
-import { isPlanFile } from "../ui/agent-tool-utils"
+import { isPlanFile, nestingFingerprintOf } from "../ui/agent-tool-utils"
 import { AgentWebFetchTool } from "../ui/agent-web-fetch-tool"
 import { AgentWebSearchCollapsible } from "../ui/agent-web-search-collapsible"
 import { GitActivityBadges } from "../ui/git-activity-badges"
@@ -709,6 +709,13 @@ type PartRenderContext = {
   nestedToolsMap: Map<string, NormalizedPart[]>
   /** Children of any subagent, by the subagent's full composite id. */
   nestedChildren: (toolCallId: string) => NormalizedPart[]
+  /**
+   * This render's snapshot of the whole nesting map, for the task-row memo.
+   * A plain string so every row compares the same immutable value instead of
+   * walking the map through the shared tool-state cache (which would let the
+   * first row consume a grandchild mutation for all the others).
+   */
+  nestingFingerprint: string
   nestedToolIds: Set<string>
   /** Nested calls whose parent task part never arrived. */
   orphans: {
@@ -760,7 +767,7 @@ function renderOrphanTaskGroup(
       }}
       nestedTools={group.parts}
       nestedChildren={ctx.nestedChildren}
-      nestedToolsMap={ctx.nestedToolsMap}
+      nestingFingerprint={ctx.nestingFingerprint}
       chatStatus={ctx.status}
     />
   )
@@ -798,7 +805,7 @@ function renderSubagentTask(part: NormalizedPart, idx: number, ctx: PartRenderCo
       part={part}
       nestedTools={nestedTools}
       nestedChildren={ctx.nestedChildren}
-      nestedToolsMap={ctx.nestedToolsMap}
+      nestingFingerprint={ctx.nestingFingerprint}
       chatStatus={ctx.status}
     />
   )
@@ -1213,6 +1220,12 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     [messageParts],
   )
 
+  // One pure string per render for every task row's memo — see
+  // `nestingFingerprintOf`: comparing the map through arePartsEqual would
+  // advance the shared tool-state cache, and the first row to walk it would
+  // consume the change a later row needed to see.
+  const nestingFingerprint = useMemo(() => nestingFingerprintOf(nestedToolsMap), [nestedToolsMap])
+
   const msgMetadata = message?.metadata as AgentMessageMetadata
 
   // One context object, so the dispatch and every renderer it calls can live at
@@ -1229,6 +1242,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       onOpenFile,
       nestedToolsMap,
       nestedChildren: (toolCallId: string) => nestedToolsMap.get(toolCallId) ?? [],
+      nestingFingerprint,
       nestedToolIds,
       orphans: {
         toolCallIds: orphanToolCallIds,
@@ -1245,6 +1259,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     }),
     [
       nestedToolsMap,
+      nestingFingerprint,
       nestedToolIds,
       orphanToolCallIds,
       orphanFirstToolCallIds,

@@ -17,7 +17,6 @@ import {
   areTaskToolPropsEqual,
   isLaunchedAgentOutput,
   type NestedToolsLookup,
-  type NestedToolsMapLike,
 } from "./agent-tool-utils"
 
 interface AgentTaskToolProps {
@@ -30,11 +29,12 @@ interface AgentTaskToolProps {
    */
   nestedChildren?: NestedToolsLookup
   /**
-   * The message-level map behind `nestedToolsMap`, carried for the memo only:
-   * a grandchild lives under another key, and content comparison is what lets
-   * a re-render through without defeating the memo with a fresh callback.
+   * The message component's snapshot of the whole nesting map, for the memo
+   * only. A plain string: a grandchild lives under another key, and comparing
+   * fingerprints lets every row see the same mutation without any of them
+   * consuming the shared tool-state cache on the way past.
    */
-  nestedToolsMap?: NestedToolsMapLike
+  nestingFingerprint?: string
   /** How many subagent levels deep this call already is; the cap counts them. */
   depth?: number
   chatStatus?: string
@@ -66,7 +66,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
   part,
   nestedTools,
   nestedChildren,
-  nestedToolsMap,
+  nestingFingerprint,
   depth = 0,
   chatStatus,
 }: AgentTaskToolProps) {
@@ -268,7 +268,7 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                     part={nestedPart}
                     nestedTools={childId ? nestedChildren(childId) : []}
                     nestedChildren={nestedChildren}
-                    nestedToolsMap={nestedToolsMap}
+                    nestingFingerprint={nestingFingerprint}
                     depth={depth + 1}
                     chatStatus={chatStatus}
                   />
