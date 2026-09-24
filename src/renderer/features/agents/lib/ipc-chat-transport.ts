@@ -504,6 +504,16 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               _chunkCount++
               _lastChunkType = chunk.type
 
+              // A provider failure arrives as an ordinary data chunk and is
+              // toasted by `routeChunk` — it never hits this subscription's
+              // `onError`. A failed turn leaves no next step behind: withdraw
+              // this turn's suggestion under the same generation guard as
+              // abort and transport failure, so a row stored before the
+              // failure cannot still be offered afterwards.
+              if (chunk.type === "error" || chunk.type === "auth-error") {
+                clearOwnSuggestion()
+              }
+
               if (routeChunk(chunk, ctx, controller) !== "enqueue") return
               enqueueChunk(controller, chunk)
               if (chunk.type === "finish") closeQuietly(controller)
