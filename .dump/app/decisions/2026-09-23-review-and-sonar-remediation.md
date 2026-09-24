@@ -675,3 +675,15 @@ passed in default mode earlier on this tree, and the single-threaded run
 was sanity-checked against a deliberate type error. CI on `5683525`: both
 runs success, 18 checks passed, 2 skipped (DeepSource, Sourcery), 0 failed.
 The issue-#14 comment retried a fourth time — still 403.
+
+### Round 7 follow-up — Sonar's read of the fix itself
+
+The analysis of `5683525` kept the gate passing but raised two new issues on
+the fingerprint code: S5906 on the test's redundant `expect(a === b).toBe(true)`
+beside the `.toBe` that already pinned it, and S6551 on the segment `.join()`
+whose `state` member is `unknown` — join's default stringification could fold
+two different state objects into one `"[object Object]"` and hide precisely the
+change the fingerprint exists to catch. `172fbb2` drops the redundant
+assertion and JSON.stringify's the tuple as a whole instead; the re-analysis
+confirms it: **1 open issue again (S6845 only), gate passed**, 0 hotspots,
+0.6% duplication. Comment `5820990401`.
