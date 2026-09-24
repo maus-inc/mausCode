@@ -5,17 +5,18 @@ import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip"
 
 /**
- * The subtitle span, wearing button semantics only when there is an action to
- * press. A `role="button"` whose Enter and Space do nothing is a control that
- * lies: keyboard and screen-reader users can focus it, it announces itself as
- * interactive, and nothing happens — which is every `TaskOutput` and
- * `TaskStop` row, since neither offers an action beyond being read.
+ * The subtitle span, wearing button semantics when there is an affordance to
+ * press — an action, or a tooltip that needs a keyboard entry point — and
+ * nothing at all when there is neither.
  *
- * Without an action but WITH a tooltip, the span still takes a tab stop:
- * `TooltipTrigger` hangs off focus, and a truncated path that only a mouse
- * can reveal is not keyboard-accessible. A bare tab stop is not a button —
- * no role, no Enter/Space handler — so it does not claim an affordance it
- * does not have; it only lets focus open the tooltip that is already there.
+ * The tooltip-only case used to be a focusable span with `tabIndex={0}` and
+ * no role: Sonar's S6845 reads that as a tab stop on a non-interactive
+ * element, and the alternative of `role="button"` with an Enter handler that
+ * does nothing is the control that lies (which is the `TaskOutput` and
+ * `TaskStop` rows this component was already fixed for). The button here is
+ * the resolution Radix itself picks: `TooltipTrigger` renders a button by
+ * default, so focus is the affordance, native focusability carries the tab
+ * stop without declaring one, and activation has nothing to fake.
  */
 function subtitleSpan(
   content: React.ReactNode,
@@ -28,17 +29,13 @@ function subtitleSpan(
   // semantics (implicit role, keyboard activation, no hand-rolled keydown).
   const buttonReset =
     "appearance-none border-0 bg-transparent p-0 m-0 font-[inherit] text-[inherit]"
-  if (!onClick) {
-    if (!tooltipFocusable) return <span className={className}>{content}</span>
-    return (
-      /* biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard entry point for the tooltip trigger; focus opens it, and the span deliberately claims no interactive role. */
-      <span className={className} tabIndex={0}>
-        {content}
-      </span>
-    )
-  }
+  // No action and nothing to reveal: passive text, out of the tab order.
+  if (!onClick && !tooltipFocusable) return <span className={className}>{content}</span>
+  // The tooltip-only button is a trigger, not a link: it must not advertise a
+  // pointer click the UA stylesheet would otherwise promise.
+  const cursor = onClick ? "" : " cursor-default"
   return (
-    <button type="button" className={`${buttonReset} ${className}`} onClick={onClick}>
+    <button type="button" className={`${buttonReset}${cursor} ${className}`} onClick={onClick}>
       {content}
     </button>
   )

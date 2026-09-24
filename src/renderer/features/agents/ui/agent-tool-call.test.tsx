@@ -6,8 +6,11 @@
  * Enter/Space handling, and attached the handler only when the row had an
  * action — so every `TaskOutput` and `TaskStop` row (and any row rendered
  * without its file-open provider) was a focusable, screen-reader-announced
- * control that did nothing. The two halves of that are pinned here: no
- * action, no button; action, button that works.
+ * control that did nothing. Pinned here: no affordance, no button; an
+ * action or a tooltip that needs a keyboard entry, a native button that
+ * carries the focus without declaring a `tabIndex` (Sonar S6845 reads the
+ * declaration on a non-interactive element, and Radix's own TooltipTrigger
+ * is a button).
  */
 import { render } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
@@ -35,10 +38,13 @@ describe("AgentToolCall subtitle affordance", () => {
     expect(subtitle.getAttribute("tabindex")).toBeNull()
   })
 
-  it("is a focusable non-button when only a tooltip needs a keyboard entry", () => {
+  it("is a button when only a tooltip needs a keyboard entry", () => {
     // TooltipTrigger hangs off focus; a truncated path that only a mouse can
-    // reveal is not keyboard-accessible. Focusable is not the same as a button.
-    const { getByText } = renderCall(
+    // reveal is not keyboard-accessible. A native button is Radix's own
+    // default trigger: it carries the tab stop natively, so no tabIndex sits
+    // on a non-interactive element (Sonar S6845), and with no action to
+    // press it gets no handler to fake one.
+    const { getByRole } = renderCall(
       <AgentToolCall
         icon={EyeIcon}
         title="Bash"
@@ -48,9 +54,9 @@ describe("AgentToolCall subtitle affordance", () => {
         isError={false}
       />,
     )
-    const subtitle = getByText("src/very/long/path/to/file.ts")
-    expect(subtitle.getAttribute("role")).toBeNull()
-    expect(subtitle.getAttribute("tabindex")).toBe("0")
+    const subtitle = getByRole("button", { name: "src/very/long/path/to/file.ts" })
+    expect(subtitle.tagName).toBe("BUTTON")
+    expect(subtitle.getAttribute("tabindex")).toBeNull()
   })
 
   it("is a button when the row has an action to press", () => {
