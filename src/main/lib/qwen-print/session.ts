@@ -318,6 +318,10 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
   }
 
   const feedLine = (rawLine: string) => {
+    // A settled turn (error, result, interrupt) must not keep consuming
+    // stdout: the router has already cleared `activeTurn`, and a late line
+    // would emit chunks against nothing.
+    if (settled) return
     const text = rawLine.trim()
     if (text.length === 0) return
     let parsed: unknown
@@ -354,6 +358,11 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
       const errorMessage = `Malformed provider message: ${detail}`
       emit({ type: "error", errorText: errorMessage })
       settle({ status: "error", errorMessage, sessionId })
+      // The child is still running the turn the renderer has already been
+      // told ended. Reap it (same SIGINT→SIGTERM→SIGKILL escalation as a
+      // user interrupt) so it cannot keep executing or emitting; `settle`
+      // is idempotent, so the close handler will not resurrect the turn.
+      interrupt()
     }
   }
 
