@@ -130,11 +130,36 @@ export function areToolPropsEqual(
  * Compare function for AgentTaskTool which has additional nestedTools prop.
  */
 /**
- * A subagent's own children by its id. The message-level map stands behind it
- * so the memo can compare identity: a grandchild is not in this task's own
- * `nestedTools`, and only the lookup's identity says it changed.
+ * A subagent's own children by its id, and the message-level map that stands
+ * behind it. The map's CONTENT is what the memo compares: a grandchild is not
+ * in this task's own `nestedTools`, and only a change under some other key
+ * says it moved. Identity of either is useless here — `messageParts` is
+ * rebuilt every render (the AI SDK mutates parts in place), so the map and
+ * any callback over it are fresh objects with unchanged contents.
  */
 export type NestedToolsLookup = (toolCallId: string) => ToolPartLike[]
+export type NestedToolsMapLike = ReadonlyMap<string, readonly ToolPartLike[]>
+
+function nestedMapsEqual(
+  prev: NestedToolsMapLike | undefined,
+  next: NestedToolsMapLike | undefined,
+): boolean {
+  if (prev === next) return true
+  const prevSize = prev?.size ?? 0
+  const nextSize = next?.size ?? 0
+  if (prevSize !== nextSize) return false
+  if (!prev || !next) return prevSize === 0
+  for (const [id, prevParts] of prev) {
+    const nextParts = next.get(id)
+    if (!nextParts || nextParts.length !== prevParts.length) return false
+    for (let i = 0; i < prevParts.length; i++) {
+      if (!arePartsEqual(prevParts[i] as ToolPartLike, nextParts[i] as ToolPartLike)) {
+        return false
+      }
+    }
+  }
+  return true
+}
 
 /**
  * A result that launched work instead of finishing it. The pinned SDK types
@@ -153,6 +178,7 @@ export function areTaskToolPropsEqual(
     part: ToolPartLike
     nestedTools: ToolPartLike[]
     nestedChildren?: NestedToolsLookup
+    nestedToolsMap?: NestedToolsMapLike
     depth?: number
     chatStatus?: string
   },
@@ -160,15 +186,25 @@ export function areTaskToolPropsEqual(
     part: ToolPartLike
     nestedTools: ToolPartLike[]
     nestedChildren?: NestedToolsLookup
+    nestedToolsMap?: NestedToolsMapLike
     depth?: number
     chatStatus?: string
   },
 ): boolean {
-  // The lookup's identity changes when the message's nesting map is rebuilt,
-  // which is the only signal that reaches here about a descendant deeper than
-  // this task's own `nestedTools`. Checked first so the completed short
-  // circuit below cannot hide it.
-  if (prevProps.nestedChildren !== nextProps.nestedChildren) return false
+  // Descendants beyond this task's own `nestedTools` are only visible through
+  // the message-level map. Compare it by CONTENT — the map (and the lookup
+  // over it) is rebuilt every render, so identity would reject every time and
+  // undo the memo this comparator exists to protect. Checked first so the
+  // completed short circuit below cannot hide a grandchild change.
+  if (!nestedMapsEqual(prevProps.nestedToolsMap, nextProps.nestedToolsMap)) return false
+  // Fallback for callers that offer a lookup without the map.
+  if (
+    prevProps.nestedToolsMap === undefined &&
+    nextProps.nestedToolsMap === undefined &&
+    prevProps.nestedChildren !== nextProps.nestedChildren
+  ) {
+    return false
+  }
   if (prevProps.depth !== nextProps.depth) return false
 
   // Compare main part first

@@ -684,6 +684,7 @@ function renderOrphanTaskGroup(
       }}
       nestedTools={group.parts}
       nestedChildren={ctx.nestedChildren}
+      nestedToolsMap={ctx.nestedToolsMap}
       chatStatus={ctx.status}
     />
   )
@@ -721,6 +722,7 @@ function renderSubagentTask(part: NormalizedPart, idx: number, ctx: PartRenderCo
       part={part}
       nestedTools={nestedTools}
       nestedChildren={ctx.nestedChildren}
+      nestedToolsMap={ctx.nestedToolsMap}
       chatStatus={ctx.status}
     />
   )
