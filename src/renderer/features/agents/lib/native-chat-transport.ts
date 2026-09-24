@@ -19,6 +19,7 @@ import {
   normalizeCustomClaudeConfig,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
+  subChatClaudeEffortAtomFamily,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
@@ -86,6 +87,9 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
     // Read model selection dynamically per sub-chat (so split panes stay independent)
     const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))
     const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP.opus
+    // ...and the effort beside it, from the same family the legacy transport
+    // reads: both engines send what their pane's picker last chose.
+    const effort = appStore.get(subChatClaudeEffortAtomFamily(this.config.subChatId))
 
     // Offline/Ollama routing is a legacy-path feature; refuse loudly rather
     // than silently running the turn against cloud credentials.
@@ -139,6 +143,9 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
             projectPath: this.config.projectPath,
             mode: currentMode,
             ...(modelString && { model: modelString }),
+            // The same per-sub-chat effort the legacy transport sends: the
+            // daemon's `set_reasoning_effort` carries it the rest of the way.
+            ...(effort && { effort }),
             ...(customConfig?.token && { customToken: customConfig.token }),
             ...(customConfig?.baseUrl && { customBaseUrl: customConfig.baseUrl }),
             ...(images.length > 0 && { images }),

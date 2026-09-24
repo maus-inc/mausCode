@@ -12,6 +12,7 @@ import { observable } from "@trpc/server/observable"
 import { and, eq } from "drizzle-orm"
 import { z } from "zod"
 import { type AgentMode, agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
+import { EFFORT_LEVELS } from "../../../../shared/effort"
 import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
 import { approvalWasDenied } from "../../claude/tool-approval"
 import type { UIMessageChunk } from "../../claude/types"
@@ -284,6 +285,10 @@ export const runtimeRouter = router({
         projectPath: z.string().optional(),
         mode: agentModeSchema.default(DEFAULT_AGENT_MODE),
         model: z.string().optional(),
+        // Same vocabulary and same validation as the legacy chat router: one
+        // effort scale across both engines, so a pane's visible level means
+        // the same thing whichever transport runs it.
+        effort: z.enum(EFFORT_LEVELS).optional(),
         customToken: z.string().optional(),
         customBaseUrl: z.string().optional(),
         images: z.array(imageAttachmentSchema).optional(),
@@ -404,6 +409,23 @@ export const runtimeRouter = router({
             }
 
             await setNativeModelWithRetry(client, sessionId, input.model, safeEmit)
+
+            // The daemon takes effort as its own request, after the model so
+            // the provider context is settled. Applied best-effort: a refusal
+            // (a level this provider will not accept, an older daemon) leaves
+            // the turn running at the daemon's default rather than failing a
+            // prompt over a reasoning preference.
+            if (input.effort) {
+              try {
+                await client.setReasoningEffort(sessionId, input.effort)
+              } catch (error) {
+                console.warn(
+                  `[Native] set_reasoning_effort refused (${input.effort}): ${
+                    error instanceof Error ? error.message : String(error)
+                  }`,
+                )
+              }
+            }
 
             // The turn may have been cancelled while the daemon was starting;
             // never send a doomed turn (it would run uncancelled server-side).
