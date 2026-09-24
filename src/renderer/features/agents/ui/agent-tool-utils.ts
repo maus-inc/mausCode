@@ -160,15 +160,12 @@ export function nestingFingerprintOf(map: NestedToolsMapLike | undefined): strin
   const segments: string[] = []
   for (const [id, parts] of map) {
     for (const part of parts) {
+      // JSON.stringify the tuple rather than join(): `state` is `unknown`, and
+      // join() would fall back to Object's default stringification for any
+      // non-string it meets, collapsing two different objects into one
+      // "[object Object]" and hiding a change behind it.
       segments.push(
-        [
-          id,
-          part.type,
-          part.toolCallId ?? "",
-          part.state ?? "",
-          JSON.stringify(part.input ?? {}),
-          JSON.stringify(part.output ?? {}),
-        ].join("\u0000"),
+        JSON.stringify([id, part.type, part.toolCallId, part.state, part.input, part.output]),
       )
     }
   }

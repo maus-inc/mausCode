@@ -52,10 +52,9 @@ describe("nestingFingerprintOf", () => {
 
   it("is stable across rebuilds with equal content", () => {
     const { a, b } = twinMaps()
+    // A rebuilt map yields the same string, and string identity (not map
+    // identity) is what the row memo compares.
     expect(nestingFingerprintOf(a)).toBe(nestingFingerprintOf(b))
-    // Recomputed from a rebuilt map is still the same string, so identity of
-    // the string (not the map) is what the memo compares.
-    expect(nestingFingerprintOf(a) === nestingFingerprintOf(b)).toBe(true)
   })
 
   it("changes when a streaming grandchild mutates in place", () => {
