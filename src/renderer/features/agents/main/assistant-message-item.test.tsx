@@ -19,7 +19,7 @@
  * next change to any of these branches, where the acceptable result is a diff
  * somebody meant.
  */
-import { render } from "@testing-library/react"
+import { fireEvent, render } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "../../../components/ui/tooltip"
 import type { Message, MessagePart } from "../stores/message-store"
@@ -92,6 +92,24 @@ function renderParts(parts: MessagePart[], streaming = false): string {
     parts,
   }
   return renderMessage(message, streaming)
+}
+
+/** The same message as `renderParts`, but with the DOM still attached to click on. */
+function renderPartsDom(parts: MessagePart[]): HTMLElement {
+  const { container } = render(
+    <TooltipProvider delayDuration={300}>
+      <AssistantMessageItem
+        message={{ id: `msg-${++messageSequence}`, role: "assistant", parts }}
+        isLastMessage={false}
+        isStreaming={false}
+        status="ready"
+        isMobile={false}
+        subChatId="sub-chat-1"
+        chatId="chat-1"
+      />
+    </TooltipProvider>,
+  )
+  return container
 }
 
 /** A completed tool call, which is the state every fixture below starts from. */
@@ -420,6 +438,89 @@ describe("AssistantMessageItem, one message per branch of the part dispatcher", 
         tool("tool-Read", "toolu_ghost_1:1", { file_path: "/repo/AGENTS.md" }),
       ]),
     ).toMatchSnapshot()
+  })
+
+  it("tells a launch apart from a finished subagent", () => {
+    const html = renderParts([
+      tool(
+        "tool-Agent",
+        "toolu_async_1",
+        { subagent_type: "general-purpose", description: "Watch the queue" },
+        {
+          status: "async_launched",
+          agentId: "agent_1",
+          description: "Watch the queue",
+          prompt: "watch",
+          outputFile: "/tmp/agent.log",
+        },
+      ),
+      tool(
+        "tool-Agent",
+        "toolu_remote_1",
+        { subagent_type: "general-purpose", description: "Run elsewhere" },
+        {
+          status: "remote_launched",
+          taskId: "task_9",
+          description: "Run elsewhere",
+          prompt: "run",
+        },
+      ),
+      tool(
+        "tool-Agent",
+        "toolu_done_1",
+        { subagent_type: "general-purpose", description: "Finished run" },
+        { status: "completed", prompt: "done" },
+      ),
+    ])
+    // Two launches say launched; only the `completed` status says completed.
+    expect(html.match(/Launched Subagent/g)).toHaveLength(2)
+    expect(html).toContain("Completed Subagent")
+    expect(html).toMatchSnapshot()
+  })
+
+  it("keeps a nested subagent's descendants under it instead of orphaning them", () => {
+    const html = renderParts([
+      tool("tool-Agent", "toolu_agent_1", {
+        subagent_type: "general-purpose",
+        description: "Outer agent",
+      }),
+      tool("tool-Agent", "toolu_agent_1:toolu_agent_2", {
+        subagent_type: "general-purpose",
+        description: "Inner agent",
+      }),
+      tool("tool-Read", "toolu_agent_2:toolu_read_9", { file_path: "/repo/nested.txt" }),
+    ])
+    // The parent is resolved through the full id map: no top-level task is
+    // named `toolu_agent_2`, and before that lookup existed the Read stood up
+    // a fake "Incomplete task" instead of living under the inner agent.
+    expect(html).not.toContain("Incomplete task")
+    expect(html).toMatchSnapshot()
+  })
+
+  it("renders a three-level subagent chain once each level is expanded", () => {
+    const container = renderPartsDom([
+      tool("tool-Agent", "toolu_agent_1", {
+        subagent_type: "general-purpose",
+        description: "Outer agent",
+      }),
+      tool("tool-Agent", "toolu_agent_1:toolu_agent_2", {
+        subagent_type: "general-purpose",
+        description: "Inner agent",
+      }),
+      tool("tool-Read", "toolu_agent_2:toolu_read_9", { file_path: "/repo/nested.txt" }),
+    ])
+    const clickHeader = (needle: string) => {
+      const header = Array.from(container.querySelectorAll<HTMLElement>('[role="button"]')).find(
+        (el) => el.textContent?.includes(needle),
+      )
+      expect(header, `a header containing ${needle}`).toBeTruthy()
+      fireEvent.click(header as HTMLElement)
+    }
+    clickHeader("Outer agent")
+    clickHeader("Inner agent")
+    // The Read row's subtitle is the file's basename — proof the descendant
+    // renders under the inner agent rather than at the top level or nowhere.
+    expect(container.textContent).toContain("nested.txt")
   })
 
   it("renders an MCP tool call", () => {

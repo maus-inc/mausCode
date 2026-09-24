@@ -30,6 +30,7 @@ import {
   WriteFileIcon,
 } from "../../../components/ui/icons"
 import { getToolLifecycleState } from "./agent-tool-state"
+import { isLaunchedAgentOutput } from "./agent-tool-utils"
 
 export { getToolStatus } from "./agent-tool-state"
 
@@ -65,6 +66,8 @@ export type ToolDisplayPart = {
     numLines?: number
     task?: { subject?: string }
     tasks?: unknown[]
+    /** `AgentOutput.status`: `completed`, or one of the two launch hand-offs. */
+    status?: string
   }
 }
 
@@ -163,7 +166,12 @@ const subagentTool: ToolMeta = {
   title: (part) => {
     if (isInputStreaming(part)) return "Preparing agent"
     const subagentType = part.input?.subagent_type || "Agent"
-    return isPendingState(part) ? `Running ${subagentType}` : `${subagentType} completed`
+    if (isPendingState(part)) return `Running ${subagentType}`
+    // A launched run is still running somewhere else; only a `completed`
+    // status has actually finished.
+    return isLaunchedAgentOutput(part.output)
+      ? `${subagentType} launched`
+      : `${subagentType} completed`
   },
   subtitle: (part) => {
     // Don't show subtitle while input is still streaming

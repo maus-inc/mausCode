@@ -86,6 +86,18 @@ describe("agent tool registry: renamed sub-agent and background task tools", () 
     expect(meta.title({ state: "output-available", input: {} })).toBe("Agent completed")
   })
 
+  it("calls a launched sub-agent a launch, not a completion", () => {
+    const meta = AgentToolRegistry["tool-Agent"]
+    const base: ToolDisplayPart = {
+      state: "output-available",
+      input: { subagent_type: "Explore", description: "Hand the run off" },
+    }
+    expect(meta.title({ ...base, output: { status: "async_launched" } })).toBe("Explore launched")
+    expect(meta.title({ ...base, output: { status: "remote_launched" } })).toBe("Explore launched")
+    // A real completion still says so.
+    expect(meta.title({ ...base, output: { status: "completed" } })).toBe("Explore completed")
+  })
+
   it("truncates a long sub-agent description and hides it while streaming", () => {
     const meta = AgentToolRegistry["tool-Agent"]
     expect(meta.subtitle?.(streamingSubagent)).toBe("")

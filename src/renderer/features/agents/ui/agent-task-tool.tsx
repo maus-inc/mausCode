@@ -7,22 +7,42 @@ import { TextShimmer } from "../../../components/ui/text-shimmer"
 import { keyItems } from "../../../lib/react-keys"
 import { cn } from "../../../lib/utils"
 import { selectedProjectAtom } from "../atoms"
+import { isSubagentToolType } from "../lib/subagent-tool-types"
 import { useFileOpen } from "../mentions"
 import { AgentToolCall } from "./agent-tool-call"
 import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { AgentToolRegistry, getToolStatus, type ToolDisplayPart } from "./agent-tool-registry"
 import type { ToolPartLike } from "./agent-tool-state"
-import { areTaskToolPropsEqual } from "./agent-tool-utils"
+import {
+  areTaskToolPropsEqual,
+  isLaunchedAgentOutput,
+  type NestedToolsLookup,
+} from "./agent-tool-utils"
 
 interface AgentTaskToolProps {
   part: ToolPartLike
   nestedTools: ToolPartLike[]
+  /**
+   * Children of any nested subagent, so a subagent inside a subagent renders
+   * as its own expandable task rather than a flat line. Absent means flat
+   * rows only (the depth cap, and callers that have no map to offer).
+   */
+  nestedChildren?: NestedToolsLookup
+  /** How many subagent levels deep this call already is; the cap counts them. */
+  depth?: number
   chatStatus?: string
 }
 
 // Constants for rendering
 const MAX_VISIBLE_TOOLS = 5
 const TOOL_HEIGHT_PX = 24
+/**
+ * Subagent levels this component will nest into itself. The wire composes ids
+ * as `parentOriginal:childOriginal`, so real transcripts stop at depth two;
+ * the cap exists so an id scheme nobody has seen yet cannot recurse without
+ * bound — a level at or past it falls back to the flat registry row.
+ */
+const MAX_SUBAGENT_RENDER_DEPTH = 3
 
 // Format elapsed time in a human-readable format
 function formatElapsedTime(ms: number): string {
@@ -38,6 +58,8 @@ function formatElapsedTime(ms: number): string {
 export const AgentTaskTool = memo(function AgentTaskTool({
   part,
   nestedTools,
+  nestedChildren,
+  depth = 0,
   chatStatus,
 }: AgentTaskToolProps) {
   const selectedProject = useAtomValue(selectedProjectAtom)
@@ -124,9 +146,11 @@ export const AgentTaskTool = memo(function AgentTaskTool({
 
   const subtitle = getSubtitle()
 
-  // Get title text based on status
+  // Get title text based on status: a launch is not a finish, and the row
+  // says which one it was.
   const getTitle = () => {
-    return isPending ? "Running Subagent" : "Completed Subagent"
+    if (isPending) return "Running Subagent"
+    return isLaunchedAgentOutput(part.output) ? "Launched Subagent" : "Completed Subagent"
   }
 
   // Show interrupted state if task was interrupted without completing
@@ -217,6 +241,27 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                 (nestedPart as { toolCallId?: unknown }).toolCallId ?? nestedPart.type ?? "part",
               ),
             ).map(({ key, item: nestedPart }) => {
+              // A subagent inside a subagent is its own task row — same
+              // header, same expansion, its own children — so its descendants
+              // render under it instead of being flattened into this level.
+              if (
+                nestedPart.type &&
+                isSubagentToolType(nestedPart.type) &&
+                nestedChildren &&
+                depth < MAX_SUBAGENT_RENDER_DEPTH
+              ) {
+                const childId = String((nestedPart as { toolCallId?: unknown }).toolCallId ?? "")
+                return (
+                  <AgentTaskTool
+                    key={key}
+                    part={nestedPart}
+                    nestedTools={childId ? nestedChildren(childId) : []}
+                    nestedChildren={nestedChildren}
+                    depth={depth + 1}
+                    chatStatus={chatStatus}
+                  />
+                )
+              }
               const nestedMeta = nestedPart.type ? AgentToolRegistry[nestedPart.type] : undefined
               if (!nestedMeta) {
                 return (

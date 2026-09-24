@@ -129,10 +129,48 @@ export function areToolPropsEqual(
 /**
  * Compare function for AgentTaskTool which has additional nestedTools prop.
  */
+/**
+ * A subagent's own children by its id. The message-level map stands behind it
+ * so the memo can compare identity: a grandchild is not in this task's own
+ * `nestedTools`, and only the lookup's identity says it changed.
+ */
+export type NestedToolsLookup = (toolCallId: string) => ToolPartLike[]
+
+/**
+ * A result that launched work instead of finishing it. The pinned SDK types
+ * `AgentOutput.status` as `completed` | `async_launched` | `remote_launched`:
+ * the latter two mean the run was handed off — to the background, or to a
+ * remote session — and is still going there, so a row that calls them a
+ * completion reads as subagent work that ended when it has not.
+ */
+export function isLaunchedAgentOutput(output: unknown): boolean {
+  const status = (output as { status?: unknown } | null | undefined)?.status
+  return status === "async_launched" || status === "remote_launched"
+}
+
 export function areTaskToolPropsEqual(
-  prevProps: { part: ToolPartLike; nestedTools: ToolPartLike[]; chatStatus?: string },
-  nextProps: { part: ToolPartLike; nestedTools: ToolPartLike[]; chatStatus?: string },
+  prevProps: {
+    part: ToolPartLike
+    nestedTools: ToolPartLike[]
+    nestedChildren?: NestedToolsLookup
+    depth?: number
+    chatStatus?: string
+  },
+  nextProps: {
+    part: ToolPartLike
+    nestedTools: ToolPartLike[]
+    nestedChildren?: NestedToolsLookup
+    depth?: number
+    chatStatus?: string
+  },
 ): boolean {
+  // The lookup's identity changes when the message's nesting map is rebuilt,
+  // which is the only signal that reaches here about a descendant deeper than
+  // this task's own `nestedTools`. Checked first so the completed short
+  // circuit below cannot hide it.
+  if (prevProps.nestedChildren !== nextProps.nestedChildren) return false
+  if (prevProps.depth !== nextProps.depth) return false
+
   // Compare main part first
   if (!arePartsEqual(prevProps.part, nextProps.part)) return false
 

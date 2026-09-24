@@ -631,6 +631,8 @@ type PartRenderContext = {
   projectPath: string | undefined
   onOpenFile: ReturnType<typeof useFileOpen>
   nestedToolsMap: Map<string, NormalizedPart[]>
+  /** Children of any subagent, by the subagent's full composite id. */
+  nestedChildren: (toolCallId: string) => NormalizedPart[]
   nestedToolIds: Set<string>
   /** Nested calls whose parent task part never arrived. */
   orphans: {
@@ -681,6 +683,7 @@ function renderOrphanTaskGroup(
         input: { subagent_type: "unknown-agent", description: "Incomplete task" },
       }}
       nestedTools={group.parts}
+      nestedChildren={ctx.nestedChildren}
       chatStatus={ctx.status}
     />
   )
@@ -712,7 +715,15 @@ function renderTextPart(
 
 function renderSubagentTask(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
   const nestedTools = ctx.nestedToolsMap.get(part.toolCallId ?? "") || []
-  return <AgentTaskTool key={idx} part={part} nestedTools={nestedTools} chatStatus={ctx.status} />
+  return (
+    <AgentTaskTool
+      key={idx}
+      part={part}
+      nestedTools={nestedTools}
+      nestedChildren={ctx.nestedChildren}
+      chatStatus={ctx.status}
+    />
+  )
 }
 
 function renderBashTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
@@ -1006,32 +1017,47 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   } = useMemo(() => {
     const nestedToolsMap = new Map<string, NormalizedPart[]>()
     const nestedToolIds = new Set<string>()
-    const taskPartIds = new Set(
-      messageParts
-        .filter(
-          (p): p is NormalizedPart & { toolCallId: string } =>
-            isSubagentToolType(p.type) && !!p.toolCallId,
-        )
-        .map((p) => p.toolCallId),
+    const taskParts = messageParts.filter(
+      (p): p is NormalizedPart & { toolCallId: string } =>
+        isSubagentToolType(p.type) && !!p.toolCallId,
     )
+    // A composite id is `parentOriginal:childOriginal` — the SDK names a
+    // child's parent by that parent's ORIGINAL tool id, never by the
+    // parent's own composite — so a nested task's original id is its last
+    // segment, and it is what the task's own children carry before the
+    // colon. Looking the first segment up in the top-level ids alone (what
+    // this did before) finds `A` under `A:B`, but orphans everything under
+    // `A:B`, because no top-level task is ever named just `B`.
+    const taskFullIdByOriginalId = new Map<string, string>()
+    for (const task of taskParts) {
+      const segments = task.toolCallId.split(":")
+      taskFullIdByOriginalId.set(segments[segments.length - 1] ?? task.toolCallId, task.toolCallId)
+    }
     const orphanTaskGroups = new Map<string, { parts: NormalizedPart[]; firstToolCallId: string }>()
     const orphanToolCallIds = new Set<string>()
     const orphanFirstToolCallIds = new Set<string>()
 
     for (const part of messageParts) {
       if (part.toolCallId?.includes(":")) {
-        const parentId = part.toolCallId.split(":")[0]
-        if (taskPartIds.has(parentId)) {
-          if (!nestedToolsMap.has(parentId)) {
-            nestedToolsMap.set(parentId, [])
+        const parentOriginalId = part.toolCallId.split(":")[0]
+        const parentFullId =
+          parentOriginalId === undefined ? undefined : taskFullIdByOriginalId.get(parentOriginalId)
+        // The self check is the cycle guard: a part that names itself as its
+        // own parent would otherwise sit in its own children forever.
+        if (parentFullId !== undefined && parentFullId !== part.toolCallId) {
+          // Keyed by the parent's FULL id: that is the id `renderSubagentTask`
+          // looks children up by, whether the parent sits at the top level
+          // (`A`) or inside another task (`A:B`).
+          if (!nestedToolsMap.has(parentFullId)) {
+            nestedToolsMap.set(parentFullId, [])
           }
-          nestedToolsMap.get(parentId)?.push(part)
+          nestedToolsMap.get(parentFullId)?.push(part)
           nestedToolIds.add(part.toolCallId)
         } else {
-          let group = orphanTaskGroups.get(parentId)
+          let group = orphanTaskGroups.get(parentOriginalId ?? "")
           if (!group) {
             group = { parts: [], firstToolCallId: part.toolCallId }
-            orphanTaskGroups.set(parentId, group)
+            orphanTaskGroups.set(parentOriginalId ?? "", group)
             orphanFirstToolCallIds.add(part.toolCallId)
           }
           group.parts.push(part)
@@ -1183,6 +1209,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       projectPath,
       onOpenFile,
       nestedToolsMap,
+      nestedChildren: (toolCallId: string) => nestedToolsMap.get(toolCallId) ?? [],
       nestedToolIds,
       orphans: {
         toolCallIds: orphanToolCallIds,
