@@ -54,7 +54,7 @@ describe("AgentToolCall subtitle affordance", () => {
   })
 
   it("is a button when the row has an action to press", () => {
-    const { getByText } = renderCall(
+    const { getByRole } = renderCall(
       <AgentToolCall
         icon={EyeIcon}
         title="Read"
@@ -64,8 +64,8 @@ describe("AgentToolCall subtitle affordance", () => {
         onClick={() => {}}
       />,
     )
-    const subtitle = getByText("effort.ts")
-    expect(subtitle.getAttribute("role")).toBe("button")
-    expect(subtitle.getAttribute("tabindex")).toBe("0")
+    // A native button: implicit role, in the tab order, no hand-rolled keys.
+    const subtitle = getByRole("button", { name: "effort.ts" })
+    expect(subtitle.tagName).toBe("BUTTON")
   })
 })

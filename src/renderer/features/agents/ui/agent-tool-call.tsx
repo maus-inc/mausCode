@@ -23,6 +23,11 @@ function subtitleSpan(
   onClick?: () => void,
   tooltipFocusable = false,
 ): React.ReactElement {
+  // Reset the native button's UA styles so it sits in the row like the span it
+  // replaces — same fonts, colors, spacing — while keeping real button
+  // semantics (implicit role, keyboard activation, no hand-rolled keydown).
+  const buttonReset =
+    "appearance-none border-0 bg-transparent p-0 m-0 font-[inherit] text-[inherit]"
   if (!onClick) {
     if (!tooltipFocusable) return <span className={className}>{content}</span>
     return (
@@ -33,21 +38,9 @@ function subtitleSpan(
     )
   }
   return (
-    /* biome-ignore lint/a11y/useSemanticElements: compact inline action; a native button would require style resets. */
-    <span
-      role="button"
-      className={className}
-      onClick={onClick}
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          onClick()
-        }
-      }}
-    >
+    <button type="button" className={`${buttonReset} ${className}`} onClick={onClick}>
       {content}
-    </span>
+    </button>
   )
 }
 

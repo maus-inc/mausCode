@@ -151,7 +151,7 @@ function nestedMapsEqual(
   if (!prev || !next) return prevSize === 0
   for (const [id, prevParts] of prev) {
     const nextParts = next.get(id)
-    if (!nextParts || nextParts.length !== prevParts.length) return false
+    if (nextParts?.length !== prevParts.length) return false
     for (let i = 0; i < prevParts.length; i++) {
       if (!arePartsEqual(prevParts[i] as ToolPartLike, nextParts[i] as ToolPartLike)) {
         return false

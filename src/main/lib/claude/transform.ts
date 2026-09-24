@@ -180,12 +180,8 @@ function apiRetryMessage(
   // child's stdout callback.
   const reason = typeof msg.error === "string" ? msg.error.replaceAll("_", " ") : "request failed"
   const status = typeof msg.error_status === "number" ? ` (HTTP ${msg.error_status})` : ""
-  const attempt =
-    typeof msg.attempt === "number"
-      ? `, attempt ${msg.attempt}${
-          typeof msg.max_retries === "number" ? ` of ${msg.max_retries}` : ""
-        }`
-      : ""
+  const maxRetries = typeof msg.max_retries === "number" ? ` of ${msg.max_retries}` : ""
+  const attempt = typeof msg.attempt === "number" ? `, attempt ${msg.attempt}${maxRetries}` : ""
   const waitSeconds =
     typeof msg.retry_delay_ms === "number" ? Math.max(1, Math.round(msg.retry_delay_ms / 1000)) : 1
   return `Claude API retry: ${reason}${status}${attempt}, waiting ${waitSeconds}s`

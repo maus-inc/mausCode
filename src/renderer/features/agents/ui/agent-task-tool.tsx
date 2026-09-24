@@ -258,7 +258,10 @@ export const AgentTaskTool = memo(function AgentTaskTool({
                 nestedChildren &&
                 depth < MAX_SUBAGENT_RENDER_DEPTH
               ) {
-                const childId = String((nestedPart as { toolCallId?: unknown }).toolCallId ?? "")
+                const rawChildId = (nestedPart as { toolCallId?: unknown }).toolCallId
+                // Only a string id names a child; an object would stringify to
+                // "[object Object]" and look up nothing (or the wrong thing).
+                const childId = typeof rawChildId === "string" ? rawChildId : ""
                 return (
                   <AgentTaskTool
                     key={key}

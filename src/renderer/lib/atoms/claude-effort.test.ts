@@ -23,7 +23,7 @@ describe("sub-chat Claude effort", () => {
     expect(store.get(subChatClaudeEffortAtomFamily("chat-a"))).toBe("max")
     expect(store.get(subChatClaudeEffortAtomFamily("chat-b"))).toBe("low")
     // The global a third chat falls back on has not moved.
-    expect(store.get(lastSelectedClaudeEffortAtom)).toBe(null)
+    expect(store.get(lastSelectedClaudeEffortAtom)).toBeNull()
   })
 
   it("falls back to the last-selected pick for a chat that has never chosen", () => {
@@ -38,7 +38,7 @@ describe("sub-chat Claude effort", () => {
     store.set(subChatClaudeEffortAtomFamily("chat-a"), null)
     // `high` is what a fresh chat gets; chat-a asked for the CLI default and
     // must keep reading null rather than someone else's level.
-    expect(store.get(subChatClaudeEffortAtomFamily("chat-a"))).toBe(null)
+    expect(store.get(subChatClaudeEffortAtomFamily("chat-a"))).toBeNull()
     expect(store.get(subChatClaudeEffortAtomFamily("chat-b"))).toBe("high")
   })
 
