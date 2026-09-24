@@ -34,6 +34,7 @@ import {
   pendingAuthRetryMessageAtom,
   subChatModelIdAtomFamily,
   subChatPromptSuggestionAtomFamily,
+  subChatTurnGenerationAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
@@ -47,6 +48,7 @@ import {
   type SendMessagesOptions,
   type SubscriptionChunk,
 } from "./chat-chunk-atoms"
+import { mayStoreSuggestion } from "./suggestion-ownership"
 
 // Error categories and their user-friendly messages
 const ERROR_TOAST_CONFIG: Record<
@@ -165,6 +167,12 @@ type ChunkContext = ChatChunkContext & {
   images: ImageAttachment[]
   /** Written by this stream's own metadata chunk, read by the suggestion after it. */
   sessionId: string | null
+  /**
+   * The turn generation this stream bumped when it started. A suggestion is
+   * stored under it, so a late chunk arriving after a newer send is refused
+   * instead of overwriting the newer turn's own.
+   */
+  turnGeneration: number
 }
 
 type ChunkController = ReadableStreamDefaultController<SDKUIMessageChunk>
@@ -227,7 +235,21 @@ function routePromptSuggestion(chunk: SubscriptionChunk, ctx: ChunkContext): Chu
   }
   if (chunk.type !== "prompt-suggestion") return "enqueue"
   if (ctx.sessionId && chunk.sessionId !== ctx.sessionId) return "consumed"
-  appStore.set(subChatPromptSuggestionAtomFamily(ctx.subChatId), chunk.suggestion)
+  // The preference and the turn generation decide together: an inherited
+  // environment variable can make the CLI emit this while the app's switch is
+  // off, and a session id is reused across turns, so neither the switch nor
+  // the session alone answers whether the composer may still offer it.
+  const mayStore = mayStoreSuggestion({
+    preferenceOn: appStore.get(promptSuggestionsEnabledAtom),
+    capturedTurn: ctx.turnGeneration,
+    currentTurn: appStore.get(subChatTurnGenerationAtomFamily(ctx.subChatId)),
+  })
+  if (!mayStore) return "consumed"
+  appStore.set(subChatPromptSuggestionAtomFamily(ctx.subChatId), {
+    text: chunk.suggestion,
+    turn: ctx.turnGeneration,
+    engine: "legacy",
+  })
   return "consumed"
 }
 
@@ -417,9 +439,22 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       this.config.mode
 
     // A suggestion belongs to the turn that produced it, so starting a turn
-    // clears the last one: the composer must not offer a previous request's next
-    // step, and clicking it must not insert that into this prompt.
+    // bumps the generation — the store refuses a late chunk from the stream
+    // this send supersedes — and clears the last one: the composer must not
+    // offer a previous request's next step, and clicking it must not insert
+    // that into this prompt.
+    const turnGeneration = appStore.get(subChatTurnGenerationAtomFamily(this.config.subChatId)) + 1
+    appStore.set(subChatTurnGenerationAtomFamily(this.config.subChatId), turnGeneration)
     appStore.set(subChatPromptSuggestionAtomFamily(this.config.subChatId), null)
+    // Aborting or failing this turn takes its suggestion with it, but only if
+    // it is still this turn's: a superseding send may already have begun, and
+    // its own suggestion must not be wiped by the stream it replaced.
+    const clearOwnSuggestion = () => {
+      const entry = appStore.get(subChatPromptSuggestionAtomFamily(this.config.subChatId))
+      if (entry?.turn === turnGeneration) {
+        appStore.set(subChatPromptSuggestionAtomFamily(this.config.subChatId), null)
+      }
+    }
 
     // Stream tracking
     let _chunkCount = 0
@@ -435,6 +470,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       prompt,
       images,
       sessionId: null,
+      turnGeneration,
     }
 
     return new ReadableStream({
@@ -450,7 +486,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             sessionId,
             thinking,
             ...(effort && { effort }),
-            ...(promptSuggestions && { promptSuggestions: true }),
+            // Sent in both directions: with the option absent, an inherited
+            // `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION` in the shell decides,
+            // and the app's switch stops being the switch.
+            promptSuggestions,
             ...(modelString && { model: modelString }),
             ...(customConfig && { customConfig }),
             ...(selectedOllamaModel && { selectedOllamaModel }),
@@ -482,6 +521,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 },
               })
 
+              clearOwnSuggestion()
               controller.error(err)
             },
             onComplete: () => {
@@ -495,6 +535,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
         // Handle abort
         options.abortSignal?.addEventListener("abort", () => {
+          // A stopped turn leaves no next step behind: whatever arrived from
+          // it is withdrawn with the same generation guard as the error path.
+          clearOwnSuggestion()
           sub.unsubscribe()
           // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
           closeQuietly(controller)

@@ -79,6 +79,7 @@ import {
   subChatPromptSuggestionAtomFamily,
   subChatQwenModelIdAtomFamily,
   subChatRooModelIdAtomFamily,
+  subChatTurnGenerationAtomFamily,
 } from "../atoms"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
 import { AgentModelSelector, type AgentProviderId } from "../components/agent-model-selector"
@@ -101,6 +102,7 @@ import {
   ROO_MODELS,
 } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
+import { suggestionIsCurrent } from "../lib/suggestion-ownership"
 import {
   AgentsFileMention,
   AgentsMentionsEditor,
@@ -430,6 +432,12 @@ export const ChatInputArea = memo(function ChatInputArea({
     [subChatId],
   )
   const [promptSuggestion, setPromptSuggestion] = useAtom(promptSuggestionAtom)
+  // The generation the composer is on: a stored suggestion names the turn
+  // that produced it, and one from an older turn — or the other engine — is
+  // not this composer's next step, whatever a late stream wrote.
+  const turnGeneration = useAtomValue(
+    useMemo(() => subChatTurnGenerationAtomFamily(subChatId), [subChatId]),
+  )
 
   const subChatModelIdAtom = useMemo(() => subChatModelIdAtomFamily(subChatId), [subChatId])
   const [selectedSubChatModelId, setSelectedSubChatModelId] = useAtom(subChatModelIdAtom)
@@ -1816,19 +1824,22 @@ export const ChatInputArea = memo(function ChatInputArea({
                 ) : null
               }
             >
-              {promptSuggestion && (
+              {suggestionIsCurrent(promptSuggestion, {
+                engineNow: engine,
+                turnNow: turnGeneration,
+              }) && (
                 <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
                   <Sparkles className="h-3.5 w-3.5 shrink-0" />
                   <button
                     type="button"
                     className="min-w-0 flex-1 truncate text-left transition-colors hover:text-foreground"
                     onClick={() => {
-                      editorRef.current?.setValue(promptSuggestion)
+                      editorRef.current?.setValue(promptSuggestion.text)
                       editorRef.current?.focus()
                       setPromptSuggestion(null)
                     }}
                   >
-                    {promptSuggestion}
+                    {promptSuggestion.text}
                   </button>
                   <button
                     type="button"

@@ -1201,6 +1201,13 @@ export const claudeRouter = router({
               }),
               enableTasks: input.enableTasks ?? true,
             })
+            // The app's switch is the authority, and the env var is how the SDK
+            // documents winning: `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION` beats
+            // settings, so an inherited shell value is replaced with the
+            // preference rather than left to fight it. Both directions are
+            // set — a turn with the switch off must not inherit an on.
+            claudeEnv.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION =
+              (input.promptSuggestions ?? false) ? "true" : "false"
 
             // Debug logging in dev
             if (process.env.NODE_ENV !== "production") {
@@ -1969,7 +1976,10 @@ ${prompt}
                 // fallbackModel: "claude-opus-4-5-20251101",
                 ...(input.thinking && { thinking: input.thinking }),
                 ...(input.effort && { effort: input.effort }),
-                ...(input.promptSuggestions && { promptSuggestions: true }),
+                // Both directions, matching the env override above: absent
+                // means undecided, and undecided is where an inherited shell
+                // variable slips in and overrides the app's switch.
+                promptSuggestions: input.promptSuggestions ?? false,
               },
             }
 

@@ -22,7 +22,13 @@ import {
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
-import { MODEL_ID_MAP, pendingAuthRetryMessageAtom, subChatModelIdAtomFamily } from "../atoms"
+import {
+  MODEL_ID_MAP,
+  pendingAuthRetryMessageAtom,
+  subChatModelIdAtomFamily,
+  subChatPromptSuggestionAtomFamily,
+  subChatTurnGenerationAtomFamily,
+} from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import {
   applyCompactingChunks,
@@ -108,6 +114,14 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
         .getState()
         .allSubChats.find((subChat) => subChat.id === this.config.subChatId)?.mode ||
       this.config.mode
+
+    // Turn ownership is shared with the legacy transport: bump the generation
+    // so a late suggestion from a still-open legacy stream is refused at the
+    // store, and clear whatever the previous turn left — this engine emits no
+    // suggestions of its own, and it inherits no stale ones.
+    const turnGeneration = appStore.get(subChatTurnGenerationAtomFamily(this.config.subChatId)) + 1
+    appStore.set(subChatTurnGenerationAtomFamily(this.config.subChatId), turnGeneration)
+    appStore.set(subChatPromptSuggestionAtomFamily(this.config.subChatId), null)
 
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
