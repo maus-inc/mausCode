@@ -57,7 +57,7 @@
     "@git-diff-view/shiki": "^0.0.36",
     "@maus-inc/runtime-client": "file:packages/runtime-client",
     "@mcpc-tech/acp-ai-provider": "^0.2.4",
-    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@modelcontextprotocol/sdk": "1.30.1",
     "@monaco-editor/react": "^4.7.0",
     "@opencode-ai/sdk": "1.18.30",
     "@openrouter/ai-sdk-provider": "^2.9.0",
