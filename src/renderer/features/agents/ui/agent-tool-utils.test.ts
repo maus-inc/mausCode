@@ -21,11 +21,15 @@ function taskPart(id: string): ToolPartLike {
   }
 }
 
-function grandchild(id: string, filePath: string): ToolPartLike {
+function grandchild(
+  id: string,
+  filePath: string,
+  state: string = "output-available",
+): ToolPartLike {
   return {
     type: "tool-Read",
     toolCallId: id,
-    state: "output-available",
+    state,
     input: { file_path: filePath },
     output: { content: `contents of ${filePath}` },
   }
@@ -60,15 +64,38 @@ describe("nestingFingerprintOf", () => {
   it("changes when a streaming grandchild mutates in place", () => {
     const map = new Map<string, ToolPartLike[]>([
       ["A", [taskPart("A")]],
-      ["A:B", [grandchild("A:B:C", "src/one.ts")]],
+      ["A:B", [grandchild("A:B:C", "src/one.ts", "input-streaming")]],
     ])
     const before = nestingFingerprintOf(map)
-    // The AI SDK mutates parts in place: same Map, same array, new output.
+    // The AI SDK mutates parts in place — same part, same input object, the
+    // file_path rewritten underneath. A live (non-terminal) part is
+    // re-serialized every render, so the fingerprint sees it.
     const child = map.get("A:B")?.[0]
     expect(child).toBeDefined()
-    if (child) child.output = { content: "halfway through the file" }
+    const input = child?.input as { file_path: string }
+    input.file_path = "src/two.ts"
     const after = nestingFingerprintOf(map)
     expect(after).not.toBe(before)
+  })
+
+  it("holds a settled terminal part's segment until a reference moves", () => {
+    // The round-9 cost bound: a completed part whose input/output references
+    // have not moved is not re-stringified, so a deep rewrite of a FINISHED
+    // part does not reach the fingerprint — the SDK does not reopen one.
+    // What keeps it honest is the other half: a changed reference or state
+    // re-serializes immediately, which is the case the row memos feed on.
+    const map = new Map<string, ToolPartLike[]>([
+      ["A:B", [grandchild("A:B:C", "src/one.ts")]], // terminal by default
+    ])
+    const before = nestingFingerprintOf(map)
+    const child = map.get("A:B")?.[0]
+    const input = child?.input as { file_path: string }
+    input.file_path = "src/deep-rewritten.ts" // same reference, settled part
+    expect(nestingFingerprintOf(map)).toBe(before)
+
+    // A new input object (the shape a replacement takes) breaks the settle.
+    if (child) child.input = { file_path: "src/replaced.ts" }
+    expect(nestingFingerprintOf(map)).not.toBe(before)
   })
 
   it("changes when a nested part's state moves from pending to done", () => {

@@ -54,6 +54,7 @@ import {
   parseMcpToolType,
   type ToolDisplayPart,
 } from "../ui/agent-tool-registry"
+import { isTerminalStateString } from "../ui/agent-tool-state"
 import { isPlanFile, nestingFingerprintOf } from "../ui/agent-tool-utils"
 import { AgentWebFetchTool } from "../ui/agent-web-fetch-tool"
 import { AgentWebSearchCollapsible } from "../ui/agent-web-search-collapsible"
@@ -566,18 +567,29 @@ export interface AssistantMessageItemProps {
 // Cache for tracking previous message state per sub-chat/message
 // (to detect AI SDK in-place mutations without cross-chat collisions)
 // Stores both text lengths and tool states for complete change detection
+interface PartIOSnapshot {
+  state: string | undefined
+  input: unknown
+  output: unknown
+  json: string | undefined
+}
+
 interface MessageStateSnapshot {
   textLengths: number[]
   partStates: (string | undefined)[]
   /**
-   * Every part's input and output, stringified. A nested tool can mutate
-   * either in place while its state and every text length around it stay
-   * unchanged, and nothing downstream of this memo runs when it skips a
-   * render — the task-row fingerprint included — so the row would never see
-   * the streamed update. Replaces the last-part-only input tracking: the last
-   * part is covered by this the same way, and one array is not two rules.
+   * Every part's input and output, stringified — but only once per state of
+   * the part. A nested tool can mutate either in place while its state and
+   * every text length around it stay unchanged, and nothing downstream of
+   * this memo runs when it skips a render, so the check has to see it. The
+   * cost stays bounded because a part whose state string is terminal and
+   * whose input/output references are unchanged is SETTLED: the SDK does not
+   * reopen a completed part, so its cached string still describes it and the
+   * comparison reuses it in O(1). Only live parts (streaming input, growing
+   * output) serialize per comparison, bounded by the active tool's payload
+   * rather than the whole transcript's — the round-9 reviews' point.
    */
-  partIOJsons: (string | undefined)[]
+  partIO: PartIOSnapshot[]
 }
 const messageStateCache = new Map<string, MessageStateSnapshot>()
 
@@ -638,21 +650,38 @@ function areMessagePropsEqual(
   // Get current message state from parts
   const nextParts = next.message?.parts || []
 
+  // Read the previous snapshot first: the per-part IO check below reuses its
+  // strings for settled parts instead of serializing them again.
+  const cachedState = cacheKey ? messageStateCache.get(cacheKey) : undefined
+
   const currentState: MessageStateSnapshot = {
     textLengths: nextParts.map((p) => getTrackedPartTextLength(p)),
     // Track ALL part states - critical for detecting Edit plan file streaming!
     partStates: nextParts.map((p) => p.state),
     // Track every part's input AND output — tool streaming arrives as in-place
     // mutation of both, on non-last parts too (parallel calls, nested tools).
-    partIOJsons: nextParts.map((p) =>
-      p.input === undefined && p.output === undefined
-        ? undefined
-        : JSON.stringify([p.input, p.output]),
-    ),
+    partIO: nextParts.map((p, i) => {
+      const prev = cachedState?.partIO?.[i]
+      if (
+        prev !== undefined &&
+        prev.state === p.state &&
+        prev.input === p.input &&
+        prev.output === p.output &&
+        isTerminalStateString(prev.state)
+      ) {
+        return prev // settled: same terminal state, same references
+      }
+      return {
+        state: p.state,
+        input: p.input,
+        output: p.output,
+        json:
+          p.input === undefined && p.output === undefined
+            ? undefined
+            : JSON.stringify([p.input, p.output]),
+      }
+    }),
   }
-
-  // Get cached state from previous render
-  const cachedState = cacheKey ? messageStateCache.get(cacheKey) : undefined
 
   // If no cache, this is first comparison - cache and allow render
   if (!cachedState || !cacheKey) {
@@ -675,9 +704,10 @@ function areMessagePropsEqual(
   }
 
   // Compare every part's input/output (detects in-place tool streaming the
-  // state and text-length checks cannot see)
-  for (let i = 0; i < currentState.partIOJsons.length; i++) {
-    if (cachedState.partIOJsons?.[i] !== currentState.partIOJsons[i]) {
+  // state and text-length checks cannot see). Settled parts carried their
+  // cached string over above, so this is a reference compare for them.
+  for (let i = 0; i < currentState.partIO.length; i++) {
+    if (cachedState.partIO?.[i]?.json !== currentState.partIO[i].json) {
       messageStateCache.set(cacheKey, currentState)
       return false // A part's input or output changed
     }

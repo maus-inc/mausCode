@@ -33,16 +33,25 @@ export type ToolPartLike = {
   result?: unknown
 }
 
+/**
+ * The state strings that say the SDK has finished with this part — the state
+ * string alone, deliberately not `getToolLifecycleState().isTerminal`, which
+ * also counts a present `output`: a part whose output arrived before its
+ * state string caught up is still live, and the settled-part serializers
+ * below must keep serializing it every time.
+ */
+const TERMINAL_STATE_STRINGS = new Set(["output-available", "output-error", "result", "error"])
+
+export function isTerminalStateString(state: unknown): boolean {
+  return typeof state === "string" && TERMINAL_STATE_STRINGS.has(state)
+}
+
 export function getToolLifecycleState(part: ToolPartLike): ToolLifecycleState {
   const state = typeof part?.state === "string" ? part.state : undefined
   const hasOutput = hasValue(part?.output)
   const hasResult = hasValue(part?.result)
   const isInputStreaming = state === "input-streaming"
-  const isTerminalState =
-    state === "output-available" ||
-    state === "output-error" ||
-    state === "result" ||
-    state === "error"
+  const isTerminalState = isTerminalStateString(state)
   const isError =
     state === "output-error" ||
     state === "error" ||

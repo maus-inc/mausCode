@@ -7,7 +7,7 @@
  * and compare cached values, not object references.
  */
 
-import { getToolLifecycleState, type ToolPartLike } from "./agent-tool-state"
+import { getToolLifecycleState, isTerminalStateString, type ToolPartLike } from "./agent-tool-state"
 
 // ============================================================================
 // TOOL STATE CACHE
@@ -28,6 +28,7 @@ export function clearToolStateCachesByToolCallIds(toolCallIds: string[]) {
   for (const toolCallId of toolCallIds) {
     toolStateCache.delete(toolCallId)
     askUserStateCache.delete(toolCallId)
+    fingerprintSegmentCache.delete(toolCallId)
   }
 }
 
@@ -141,6 +142,20 @@ export function areToolPropsEqual(
 export type NestedToolsLookup = (toolCallId: string) => ToolPartLike[]
 export type NestedToolsMapLike = ReadonlyMap<string, readonly ToolPartLike[]>
 
+interface FingerprintSegment {
+  mapKey: string
+  state: unknown
+  input: unknown
+  output: unknown
+  segment: string
+}
+
+/**
+ * Settled segments from the previous fingerprint, keyed by toolCallId —
+ * see `nestingFingerprintOf` for when a segment may be reused.
+ */
+const fingerprintSegmentCache = new Map<string, FingerprintSegment>()
+
 /**
  * An immutable snapshot of the message-level nesting map, as one string.
  *
@@ -153,20 +168,57 @@ export type NestedToolsMapLike = ReadonlyMap<string, readonly ToolPartLike[]>
  * same answer, because neither of them writes anything.
  *
  * Reads the same fields the tool-state snapshot records (`state`, `input`,
- * `output`) plus the identity fields, deliberately without touching the cache.
+ * `output`) plus the identity fields, and never the tool-state cache.
+ *
+ * Cost is bounded like the outer memo's: a part whose state string is
+ * terminal and whose input/output references are unchanged is settled (the
+ * SDK does not reopen a completed part), so its segment is reused from a
+ * private cache in O(1) instead of re-stringified — a finished transcript
+ * costs reference compares, and only live parts pay for serialization on
+ * each render. The cache is written here, once per render in the message
+ * component; the row comparators only ever read the returned string, so the
+ * single-consumer property that motivated the fingerprint is untouched.
  */
 export function nestingFingerprintOf(map: NestedToolsMapLike | undefined): string {
   if (!map || map.size === 0) return ""
   const segments: string[] = []
   for (const [id, parts] of map) {
     for (const part of parts) {
+      const key = typeof part.toolCallId === "string" ? part.toolCallId : undefined
+      const prev = key !== undefined ? fingerprintSegmentCache.get(key) : undefined
+      if (
+        prev !== undefined &&
+        prev.mapKey === id &&
+        prev.state === part.state &&
+        prev.input === part.input &&
+        prev.output === part.output &&
+        isTerminalStateString(prev.state)
+      ) {
+        segments.push(prev.segment) // settled: same terminal state, same references
+        continue
+      }
       // JSON.stringify the tuple rather than join(): `state` is `unknown`, and
       // join() would fall back to Object's default stringification for any
       // non-string it meets, collapsing two different objects into one
       // "[object Object]" and hiding a change behind it.
-      segments.push(
-        JSON.stringify([id, part.type, part.toolCallId, part.state, part.input, part.output]),
-      )
+      const segment = JSON.stringify([
+        id,
+        part.type,
+        part.toolCallId,
+        part.state,
+        part.input,
+        part.output,
+      ])
+      segments.push(segment)
+      if (key !== undefined) {
+        fingerprintSegmentCache.set(key, {
+          mapKey: id,
+          state: part.state,
+          input: part.input,
+          output: part.output,
+          segment,
+        })
+      }
     }
   }
   return segments.join("\u0001")
