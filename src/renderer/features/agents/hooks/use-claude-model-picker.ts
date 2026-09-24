@@ -14,12 +14,12 @@ import { EFFORT_LEVELS } from "../../../../shared/effort"
 import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
-  claudeEffortAtom,
   customClaudeConfigAtom,
   extendedThinkingEnabledAtom,
   normalizeCustomClaudeConfig,
   selectedOllamaModelAtom,
   showOfflineModeFeaturesAtom,
+  subChatClaudeEffortAtomFamily,
 } from "../../../lib/atoms"
 import { trpc } from "../../../lib/trpc"
 import type { AgentModelSelectorProps } from "../components/agent-model-selector"
@@ -74,7 +74,7 @@ function useAvailableModels() {
   }
 }
 
-export function useClaudeModelPicker(hiddenModels: readonly string[]) {
+export function useClaudeModelPicker(hiddenModels: readonly string[], subChatId = "") {
   const modelSets = useAvailableModels()
   // Every other provider reads its selection from the list the hidden-model
   // setting has already been applied to (`codexUiModels`, `rooUiModels` and the
@@ -113,10 +113,15 @@ export function useClaudeModelPicker(hiddenModels: readonly string[]) {
   const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
 
   // The effort rows come from the backend's own capability profile, so a
-  // provider that reports no effort control shows no sub-menu.
+  // provider that reports no effort control shows no sub-menu. The VALUE is
+  // owned by the sub-chat beside the model it will be sent with: the composer
+  // passes its id, and the new-chat form passes none, which reads and writes
+  // the last-selected value a fresh chat inherits.
   const { data: claudeCapability } = trpc.providers.get.useQuery({ id: "claude" })
   const claudeEfforts = claudeCapability?.features.effort ? EFFORT_LEVELS : []
-  const [selectedClaudeEffort, setSelectedClaudeEffort] = useAtom(claudeEffortAtom)
+  const [selectedClaudeEffort, setSelectedClaudeEffort] = useAtom(
+    subChatClaudeEffortAtomFamily(subChatId),
+  )
 
   const props: SharedClaudePickerProps = {
     models,

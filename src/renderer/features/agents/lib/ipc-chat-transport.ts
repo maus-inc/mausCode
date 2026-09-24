@@ -15,7 +15,6 @@ import {
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
   type CustomClaudeConfig,
-  claudeEffortAtom,
   claudeLoginModalConfigAtom,
   customClaudeConfigAtom,
   enableTasksAtom,
@@ -26,6 +25,7 @@ import {
   selectedOllamaModelAtom,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
+  subChatClaudeEffortAtomFamily,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
@@ -412,8 +412,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       ? ({ type: "adaptive" } as const)
       : ({ type: "disabled" } as const)
     // null is "let the CLI choose", so a chat that never opened the picker keeps
-    // the model's own default instead of a level this app guessed.
-    const effort = appStore.get(claudeEffortAtom)
+    // the model's own default instead of a level this app guessed. Read from
+    // THIS sub-chat's slot: two split panes carry two answers.
+    const effort = appStore.get(subChatClaudeEffortAtomFamily(this.config.subChatId))
     const promptSuggestions = appStore.get(promptSuggestionsEnabledAtom)
     const historyEnabled = appStore.get(historyEnabledAtom)
     const enableTasks = appStore.get(enableTasksAtom)

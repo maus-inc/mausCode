@@ -529,7 +529,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     hasCustomClaudeConfig,
     currentOllamaModel,
     props: claudePickerProps,
-  } = useClaudeModelPicker(hiddenModels)
+  } = useClaudeModelPicker(hiddenModels, subChatId)
   // Derived from the visible list, the way every other provider derives its
   // selection (`codexUiModels.find(...) || codexUiModels[0]` and the rest). Local
   // state plus a sync effect kept a model that the picker no longer offers: hide

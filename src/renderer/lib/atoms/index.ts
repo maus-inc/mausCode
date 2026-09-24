@@ -1,5 +1,5 @@
 import { atom } from "jotai"
-import { atomWithStorage } from "jotai/utils"
+import { atomFamily, atomWithStorage } from "jotai/utils"
 import type { EffortLevel } from "../../../shared/effort"
 import { desktopViewAtom as _desktopViewAtom } from "../../features/agents/atoms"
 import { createRendererSecretStorage } from "../renderer-secrets"
@@ -355,11 +355,45 @@ export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
 // The levels come from `src/shared/effort.ts`, the one vocabulary the main
 // process validates a request against. `null` means the chat never picked one
 // and the CLI decides, which is the behaviour before this setting existed.
-export const claudeEffortAtom = atomWithStorage<EffortLevel | null>(
+//
+// Effort belongs to the sub-chat that chose it: the model beside it in the
+// picker has always been per-sub-chat, and one split pane setting `max` must
+// not change what the other pane sends. The pre-existing global value is kept
+// as `lastSelected` — what a chat that has never picked one reads, and what
+// the new-chat form writes before there is a chat to write into. The storage
+// key for it is the old one, so every existing pick carries over untouched.
+export const lastSelectedClaudeEffortAtom = atomWithStorage<EffortLevel | null>(
   "preferences:claude-effort",
   null,
   undefined,
   { getOnInit: true },
+)
+const subChatClaudeEffortStorageAtom = atomWithStorage<Record<string, EffortLevel | null>>(
+  "preferences:claude-effort-by-subchat",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+export const subChatClaudeEffortAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      // `in`, not `??`: a chat that explicitly chose "no effort" stores null,
+      // and a null that means "this chat decided" must not read as a miss and
+      // fall back to someone else's pick.
+      const stored = get(subChatClaudeEffortStorageAtom)
+      if (subChatId && subChatId in stored) return stored[subChatId]
+      return get(lastSelectedClaudeEffortAtom)
+    },
+    (get, set, effort: EffortLevel | null) => {
+      if (!subChatId) {
+        set(lastSelectedClaudeEffortAtom, effort)
+        return
+      }
+      const current = get(subChatClaudeEffortStorageAtom)
+      if (current[subChatId] === effort) return
+      set(subChatClaudeEffortStorageAtom, { ...current, [subChatId]: effort })
+    },
+  ),
 )
 
 // Preferences - Prompt suggestions
