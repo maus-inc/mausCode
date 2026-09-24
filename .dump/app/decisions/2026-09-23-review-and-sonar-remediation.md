@@ -687,3 +687,39 @@ change the fingerprint exists to catch. `172fbb2` drops the redundant
 assertion and JSON.stringify's the tuple as a whole instead; the re-analysis
 confirms it: **1 open issue again (S6845 only), gate passed**, 0 hotspots,
 0.6% duplication. Comment `5820990401`.
+
+## Round 8 — the outer memo's blind spot
+
+Kilo thread `4097307159` (posted a minute after the round-7 reply) claimed
+the nesting fingerprint could never fire: `areMessagePropsEqual` snapshots
+text lengths, every part's state, and only the LAST part's input, so a
+non-last nested tool mutating `input` or `output` in place with an unchanged
+state let the outer memo skip the render — and every row memo behind it,
+fingerprint included, never ran. **Verified real, and pre-existing**: the
+outer comparator and its last-part-only tracking both predate this PR, and
+before round 7 the same gate hid the change from `nestedChildren` identity
+and `nestedMapsEqual` alike. Real and in scope because the feature this PR
+ships is exactly the rows it hides.
+
+`6e90855` takes the thread's first suggestion: the snapshot carries
+`partIOJsons` — every part's input and output, stringified — replacing
+`lastPartInputJson` outright (the last part is covered the same way, one
+array is not two rules). Parts with neither field short-circuit to
+`undefined` without a stringify, so the cost lands only on tool parts, which
+the row comparators already stringify on the renders this unlocks. Nothing
+downstream needed changing: `messageParts` is rebuilt every render by
+deliberate design, so once the outer memo passes, the nesting map and its
+fingerprint recompute with it.
+
+The component-level test does what the thread asked: an expanded Task, a
+nested Read whose subtitle prints its `file_path`, a trailing tool holding
+the last-part slot, an in-place `input` mutation with `state` untouched —
+asserted to flip the row from `one.ts` to `two.ts`. Proven red with the fix
+stashed and green with it. Reply `4098391046`; all 28 Kilo roots answered.
+
+The push-triggered CI run on `6e90855` passed every job; the
+pull_request-triggered run failed its vitest step after 30s. Its merge ref
+(`refs/pull/69/merge`) is byte-identical to the head the push run passed
+(`git diff HEAD origin/pr-69-merge` is empty), log storage is unreachable
+from this sandbox, and `gh run rerun` refuses — so the failure reads as
+environmental and the re-triggered run is the arbiter.
