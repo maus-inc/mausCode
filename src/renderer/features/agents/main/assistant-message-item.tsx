@@ -721,7 +721,12 @@ function areMessagePropsEqual(
     }
   }
 
-  // Nothing changed - skip re-render
+  // Nothing changed - skip re-render. The snapshot still advances: a history
+  // refresh can hand back fresh part objects whose content is identical, and
+  // without recording them every following comparison would re-serialize the
+  // whole transcript looking for a change that is not there — the exact
+  // per-tick cost the settled-part rule exists to stop, resurfacing.
+  messageStateCache.set(cacheKey, currentState)
   return true
 }
 
