@@ -1,25 +1,11 @@
-import { execFile } from "node:child_process"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveOpenclawCliLaunch } from "../openclaw-binary"
 import { readOpenclawModelsStatus, summarizeModelsStatusAuth } from "../openclaw-print/auth-config"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
 
-function runLaunch(
-  command: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(command, args, { timeout: 30000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
-}
+/** This manifest's launch probe has always been given twice the shared bound. */
+const LAUNCH_PROBE_TIMEOUT_MS = 30_000
 
 export function getOpenclawCapability(): ProviderCapability {
   return {
@@ -56,6 +42,7 @@ export function getOpenclawCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       // No image input surface on exec — attachments travel as prompt
       // path references the agent reads via tools (cline posture).
@@ -63,15 +50,10 @@ export function getOpenclawCapability(): ProviderCapability {
       // Exec accepts no session id: each turn is a fresh session with
       // bounded transcript context.
       resume: false,
-      fork: false,
       mcp: true,
-      subagents: false,
-      cron: false,
       // Upstream skills exist but exec-run skill loading is
       // unverified from here.
       skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
     },
     notes: [
       "One JSON envelope per turn — no streaming; progress appears only when the turn settles.",
@@ -134,7 +116,7 @@ export async function probeOpenclawBinary(): Promise<{
   } catch {
     return { available: false, detail: "openclaw CLI binary not found" }
   }
-  const version = await runLaunch(launch.command, launch.args)
+  const version = await runProbeCommand(launch.command, launch.args, LAUNCH_PROBE_TIMEOUT_MS)
   if (version.exitCode === null) {
     // Spawn failure (missing/not executable, e.g. a broken $OPENCLAW_BINARY).
     return {

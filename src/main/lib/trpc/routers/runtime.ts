@@ -12,6 +12,7 @@ import { observable } from "@trpc/server/observable"
 import { and, eq } from "drizzle-orm"
 import { z } from "zod"
 import { type AgentMode, agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
+import { EFFORT_LEVELS, type EffortLevel } from "../../../../shared/effort"
 import { nativeModeRefusal } from "../../../../shared/permissions/native-mode-floor"
 import { approvalWasDenied } from "../../claude/tool-approval"
 import type { UIMessageChunk } from "../../claude/types"
@@ -273,6 +274,83 @@ function finishNativeTurnBookkeeping(
   }
 }
 
+/**
+ * The daemon takes effort as its own request, after the model so the provider
+ * context is settled. Applied best-effort: a refusal (a level this provider
+ * will not accept, an older daemon) leaves the turn running at the daemon's
+ * default rather than failing a prompt over a reasoning preference.
+ */
+async function applyNativeEffort(
+  client: JcodeClient,
+  sessionId: string,
+  effort: EffortLevel | undefined,
+): Promise<void> {
+  if (!effort) return
+  try {
+    await client.setReasoningEffort(sessionId, effort)
+  } catch (error) {
+    console.warn(
+      `[Native] set_reasoning_effort refused (${effort}): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  }
+}
+
+/**
+ * Everything between "start a turn" and "send the prompt": attach the client,
+ * open (or resume) the session, snapshot MCP, apply credentials, set the model,
+ * set effort. Named as its own step so the chat subscription stays a flat
+ * sequence and the complexity gate stays green — same pattern as the mode floor
+ * and the credential prepare above. Returns null when a hook has already
+ * failed the turn.
+ */
+async function openNativeTurnSession(
+  input: {
+    subChatId: string
+    cwd: string
+    model?: string
+    effort?: EffortLevel
+    customToken?: string
+    customBaseUrl?: string
+  },
+  turn: { cancelled: boolean; completed: boolean; releaseCredentials?: () => void },
+  hooks: { fail: NativeFail; safeEmit: NativeEmit; safeComplete: () => void },
+): Promise<{ client: JcodeClient; sessionId: string } | null> {
+  const manager = getRuntimeManager()
+
+  // Attach FIRST: the bridge rejects stateful requests (including
+  // set_api_key) until the client has subscribed with a working_dir.
+  // Credentials are still applied before the turn starts.
+  const client = await acquireNativeClient(hooks.fail)
+  if (!client) return null
+
+  const sessionId = await openNativeSession(client, input.subChatId, input.cwd, hooks.fail)
+  if (!sessionId) return null
+
+  // Native session snapshot (MCP Phase 1 + session-init): the v1
+  // harness exposes no tool list, so tools carries only cached
+  // mcp__server__tool names with toolsUnknown set.
+  emitNativeSessionSnapshot(input.cwd, manager.jcodeHome, hooks.safeEmit)
+
+  const credentials = await prepareNativeCredentials(client, input, sessionId, hooks)
+  if (!credentials) return null
+  // A key held in the runtime's memory is released when this turn
+  // ends; the next turn applies it again.
+  turn.releaseCredentials = () => {
+    void releaseNativeEphemeralCredentials(
+      client,
+      sessionId,
+      credentials.ephemeralProviders,
+      credentials.generation,
+    )
+  }
+
+  await setNativeModelWithRetry(client, sessionId, input.model, hooks.safeEmit)
+  await applyNativeEffort(client, sessionId, input.effort)
+  return { client, sessionId }
+}
+
 export const runtimeRouter = router({
   chat: publicProcedure
     .input(
@@ -284,6 +362,10 @@ export const runtimeRouter = router({
         projectPath: z.string().optional(),
         mode: agentModeSchema.default(DEFAULT_AGENT_MODE),
         model: z.string().optional(),
+        // Same vocabulary and same validation as the legacy chat router: one
+        // effort scale across both engines, so a pane's visible level means
+        // the same thing whichever transport runs it.
+        effort: z.enum(EFFORT_LEVELS).optional(),
         customToken: z.string().optional(),
         customBaseUrl: z.string().optional(),
         images: z.array(imageAttachmentSchema).optional(),
@@ -370,40 +452,13 @@ export const runtimeRouter = router({
               .where(eq(subChats.id, input.subChatId))
               .run()
 
-            const manager = getRuntimeManager()
-
-            // Attach FIRST: the bridge rejects stateful requests (including
-            // set_api_key) until the client has subscribed with a working_dir.
-            // Credentials are still applied before the turn starts.
-            const client = await acquireNativeClient(fail)
-            if (!client) return
-
-            const sessionId = await openNativeSession(client, input.subChatId, input.cwd, fail)
-            if (!sessionId) return
-
-            // Native session snapshot (MCP Phase 1 + session-init): the v1
-            // harness exposes no tool list, so tools carries only cached
-            // mcp__server__tool names with toolsUnknown set.
-            emitNativeSessionSnapshot(input.cwd, manager.jcodeHome, safeEmit)
-
-            const credentials = await prepareNativeCredentials(client, input, sessionId, {
+            const opened = await openNativeTurnSession(input, turn, {
               fail,
               safeEmit,
               safeComplete,
             })
-            if (!credentials) return
-            // A key held in the runtime's memory is released when this turn
-            // ends; the next turn applies it again.
-            turn.releaseCredentials = () => {
-              void releaseNativeEphemeralCredentials(
-                client,
-                sessionId,
-                credentials.ephemeralProviders,
-                credentials.generation,
-              )
-            }
-
-            await setNativeModelWithRetry(client, sessionId, input.model, safeEmit)
+            if (!opened) return
+            const { client, sessionId } = opened
 
             // The turn may have been cancelled while the daemon was starting;
             // never send a doomed turn (it would run uncancelled server-side).

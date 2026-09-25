@@ -1,24 +1,7 @@
-import { execFile } from "node:child_process"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveCursorAgentCliLaunch } from "../cursor-agent-binary"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
-
-function runLaunch(
-  command: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(command, args, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
-}
 
 export function getCursorCapability(): ProviderCapability {
   return {
@@ -51,17 +34,13 @@ export function getCursorCapability(): ProviderCapability {
       usageSurface: "none",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
-      fork: false,
       mcp: true,
       // Task/subagent delegation drains before print runs exit.
       subagents: true,
-      cron: false,
-      skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
     },
     notes: [
       "Images travel as prompt path references the agent reads via tools.",
@@ -79,14 +58,14 @@ export async function probeCursor(): Promise<BackendProbe> {
   } catch {
     return { available: false, detail: "cursor agent binary not found" }
   }
-  const version = await runLaunch(launch.command, launch.args)
+  const version = await runProbeCommand(launch.command, launch.args)
   if (version.exitCode !== 0) {
     return { available: false, detail: "cursor agent binary not found" }
   }
   // `status` is the documented auth check (displays whether the CLI is
   // authenticated plus account/endpoint info).
   const statusLaunch = resolveCursorAgentCliLaunch(["status"])
-  const status = await runLaunch(statusLaunch.command, statusLaunch.args)
+  const status = await runProbeCommand(statusLaunch.command, statusLaunch.args)
   const combined = `${status.stdout}\n${status.stderr}`.toLowerCase()
   const loggedOut =
     combined.includes("not logged in") ||

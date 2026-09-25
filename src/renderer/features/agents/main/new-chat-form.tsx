@@ -78,20 +78,13 @@ import {
 import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
-  anthropicOnboardingCompletedAtom,
-  apiKeyOnboardingCompletedAtom,
   chatSourceModeAtom,
   codexApiKeyAtom,
   codexOnboardingCompletedAtom,
-  customClaudeConfigAtom,
   customHotkeysAtom,
-  extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   normalizeCodexApiKey,
-  normalizeCustomClaudeConfig,
   pinnedOpenRouterModelsAtom,
-  selectedOllamaModelAtom,
-  showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import {
   blobToBase64,
@@ -111,6 +104,7 @@ import { AgentModelSelector, type AgentProviderId } from "../components/agent-mo
 import { AgentSendButton } from "../components/agent-send-button"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { useAgentsFileUpload } from "../hooks/use-agents-file-upload"
+import { useClaudeModelPicker } from "../hooks/use-claude-model-picker"
 import { useFocusInputOnEnter } from "../hooks/use-focus-input-on-enter"
 import { usePastedTextFiles } from "../hooks/use-pasted-text-files"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
@@ -122,7 +116,6 @@ import {
   saveGlobalDrafts,
 } from "../lib/drafts"
 import {
-  CLAUDE_MODELS,
   CLINE_MODELS,
   CODEX_MODELS,
   CODEX_SUBSCRIPTION_ONLY_MODEL_IDS,
@@ -148,44 +141,6 @@ import { AgentsHeaderControls } from "../ui/agents-header-controls"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
 import { formatTimeAgo } from "../utils/format-time-ago"
 import { handlePasteEvent } from "../utils/paste-text"
-
-// Hook to get available models (including offline models if Ollama is available and debug enabled)
-function useAvailableModels() {
-  const showOfflineFeatures = useAtomValue(showOfflineModeFeaturesAtom)
-  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
-    refetchInterval: showOfflineFeatures ? 30000 : false,
-    enabled: showOfflineFeatures, // Only query Ollama when offline mode is enabled
-  })
-
-  const baseModels = CLAUDE_MODELS
-
-  const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
-  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
-  const ollamaModels = ollamaStatus?.ollama.models || []
-  const recommendedModel = ollamaStatus?.ollama.recommendedModel
-
-  // Only show offline models if:
-  // 1. Debug flag is enabled (showOfflineFeatures)
-  // 2. Ollama is available with models
-  // 3. User is actually offline
-  if (showOfflineFeatures && hasOllama && isOffline) {
-    return {
-      models: baseModels,
-      ollamaModels,
-      recommendedModel,
-      isOffline,
-      hasOllama: true,
-    }
-  }
-
-  return {
-    models: baseModels,
-    ollamaModels: [] as string[],
-    recommendedModel: undefined as string | undefined,
-    isOffline,
-    hasOllama: false,
-  }
-}
 
 // Agent providers
 const agents: {
@@ -263,25 +218,14 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
   }, [])
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const debugMode = useAtomValue(agentsDebugModeAtom)
-  const customClaudeConfig = useAtomValue(customClaudeConfigAtom)
-  const normalizedCustomClaudeConfig = normalizeCustomClaudeConfig(customClaudeConfig)
-  const hasCustomClaudeConfig = Boolean(normalizedCustomClaudeConfig)
   // Connection status for providers
-  const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
-  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const { data: claudeCodeIntegration } = trpc.claudeCode.getIntegration.useQuery()
   const { data: cursorIntegration } = trpc.cursor.getIntegration.useQuery()
   const { data: grokIntegration } = trpc.grok.getIntegration.useQuery()
   const { data: qwenIntegration } = trpc.qwen.getIntegration.useQuery()
   const { data: clineIntegration } = trpc.cline.getIntegration.useQuery()
   const { data: openclawIntegration } = trpc.openclaw.getIntegration.useQuery()
   const { data: rooIntegration } = trpc.roo.getIntegration.useQuery()
-  const isClaudeConnected =
-    Boolean(claudeCodeIntegration?.isConnected) ||
-    anthropicOnboardingCompleted ||
-    apiKeyOnboardingCompleted ||
-    hasCustomClaudeConfig
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
@@ -345,9 +289,15 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
     }
   }, [enabledAgents, fallbackAgent, lastSelectedAgentId, selectedAgent.id])
 
-  // Get available models (with offline support)
-  const availableModels = useAvailableModels()
-  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
+  const hiddenModels = useAtomValue(hiddenModelsAtom)
+  // The Claude half of the picker is shared with the chat composer; which model
+  // is selected, and what selecting one does, belong to this surface alone.
+  const {
+    availableModels,
+    hasCustomClaudeConfig,
+    currentOllamaModel,
+    props: claudePickerProps,
+  } = useClaudeModelPicker(hiddenModels)
   const [lastSelectedCodexModelId, setLastSelectedCodexModelId] = useAtom(
     lastSelectedCodexModelIdAtom,
   )
@@ -369,7 +319,6 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
   const [lastSelectedGeminiModelId, setLastSelectedGeminiModelId] = useAtom(
     lastSelectedGeminiModelIdAtom,
   )
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
   const { data: geminiAuth } = trpc.gemini.getAuthStatus.useQuery()
   const { data: geminiCliStatus } = trpc.gemini.getCliStatus.useQuery()
   const isGeminiConnected =
@@ -389,20 +338,15 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
     retry: 1,
   })
 
-  const [selectedModel, setSelectedModel] = useState(
+  // Derived from the visible list, as the other nine providers derive theirs,
+  // so a model hidden in settings cannot stay selected for the next chat.
+  const selectedModel = useMemo(
     () =>
-      availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[0],
+      availableModels.models.find((model) => model.id === lastSelectedModelId) ||
+      availableModels.models[0],
+    [availableModels.models, lastSelectedModelId],
   )
 
-  // Sync selectedModel when atom value changes (e.g., after localStorage hydration)
-  useEffect(() => {
-    const model = availableModels.models.find((m) => m.id === lastSelectedModelId)
-    if (model && model.id !== selectedModel.id) {
-      setSelectedModel(model)
-    }
-  }, [lastSelectedModelId, selectedModel.id, availableModels.models.find])
-
-  const hiddenModels = useAtomValue(hiddenModelsAtom)
   const storedCodexApiKey = useAtomValue(codexApiKeyAtom)
   const hasAppCodexApiKey = Boolean(normalizeCodexApiKey(storedCodexApiKey))
   const codexUiModels = useMemo(() => {
@@ -588,9 +532,6 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
     selectedModel?.id,
   ])
 
-  // Determine current Ollama model (selected or recommended)
-  const currentOllamaModel =
-    selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
   const claudeAgent = enabledAgents.find((agent) => agent.id === "claude-code") || fallbackAgent
   const selectedModelLabel = useMemo(() => {
     if (selectedAgent.id === "codex") {
@@ -2189,27 +2130,15 @@ export function NewChatForm({ isMobileFullscreen = false, onBackToChats }: NewCh
                               setSettingsDialogOpen(true)
                             }}
                             claude={{
-                              models: availableModels.models.filter(
-                                (m) => !hiddenModels.includes(m.id),
-                              ),
+                              ...claudePickerProps,
                               selectedModelId: selectedModel?.id,
                               onSelectModel: (modelId) => {
                                 const model =
                                   availableModels.models.find((m) => m.id === modelId) ||
                                   availableModels.models[0]
                                 if (!model) return
-                                setSelectedModel(model)
                                 setLastSelectedModelId(model.id)
                               },
-                              hasCustomModelConfig: hasCustomClaudeConfig,
-                              isOffline: availableModels.isOffline && availableModels.hasOllama,
-                              ollamaModels: availableModels.ollamaModels,
-                              selectedOllamaModel: currentOllamaModel,
-                              recommendedOllamaModel: availableModels.recommendedModel,
-                              onSelectOllamaModel: setSelectedOllamaModel,
-                              isConnected: isClaudeConnected,
-                              thinkingEnabled,
-                              onThinkingChange: setThinkingEnabled,
                             }}
                             codex={{
                               models: codexUiModels,

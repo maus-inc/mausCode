@@ -1,7 +1,7 @@
-import { execFile } from "node:child_process"
 import { join } from "node:path"
 import { app } from "electron"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
 
 function resolveCodexBinary(): string {
@@ -16,23 +16,6 @@ function resolveCodexBinary(): string {
     `${process.platform}-${process.arch}`,
     binaryName,
   )
-}
-
-function runBinary(
-  binary: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(binary, args, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
 }
 
 export function getCodexCapability(): ProviderCapability {
@@ -62,16 +45,14 @@ export function getCodexCapability(): ProviderCapability {
       usageSurface: "session-files",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
-      fork: false,
       mcp: true,
-      subagents: false,
-      cron: false,
-      skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
+      // The app-server takes a reasoning effort on a turn; Codex chooses its
+      // own thinking budget and sends no prompt suggestion.
+      effort: true,
     },
     notes: [
       "Approvals auto-grant session-wide (parity with the former ACP path).",
@@ -85,9 +66,9 @@ export async function probeCodex(): Promise<BackendProbe> {
   const candidates = [resolveCodexBinary(), "codex"]
   for (const binary of candidates) {
     try {
-      const version = await runBinary(binary, ["--version"])
+      const version = await runProbeCommand(binary, ["--version"])
       if (version.exitCode === 0) {
-        const login = await runBinary(binary, ["login", "status"])
+        const login = await runProbeCommand(binary, ["login", "status"])
         const combined = `${login.stdout}\n${login.stderr}`.toLowerCase()
         return {
           available: true,

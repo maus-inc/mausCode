@@ -7,7 +7,7 @@
  * and compare cached values, not object references.
  */
 
-import { getToolLifecycleState, type ToolPartLike } from "./agent-tool-state"
+import { getToolLifecycleState, isTerminalStateString, type ToolPartLike } from "./agent-tool-state"
 
 // ============================================================================
 // TOOL STATE CACHE
@@ -20,6 +20,15 @@ interface CachedToolState {
   state: string | undefined
   inputJson: string // JSON stringified input for deep comparison
   outputJson: string // JSON stringified output for deep comparison
+  // References, deliberately not JSON: every writer in this repo assigns
+  // these wholesale when it sets them (claude.ts's three result sites pair
+  // the assignment with a state transition; nothing deep-mutates them the
+  // way the SDK does input and output — rounds 7 and 8). The ask card
+  // renders `result` and `errorText`, so a change in either has to move
+  // the row even when state, input, and output sit still.
+  result: unknown
+  error: unknown
+  errorText: unknown
 }
 
 const toolStateCache = new Map<string, CachedToolState>()
@@ -28,6 +37,7 @@ export function clearToolStateCachesByToolCallIds(toolCallIds: string[]) {
   for (const toolCallId of toolCallIds) {
     toolStateCache.delete(toolCallId)
     askUserStateCache.delete(toolCallId)
+    fingerprintSegmentCache.delete(toolCallId)
   }
 }
 
@@ -36,6 +46,9 @@ function getToolStateSnapshot(part: ToolPartLike): CachedToolState {
     state: typeof part.state === "string" ? part.state : undefined,
     inputJson: JSON.stringify(part.input || {}),
     outputJson: JSON.stringify(part.output || {}),
+    result: part.result,
+    error: part.error,
+    errorText: part.errorText,
   }
 }
 
@@ -51,7 +64,10 @@ function hasToolStateChanged(toolCallId: string, part: ToolPartLike): boolean {
   const changed =
     cached.state !== current.state ||
     cached.inputJson !== current.inputJson ||
-    cached.outputJson !== current.outputJson
+    cached.outputJson !== current.outputJson ||
+    cached.result !== current.result ||
+    cached.error !== current.error ||
+    cached.errorText !== current.errorText
 
   if (changed) {
     toolStateCache.set(toolCallId, current)
@@ -129,10 +145,164 @@ export function areToolPropsEqual(
 /**
  * Compare function for AgentTaskTool which has additional nestedTools prop.
  */
+/**
+ * A subagent's own children by its id, and the message-level map that stands
+ * behind it. A grandchild is not in this task's own `nestedTools`, and only a
+ * change under some other key says it moved. Identity of either is useless
+ * here — `messageParts` is rebuilt every render (the AI SDK mutates parts in
+ * place), so the map and any callback over it are fresh objects with
+ * unchanged contents. What the memo compares is `nestingFingerprintOf`'s
+ * snapshot of that map: one string, every row, no cache writes.
+ */
+export type NestedToolsLookup = (toolCallId: string) => ToolPartLike[]
+export type NestedToolsMapLike = ReadonlyMap<string, readonly ToolPartLike[]>
+
+interface FingerprintSegment {
+  mapKey: string
+  state: unknown
+  input: unknown
+  output: unknown
+  result: unknown
+  error: unknown
+  errorText: unknown
+  segment: string
+}
+
+/**
+ * Settled segments from the previous fingerprint, keyed by toolCallId —
+ * see `nestingFingerprintOf` for when a segment may be reused.
+ */
+const fingerprintSegmentCache = new Map<string, FingerprintSegment>()
+
+/**
+ * An immutable snapshot of the message-level nesting map, as one string.
+ *
+ * The map itself cannot be compared by content through `arePartsEqual`: that
+ * comparator advances the module-level `toolStateCache`, so the first task row
+ * to walk the map would consume every mutation and the rows after it would
+ * see a clean cache and skip a grandchild that changed. Computed ONCE per
+ * render in the message component and carried as a plain string, the compare
+ * is pure — two rows asking "did anything under the tree move?" both get the
+ * same answer, because neither of them writes anything.
+ *
+ * Reads the same fields the tool-state snapshot records (`state`, `input`,
+ * `output`) plus the identity fields, and never the tool-state cache.
+ *
+ * Cost is bounded like the outer memo's: a part whose state string is
+ * terminal and whose input/output references are unchanged is settled (the
+ * SDK does not reopen a completed part), so its segment is reused from a
+ * private cache in O(1) instead of re-stringified — a finished transcript
+ * costs reference compares, and only live parts pay for serialization on
+ * each render. The cache is written here, once per render in the message
+ * component; the row comparators only ever read the returned string, so the
+ * single-consumer property that motivated the fingerprint is untouched.
+ */
+function fingerprintSegmentOf(mapKey: string, part: ToolPartLike): string {
+  // A part without a usable toolCallId keys under "" — which is never stored,
+  // so it never reads a cached segment either: it serializes every time.
+  const key = typeof part.toolCallId === "string" ? part.toolCallId : ""
+  const prev = fingerprintSegmentCache.get(key)
+  if (
+    prev?.mapKey === mapKey &&
+    prev?.state === part.state &&
+    prev?.input === part.input &&
+    prev?.output === part.output &&
+    prev?.result === part.result &&
+    prev?.error === part.error &&
+    prev?.errorText === part.errorText &&
+    isTerminalStateString(prev?.state)
+  ) {
+    return prev.segment // settled: same terminal state, same references
+  }
+  // JSON.stringify the tuple rather than join(): `state` is `unknown`, and
+  // join() would fall back to Object's default stringification for any
+  // non-string it meets, collapsing two different objects into one
+  // "[object Object]" and hiding a change behind it. `result`, `error`, and
+  // `errorText` ride along because the ask card and the lifecycle view
+  // render them: a result-only update has to move the rows like any other.
+  const segment = JSON.stringify([
+    mapKey,
+    part.type,
+    part.toolCallId,
+    part.state,
+    part.input,
+    part.output,
+    part.result,
+    part.error,
+    part.errorText,
+  ])
+  if (key !== "") {
+    fingerprintSegmentCache.set(key, {
+      mapKey,
+      state: part.state,
+      input: part.input,
+      output: part.output,
+      result: part.result,
+      error: part.error,
+      errorText: part.errorText,
+      segment,
+    })
+  }
+  return segment
+}
+
+export function nestingFingerprintOf(map: NestedToolsMapLike | undefined): string {
+  if (!map || map.size === 0) return ""
+  const segments: string[] = []
+  for (const [id, parts] of map) {
+    for (const part of parts) {
+      segments.push(fingerprintSegmentOf(id, part))
+    }
+  }
+  return segments.join("\u0001")
+}
+
+/**
+ * A result that launched work instead of finishing it. The pinned SDK types
+ * `AgentOutput.status` as `completed` | `async_launched` | `remote_launched`:
+ * the latter two mean the run was handed off — to the background, or to a
+ * remote session — and is still going there, so a row that calls them a
+ * completion reads as subagent work that ended when it has not.
+ */
+export function isLaunchedAgentOutput(output: unknown): boolean {
+  const status = (output as { status?: unknown } | null | undefined)?.status
+  return status === "async_launched" || status === "remote_launched"
+}
+
 export function areTaskToolPropsEqual(
-  prevProps: { part: ToolPartLike; nestedTools: ToolPartLike[]; chatStatus?: string },
-  nextProps: { part: ToolPartLike; nestedTools: ToolPartLike[]; chatStatus?: string },
+  prevProps: {
+    part: ToolPartLike
+    nestedTools: ToolPartLike[]
+    nestedChildren?: NestedToolsLookup
+    nestingFingerprint?: string
+    depth?: number
+    chatStatus?: string
+  },
+  nextProps: {
+    part: ToolPartLike
+    nestedTools: ToolPartLike[]
+    nestedChildren?: NestedToolsLookup
+    nestingFingerprint?: string
+    depth?: number
+    chatStatus?: string
+  },
 ): boolean {
+  // Descendants beyond this task's own `nestedTools` are visible only through
+  // the message-level map. Compare the render's fingerprint of it — a pure
+  // string, so two rows can both see the same grandchild mutation without
+  // either consuming the other's change out of the tool-state cache. Checked
+  // first so the completed short circuit below cannot hide it.
+  if ((prevProps.nestingFingerprint ?? "") !== (nextProps.nestingFingerprint ?? "")) return false
+  // Fallback for callers that offer a lookup without a fingerprint.
+  if (
+    prevProps.nestingFingerprint === undefined &&
+    nextProps.nestingFingerprint === undefined &&
+    prevProps.nestedChildren !== nextProps.nestedChildren
+  ) {
+    return false
+  }
+  if (prevProps.depth !== nextProps.depth) return false
+
   // Compare main part first
   if (!arePartsEqual(prevProps.part, nextProps.part)) return false
 

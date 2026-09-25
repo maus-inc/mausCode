@@ -1,25 +1,8 @@
-import { execFile } from "node:child_process"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveQwenCliLaunch } from "../qwen-binary"
 import { probeQwenStoredAuth } from "../qwen-print/auth-config"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
-
-function runLaunch(
-  command: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(command, args, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
-}
 
 export function getQwenCapability(): ProviderCapability {
   return {
@@ -53,6 +36,7 @@ export function getQwenCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       // read_file reads images/PDFs by path; attachments are staged to
       // temp files and referenced from the prompt (cursor posture).
@@ -65,10 +49,7 @@ export function getQwenCapability(): ProviderCapability {
       // agent/task delegation flows through the same tool projector as
       // any other tool call (same posture as the claude backend).
       subagents: true,
-      cron: false,
       skills: true,
-      structuredOutput: false,
-      fileCheckpointing: false,
     },
     notes: [
       "Images travel as prompt path references the agent reads via tools.",
@@ -103,7 +84,7 @@ export async function probeQwen(): Promise<BackendProbe> {
   } catch {
     return { available: false, detail: "qwen CLI binary not found" }
   }
-  const version = await runLaunch(launch.command, launch.args)
+  const version = await runProbeCommand(launch.command, launch.args)
   if (version.exitCode === null) {
     // Spawn failure (missing/not executable, e.g. a broken $QWEN_BINARY).
     return {

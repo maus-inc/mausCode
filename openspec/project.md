@@ -15,7 +15,7 @@ Roadmap step 01 measured every path, name and count on this page against the tre
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
 | Backend | tRPC over Electron IPC, Drizzle ORM, better-sqlite3 |
-| AI | `@anthropic-ai/claude-agent-sdk` 0.2.45, plus the Codex app-server adapter |
+| AI | `@anthropic-ai/claude-agent-sdk` 0.3.270, plus the Codex app-server adapter |
 | Schemas | `effect` 4.0.0-rc.112, an exact pin, load bearing for `src/shared/contracts` |
 | Lint and format | Biome 2.5.13, every rule at error |
 | Tests | Vitest 4.1.11 and `node --test` |

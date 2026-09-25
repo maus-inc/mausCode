@@ -318,6 +318,10 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
   }
 
   const feedLine = (rawLine: string) => {
+    // A settled turn (error, result, interrupt) must not keep consuming
+    // stdout: the router has already cleared `activeTurn`, and a late line
+    // would emit chunks against nothing.
+    if (settled) return
     const text = rawLine.trim()
     if (text.length === 0) return
     let parsed: unknown
@@ -333,15 +337,32 @@ export function runQwenPrintTurn(opts: RunQwenPrintTurnOptions): QwenPrintTurn {
       sessionId = parsed.session_id
       opts.onSessionId?.(parsed.session_id)
     }
-    premapQwenLine(parsed)
-    if (isRecord(parsed) && parsed.type === "result") {
-      handleResultLine(parsed)
-      return
-    }
-    const message = toClaudeStreamMessage(parsed)
-    if (!message) return
-    for (const chunk of transform(message)) {
-      emit(chunk)
+    try {
+      premapQwenLine(parsed)
+      if (isRecord(parsed) && parsed.type === "result") {
+        handleResultLine(parsed)
+        return
+      }
+      const message = toClaudeStreamMessage(parsed)
+      if (!message) return
+      for (const chunk of transform(message)) {
+        emit(chunk)
+      }
+    } catch (error) {
+      // The child's stdout is an untrusted boundary. A line the transform
+      // cannot read must settle the turn with that line's failure rather
+      // than throw out of the `data` callback and take the main process
+      // with it; `settle` is idempotent, so a later result line cannot
+      // resurrect a turn that already ended.
+      const detail = error instanceof Error ? error.message : String(error)
+      const errorMessage = `Malformed provider message: ${detail}`
+      emit({ type: "error", errorText: errorMessage })
+      settle({ status: "error", errorMessage, sessionId })
+      // The child is still running the turn the renderer has already been
+      // told ended. Reap it (same SIGINT→SIGTERM→SIGKILL escalation as a
+      // user interrupt) so it cannot keep executing or emitting; `settle`
+      // is idempotent, so the close handler will not resurrect the turn.
+      interrupt()
     }
   }
 

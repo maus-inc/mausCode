@@ -1,28 +1,11 @@
-import { execFile } from "node:child_process"
 import { existsSync } from "node:fs"
 import { eq } from "drizzle-orm"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { getBundledClaudeBinaryPath } from "../claude/env"
 import { getExistingClaudeCredentials } from "../claude-token"
 import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../db"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
-
-function runBinary(
-  binary: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(binary, args, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
-}
 
 /**
  * Local-only credential presence (no decrypt, no network): env API key,
@@ -91,16 +74,19 @@ export function getClaudeCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
       fork: true,
       mcp: true,
       subagents: true,
-      cron: false,
       skills: true,
-      structuredOutput: false,
-      fileCheckpointing: false,
+      // All three on: the 0.3.270 pin carries `Options.effort`, adaptive
+      // thinking and `Options.promptSuggestions` through a turn end to end.
+      effort: true,
+      adaptiveThinking: true,
+      promptSuggestions: true,
     },
     notes: [
       "Per-action approvals via canUseTool + in-chat approval prompts.",
@@ -115,7 +101,7 @@ export async function probeClaude(): Promise<BackendProbe> {
     (binary, index) => index > 0 || existsSync(binary),
   )
   for (const binary of candidates) {
-    const version = await runBinary(binary, ["--version"])
+    const version = await runProbeCommand(binary, ["--version"])
     if (version.exitCode === 0) {
       return {
         available: true,

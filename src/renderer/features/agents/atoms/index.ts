@@ -6,6 +6,7 @@ import {
   DEFAULT_CODEX_UI_MODEL,
 } from "../../../../shared/codex-model-id"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
+import type { PromptSuggestionEntry } from "../lib/suggestion-ownership"
 import type { FileMentionOption } from "../mentions/agents-mentions-editor"
 
 export type { AgentMode } from "../../../../shared/agent-mode"
@@ -636,6 +637,28 @@ export const subChatRooModelIdAtomFamily = atomFamily((subChatId: string) =>
     },
   ),
 )
+
+/**
+ * The one prompt suggestion the last finished turn produced for this sub-chat.
+ * Not persisted: a suggestion belongs to the turn that produced it, so a
+ * reloaded chat starts with none instead of offering a stale next step. The
+ * transport writes it when the SDK sends `prompt_suggestion`, and the composer
+ * renders it and clears it on use or dismiss. The key is the sub-chat the
+ * suggestion belongs to; jotai does the keying, so the created atom itself has
+ * nothing to read from it.
+ */
+export const subChatPromptSuggestionAtomFamily = atomFamily((_subChatId: string) =>
+  atom<PromptSuggestionEntry | null>(null),
+)
+
+/**
+ * The send counter behind `PromptSuggestionEntry.turn`. Every transport bumps
+ * it at the start of a turn; a suggestion carries the generation that
+ * produced it, and both the store and the composer refuse one whose
+ * generation is no longer current. In-memory on purpose: a restart has no
+ * late chunks to reject, and a persisted counter would only desynchronize.
+ */
+export const subChatTurnGenerationAtomFamily = atomFamily((_subChatId: string) => atom(0))
 
 export const subChatCodexThinkingAtomFamily = atomFamily((subChatId: string) =>
   atom(

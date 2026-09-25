@@ -72,6 +72,12 @@ export const featureFlagsSchema = z.object({
   skills: z.boolean(),
   structuredOutput: z.boolean(),
   fileCheckpointing: z.boolean(),
+  /** The backend accepts a reasoning-effort level from `src/shared/effort.ts` on a turn. */
+  effort: z.boolean(),
+  /** The backend can pick its own thinking budget per turn instead of being handed one. */
+  adaptiveThinking: z.boolean(),
+  /** The backend can suggest a next prompt after it finishes a turn. */
+  promptSuggestions: z.boolean(),
 })
 
 export const providerCapabilitySchema = z.object({
@@ -92,6 +98,40 @@ export type ProviderCapability = z.infer<typeof providerCapabilitySchema>
 
 /** The two answers to "who enforces the permission floor of roadmap step 10". */
 export type PermissionFloor = ProviderCapability["security"]["permissionFloor"]
+
+/** The feature flags themselves, so a manifest can be typed against them. */
+export type FeatureFlags = z.infer<typeof featureFlagsSchema>
+
+/**
+ * Every feature at the rule above's own answer: false.
+ *
+ * A manifest spreads this and then claims what its backend carries end to end,
+ * so the flags nothing in mausCode wires for any backend yet are stated once
+ * here instead of once per manifest, and a claim reads as a claim. Forgetting
+ * one fails safe, which is the direction the rule already asks for: the UI must
+ * not offer what a manifest did not say. A flag added to the schema fails
+ * typecheck here rather than going silently missing from one manifest.
+ *
+ * A negative claim that was investigated keeps its own line and its reason in
+ * the manifest — `grok` forks, `openclaw` does not resume — because that is
+ * evidence about a backend, not a default. The evidence behind the three
+ * turn-shaping flags is in `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
+ */
+export const ALL_FEATURES_OFF = {
+  chat: false,
+  images: false,
+  resume: false,
+  fork: false,
+  mcp: false,
+  subagents: false,
+  cron: false,
+  skills: false,
+  structuredOutput: false,
+  fileCheckpointing: false,
+  effort: false,
+  adaptiveThinking: false,
+  promptSuggestions: false,
+} satisfies FeatureFlags
 
 /**
  * The floor behind a sub-chat provider id, which is the vocabulary the chat UI

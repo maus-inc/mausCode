@@ -80,7 +80,9 @@ export async function permissionFloorDecision(
   if (decision.decision === "allow") return {}
   // `ask` goes out as `ask` rather than being hardened into `deny`, and that rests
   // on the pinned engine honouring the value. Checked against the bundled CLI in
-  // `@anthropic-ai/claude-agent-sdk` 0.2.45, which switches on it and sets
+  // `@anthropic-ai/claude-agent-sdk` 0.3.270 (the same `["deny", "ask"]`
+  // validation it had at 0.2.45, re-read in the 0.3.270 bundle), which switches
+  // on it and sets
   // `permissionBehavior` to `ask`, and throws on a value it does not know, so an
   // unsupported spelling cannot slip through as an approval. Hardening it here
   // would break the critical-path breaker's own contract, which is that Turbo asks

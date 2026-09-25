@@ -19,17 +19,24 @@ import {
   normalizeCustomClaudeConfig,
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
+  subChatClaudeEffortAtomFamily,
 } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
-import { MODEL_ID_MAP, pendingAuthRetryMessageAtom, subChatModelIdAtomFamily } from "../atoms"
+import {
+  MODEL_ID_MAP,
+  pendingAuthRetryMessageAtom,
+  subChatModelIdAtomFamily,
+  subChatPromptSuggestionAtomFamily,
+  subChatTurnGenerationAtomFamily,
+} from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import {
   applyCompactingChunks,
   applyQuestionChunks,
   clearStalePendingQuestion,
-  extractPromptImages,
-  extractPromptText,
+  lastUserPrompt,
+  type SendMessagesOptions,
   type SubscriptionChunk,
 } from "./chat-chunk-atoms"
 
@@ -74,17 +81,15 @@ const NATIVE_ERROR_TOAST_CONFIG: Record<string, { title: string; description: st
 export class NativeChatTransport implements ChatTransport<UIMessage> {
   constructor(private config: NativeChatTransportConfig) {}
 
-  async sendMessages(options: {
-    messages: UIMessage[]
-    abortSignal?: AbortSignal
-  }): Promise<ReadableStream<SDKUIMessageChunk>> {
-    const lastUser = [...options.messages].reverse().find((m) => m.role === "user")
-    const prompt = extractPromptText(lastUser)
-    const images = extractPromptImages(lastUser)
+  async sendMessages(options: SendMessagesOptions): Promise<ReadableStream<SDKUIMessageChunk>> {
+    const { prompt, images } = lastUserPrompt(options.messages)
 
     // Read model selection dynamically per sub-chat (so split panes stay independent)
     const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))
     const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP.opus
+    // ...and the effort beside it, from the same family the legacy transport
+    // reads: both engines send what their pane's picker last chose.
+    const effort = appStore.get(subChatClaudeEffortAtomFamily(this.config.subChatId))
 
     // Offline/Ollama routing is a legacy-path feature; refuse loudly rather
     // than silently running the turn against cloud credentials.
@@ -114,6 +119,14 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
         .allSubChats.find((subChat) => subChat.id === this.config.subChatId)?.mode ||
       this.config.mode
 
+    // Turn ownership is shared with the legacy transport: bump the generation
+    // so a late suggestion from a still-open legacy stream is refused at the
+    // store, and clear whatever the previous turn left — this engine emits no
+    // suggestions of its own, and it inherits no stale ones.
+    const turnGeneration = appStore.get(subChatTurnGenerationAtomFamily(this.config.subChatId)) + 1
+    appStore.set(subChatTurnGenerationAtomFamily(this.config.subChatId), turnGeneration)
+    appStore.set(subChatPromptSuggestionAtomFamily(this.config.subChatId), null)
+
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
@@ -130,6 +143,9 @@ export class NativeChatTransport implements ChatTransport<UIMessage> {
             projectPath: this.config.projectPath,
             mode: currentMode,
             ...(modelString && { model: modelString }),
+            // The same per-sub-chat effort the legacy transport sends: the
+            // daemon's `set_reasoning_effort` carries it the rest of the way.
+            ...(effort && { effort }),
             ...(customConfig?.token && { customToken: customConfig.token }),
             ...(customConfig?.baseUrl && { customBaseUrl: customConfig.baseUrl }),
             ...(images.length > 0 && { images }),

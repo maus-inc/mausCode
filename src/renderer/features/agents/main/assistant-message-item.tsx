@@ -2,7 +2,16 @@
 
 import { useAtomValue } from "jotai"
 import { ListTree, MoreHorizontal } from "lucide-react"
-import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import {
+  memo,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { normalizeCodexToolPart } from "../../../../shared/codex-tool-normalizer"
 import {
   DropdownMenu,
@@ -19,6 +28,7 @@ import { cn } from "../../../lib/utils"
 import { selectedProjectAtom, showMessageJsonAtom } from "../atoms"
 import { isAssistantMessageQuestion } from "../lib/is-question"
 import { playQuestionSound } from "../lib/play-question-sound"
+import { isSubagentToolType } from "../lib/subagent-tool-types"
 import { useFileOpen } from "../mentions"
 import type { Message } from "../stores/message-store"
 import {
@@ -44,7 +54,8 @@ import {
   parseMcpToolType,
   type ToolDisplayPart,
 } from "../ui/agent-tool-registry"
-import { isPlanFile } from "../ui/agent-tool-utils"
+import { isTerminalStateString } from "../ui/agent-tool-state"
+import { isPlanFile, nestingFingerprintOf } from "../ui/agent-tool-utils"
 import { AgentWebFetchTool } from "../ui/agent-web-fetch-tool"
 import { AgentWebSearchCollapsible } from "../ui/agent-web-search-collapsible"
 import { GitActivityBadges } from "../ui/git-activity-badges"
@@ -241,6 +252,82 @@ function normalizeAcpParts(parts: unknown[]): NormalizedPart[] {
       output: part.output,
     }
   })
+}
+
+type NestingIndex = {
+  nestedToolsMap: Map<string, NormalizedPart[]>
+  nestedToolIds: Set<string>
+  orphanTaskGroups: Map<string, { parts: NormalizedPart[]; firstToolCallId: string }>
+  orphanToolCallIds: Set<string>
+  orphanFirstToolCallIds: Set<string>
+}
+
+/**
+ * Which parts nest under which subagent, and which ones lost their parent.
+ *
+ * A composite id is `parentOriginal:childOriginal` — the SDK names a child's
+ * parent by that parent's ORIGINAL tool id, never by the parent's own
+ * composite — so a nested task's original id is its last segment, and it is
+ * what the task's own children carry before the colon. Looking the first
+ * segment up in the top-level ids alone (what this did before) finds `A` under
+ * `A:B`, but orphans everything under `A:B`, because no top-level task is ever
+ * named just `B`.
+ *
+ * Module scope so the useMemo above it is one line and this function owns its
+ * own complexity: the dispatcher's cognitive-complexity budget is for the
+ * render branches, not for bookkeeping the pure rules already test.
+ */
+function buildNestingIndex(messageParts: NormalizedPart[]): NestingIndex {
+  const nestedToolsMap = new Map<string, NormalizedPart[]>()
+  const nestedToolIds = new Set<string>()
+  const taskParts = messageParts.filter(
+    (p): p is NormalizedPart & { toolCallId: string } =>
+      isSubagentToolType(p.type) && !!p.toolCallId,
+  )
+  const taskFullIdByOriginalId = new Map<string, string>()
+  for (const task of taskParts) {
+    const segments = task.toolCallId.split(":")
+    taskFullIdByOriginalId.set(segments.at(-1) ?? task.toolCallId, task.toolCallId)
+  }
+  const orphanTaskGroups = new Map<string, { parts: NormalizedPart[]; firstToolCallId: string }>()
+  const orphanToolCallIds = new Set<string>()
+  const orphanFirstToolCallIds = new Set<string>()
+
+  for (const part of messageParts) {
+    if (!part.toolCallId?.includes(":")) continue
+    const parentOriginalId = part.toolCallId.split(":")[0]
+    const parentFullId =
+      parentOriginalId === undefined ? undefined : taskFullIdByOriginalId.get(parentOriginalId)
+    // The self check is the cycle guard: a part that names itself as its
+    // own parent would otherwise sit in its own children forever.
+    if (parentFullId !== undefined && parentFullId !== part.toolCallId) {
+      // Keyed by the parent's FULL id: that is the id `renderSubagentTask`
+      // looks children up by, whether the parent sits at the top level
+      // (`A`) or inside another task (`A:B`).
+      if (!nestedToolsMap.has(parentFullId)) {
+        nestedToolsMap.set(parentFullId, [])
+      }
+      nestedToolsMap.get(parentFullId)?.push(part)
+      nestedToolIds.add(part.toolCallId)
+      continue
+    }
+    let group = orphanTaskGroups.get(parentOriginalId ?? "")
+    if (!group) {
+      group = { parts: [], firstToolCallId: part.toolCallId }
+      orphanTaskGroups.set(parentOriginalId ?? "", group)
+      orphanFirstToolCallIds.add(part.toolCallId)
+    }
+    group.parts.push(part)
+    orphanToolCallIds.add(part.toolCallId)
+  }
+
+  return {
+    nestedToolsMap,
+    nestedToolIds,
+    orphanTaskGroups,
+    orphanToolCallIds,
+    orphanFirstToolCallIds,
+  }
 }
 
 // Exploring tools - these get grouped when 3+ consecutive
@@ -480,10 +567,37 @@ export interface AssistantMessageItemProps {
 // Cache for tracking previous message state per sub-chat/message
 // (to detect AI SDK in-place mutations without cross-chat collisions)
 // Stores both text lengths and tool states for complete change detection
+interface PartIOSnapshot {
+  state: string | undefined
+  input: unknown
+  output: unknown
+  // The rendered fields beyond IO: the ask card draws its answers from
+  // `result` and its failure line from `errorText`/`error`, so a change
+  // in any of them with state, input, and output untouched still has to
+  // pass the comparison below.
+  result: unknown
+  error: unknown
+  errorText: unknown
+  json: string | undefined
+}
+
 interface MessageStateSnapshot {
   textLengths: number[]
   partStates: (string | undefined)[]
-  lastPartInputJson: string | undefined
+  /**
+   * Every part's input, output, result, error, and errorText, stringified —
+   * but only once per state of the part. A nested tool can mutate its IO in
+   * place while its state and
+   * every text length around it stay unchanged, and nothing downstream of
+   * this memo runs when it skips a render, so the check has to see it. The
+   * cost stays bounded because a part whose state string is terminal and
+   * whose input/output references are unchanged is SETTLED: the SDK does not
+   * reopen a completed part, so its cached string still describes it and the
+   * comparison reuses it in O(1). Only live parts (streaming input, growing
+   * output) serialize per comparison, bounded by the active tool's payload
+   * rather than the whole transcript's — the round-9 reviews' point.
+   */
+  partIO: PartIOSnapshot[]
 }
 const messageStateCache = new Map<string, MessageStateSnapshot>()
 
@@ -543,18 +657,49 @@ function areMessagePropsEqual(
 
   // Get current message state from parts
   const nextParts = next.message?.parts || []
-  const lastPart = nextParts[nextParts.length - 1]
+
+  // Read the previous snapshot first: the per-part IO check below reuses its
+  // strings for settled parts instead of serializing them again.
+  const cachedState = cacheKey ? messageStateCache.get(cacheKey) : undefined
 
   const currentState: MessageStateSnapshot = {
     textLengths: nextParts.map((p) => getTrackedPartTextLength(p)),
     // Track ALL part states - critical for detecting Edit plan file streaming!
     partStates: nextParts.map((p) => p.state),
-    // Track tool input changes - this is critical for tool streaming!
-    lastPartInputJson: lastPart?.input ? JSON.stringify(lastPart.input) : undefined,
+    // Track every part's input AND output — tool streaming arrives as in-place
+    // mutation of both, on non-last parts too (parallel calls, nested tools).
+    partIO: nextParts.map((p, i) => {
+      const prev = cachedState?.partIO?.[i]
+      if (
+        prev !== undefined &&
+        prev.state === p.state &&
+        prev.input === p.input &&
+        prev.output === p.output &&
+        prev.result === p.result &&
+        prev.error === p.error &&
+        prev.errorText === p.errorText &&
+        isTerminalStateString(prev.state)
+      ) {
+        return prev // settled: same terminal state, same references
+      }
+      return {
+        state: p.state,
+        input: p.input,
+        output: p.output,
+        result: p.result,
+        error: p.error,
+        errorText: p.errorText,
+        json:
+          p.input === undefined &&
+          p.output === undefined &&
+          p.result === undefined &&
+          p.error === undefined &&
+          p.errorText === undefined
+            ? undefined
+            : JSON.stringify([p.input, p.output, p.result, p.error, p.errorText]),
+      }
+    }),
   }
-
-  // Get cached state from previous render
-  const cachedState = cacheKey ? messageStateCache.get(cacheKey) : undefined
 
   // If no cache, this is first comparison - cache and allow render
   if (!cachedState || !cacheKey) {
@@ -576,10 +721,14 @@ function areMessagePropsEqual(
     }
   }
 
-  // Compare last part's input (detects tool input streaming!)
-  if (cachedState.lastPartInputJson !== currentState.lastPartInputJson) {
-    messageStateCache.set(cacheKey, currentState)
-    return false // Tool input changed
+  // Compare every part's input/output (detects in-place tool streaming the
+  // state and text-length checks cannot see). Settled parts carried their
+  // cached string over above, so this is a reference compare for them.
+  for (let i = 0; i < currentState.partIO.length; i++) {
+    if (cachedState.partIO?.[i]?.json !== currentState.partIO[i].json) {
+      messageStateCache.set(cacheKey, currentState)
+      return false // A part's input or output changed
+    }
   }
 
   // Compare ALL part states (detects Edit plan file streaming!)
@@ -590,8 +739,395 @@ function areMessagePropsEqual(
     }
   }
 
-  // Nothing changed - skip re-render
+  // Nothing changed - skip re-render. The snapshot still advances: a history
+  // refresh can hand back fresh part objects whose content is identical, and
+  // without recording them every following comparison would re-serialize the
+  // whole transcript looking for a change that is not there — the exact
+  // per-tick cost the settled-part rule exists to stop, resurfacing.
+  messageStateCache.set(cacheKey, currentState)
   return true
+}
+
+/** One plan-file operation this message carries, in the order it arrived. */
+type PlanOperation = { type: "write" | "edit"; part: NormalizedPart; index: number }
+
+/** What the plan-file pass found across the whole message. */
+type PlanOpsSummary = {
+  operations: PlanOperation[]
+  hasAnyPlanOperation: boolean
+  isStreaming: boolean
+  lastOperationType: "write" | "edit" | null
+}
+
+/**
+ * Everything a part renderer reads that is not the part itself: this message's
+ * identity and stream state, the grouping its parts implied, and how it
+ * collapses. One object instead of eighteen closure reads, which is what lets
+ * the dispatch and the renderers live at module scope, be read one branch at a
+ * time, and be tested without the component that owns the values.
+ */
+type PartRenderContext = {
+  messageId: string
+  status: string
+  isStreaming: boolean
+  isLastMessage: boolean
+  subChatId: string
+  projectPath: string | undefined
+  onOpenFile: ReturnType<typeof useFileOpen>
+  nestedToolsMap: Map<string, NormalizedPart[]>
+  /** Children of any subagent, by the subagent's full composite id. */
+  nestedChildren: (toolCallId: string) => NormalizedPart[]
+  /**
+   * This render's snapshot of the whole nesting map, for the task-row memo.
+   * A plain string so every row compares the same immutable value instead of
+   * walking the map through the shared tool-state cache (which would let the
+   * first row consume a grandchild mutation for all the others).
+   */
+  nestingFingerprint: string
+  nestedToolIds: Set<string>
+  /** Nested calls whose parent task part never arrived. */
+  orphans: {
+    toolCallIds: Set<string>
+    firstToolCallIds: Set<string>
+    taskGroups: Map<string, { parts: NormalizedPart[]; firstToolCallId: string }>
+  }
+  planOps: PlanOpsSummary
+  collapse: {
+    shouldCollapse: boolean
+    collapseBeforeIndex: number
+    visibleStepsCount: number
+    lastCollapsedPlanOp: PlanOperation | null
+  }
+}
+
+type PartRenderer = (part: NormalizedPart, idx: number, ctx: PartRenderContext) => ReactNode
+
+/**
+ * A nested call under a parent that never arrived, which is not the first of its
+ * group: the first one stands in for the missing parent and renders the rest
+ * inside itself, so the others are suppressed where they sit.
+ */
+function isSuppressedOrphan(part: NormalizedPart, ctx: PartRenderContext): boolean {
+  const { toolCallIds, firstToolCallIds } = ctx.orphans
+  if (!part.toolCallId || !toolCallIds.has(part.toolCallId)) return false
+  return !firstToolCallIds.has(part.toolCallId)
+}
+
+/** The incomplete task the first orphaned nested call of a group stands in for. */
+function renderOrphanTaskGroup(
+  part: NormalizedPart,
+  idx: number,
+  ctx: PartRenderContext,
+): ReactNode {
+  const { toolCallIds, firstToolCallIds, taskGroups } = ctx.orphans
+  if (!part.toolCallId || !toolCallIds.has(part.toolCallId)) return null
+  if (!firstToolCallIds.has(part.toolCallId)) return null
+  const parentId = part.toolCallId.split(":")[0]
+  const group = taskGroups.get(parentId)
+  if (!group) return null
+  return (
+    <AgentTaskTool
+      key={idx}
+      part={{
+        type: "tool-Task",
+        toolCallId: parentId,
+        input: { subagent_type: "unknown-agent", description: "Incomplete task" },
+      }}
+      nestedTools={group.parts}
+      nestedChildren={ctx.nestedChildren}
+      nestingFingerprint={ctx.nestingFingerprint}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+function renderTextPart(
+  part: NormalizedPart,
+  idx: number,
+  isFinal: boolean,
+  ctx: PartRenderContext,
+): ReactNode {
+  const { messageId, isLastMessage, isStreaming, collapse } = ctx
+  const { collapseBeforeIndex, visibleStepsCount } = collapse
+  if (!part.text?.trim()) return null
+  const isFinalText = isFinal && idx === collapseBeforeIndex
+  const isTextStreaming = isLastMessage && isStreaming
+  return (
+    <MemoizedTextPart
+      key={idx}
+      text={part.text}
+      messageId={messageId}
+      partIndex={idx}
+      isFinalText={isFinalText}
+      visibleStepsCount={visibleStepsCount}
+      isStreaming={isTextStreaming}
+    />
+  )
+}
+
+function renderSubagentTask(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  const nestedTools = ctx.nestedToolsMap.get(part.toolCallId ?? "") || []
+  return (
+    <AgentTaskTool
+      key={idx}
+      part={part}
+      nestedTools={nestedTools}
+      nestedChildren={ctx.nestedChildren}
+      nestingFingerprint={ctx.nestingFingerprint}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+function renderBashTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentBashTool
+      key={idx}
+      part={part}
+      messageId={ctx.messageId}
+      partIndex={idx}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+function renderThinkingTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentThinkingTool
+      key={idx}
+      part={toThinkingToolPart(part, ctx.messageId, idx)}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+/** A Write or Edit whose target is a plan file, which the transcript shows as plan steps. */
+function isPlanOperationPart(part: NormalizedPart): boolean {
+  if (part.type !== "tool-Write" && part.type !== "tool-Edit") return false
+  const toolInput = part.input as { file_path?: string } | null | undefined
+  return isPlanFile(toolInput?.file_path || "")
+}
+
+/**
+ * What a plan operation's one-line indicator says: the verb its own tool carries,
+ * in the tense the stream state asks for. Four strings behind two questions,
+ * which reads as a table here and as a ternary inside a ternary inside JSX there.
+ */
+function planOperationLabel(isWrite: boolean, isOpStreaming: boolean): string {
+  if (isOpStreaming) return isWrite ? "Creating plan..." : "Updating plan..."
+  return isWrite ? "Created plan" : "Updated plan"
+}
+
+/**
+ * Plan files: unified handling
+ * - In collapsed steps: all show mini indicator, last collapsed op's card shown separately after finalParts
+ * - In final parts: all but last show mini indicator, last shows full card
+ */
+function renderPlanOperation(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  const { planOps, status, subChatId, isStreaming, isLastMessage, collapse } = ctx
+  const { shouldCollapse, collapseBeforeIndex, lastCollapsedPlanOp } = collapse
+
+  // Use part.toolCallId to find operation since idx may be adjusted for collapsed parts
+  const opIndex = planOps.operations.findIndex((op) => op.part.toolCallId === part.toolCallId)
+  if (opIndex === -1) return null
+
+  const originalIndex = planOps.operations[opIndex]?.index ?? -1
+  const isInCollapsedSteps =
+    shouldCollapse && collapseBeforeIndex !== -1 && originalIndex < collapseBeforeIndex
+  const isLastCollapsedOp = lastCollapsedPlanOp?.part.toolCallId === part.toolCallId
+  const isLastOperation = opIndex === planOps.operations.length - 1
+
+  // If this is the last collapsed plan op, hide it here (card shown after CollapsibleSteps)
+  if (isInCollapsedSteps && isLastCollapsedOp) {
+    return null
+  }
+
+  // Show mini indicator for:
+  // - All operations in collapsed steps (except last collapsed, handled above)
+  // - All operations except last in final parts
+  const showMiniIndicator = isInCollapsedSteps || !isLastOperation
+
+  if (showMiniIndicator) {
+    const isWrite = part.type === "tool-Write"
+    const { isPending } = getToolStatus(part, status)
+    const isOpStreaming =
+      isPending || (part.state === "input-streaming" && isStreaming && isLastMessage)
+    const label = planOperationLabel(isWrite, isOpStreaming)
+
+    return (
+      <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5">
+        <span className="text-xs text-muted-foreground">
+          {isOpStreaming ? (
+            <TextShimmer as="span" duration={1.2}>
+              {label}
+            </TextShimmer>
+          ) : (
+            label
+          )}
+        </span>
+      </div>
+    )
+  }
+
+  // Last operation in final parts: show full card
+  return (
+    <AgentPlanFileTool
+      key={idx}
+      part={part as AgentPlanFileToolProps["part"]}
+      chatStatus={status}
+      subChatId={subChatId}
+      isEdit={part.type === "tool-Edit"}
+    />
+  )
+}
+
+/** A file edit that is not a plan step: Write and Edit render the same card. */
+function renderFileEditTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentEditTool
+      key={idx}
+      part={part}
+      messageId={ctx.messageId}
+      partIndex={idx}
+      chatStatus={ctx.status}
+    />
+  )
+}
+
+function renderWebSearch(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return <AgentWebSearchCollapsible key={idx} part={part} chatStatus={ctx.status} />
+}
+
+function renderWebFetch(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return <AgentWebFetchTool key={idx} part={part} chatStatus={ctx.status} />
+}
+
+function renderPlanWrite(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentPlanTool key={idx} part={part as AgentPlanToolProps["part"]} chatStatus={ctx.status} />
+  )
+}
+
+function renderTodoList(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  return (
+    <AgentTodoTool
+      key={idx}
+      part={part as AgentTodoToolProps["part"]}
+      chatStatus={ctx.status}
+      subChatId={ctx.subChatId}
+    />
+  )
+}
+
+function renderQuestionTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  const { isPending, isError } = getToolStatus(part, ctx.status)
+  return (
+    <AgentAskUserQuestionTool
+      key={idx}
+      input={part.input as AgentAskUserQuestionToolProps["input"]}
+      result={part.result as AgentAskUserQuestionToolProps["result"]}
+      errorText={part.errorText || (typeof part.error === "string" ? part.error : undefined)}
+      state={isPending ? "call" : "result"}
+      isError={isError}
+      isStreaming={ctx.isStreaming && ctx.isLastMessage}
+      toolCallId={part.toolCallId}
+    />
+  )
+}
+
+/** A tool the registry knows: one row, clickable when it was a file read. */
+function renderRegistryTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  const { onOpenFile, projectPath, status } = ctx
+  const meta = AgentToolRegistry[part.type]
+  const { isPending, isError } = getToolStatus(part, status)
+  // Make Read tool clickable to open file in viewer
+  // Capture the path at render: part objects can be mutated in place during streaming.
+  const toolInput = part.input as { file_path?: string } | null | undefined
+  const readFilePath =
+    part.type === "tool-Read" && onOpenFile ? (toolInput?.file_path ?? null) : null
+  const handleClick = readFilePath && onOpenFile ? () => onOpenFile(readFilePath) : undefined
+  return (
+    <AgentToolCall
+      key={idx}
+      icon={meta.icon}
+      title={meta.title(part as ToolDisplayPart)}
+      subtitle={meta.subtitle?.(part as ToolDisplayPart)}
+      tooltipContent={meta.tooltipContent?.(part as ToolDisplayPart, projectPath)}
+      isPending={isPending}
+      isError={isError}
+      onClick={handleClick}
+    />
+  )
+}
+
+/** A tool nobody registered: an MCP call by its server and tool, else its bare name. */
+function renderUnlistedTool(part: NormalizedPart, idx: number, ctx: PartRenderContext): ReactNode {
+  // MCP tool calls (pattern: tool-mcp__<server>__<tool>)
+  const mcpInfo = parseMcpToolType(part.type)
+  if (mcpInfo) {
+    return <AgentMcpToolCall key={idx} part={part} mcpInfo={mcpInfo} chatStatus={ctx.status} />
+  }
+
+  if (part.type?.startsWith("tool-")) {
+    return (
+      <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
+        {part.type.replace("tool-", "")}
+      </div>
+    )
+  }
+
+  return null
+}
+
+/**
+ * The part types with a renderer of their own. Order does not matter here
+ * because the keys are distinct; what does matter is that the dispatcher consults
+ * this table only after the shapes that claim a type before its own renderer —
+ * a sub-agent task, and a Write or Edit aimed at a plan file.
+ */
+const PART_RENDERERS: Record<string, PartRenderer> = {
+  "tool-Bash": renderBashTool,
+  reasoning: renderThinkingTool,
+  "tool-Thinking": renderThinkingTool,
+  "tool-Write": renderFileEditTool,
+  "tool-Edit": renderFileEditTool,
+  "tool-WebSearch": renderWebSearch,
+  "tool-WebFetch": renderWebFetch,
+  "tool-PlanWrite": renderPlanWrite,
+  // ExitPlanMode tool is hidden - plan is shown in sidebar instead
+  "tool-ExitPlanMode": () => null,
+  "tool-TodoWrite": renderTodoList,
+  "tool-AskUserQuestion": renderQuestionTool,
+}
+
+/**
+ * What one part of a message looks like, decided in the order the transcript has
+ * always decided it: the suppressions first, then text, then the two shapes that
+ * claim a type before its own renderer does, then the table, then the registry,
+ * then the shapes nobody registered.
+ */
+function renderMessagePart(
+  part: NormalizedPart,
+  idx: number,
+  isFinal: boolean,
+  ctx: PartRenderContext,
+): ReactNode {
+  if (part.type === "step-start") return null
+  if (isSuppressedOrphan(part, ctx)) return null
+
+  const orphanTask = renderOrphanTaskGroup(part, idx, ctx)
+  if (orphanTask) return orphanTask
+
+  if (part.toolCallId && ctx.nestedToolIds.has(part.toolCallId)) return null
+  if (part.type === "exploring-group") return null
+  if (part.type === "text") return renderTextPart(part, idx, isFinal, ctx)
+  if (isSubagentToolType(part.type)) return renderSubagentTask(part, idx, ctx)
+  if (isPlanOperationPart(part)) return renderPlanOperation(part, idx, ctx)
+
+  const renderer = PART_RENDERERS[part.type]
+  if (renderer) return renderer(part, idx, ctx)
+  if (part.type in AgentToolRegistry) return renderRegistryTool(part, idx, ctx)
+  return renderUnlistedTool(part, idx, ctx)
 }
 
 export const AssistantMessageItem = memo(function AssistantMessageItem({
@@ -631,51 +1167,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     orphanTaskGroups,
     orphanToolCallIds,
     orphanFirstToolCallIds,
-  } = useMemo(() => {
-    const nestedToolsMap = new Map<string, NormalizedPart[]>()
-    const nestedToolIds = new Set<string>()
-    const taskPartIds = new Set(
-      messageParts
-        .filter(
-          (p): p is NormalizedPart & { toolCallId: string } =>
-            p.type === "tool-Task" && !!p.toolCallId,
-        )
-        .map((p) => p.toolCallId),
-    )
-    const orphanTaskGroups = new Map<string, { parts: NormalizedPart[]; firstToolCallId: string }>()
-    const orphanToolCallIds = new Set<string>()
-    const orphanFirstToolCallIds = new Set<string>()
-
-    for (const part of messageParts) {
-      if (part.toolCallId?.includes(":")) {
-        const parentId = part.toolCallId.split(":")[0]
-        if (taskPartIds.has(parentId)) {
-          if (!nestedToolsMap.has(parentId)) {
-            nestedToolsMap.set(parentId, [])
-          }
-          nestedToolsMap.get(parentId)?.push(part)
-          nestedToolIds.add(part.toolCallId)
-        } else {
-          let group = orphanTaskGroups.get(parentId)
-          if (!group) {
-            group = { parts: [], firstToolCallId: part.toolCallId }
-            orphanTaskGroups.set(parentId, group)
-            orphanFirstToolCallIds.add(part.toolCallId)
-          }
-          group.parts.push(part)
-          orphanToolCallIds.add(part.toolCallId)
-        }
-      }
-    }
-
-    return {
-      nestedToolsMap,
-      nestedToolIds,
-      orphanTaskGroups,
-      orphanToolCallIds,
-      orphanFirstToolCallIds,
-    }
-  }, [messageParts])
+  } = useMemo(() => buildNestingIndex(messageParts), [messageParts])
 
   // Collect all plan operations (Write/Edit) for unified handling
   const planOpsSummary = useMemo(() => {
@@ -746,7 +1238,6 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       shouldCollapse && collapseBeforeIndex !== -1 ? messageParts.slice(0, collapseBeforeIndex) : []
     const visibleStepsCount = stepParts.filter((p) => {
       if (p.type === "step-start") return false
-      if (p.type === "tool-TaskOutput") return false
       if (p.type === "tool-ExitPlanMode") return false
       if (p.toolCallId && nestedToolIds.has(p.toolCallId)) return false
       if (
@@ -797,244 +1288,46 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
     [messageParts],
   )
 
+  // One pure string per render for every task row's memo — see
+  // `nestingFingerprintOf`: comparing the map through arePartsEqual would
+  // advance the shared tool-state cache, and the first row to walk it would
+  // consume the change a later row needed to see.
+  const nestingFingerprint = useMemo(() => nestingFingerprintOf(nestedToolsMap), [nestedToolsMap])
+
   const msgMetadata = message?.metadata as AgentMessageMetadata
 
-  const renderPart = useCallback(
-    (part: NormalizedPart, idx: number, isFinal = false) => {
-      const toolInput = part.input as { file_path?: string } | null | undefined
-      if (part.type === "step-start") return null
-      if (part.type === "tool-TaskOutput") return null
-
-      if (part.toolCallId && orphanToolCallIds.has(part.toolCallId)) {
-        if (!orphanFirstToolCallIds.has(part.toolCallId)) return null
-        const parentId = part.toolCallId.split(":")[0]
-        const group = orphanTaskGroups.get(parentId)
-        if (group) {
-          return (
-            <AgentTaskTool
-              key={idx}
-              part={{
-                type: "tool-Task",
-                toolCallId: parentId,
-                input: { subagent_type: "unknown-agent", description: "Incomplete task" },
-              }}
-              nestedTools={group.parts}
-              chatStatus={status}
-            />
-          )
-        }
-      }
-
-      if (part.toolCallId && nestedToolIds.has(part.toolCallId)) return null
-      if (part.type === "exploring-group") return null
-
-      if (part.type === "text") {
-        if (!part.text?.trim()) return null
-        const isFinalText = isFinal && idx === collapseBeforeIndex
-        const isTextStreaming = isLastMessage && isStreaming
-        return (
-          <MemoizedTextPart
-            key={idx}
-            text={part.text}
-            messageId={message.id}
-            partIndex={idx}
-            isFinalText={isFinalText}
-            visibleStepsCount={visibleStepsCount}
-            isStreaming={isTextStreaming}
-          />
-        )
-      }
-
-      if (part.type === "tool-Task") {
-        const nestedTools = nestedToolsMap.get(part.toolCallId ?? "") || []
-        return <AgentTaskTool key={idx} part={part} nestedTools={nestedTools} chatStatus={status} />
-      }
-
-      if (part.type === "tool-Bash")
-        return (
-          <AgentBashTool
-            key={idx}
-            part={part}
-            messageId={message.id}
-            partIndex={idx}
-            chatStatus={status}
-          />
-        )
-      if (part.type === "reasoning" || part.type === "tool-Thinking") {
-        return (
-          <AgentThinkingTool
-            key={idx}
-            part={toThinkingToolPart(part, message?.id, idx)}
-            chatStatus={status}
-          />
-        )
-      }
-
-      // Plan files: unified handling
-      // - In collapsed steps: all show mini indicator, last collapsed op's card shown separately after finalParts
-      // - In final parts: all but last show mini indicator, last shows full card
-      if (part.type === "tool-Write" || part.type === "tool-Edit") {
-        const filePath = toolInput?.file_path || ""
-        if (isPlanFile(filePath)) {
-          // Use part.toolCallId to find operation since idx may be adjusted for collapsed parts
-          const opIndex = planOpsSummary.operations.findIndex(
-            (op) => op.part.toolCallId === part.toolCallId,
-          )
-          if (opIndex === -1) return null
-
-          const originalIndex = planOpsSummary.operations[opIndex]?.index ?? -1
-          const isInCollapsedSteps =
-            shouldCollapse && collapseBeforeIndex !== -1 && originalIndex < collapseBeforeIndex
-          const isLastCollapsedOp = lastCollapsedPlanOp?.part.toolCallId === part.toolCallId
-          const isLastOperation = opIndex === planOpsSummary.operations.length - 1
-
-          // If this is the last collapsed plan op, hide it here (card shown after CollapsibleSteps)
-          if (isInCollapsedSteps && isLastCollapsedOp) {
-            return null
-          }
-
-          // Show mini indicator for:
-          // - All operations in collapsed steps (except last collapsed, handled above)
-          // - All operations except last in final parts
-          const showMiniIndicator = isInCollapsedSteps || !isLastOperation
-
-          if (showMiniIndicator) {
-            const isWrite = part.type === "tool-Write"
-            const { isPending } = getToolStatus(part, status)
-            const isOpStreaming =
-              isPending || (part.state === "input-streaming" && isStreaming && isLastMessage)
-
-            return (
-              <div key={idx} className="flex items-center gap-1.5 px-2 py-0.5">
-                <span className="text-xs text-muted-foreground">
-                  {isOpStreaming ? (
-                    <TextShimmer as="span" duration={1.2}>
-                      {isWrite ? "Creating plan..." : "Updating plan..."}
-                    </TextShimmer>
-                  ) : isWrite ? (
-                    "Created plan"
-                  ) : (
-                    "Updated plan"
-                  )}
-                </span>
-              </div>
-            )
-          }
-
-          // Last operation in final parts: show full card
-          return (
-            <AgentPlanFileTool
-              key={idx}
-              part={part as AgentPlanFileToolProps["part"]}
-              chatStatus={status}
-              subChatId={subChatId}
-              isEdit={part.type === "tool-Edit"}
-            />
-          )
-        }
-      }
-
-      if (part.type === "tool-Edit")
-        return (
-          <AgentEditTool
-            key={idx}
-            part={part}
-            messageId={message.id}
-            partIndex={idx}
-            chatStatus={status}
-          />
-        )
-      if (part.type === "tool-Write")
-        return (
-          <AgentEditTool
-            key={idx}
-            part={part}
-            messageId={message.id}
-            partIndex={idx}
-            chatStatus={status}
-          />
-        )
-      if (part.type === "tool-WebSearch")
-        return <AgentWebSearchCollapsible key={idx} part={part} chatStatus={status} />
-      if (part.type === "tool-WebFetch")
-        return <AgentWebFetchTool key={idx} part={part} chatStatus={status} />
-      if (part.type === "tool-PlanWrite")
-        return (
-          <AgentPlanTool key={idx} part={part as AgentPlanToolProps["part"]} chatStatus={status} />
-        )
-
-      // ExitPlanMode tool is hidden - plan is shown in sidebar instead
-      if (part.type === "tool-ExitPlanMode") {
-        return null
-      }
-
-      if (part.type === "tool-TodoWrite") {
-        return (
-          <AgentTodoTool
-            key={idx}
-            part={part as AgentTodoToolProps["part"]}
-            chatStatus={status}
-            subChatId={subChatId}
-          />
-        )
-      }
-
-      if (part.type === "tool-AskUserQuestion") {
-        const { isPending, isError } = getToolStatus(part, status)
-        return (
-          <AgentAskUserQuestionTool
-            key={idx}
-            input={part.input as AgentAskUserQuestionToolProps["input"]}
-            result={part.result as AgentAskUserQuestionToolProps["result"]}
-            errorText={part.errorText || (typeof part.error === "string" ? part.error : undefined)}
-            state={isPending ? "call" : "result"}
-            isError={isError}
-            isStreaming={isStreaming && isLastMessage}
-            toolCallId={part.toolCallId}
-          />
-        )
-      }
-
-      if (part.type in AgentToolRegistry) {
-        const meta = AgentToolRegistry[part.type]
-        const { isPending, isError } = getToolStatus(part, status)
-        // Make Read tool clickable to open file in viewer
-        // Capture the path at render: part objects can be mutated in place during streaming.
-        const readFilePath =
-          part.type === "tool-Read" && onOpenFile ? (toolInput?.file_path ?? null) : null
-        const handleClick = readFilePath && onOpenFile ? () => onOpenFile(readFilePath) : undefined
-        return (
-          <AgentToolCall
-            key={idx}
-            icon={meta.icon}
-            title={meta.title(part as ToolDisplayPart)}
-            subtitle={meta.subtitle?.(part as ToolDisplayPart)}
-            tooltipContent={meta.tooltipContent?.(part as ToolDisplayPart, projectPath)}
-            isPending={isPending}
-            isError={isError}
-            onClick={handleClick}
-          />
-        )
-      }
-
-      // MCP tool calls (pattern: tool-mcp__<server>__<tool>)
-      const mcpInfo = parseMcpToolType(part.type)
-      if (mcpInfo) {
-        return <AgentMcpToolCall key={idx} part={part} mcpInfo={mcpInfo} chatStatus={status} />
-      }
-
-      if (part.type?.startsWith("tool-")) {
-        return (
-          <div key={idx} className="text-xs text-muted-foreground py-0.5 px-2">
-            {part.type.replace("tool-", "")}
-          </div>
-        )
-      }
-
-      return null
-    },
+  // One context object, so the dispatch and every renderer it calls can live at
+  // module scope: this component says what this message's values are, and
+  // renderMessagePart decides what each part looks like.
+  const partContext = useMemo<PartRenderContext>(
+    () => ({
+      messageId: message.id,
+      status,
+      isStreaming,
+      isLastMessage,
+      subChatId,
+      projectPath,
+      onOpenFile,
+      nestedToolsMap,
+      nestedChildren: (toolCallId: string) => nestedToolsMap.get(toolCallId) ?? [],
+      nestingFingerprint,
+      nestedToolIds,
+      orphans: {
+        toolCallIds: orphanToolCallIds,
+        firstToolCallIds: orphanFirstToolCallIds,
+        taskGroups: orphanTaskGroups,
+      },
+      planOps: planOpsSummary,
+      collapse: {
+        shouldCollapse,
+        collapseBeforeIndex,
+        visibleStepsCount,
+        lastCollapsedPlanOp,
+      },
+    }),
     [
       nestedToolsMap,
+      nestingFingerprint,
       nestedToolIds,
       orphanToolCallIds,
       orphanFirstToolCallIds,
@@ -1052,6 +1345,12 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       projectPath,
       onOpenFile,
     ],
+  )
+
+  const renderPart = useCallback(
+    (part: NormalizedPart, idx: number, isFinal = false) =>
+      renderMessagePart(part, idx, isFinal, partContext),
+    [partContext],
   )
 
   // Detect when the assistant's final text part is a question awaiting user input.

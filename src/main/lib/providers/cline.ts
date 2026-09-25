@@ -1,25 +1,8 @@
-import { execFile } from "node:child_process"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
 import { resolveClineCliLaunch } from "../cline-binary"
 import { probeClineStoredAuth } from "../cline-print/auth-config"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
-
-function runLaunch(
-  command: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(command, args, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
-}
 
 export function getClineCapability(): ProviderCapability {
   return {
@@ -53,6 +36,7 @@ export function getClineCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       // `@./path.png` image mentions exist upstream, but headless
       // image support is unverified — attachments travel as prompt
@@ -61,15 +45,11 @@ export function getClineCapability(): ProviderCapability {
       // --id resume is broken in all headless paths (v3.0.61):
       // continuity comes from transcript-in-prompt instead.
       resume: false,
-      fork: false,
       mcp: true,
       // spawn_agent / team_* tools exist upstream and flow through
       // the tool projector; multi-agent orchestration is CLI-managed.
       subagents: true,
-      cron: false,
       skills: true,
-      structuredOutput: false,
-      fileCheckpointing: false,
     },
     notes: [
       "Images travel as prompt path references the agent reads via tools.",
@@ -105,7 +85,7 @@ export async function probeCline(): Promise<BackendProbe> {
   } catch {
     return { available: false, detail: "cline CLI binary not found" }
   }
-  const version = await runLaunch(launch.command, launch.args)
+  const version = await runProbeCommand(launch.command, launch.args)
   if (version.exitCode === null) {
     // Spawn failure (missing/not executable, e.g. a broken $CLINE_BINARY).
     return {

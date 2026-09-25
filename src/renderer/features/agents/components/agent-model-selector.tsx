@@ -4,6 +4,7 @@ import { Brain, ChevronRight, Zap } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { type EffortLevel, formatEffortLabel } from "../../../../shared/effort"
 import { Button } from "../../../components/ui/button"
 import { Checkbox } from "../../../components/ui/checkbox"
 import {
@@ -31,7 +32,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/
 import { Switch } from "../../../components/ui/switch"
 import { cn } from "../../../lib/utils"
 import type { CodexThinkingLevel } from "../lib/models"
-import { formatCodexThinkingLabel } from "../lib/models"
 
 const CROSS_PROVIDER_DIALOG_DISMISSED_KEY = "agent-model-selector:skip-cross-provider-dialog"
 
@@ -134,7 +134,7 @@ type RooModelOption = {
   name: string
 }
 
-interface AgentModelSelectorProps {
+export interface AgentModelSelectorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedAgentId: AgentProviderId
@@ -158,6 +158,10 @@ interface AgentModelSelectorProps {
     isConnected: boolean
     thinkingEnabled: boolean
     onThinkingChange: (enabled: boolean) => void
+    /** Empty while the backend's capability profile reports no effort control. */
+    efforts: readonly EffortLevel[]
+    selectedEffort: EffortLevel | null
+    onSelectEffort: (effort: EffortLevel | null) => void
   }
   codex: {
     models: CodexModelOption[]
@@ -231,15 +235,29 @@ type FlatModelItem =
   | { type: "ollama"; modelName: string; isRecommended: boolean }
   | { type: "custom" }
 
-function CodexThinkingSubMenu({
+/**
+ * The effort sub-menu both backends that take an effort share. Codex has always
+ * had one; Claude gained one with the SDK pin that added `Options.effort`. The
+ * levels come from `src/shared/effort.ts` so two pickers cannot drift to two
+ * vocabularies, and the trigger row is the one Codex already shipped.
+ */
+function EffortSubMenu<TLevel extends EffortLevel>({
   thinkings,
   selectedThinking,
   onSelectThinking,
-}: {
-  thinkings: CodexThinkingLevel[]
-  selectedThinking: CodexThinkingLevel
-  onSelectThinking: (thinking: CodexThinkingLevel) => void
-}) {
+  onClear,
+}: Readonly<{
+  thinkings: readonly TLevel[]
+  selectedThinking: TLevel | null
+  onSelectThinking: (thinking: TLevel) => void
+  /**
+   * Renders a row that hands the choice back to the runtime. Claude passes it:
+   * a chat that never opened the picker must keep the model's own default
+   * instead of a level this app guessed. Codex always sends a concrete level,
+   * so it passes nothing and the row does not appear.
+   */
+  onClear?: () => void
+}>) {
   const triggerRef = useRef<HTMLDivElement>(null)
   const subMenuRef = useRef<HTMLDivElement>(null)
   const [showSub, setShowSub] = useState(false)
@@ -324,7 +342,9 @@ function CodexThinkingSubMenu({
           <span>Thinking</span>
         </div>
         <div className="flex items-center gap-1 text-muted-foreground">
-          <span className="text-xs">{formatCodexThinkingLabel(selectedThinking)}</span>
+          <span className="text-xs">
+            {selectedThinking === null ? "Default" : formatEffortLabel(selectedThinking)}
+          </span>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
         </div>
       </div>
@@ -339,6 +359,17 @@ function CodexThinkingSubMenu({
             className="fixed z-50 min-w-[180px] overflow-auto rounded-[10px] border border-border bg-popover text-sm text-popover-foreground shadow-lg py-1 animate-in fade-in-0 zoom-in-95 slide-in-from-left-2"
             style={{ top: subPos.top, left: subPos.left }}
           >
+            {onClear && (
+              <button
+                type="button"
+                onClick={onClear}
+                onFocus={cancelClose}
+                className="flex items-center justify-between gap-4 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
+              >
+                <span>Default</span>
+                {selectedThinking === null && <CheckIcon className="h-3.5 w-3.5 shrink-0" />}
+              </button>
+            )}
             {thinkings.map((thinking) => {
               const isSelected = selectedThinking === thinking
               return (
@@ -349,7 +380,7 @@ function CodexThinkingSubMenu({
                   onFocus={cancelClose}
                   className="flex items-center justify-between gap-4 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
                 >
-                  <span>{formatCodexThinkingLabel(thinking)}</span>
+                  <span>{formatEffortLabel(thinking)}</span>
                   {isSelected && <CheckIcon className="h-3.5 w-3.5 shrink-0" />}
                 </button>
               )
@@ -940,6 +971,14 @@ export function AgentModelSelector({
                     className="scale-75"
                   />
                 </div>
+                {claude.efforts.length > 0 && (
+                  <EffortSubMenu
+                    thinkings={claude.efforts}
+                    selectedThinking={claude.selectedEffort}
+                    onSelectThinking={claude.onSelectEffort}
+                    onClear={() => claude.onSelectEffort(null)}
+                  />
+                )}
                 <CommandSeparator />
               </>
             )}
@@ -952,7 +991,7 @@ export function AgentModelSelector({
               if (!selectedCodexModel) return null
               return (
                 <>
-                  <CodexThinkingSubMenu
+                  <EffortSubMenu
                     thinkings={selectedCodexModel.thinkings}
                     selectedThinking={codex.selectedThinking}
                     onSelectThinking={codex.onSelectThinking}

@@ -1,23 +1,6 @@
-import { execFile } from "node:child_process"
-import type { ProviderCapability } from "../../../shared/provider-capabilities"
+import { ALL_FEATURES_OFF, type ProviderCapability } from "../../../shared/provider-capabilities"
+import { runProbeCommand } from "./probe-command"
 import type { BackendProbe } from "./types"
-
-function runBinary(
-  binary: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve) => {
-    execFile(binary, args, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Spawn failures (ENOENT) carry a string errno, not a numeric code.
-      const exitCode = error ? (typeof error.code === "number" ? error.code : null) : 0
-      resolve({
-        stdout: String(stdout ?? ""),
-        stderr: String(stderr ?? ""),
-        exitCode,
-      })
-    })
-  })
-}
 
 export function getOpencodeCapability(): ProviderCapability {
   return {
@@ -48,16 +31,12 @@ export function getOpencodeCapability(): ProviderCapability {
       usageSurface: "native",
     },
     features: {
+      ...ALL_FEATURES_OFF,
       chat: true,
       images: true,
       resume: true,
-      fork: false,
       mcp: true,
       subagents: true,
-      cron: false,
-      skills: false,
-      structuredOutput: false,
-      fileCheckpointing: false,
     },
     notes: [
       "Permissions auto-reply session-wide; opencode.json can tighten per-tool policy.",
@@ -70,11 +49,11 @@ export function getOpencodeCapability(): ProviderCapability {
 
 export async function probeOpencode(): Promise<BackendProbe> {
   try {
-    const version = await runBinary("opencode", ["--version"])
+    const version = await runProbeCommand("opencode", ["--version"])
     if (version.exitCode !== 0) {
       return { available: false, detail: "opencode binary not found" }
     }
-    const auth = await runBinary("opencode", ["auth", "list"])
+    const auth = await runProbeCommand("opencode", ["auth", "list"])
     const combined = `${auth.stdout}\n${auth.stderr}`.trim()
     return {
       available: true,

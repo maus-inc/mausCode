@@ -14,6 +14,7 @@ import { and, eq } from "drizzle-orm"
 import { app, BrowserWindow } from "electron"
 import { z } from "zod"
 import { agentModeSchema, DEFAULT_AGENT_MODE } from "../../../../shared/agent-mode"
+import { EFFORT_LEVELS } from "../../../../shared/effort"
 import { describePermissionDecision } from "../../../../shared/permissions/decision"
 import { setConnectionMethod } from "../../analytics"
 import {
@@ -851,7 +852,26 @@ export const claudeRouter = router({
             baseUrl: z.string().min(1),
           })
           .optional(),
-        maxThinkingTokens: z.number().optional(), // Enable extended thinking
+        // The pinned SDK deprecates `maxThinkingTokens`: on a model that
+        // supports adaptive thinking a non-zero budget only ever meant
+        // "adaptive", and leaving it out meant the model chose a budget anyway,
+        // so the old field could not turn thinking off. Take the config the SDK
+        // asks for instead.
+        thinking: z
+          .discriminatedUnion("type", [
+            z.object({ type: z.literal("adaptive") }),
+            z.object({ type: z.literal("disabled") }),
+            z.object({
+              type: z.literal("enabled"),
+              budgetTokens: z.number().int().positive().optional(),
+            }),
+          ])
+          .optional(),
+        // One vocabulary for every backend that accepts an effort; the CLI
+        // clamps a level above what the chosen model reports.
+        effort: z.enum(EFFORT_LEVELS).optional(),
+        // Asks the SDK for one suggested next prompt after the result message.
+        promptSuggestions: z.boolean().optional(),
         images: z.array(imageAttachmentSchema).optional(), // Image attachments
         historyEnabled: z.boolean().optional(),
         offlineModeEnabled: z.boolean().optional(), // Whether offline mode (Ollama) is enabled in settings
@@ -1181,6 +1201,13 @@ export const claudeRouter = router({
               }),
               enableTasks: input.enableTasks ?? true,
             })
+            // The app's switch is the authority, and the env var is how the SDK
+            // documents winning: `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION` beats
+            // settings, so an inherited shell value is replaced with the
+            // preference rather than left to fight it. Both directions are
+            // set — a turn with the switch off must not inherit an on.
+            claudeEnv.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION =
+              (input.promptSuggestions ?? false) ? "true" : "false"
 
             // Debug logging in dev
             if (process.env.NODE_ENV !== "production") {
@@ -1947,9 +1974,12 @@ ${prompt}
                 ...(!resumeSessionId && { continue: true }),
                 ...(resolvedModel && { model: resolvedModel }),
                 // fallbackModel: "claude-opus-4-5-20251101",
-                ...(input.maxThinkingTokens && {
-                  maxThinkingTokens: input.maxThinkingTokens,
-                }),
+                ...(input.thinking && { thinking: input.thinking }),
+                ...(input.effort && { effort: input.effort }),
+                // Both directions, matching the env override above: absent
+                // means undecided, and undecided is where an inherited shell
+                // variable slips in and overrides the app's switch.
+                promptSuggestions: input.promptSuggestions ?? false,
               },
             }
 

@@ -30,10 +30,9 @@ import {
   WriteFileIcon,
 } from "../../../components/ui/icons"
 import { getToolLifecycleState } from "./agent-tool-state"
+import { isLaunchedAgentOutput } from "./agent-tool-utils"
 
 export { getToolStatus } from "./agent-tool-state"
-
-export type ToolVariant = "simple" | "collapsible"
 
 /** Tool input/output fields read by the registry display callbacks. */
 export type ToolDisplayPart = {
@@ -56,6 +55,9 @@ export type ToolDisplayPart = {
     subject?: string
     status?: string
     taskId?: string | number
+    task_id?: string | number
+    /** `TaskStopInput`'s deprecated spelling of `task_id`; same value. */
+    shell_id?: string | number
     pid?: string | number
     text?: string
     plan?: { status?: string; title?: string; steps?: { status?: string }[] }
@@ -66,6 +68,8 @@ export type ToolDisplayPart = {
     numLines?: number
     task?: { subject?: string }
     tasks?: unknown[]
+    /** `AgentOutput.status`: `completed`, or one of the two launch hand-offs. */
+    status?: string
   }
 }
 
@@ -74,7 +78,6 @@ export interface ToolMeta {
   title: (part: ToolDisplayPart) => string
   subtitle?: (part: ToolDisplayPart) => string
   tooltipContent?: (part: ToolDisplayPart, projectPath?: string) => string
-  variant: ToolVariant
 }
 
 function isInputStreaming(part: { state?: unknown; output?: unknown; result?: unknown }) {
@@ -152,23 +155,81 @@ function calculateDiffStats(oldString: string, newString: string) {
   return { addedLines, removedLines }
 }
 
-export const AgentToolRegistry: Record<string, ToolMeta> = {
-  "tool-Task": {
-    icon: SparklesIcon,
-    title: (part) => {
-      if (isInputStreaming(part)) return "Preparing agent"
-      const subagentType = part.input?.subagent_type || "Agent"
-      return isPendingState(part) ? `Running ${subagentType}` : `${subagentType} completed`
-    },
-    subtitle: (part) => {
-      // Don't show subtitle while input is still streaming
-      if (isInputStreaming(part)) return ""
-      const description = part.input?.description || ""
-      return description.length > 50 ? `${description.slice(0, 47)}...` : description
-    },
-    variant: "simple",
+/**
+ * The sub-agent tool under both names it has had. The pinned CLI emits `Agent`,
+ * and its own history explains why two names exist: the SDK changelog at 0.2.69
+ * reverted the wire name with the note that it "will migrate to `Agent` in the
+ * next minor release", so transcripts this app already persisted carry `Task`.
+ * One object behind two keys, because two entries for one tool drift apart the
+ * first time someone edits the wording of one of them.
+ */
+const subagentTool: ToolMeta = {
+  icon: SparklesIcon,
+  title: (part) => {
+    if (isInputStreaming(part)) return "Preparing agent"
+    const subagentType = part.input?.subagent_type || "Agent"
+    if (isPendingState(part)) return `Running ${subagentType}`
+    // A launched run is still running somewhere else; only a `completed`
+    // status has actually finished.
+    return isLaunchedAgentOutput(part.output)
+      ? `${subagentType} launched`
+      : `${subagentType} completed`
   },
+  subtitle: (part) => {
+    // Don't show subtitle while input is still streaming
+    if (isInputStreaming(part)) return ""
+    const description = part.input?.description || ""
+    return description.length > 50 ? `${description.slice(0, 47)}...` : description
+  },
+}
 
+/**
+ * A shell reports `pid`, a background task reports `task_id`, and the persisted
+ * app shape spells the same field `taskId`. One reader for all three so the
+ * renamed tools do not each grow their own subtitle rule.
+ */
+function backgroundTaskSubtitle(part: ToolDisplayPart): string {
+  const pid = part.input?.pid
+  if (pid) return `PID: ${pid}`
+  // `shell_id` is `TaskStopInput`'s deprecated spelling of `task_id` — the
+  // same identifier under the name older transcripts carry — so a stop that
+  // sends only it still says which task it stopped.
+  const taskId = part.input?.task_id ?? part.input?.taskId ?? part.input?.shell_id
+  return taskId ? `Task: ${taskId}` : ""
+}
+
+/**
+ * Background output under the name the CLI emits now and the name it emitted
+ * before: the 2.1.270 binary normalizes `BashOutput`, `BashOutputTool`,
+ * `AgentOutput` and `AgentOutputTool` to `TaskOutput`, so one meta serves the
+ * current wire name and the legacy rows already in the transcript store.
+ */
+const backgroundOutputTool: ToolMeta = {
+  icon: Terminal,
+  title: (part) => (isPendingState(part) ? "Getting output" : "Got output"),
+  subtitle: backgroundTaskSubtitle,
+}
+
+const stopShellTool: ToolMeta = {
+  icon: XCircle,
+  title: (part) => (isPendingState(part) ? "Stopping shell" : "Stopped shell"),
+  subtitle: backgroundTaskSubtitle,
+}
+
+/**
+ * `TaskStop` is what the same binary normalizes `KillShell` and `KillBash` to,
+ * so its wording says task rather than shell: the thing being stopped at that
+ * name is a background task, which may be a sub-agent rather than a shell.
+ */
+const stopTaskTool: ToolMeta = {
+  icon: XCircle,
+  title: (part) => (isPendingState(part) ? "Stopping task" : "Stopped task"),
+  subtitle: backgroundTaskSubtitle,
+}
+
+export const AgentToolRegistry: Record<string, ToolMeta> = {
+  "tool-Task": subagentTool,
+  "tool-Agent": subagentTool,
   "tool-Grep": {
     icon: SearchIcon,
     title: (part) => {
@@ -204,7 +265,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
 
       return pattern.length > 40 ? `${pattern.slice(0, 37)}...` : pattern
     },
-    variant: "simple",
   },
 
   "tool-Glob": {
@@ -231,7 +291,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
 
       return pattern.length > 40 ? `${pattern.slice(0, 37)}...` : pattern
     },
-    variant: "simple",
   },
 
   "tool-Read": {
@@ -252,7 +311,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       const filePath = part.input?.file_path || ""
       return getDisplayPath(filePath, projectPath)
     },
-    variant: "simple",
   },
 
   "tool-Edit": {
@@ -283,14 +341,12 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
 
       return ""
     },
-    variant: "simple",
   },
 
   // Cloning indicator - shown while sandbox is being created
   "tool-cloning": {
     icon: GitBranch,
     title: () => "Cloning repo",
-    variant: "simple",
   },
 
   // Planning indicator - shown when streaming starts but no content yet
@@ -312,7 +368,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       ]
       return messages[Math.floor(Math.random() * messages.length)]
     },
-    variant: "simple",
   },
 
   "tool-Write": {
@@ -328,7 +383,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       if (!filePath) return "" // Don't show "file" placeholder during streaming
       return filePath.split("/").pop() || ""
     },
-    variant: "simple",
   },
 
   "tool-Bash": {
@@ -350,7 +404,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       })
       return normalized.length > 50 ? `${normalized.slice(0, 47)}...` : normalized
     },
-    variant: "simple",
   },
 
   "tool-WebFetch": {
@@ -369,7 +422,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
         return url.slice(0, 30)
       }
     },
-    variant: "simple",
   },
 
   "tool-WebSearch": {
@@ -384,7 +436,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       const query = part.input?.query || ""
       return query.length > 40 ? `${query.slice(0, 37)}...` : query
     },
-    variant: "collapsible",
   },
 
   // Planning tools
@@ -402,7 +453,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       if (todos.length === 0) return ""
       return `${todos.length} ${todos.length === 1 ? "item" : "items"}`
     },
-    variant: "simple",
   },
 
   // Task management tools
@@ -415,7 +465,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       const subject = part.input?.subject || ""
       return subject.length > 40 ? `${subject.slice(0, 37)}...` : subject
     },
-    variant: "simple",
   },
 
   "tool-TaskUpdate": {
@@ -442,7 +491,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       }
       return taskId ? `#${taskId}` : ""
     },
-    variant: "simple",
   },
 
   "tool-TaskGet": {
@@ -458,7 +506,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       }
       return taskId ? `#${taskId}` : ""
     },
-    variant: "simple",
   },
 
   "tool-TaskList": {
@@ -469,7 +516,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       return count !== undefined ? `Listed ${count} tasks` : "Listed tasks"
     },
     subtitle: () => "",
-    variant: "simple",
   },
 
   "tool-PlanWrite": {
@@ -498,7 +544,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       }
       return steps.length > 0 ? `${completed}/${steps.length} steps` : ""
     },
-    variant: "simple",
   },
 
   "tool-ExitPlanMode": {
@@ -507,7 +552,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       return isPendingState(part) ? "Finishing plan" : "Plan complete"
     },
     subtitle: () => "",
-    variant: "simple",
   },
 
   // Notebook tools
@@ -521,33 +565,20 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       if (!filePath) return ""
       return filePath.split("/").pop() || ""
     },
-    variant: "simple",
   },
 
-  // Shell management tools
-  "tool-BashOutput": {
-    icon: Terminal,
-    title: (part) => {
-      return isPendingState(part) ? "Getting output" : "Got output"
-    },
-    subtitle: (part) => {
-      const pid = part.input?.pid
-      return pid ? `PID: ${pid}` : ""
-    },
-    variant: "simple",
-  },
-
-  "tool-KillShell": {
-    icon: XCircle,
-    title: (part) => {
-      return isPendingState(part) ? "Stopping shell" : "Stopped shell"
-    },
-    subtitle: (part) => {
-      const pid = part.input?.pid
-      return pid ? `PID: ${pid}` : ""
-    },
-    variant: "simple",
-  },
+  // Shell and background task management. The pinned CLI emits `TaskOutput` and
+  // `TaskStop`; every other key here is a name its own normalization table folds
+  // into one of those two, kept because a transcript persisted before the bump
+  // still carries the old spelling and would otherwise render as a generic row.
+  "tool-TaskOutput": backgroundOutputTool,
+  "tool-BashOutput": backgroundOutputTool,
+  "tool-BashOutputTool": backgroundOutputTool,
+  "tool-AgentOutput": backgroundOutputTool,
+  "tool-AgentOutputTool": backgroundOutputTool,
+  "tool-TaskStop": stopTaskTool,
+  "tool-KillShell": stopShellTool,
+  "tool-KillBash": stopShellTool,
 
   // Note: ListMcpResources, ReadMcpResource and their "Tool"-suffixed variants
   // are handled by AgentMcpToolCall via parseMcpToolType() for richer output display
@@ -558,7 +589,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
     title: (part) => {
       return isPendingState(part) ? "Compacting..." : "Compacted"
     },
-    variant: "simple",
   },
 
   // Extended Thinking
@@ -572,7 +602,6 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
       // Show first 50 chars as preview
       return text.length > 50 ? `${text.slice(0, 47)}...` : text
     },
-    variant: "collapsible",
   },
 }
 

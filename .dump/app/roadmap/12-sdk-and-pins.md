@@ -81,3 +81,21 @@ The Codex schema drift and parity verification that this bump makes necessary, w
 ## 15. Handoff notes
 
 Write the upstream behaviour list to `.dump/app/research/2026-09-13-sdk-0-3-bump.md` and name it in {{S19}} and {{S20}}, which assume those three tools exist.
+
+## 16. As shipped: what the lockfile moved beyond the three pins
+
+The step is the only one allowed to touch `package.json` and `bun.lock`, so
+everything this head added there is ratified here rather than left for the next
+reader to reconcile against §1's original allowance:
+
+| Added | Why | Ratified by |
+| --- | --- | --- |
+| `@dnd-kit/core` 6.3.1, `@dnd-kit/sortable` 10.0.0, `@dnd-kit/utilities` 3.2.2 (exact) | the drag-and-drop decision §1 already names | this step's original allowance |
+| `jsdom` 30.1.1, `@testing-library/react` 16.3.3, `@testing-library/dom` 10.4.2 (exact, dev) | the `renderPart` split was conditioned on pinning the current renderer output first — a snapshot harness over the dispatcher's 30 branches before any line moved | the split-with-tests decision taken on this PR, accepted lockfile change and all |
+| `sharp` 0.35.4 (exact, dev) | `scripts/generate-icon.mjs` needs it as a direct dev dependency once the lock was regenerated; previously satisfied by hoisting | carried in the PR body's dependency row |
+| `@modelcontextprotocol/sdk` `^1.25.3` → exact `1.30.1` | SDK 0.3.270 declares that package as a peer at `^1.29.0`; the old range left `npm ls` reporting `invalid: "^1.29.0"` and exiting `ELSPROBLEMS` | the SDK's own peer contract — an exact pin inside the declared range, no override |
+| `@anthropic-ai/sdk` (lock-only, peer of the pinned SDK) | bun's auto-install of the peer the SDK declares at `>=0.93.0` | the transitive-peer decision recorded on this PR |
+
+No override, no caret on a CI-resolved dependency, and no runtime dependency
+the three pins did not earn: everything above is dev tooling, the dnd
+allowance, or a contract the new SDK imposes.

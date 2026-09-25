@@ -21,7 +21,19 @@
  * `.dump/global/decisions.md`; the two literals the release note carried,
  * `gpt-5.5` and `gpt-5.4`, were both refused.
  */
-export const CODEX_REASONING_EFFORTS = ["low", "medium", "high", "xhigh"] as const
+import type { EffortLevel } from "./effort"
+
+/**
+ * The four levels Codex sends. `satisfies` keeps the tuple type the picker
+ * already depends on while proving every member is in the one effort vocabulary
+ * in `src/shared/effort.ts`.
+ */
+export const CODEX_REASONING_EFFORTS = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const satisfies readonly EffortLevel[]
 
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number]
 
@@ -41,8 +53,10 @@ export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number]
  * Whoever retires it should rename all 25 at once, drop this alias and the
  * `CodexThinkingLevel` line from the re-export in
  * `src/renderer/features/agents/lib/models.ts`, and confirm
- * `npm run typecheck` still reports 0 errors. The effort label itself is
- * `formatCodexThinkingLabel` below, which stays.
+ * `npm run typecheck` still reports 0 errors. The effort label is
+ * `formatEffortLabel` in `src/shared/effort.ts`; the picker calls that directly
+ * now that both backends share one effort vocabulary, and the Codex-named
+ * wrapper it used to call is gone rather than left as a second name for it.
  */
 export type CodexThinkingLevel = CodexReasoningEffort
 
@@ -72,11 +86,6 @@ export const CODEX_MODELS = [
     thinkings: [...CODEX_REASONING_EFFORTS] as CodexThinkingLevel[],
   },
 ] as const
-
-export function formatCodexThinkingLabel(thinking: CodexThinkingLevel): string {
-  if (thinking === "xhigh") return "Extra High"
-  return thinking.charAt(0).toUpperCase() + thinking.slice(1)
-}
 
 export const DEFAULT_CODEX_UI_MODEL = "gpt-5.5"
 

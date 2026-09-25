@@ -6,7 +6,7 @@
  * handling that is provider-specific (session-init, auth modals, error
  * toasts) stays in each transport.
  */
-import type { UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
+import type { ChatTransport, UIMessageChunk as SDKUIMessageChunk, UIMessage } from "ai"
 import type { UIMessageChunk as WireUIMessageChunk } from "../../../../main/lib/claude/types"
 import type { SessionInfo } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
@@ -231,4 +231,29 @@ export function extractPromptImages(msg: UIMessage | undefined): ImageAttachment
   }
 
   return images
+}
+
+/**
+ * What the AI SDK hands a transport on send. Derived from the library's own
+ * `ChatTransport` contract rather than restated per transport, so both engines
+ * accept the same options and neither narrows them by hand: when the SDK adds a
+ * field, both see it without an edit here.
+ */
+export type SendMessagesOptions = Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]
+
+/**
+ * The newest user turn's prompt text and image attachments. Both engines read
+ * the last user message the same way, so the reading lives here; a missing
+ * message yields an empty prompt and no images, which each engine then rejects
+ * on its own terms.
+ */
+export function lastUserPrompt(messages: readonly UIMessage[]): {
+  prompt: string
+  images: ImageAttachment[]
+} {
+  const lastUser = [...messages].reverse().find((message) => message.role === "user")
+  return {
+    prompt: extractPromptText(lastUser),
+    images: extractPromptImages(lastUser),
+  }
 }

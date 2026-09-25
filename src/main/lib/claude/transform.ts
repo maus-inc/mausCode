@@ -16,23 +16,43 @@ import type {
 } from "./types"
 
 /**
- * Message classification (roadmap step 09). Every member of
- * `ClaudeStreamMessage` is either translated (`HANDLED`) or deliberately
- * internal with a named reason (`INTERNAL`); the compile guards below fail
- * typecheck when the SDK grows a member that is neither.
+ * Message classification (roadmap step 09, rechecked against the 0.3.270 pin by
+ * step 12). Every member of `ClaudeStreamMessage` is either translated
+ * (`HANDLED`) or deliberately internal with a named reason (`INTERNAL`); the
+ * compile guards below fail typecheck when the SDK grows a member that is
+ * neither, and the union in `types.ts` is built by exclusion from `SDKMessage`,
+ * so a new member arrives on the bump instead of being missed.
  *
- * Internal members, by `msg.type`:
+ * The pinned SDK declares 39 message members across 11 top-level types, and 28
+ * of the 39 are `system` subtypes.
+ *
+ * Internal top-level types:
  * - `tool_progress`: per-tool streaming progress; the transcript already shows
  *   the tool round-trip, and no renderer surface consumes a second live feed.
  * - `auth_status`: auth state changes mid-turn; no consumer owns them yet.
  * - `tool_use_summary`: batch summaries of past tool use; the individual tool
  *   parts are already in the transcript.
+ * - `rate_limit_event`: a subscription rate-limit gauge. The retry path below
+ *   already says when a turn is waiting, and no surface renders the gauge; a
+ *   usage panel is the consumer that would change this.
+ * - `conversation_reset`: the app persists its own transcript and never replays
+ *   history on resume, so a reset notice has nothing to invalidate.
  *
- * Internal `system` subtypes: `hook_started`, `hook_progress`,
- * `hook_response`, `task_notification`, `task_started`, `files_persisted`.
- * Each is harness bookkeeping with no chat-stream content and no named
- * consumer; the full table lives in
- * `.dump/app/research/2026-09-13-event-mapping.md`.
+ * Internal `system` subtypes are harness bookkeeping with no chat-stream
+ * content and no named consumer: the hook trio (`hook_started`,
+ * `hook_progress`, `hook_response`), the background-task family
+ * (`task_notification`, `task_started`, `task_updated`, `task_progress`,
+ * `background_tasks_changed`), session plumbing (`control_request_progress`,
+ * `session_state_changed`, `worker_shutting_down`, `commands_changed`,
+ * `files_persisted`, `memory_recall`, `plugin_install`), model fallbacks the
+ * result message also reports (`model_refusal_fallback`,
+ * `model_refusal_no_fallback`), and single-field notices (`local_command_output`,
+ * `thinking_tokens`, `notification`, `elicitation_complete`,
+ * `permission_denied`, `mirror_error`, `informational`). The permission denial
+ * is the one worth revisiting: the gate already surfaces a denial in chat, so
+ * this copy would be a second, differently-shaped report of the same event.
+ * The full table lives in
+ * `.dump/app/research/2026-09-13-sdk-0-3-bump.md`.
  */
 export const HANDLED_STREAM_MESSAGE_TYPES = [
   "stream_event",
@@ -40,18 +60,22 @@ export const HANDLED_STREAM_MESSAGE_TYPES = [
   "user",
   "system",
   "result",
+  "prompt_suggestion",
 ] as const satisfies readonly ClaudeStreamMessage["type"][]
 
 export const INTERNAL_STREAM_MESSAGE_TYPES = [
   "tool_progress",
   "auth_status",
   "tool_use_summary",
+  "rate_limit_event",
+  "conversation_reset",
 ] as const satisfies readonly ClaudeStreamMessage["type"][]
 
 export const HANDLED_SYSTEM_SUBTYPES = [
   "init",
   "status",
   "compact_boundary",
+  "api_retry",
 ] as const satisfies readonly Extract<ClaudeStreamMessage, { type: "system" }>["subtype"][]
 
 export const INTERNAL_SYSTEM_SUBTYPES = [
@@ -60,7 +84,25 @@ export const INTERNAL_SYSTEM_SUBTYPES = [
   "hook_response",
   "task_notification",
   "task_started",
+  "task_updated",
+  "task_progress",
+  "background_tasks_changed",
   "files_persisted",
+  "control_request_progress",
+  "session_state_changed",
+  "worker_shutting_down",
+  "commands_changed",
+  "memory_recall",
+  "plugin_install",
+  "model_refusal_fallback",
+  "model_refusal_no_fallback",
+  "local_command_output",
+  "thinking_tokens",
+  "notification",
+  "elicitation_complete",
+  "permission_denied",
+  "mirror_error",
+  "informational",
 ] as const satisfies readonly Extract<ClaudeStreamMessage, { type: "system" }>["subtype"][]
 
 type AssertNever<T> = [T] extends [never] ? true : never
@@ -114,10 +156,55 @@ export function toClaudeStreamMessage(raw: unknown): ClaudeStreamMessage | null 
   return raw as ClaudeStreamMessage
 }
 
-/** A failed tool result's text: structured content renders its text parts. */
+/** A failed tool result's text: structured content renders its text parts and
+ * names the parts that carry no text, which at the pinned SDK is more than the
+ * image the old dialect could send. */
 function toolResultErrorText(content: ClaudeToolResultBlock["content"]): string {
   if (typeof content === "string") return content
-  return content.map((part) => (part.type === "text" ? part.text : "[image]")).join("\n")
+  if (!content) return ""
+  return content.map((part) => (part.type === "text" ? part.text : `[${part.type}]`)).join("\n")
+}
+
+/**
+ * One line for the retry toast: what failed, which attempt, and how long the
+ * CLI is going to wait. The error arrives as a slug, so it is spaced rather
+ * than shown to a person as `oauth_org_not_allowed`.
+ */
+function apiRetryMessage(
+  msg: Extract<ClaudeStreamMessage, { type: "system"; subtype: "api_retry" }>,
+): string {
+  // The line reaches this through `toClaudeStreamMessage`, which proves only
+  // that the record carries a string `type`, so every field read here is
+  // checked against the shape the SDK documents. A record written in another
+  // dialect still yields one readable line instead of throwing inside the
+  // child's stdout callback.
+  const reason = typeof msg.error === "string" ? msg.error.replaceAll("_", " ") : "request failed"
+  const status = typeof msg.error_status === "number" ? ` (HTTP ${msg.error_status})` : ""
+  const maxRetries = typeof msg.max_retries === "number" ? ` of ${msg.max_retries}` : ""
+  const attempt = typeof msg.attempt === "number" ? `, attempt ${msg.attempt}${maxRetries}` : ""
+  const waitSeconds =
+    typeof msg.retry_delay_ms === "number" ? Math.max(1, Math.round(msg.retry_delay_ms / 1000)) : 1
+  return `Claude API retry: ${reason}${status}${attempt}, waiting ${waitSeconds}s`
+}
+
+/**
+ * A suggested next prompt, asked for with `Options.promptSuggestions` and sent
+ * after the result message. Bounded here because the string is
+ * provider-authored and crosses IPC into the composer. Module scope: it reads
+ * only its own message, so holding a slot in the transformer closure would just
+ * re-create it per stream.
+ */
+function* handlePromptSuggestion(
+  msg: Extract<ClaudeStreamMessage, { type: "prompt_suggestion" }>,
+): Generator<UIMessageChunk> {
+  // Same untrusted boundary as the retry line: unless both fields are the
+  // strings the SDK documents, the record is dropped rather than thrown on —
+  // and a suggestion with no session id has no turn to be attributed to, so
+  // there is nothing to render even if the text were well-formed.
+  if (typeof msg.suggestion !== "string" || typeof msg.session_id !== "string") return
+  const suggestion = msg.suggestion.trim().slice(0, 2000)
+  if (!suggestion) return
+  yield { type: "prompt-suggestion", suggestion, sessionId: msg.session_id }
 }
 
 /** Resolve a tool result's output payload, preferring the CLI's own result. */
@@ -675,6 +762,13 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
       }
     }
 
+    // A retry the CLI is already performing. Without it the stream looks
+    // stalled for the length of the backoff, and both chat transports toast
+    // this chunk.
+    if (msg.subtype === "api_retry") {
+      yield { type: "retry-notification", message: apiRetryMessage(msg) }
+    }
+
     // Compact boundary - mark the compacting tool as complete
     if (msg.subtype === "compact_boundary") {
       let compactId = lastCompactId
@@ -769,6 +863,9 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
         break
       case "result":
         yield* handleResultMessage(msg)
+        break
+      case "prompt_suggestion":
+        yield* handlePromptSuggestion(msg)
         break
       default:
         break
