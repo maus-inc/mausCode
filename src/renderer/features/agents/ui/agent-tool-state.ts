@@ -31,6 +31,8 @@ export type ToolPartLike = {
   input?: unknown
   output?: unknown
   result?: unknown
+  error?: unknown
+  errorText?: unknown
 }
 
 /**

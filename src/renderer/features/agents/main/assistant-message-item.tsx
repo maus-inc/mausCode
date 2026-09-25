@@ -571,6 +571,13 @@ interface PartIOSnapshot {
   state: string | undefined
   input: unknown
   output: unknown
+  // The rendered fields beyond IO: the ask card draws its answers from
+  // `result` and its failure line from `errorText`/`error`, so a change
+  // in any of them with state, input, and output untouched still has to
+  // pass the comparison below.
+  result: unknown
+  error: unknown
+  errorText: unknown
   json: string | undefined
 }
 
@@ -578,8 +585,9 @@ interface MessageStateSnapshot {
   textLengths: number[]
   partStates: (string | undefined)[]
   /**
-   * Every part's input and output, stringified — but only once per state of
-   * the part. A nested tool can mutate either in place while its state and
+   * Every part's input, output, result, error, and errorText, stringified —
+   * but only once per state of the part. A nested tool can mutate its IO in
+   * place while its state and
    * every text length around it stay unchanged, and nothing downstream of
    * this memo runs when it skips a render, so the check has to see it. The
    * cost stays bounded because a part whose state string is terminal and
@@ -667,6 +675,9 @@ function areMessagePropsEqual(
         prev.state === p.state &&
         prev.input === p.input &&
         prev.output === p.output &&
+        prev.result === p.result &&
+        prev.error === p.error &&
+        prev.errorText === p.errorText &&
         isTerminalStateString(prev.state)
       ) {
         return prev // settled: same terminal state, same references
@@ -675,10 +686,17 @@ function areMessagePropsEqual(
         state: p.state,
         input: p.input,
         output: p.output,
+        result: p.result,
+        error: p.error,
+        errorText: p.errorText,
         json:
-          p.input === undefined && p.output === undefined
+          p.input === undefined &&
+          p.output === undefined &&
+          p.result === undefined &&
+          p.error === undefined &&
+          p.errorText === undefined
             ? undefined
-            : JSON.stringify([p.input, p.output]),
+            : JSON.stringify([p.input, p.output, p.result, p.error, p.errorText]),
       }
     }),
   }

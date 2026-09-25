@@ -623,6 +623,60 @@ describe("AssistantMessageItem, the outer memo against in-place mutation", () =>
    * name from its input; a trailing tool keeps it out of the last-part slot,
    * which is exactly the hole the old snapshot had.
    */
+  it("re-renders when a completed question's result is replaced", () => {
+    // CodeAnt 4104721522: the ask card draws its answer from part.result.
+    // Replacing that reference with state, input, and output untouched must
+    // still pass the outer memo, or the card keeps the old answer forever.
+    const part: MessagePart = {
+      type: "tool-AskUserQuestion",
+      toolCallId: "toolu_result_swap",
+      state: "result",
+      input: {
+        questions: [
+          {
+            question: "Which pin?",
+            header: "Pin",
+            multiSelect: false,
+            options: [
+              { label: "0.3.270", description: "Matches the CLI pin." },
+              { label: "0.3.280", description: "One release ahead." },
+            ],
+          },
+        ],
+      },
+      result: { answers: { "Which pin?": "0.3.270" } },
+    } as MessagePart
+    const message: Message = { id: `msg-${++messageSequence}`, role: "assistant", parts: [part] }
+
+    const ui = () => (
+      <TooltipProvider delayDuration={300}>
+        <AssistantMessageItem
+          message={message}
+          isLastMessage={false}
+          isStreaming={false}
+          status="ready"
+          isMobile={false}
+          subChatId="sub-chat-1"
+          chatId="chat-1"
+        />
+      </TooltipProvider>
+    )
+
+    const { container, rerender } = render(ui())
+    expect(container.innerHTML).toContain("0.3.270")
+
+    // Prime the per-message snapshot with the answered state.
+    rerender(ui())
+
+    // The sync assigns a new result object; state, input, and output never
+    // move, so only a snapshot that compares `result` can see this.
+    part.result = { answers: { "Which pin?": "0.3.280" } } as MessagePart["result"]
+    rerender(ui())
+
+    expect(container.innerHTML).toContain("0.3.280")
+    expect(container.innerHTML).not.toContain("0.3.270")
+  })
+
   it("re-renders when a non-last nested tool mutates its input in place", () => {
     const child: MessagePart = tool("tool-Read", "A:B", { file_path: "src/one.ts" })
     const parts: MessagePart[] = [

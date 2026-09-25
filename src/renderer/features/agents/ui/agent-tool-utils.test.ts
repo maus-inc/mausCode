@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest"
 import type { ToolPartLike } from "./agent-tool-state"
-import { areTaskToolPropsEqual, nestingFingerprintOf } from "./agent-tool-utils"
+import { areTaskToolPropsEqual, areToolPropsEqual, nestingFingerprintOf } from "./agent-tool-utils"
 
 function taskPart(id: string): ToolPartLike {
   return {
@@ -96,6 +96,23 @@ describe("nestingFingerprintOf", () => {
     // A new input object (the shape a replacement takes) breaks the settle.
     if (child) child.input = { file_path: "src/replaced.ts" }
     expect(nestingFingerprintOf(map)).not.toBe(before)
+  })
+
+  it("changes when only a terminal part's result is replaced", () => {
+    // CodeAnt 4104721117: the ask card renders `result`, so a wholesale
+    // replacement with state, input, and output all untouched has to move
+    // the fingerprint — the settle gate compares the reference too.
+    const part: ToolPartLike = {
+      type: "tool-AskUserQuestion",
+      toolCallId: "result-only-call",
+      state: "result",
+      input: { questions: [{ question: "Which pin?", header: "Pin" }] },
+      result: { answers: { "Which pin?": "0.3.270" } },
+    }
+    const before = nestingFingerprintOf(new Map([["A", [part]]]))
+    part.result = { answers: { "Which pin?": "0.3.280" } }
+    const after = nestingFingerprintOf(new Map([["A", [part]]]))
+    expect(after).not.toBe(before)
   })
 
   it("changes when a nested part's state moves from pending to done", () => {
@@ -193,5 +210,25 @@ describe("areTaskToolPropsEqual fingerprint comparison", () => {
         { part: mutated, nestedTools: ownNested, nestingFingerprint: fp },
       ),
     ).toBe(false)
+  })
+})
+
+describe("areToolPropsEqual", () => {
+  it("moves the row when only a terminal part's result is replaced", () => {
+    // Same claim at the row level (CodeAnt 4104721522's sibling): the ask
+    // card renders `result`, so the row snapshot has to compare it — by
+    // reference, because every writer assigns it wholesale alongside the
+    // state flip rather than mutating it in place.
+    const part: ToolPartLike = {
+      type: "tool-AskUserQuestion",
+      toolCallId: "row-result-only-call",
+      state: "result",
+      input: { questions: [{ question: "Which pin?", header: "Pin" }] },
+      result: { answers: { "Which pin?": "0.3.270" } },
+    }
+    expect(areToolPropsEqual({ part }, { part })).toBe(false) // first call primes
+    expect(areToolPropsEqual({ part }, { part })).toBe(true) // nothing moved
+    part.result = { answers: { "Which pin?": "0.3.280" } }
+    expect(areToolPropsEqual({ part }, { part })).toBe(false) // result-only change
   })
 })

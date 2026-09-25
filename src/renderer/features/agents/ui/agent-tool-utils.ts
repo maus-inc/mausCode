@@ -20,6 +20,15 @@ interface CachedToolState {
   state: string | undefined
   inputJson: string // JSON stringified input for deep comparison
   outputJson: string // JSON stringified output for deep comparison
+  // References, deliberately not JSON: every writer in this repo assigns
+  // these wholesale when it sets them (claude.ts's three result sites pair
+  // the assignment with a state transition; nothing deep-mutates them the
+  // way the SDK does input and output — rounds 7 and 8). The ask card
+  // renders `result` and `errorText`, so a change in either has to move
+  // the row even when state, input, and output sit still.
+  result: unknown
+  error: unknown
+  errorText: unknown
 }
 
 const toolStateCache = new Map<string, CachedToolState>()
@@ -37,6 +46,9 @@ function getToolStateSnapshot(part: ToolPartLike): CachedToolState {
     state: typeof part.state === "string" ? part.state : undefined,
     inputJson: JSON.stringify(part.input || {}),
     outputJson: JSON.stringify(part.output || {}),
+    result: part.result,
+    error: part.error,
+    errorText: part.errorText,
   }
 }
 
@@ -52,7 +64,10 @@ function hasToolStateChanged(toolCallId: string, part: ToolPartLike): boolean {
   const changed =
     cached.state !== current.state ||
     cached.inputJson !== current.inputJson ||
-    cached.outputJson !== current.outputJson
+    cached.outputJson !== current.outputJson ||
+    cached.result !== current.result ||
+    cached.error !== current.error ||
+    cached.errorText !== current.errorText
 
   if (changed) {
     toolStateCache.set(toolCallId, current)
@@ -147,6 +162,9 @@ interface FingerprintSegment {
   state: unknown
   input: unknown
   output: unknown
+  result: unknown
+  error: unknown
+  errorText: unknown
   segment: string
 }
 
@@ -189,6 +207,9 @@ function fingerprintSegmentOf(mapKey: string, part: ToolPartLike): string {
     prev?.state === part.state &&
     prev?.input === part.input &&
     prev?.output === part.output &&
+    prev?.result === part.result &&
+    prev?.error === part.error &&
+    prev?.errorText === part.errorText &&
     isTerminalStateString(prev?.state)
   ) {
     return prev.segment // settled: same terminal state, same references
@@ -196,7 +217,9 @@ function fingerprintSegmentOf(mapKey: string, part: ToolPartLike): string {
   // JSON.stringify the tuple rather than join(): `state` is `unknown`, and
   // join() would fall back to Object's default stringification for any
   // non-string it meets, collapsing two different objects into one
-  // "[object Object]" and hiding a change behind it.
+  // "[object Object]" and hiding a change behind it. `result`, `error`, and
+  // `errorText` ride along because the ask card and the lifecycle view
+  // render them: a result-only update has to move the rows like any other.
   const segment = JSON.stringify([
     mapKey,
     part.type,
@@ -204,6 +227,9 @@ function fingerprintSegmentOf(mapKey: string, part: ToolPartLike): string {
     part.state,
     part.input,
     part.output,
+    part.result,
+    part.error,
+    part.errorText,
   ])
   if (key !== "") {
     fingerprintSegmentCache.set(key, {
@@ -211,6 +237,9 @@ function fingerprintSegmentOf(mapKey: string, part: ToolPartLike): string {
       state: part.state,
       input: part.input,
       output: part.output,
+      result: part.result,
+      error: part.error,
+      errorText: part.errorText,
       segment,
     })
   }
